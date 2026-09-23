@@ -68,9 +68,21 @@ Dwa **niezależne** wybory silnika: ASR i AI. Tu wymagania trzymają się w cał
 - 🆕 **Wybrany wariant modelu widoczny w UI** — nazwa, rozmiar, znacznik „Multilingual",
   przycisk testu. Wzór: ekran modeli Spokenly. Cztery z pięciu testowanych aplikacji tego
   nie pokazują i przez to milcząco jadą na złym modelu.
-- ⚠️ **Ollama / oMLX jako silnik ASR — do zweryfikowania przed wpisaniem w zakres.**
-  Ollama serwuje modele językowe; obsługi ASR nie sprawdzaliśmy. Do AI (korekta,
-  podsumowanie) jest bez zastrzeżeń.
+- 🔴 **Ollama i oMLX nie robią ASR — sprawdzone 2026-09-23.** Do AI (korekta,
+  podsumowanie) zostają bez zastrzeżeń, ale **nie mogą być silnikiem transkrypcji**:
+  - **Ollama**: udokumentowane możliwości to streaming, thinking, structured outputs, vision,
+    embeddings, tool calling i web search — **audio nie ma na liście**. W rejestrze leżą
+    modele w rodzaju `dimavz/whisper-tiny`, ale przykłady użycia na ich stronie to zwykły
+    czat tekstowy. Wszystkie działające zestawy „Whisper + Ollama" to **dwa osobne procesy**:
+    Whisper transkrybuje, Ollama dostaje gotowy tekst.
+  - **oMLX**: żądanie dodania `/v1/audio/transcriptions` (issue #301) zostało
+    **zamknięte jako nieplanowane**.
+  - ⚠️ **Obecność modelu w rejestrze nie znaczy, że runtime umie go uruchomić w jego
+    modalności.** To ta sama pułapka co katalog modeli OpenRoutera, który pomijał
+    MAI-Transcribe-2 mimo że model tam jest — tylko w drugą stronę.
+- 🆕 **Lokalny ASR musi być w procesie albo w dedykowanym sidecarze**, nie przez wspólny
+  serwer modeli. Kandydaci: **FluidAudio** (Swift, w procesie, Parakeet v3 już na dysku),
+  `parakeet-mlx-server` (OpenAI-kompatybilny FastAPI), `mlx-whisper`, WhisperKit.
 - 🆕 ⚠️ **Rozmiar instalacji to polityka modeli, nie technologia.** „8 GB" przypisywane
   Naradzie to `com.apple.e5rt.e5bundlecache` — cache kompilacji Apple Neural Engine,
   generowany lokalnie przy pierwszym uruchomieniu. Sama Narada waży 98 MB.
@@ -155,7 +167,6 @@ i nie dają nagrania do ponownego przebiegu.
 
 **Nowe, do rozstrzygnięcia:**
 
-- **Ollama/oMLX jako ASR** — czy w ogóle to potrafią (§2)
 - **Czy budować na FluidAudio (Swift), czy własna ścieżka** — FluidAudio daje gotowy
   Parakeet v3, diaryzację, VAD i boosting słownika, wszystko w CoreML i już na dysku.
   Koszt: wiązanie ze Swiftem i z cudzym harmonogramem wydań.
