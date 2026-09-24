@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+.build/
+.swiftpm/
+# Package.resolved celowo NIE jest ignorowany: przypinamy dokladne wersje
+# zaleznosci (FluidAudio wydaje ~raz w tygodniu, spec rdzenia 📐7).
+
+# Migawki UI generowane lokalnie (docs/design/macos.md §9)
+.design/review/
+
+# Dane aplikacji w trakcie prac: nagrania spotkan (~1,3 GB na sesje 85 min)
+# i transkrypty. Prywatne i ciezkie - nigdy do repo (spec rdzenia §8).
+.devdata/
