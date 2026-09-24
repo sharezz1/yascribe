@@ -37,7 +37,7 @@ bo jest jednocześnie najdroższy, najbardziej ryzykowny i fundamentalny.
 przetrwa, błąd rozpoznania przestaje być stratą spotkania. Dlatego archiwum ma wartość
 niezależną od jakości ASR — i dlatego powstaje przed nim.
 
-**Kryterium sukcesu:** rdzeń przechodzi testy T1–T8 (§7) na własnym sprzęcie, a jego
+**Kryterium sukcesu:** rdzeń przechodzi testy T1–T9 (§9) na własnym sprzęcie, a jego
 nagrania są mierzalnie lepsze od czterech z pięciu zmierzonych aplikacji konkurencyjnych.
 
 **Odbiorca:** na dziś jedna osoba, jedna maszyna (M4, 16 GB, macOS 27.0). Docelowo
@@ -126,7 +126,8 @@ Dziennik `jsonl`, dopisywany i synchronizowany z dyskiem przy każdym zdarzeniu.
 
 Zdarzenia: `session.started`, `track.opened` (id, czas hosta, częstotliwość, kanały,
 `deviceUID`, format), `track.firstSample`, `device.changed`, `track.gap` (początek, długość),
-`track.closed` (liczba ramek), `session.ended` (powód).
+`track.permissionDenied` (które uprawnienie, jak wykryte — patrz T9), `track.closed` (liczba
+ramek), `session.ended` (powód).
 
 ### `DeviceWatcher`
 
@@ -221,9 +222,12 @@ sesję.
 📐10: `import SwiftUI` + `CATapDescription` budują się na samych Command Line Tools
 (SDK 27.0, Swift 6.4) w 25 sekund. Oszczędza kilkanaście GB.
 
-⚠️ **Znane ograniczenie:** podpis ad-hoc zmienia `cdhash` przy każdej przebudowie, więc
-uprawnienia TCC (mikrofon, przechwytywanie dźwięku) mogą się resetować. Obejście: stały
-certyfikat samopodpisany w pęku kluczy. Do rozstrzygnięcia w planie, nie blokuje designu.
+🔴 **Podpis ad-hoc zmienia `cdhash` przy każdej przebudowie, więc TCC resetuje uprawnienia**
+(mikrofon, dźwięk systemowy). Obejście: stały certyfikat samopodpisany w pęku kluczy.
+
+Pierwotnie zapisane tu jako „do rozstrzygnięcia w planie". Po dodaniu setupu przy pierwszym
+uruchomieniu (spec fazy 1, §1.3) to już nie niedogodność: bez stałego podpisu kreator
+uruchamiałby się po każdym `swift build`. **Zadanie na dzień pierwszy.**
 
 ### Kontenery: nie
 
@@ -276,6 +280,13 @@ a w poprzednim projekcie trzy razy okazało się, że testy chroniły nie to, co
 | **T6** | Przepięcie urządzenia w trakcie | sesja trwa, `device.changed` i `track.gap` w dzienniku | — |
 | **T7** | `kill -9` w połowie sesji | dziennik odtwarza `session.json`, pliki grają | skasować `fsync` → czerwień |
 | **T8** | Sesja 85+ min | każda ścieżka z osobna: różnica między czasem hosta a długością z liczby ramek ≤ 50 ms. Różnica **między** ścieżkami ma być **zapisana**, nie zerowa | skasować przeliczanie zegara → czerwień |
+| **T9** | Odmowa uprawnienia dźwięku systemowego daje **jawny błąd**, nie cichy plik | sesja nie startuje albo dziennik ma `track.permissionDenied`; zero ścieżek pełnych zer udających nagranie | wyłączyć sprawdzenie → czerwień |
+
+⚠️ **T9 wyrasta z hipotezy, nie z pomiaru.** Nie ma publicznego API do sprawdzenia stanu tego
+uprawnienia (spec fazy 1, §1.3). Jeśli tap przy odmowie oddaje **ciszę zamiast błędu**,
+aplikacja nagra 85 minut niczego i będzie przy tym wyglądać na zdrową. Rdzeń ma chronić
+archiwum właśnie przed takim scenariuszem, więc zanim powstanie setup, trzeba to sprawdzić
+sondą. Jeśli tap zwraca błąd, T9 staje się zwykłym testem obsługi błędu.
 
 ⚠️ **T3 i T4 wymagają przepróbkowania.** `system.caf` jest w 48 kHz stereo, kanały mikrofonu
 w 16 kHz mono — korelacji nie liczy się na surowych plikach. Test przepróbkowuje obie ścieżki
@@ -331,7 +342,8 @@ kosztem wydajności przy zimnym starcie, nie kosztem instalacji. Nie zmienia to 
 | Próg klastrowania, tożsamość mówcy | specyfikacja diaryzacji |
 | Kodek i bitrate kompresji po sesji | plan, po pomiarze wpływu na ASR |
 | Wartość N dla warunku ciszy | plan; wartość startowa 10 min, nastawialna |
-| Minimalna wersja macOS | plan: ta, na której przejdzie zestaw T1–T8. Narada wymaga 15.6 mimo API od 14.4 — z nieznanego powodu (rozdz. 6) |
-| Stały certyfikat a reset TCC | plan, etap pierwszy |
+| Minimalna wersja macOS | plan: ta, na której przejdzie zestaw T1–T9. Narada wymaga 15.6 mimo API od 14.4 — z nieznanego powodu (rozdz. 6) |
+| Stały certyfikat a reset TCC | ~~plan~~ → **rozstrzygnięte:** zadanie na dzień pierwszy (§8) |
+| Sprawdzanie stanu uprawnienia dźwięku systemowego | spec fazy 1, §1.3 i O5; sonda przed T9 |
 | Framework UI i magazyn danych | poza rdzeniem nagrywania |
 | Retencja archiwum | domyślnie brak kasowania; polityka to osobna decyzja |

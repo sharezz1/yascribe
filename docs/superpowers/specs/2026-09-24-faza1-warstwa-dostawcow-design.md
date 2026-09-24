@@ -96,6 +96,106 @@ odpowiedzi na to samo pytanie: Narada robi ze strony głównej pulpit ze wskaźn
 spotkań, koszt przełączania kontekstu), Granola robi listę notatek z kalendarzem z boku.
 To decyzja do podjęcia przed implementacją powłoki.
 
+### 1.3 Setup: uprawnienia przy pierwszym uruchomieniu
+
+Ustalone 2026-09-24. **Zasada: setup jest pogrupowany po funkcjach. O uprawnienie prosimy
+dopiero wtedy, gdy istnieje funkcja, która go używa.**
+
+📐 Zasada wynika z pomiaru, nie z gustu. `nm -u` na binarkach konkurentów: Dostępność
+(`AXIsProcessTrusted` + `CGEventPost` + `CGEventTapCreate`) importują **dokładnie te trzy
+aplikacje, które dyktują** — FluidVoice, Spokenly, MacParakeet. Narada tylko nagrywa spotkania
+i nie importuje żadnej z tych funkcji.
+
+| Uprawnienie | Klucz `Info.plist` | Po co | Faza |
+|---|---|---|---|
+| **Mikrofon** | `NSMicrophoneUsageDescription` | kanał „Ja" | **1** |
+| **Tylko nagrywanie dźwięku systemowego** | `NSAudioCaptureUsageDescription` | kanał „Oni" — process tap | **1** |
+| **Kalendarz** | `NSCalendarsFullAccessUsageDescription` | nadchodzące spotkania, warunek końca sesji | z kalendarzem (3) |
+| **Dostępność** | — (zapytanie przez `AXIsProcessTrustedWithOptions`) | dyktowanie: wstawianie tekstu, globalny skrót | z dyktowaniem |
+| ~~Nagrywanie ekranu~~ | — | 🔴 **nie prosimy** | — |
+
+#### Nagrywanie ekranu: nie
+
+Panel w Ustawieniach systemowych nazywa się *„Nagrywanie ekranu i dźwięku systemowego"*, ale
+ma osobną sekcję *„Tylko nagrywanie dźwięku systemowego"*. Stąd łatwo o wrażenie, że każda
+aplikacja nagrywająca spotkania chce dostępu do ekranu. Pomiar mówi co innego.
+
+📐 Źródło: Ustawienia systemowe na maszynie użytkownika, 2026-09-24. To rozstrzyga, bo TCC
+pokazuje, **o co aplikacja faktycznie poprosiła**, a nie co deklaruje.
+
+| Aplikacja | Sekcja w Ustawieniach | Ślad w binarce |
+|---|---|---|
+| **Narada** | tylko dźwięk | `AudioHardwareCreateProcessTap`, bez ScreenCaptureKit (rozdz. 6) |
+| **Spokenly** | tylko dźwięk | `AudioHardwareCreateProcessTap` + `kTCCServiceAudioCapture` |
+| **Wispr Flow** | tylko dźwięk | `kTCCServiceAudioCapture` |
+| **OpenWhispr** | **obie** | własny `macos-audio-tap` (dźwięk) + Electron `desktopCapturer` (ekran) |
+| **MacParakeet** | ekran + dźwięk | ScreenCaptureKit |
+| Letterly | ekran + dźwięk | ⚠️ nie zmierzone — paczki nie ma na dysku |
+
+**Trzy z czterech zmierzonych nagrywarek spotkań obywają się bez dostępu do ekranu.**
+MacParakeet jest wyjątkiem, a nie regułą.
+
+✏️ **Korekta.** Pierwsza wersja tej tabeli przypisywała Wispr Flow „ekran + dźwięk" na
+podstawie opisu mechanizmu z rozdz. 6 („Chromium `getDisplayMedia`"). Ustawienia pokazały
+sekcję „tylko dźwięk" — i zgadza się to z `kTCCServiceAudioCapture` w binarce, który był
+w pomiarze od początku. Opis mechanizmu przegrał z odczytem TCC. To ta sama lekcja co
+w rozdz. 16: rozstrzyga to, co system zapisał, a nie to, co wynika z opisu.
+
+Process tap nie daje dostępu do obrazu, więc nasza aplikacja **strukturalnie nie może**
+widzieć ekranu. Przy aplikacji, która słyszy wszystkie Twoje spotkania, to realna przewaga
+w zaufaniu. Zgodne też z W§7: v1 wyłącznie audio.
+
+#### 🔴 Brak publicznego API do sprawdzenia uprawnienia dźwięku systemowego
+
+Stan mikrofonu i Dostępności da się sprawdzić publicznie. Stanu **dźwięku systemowego — nie**.
+
+📐 Wispr Flow i Spokenly obchodzą to prywatnym interfejsem TCC: w binarkach są ciągi
+`TCCAccessPreflight`, `TCCAccessRequest` i `kTCCServiceAudioCapture`, ładowane przez `dlsym`.
+Narada tych ciągów nie ma, więc najpewniej uruchamia tap i zostawia monit systemowi.
+
+| Droga | Za | Przeciw |
+|---|---|---|
+| **Prywatne TCC** (Wispr Flow, Spokenly) | setup pokazuje prawdziwy stan | może pęknąć przy aktualizacji systemu; zamyka App Store (i tak zamknięty, spec rdzenia §8) |
+| **Próba i obserwacja** (Narada) | tylko publiczne API | stan znany dopiero po pierwszej próbie nagrania |
+
+Decyzja po sondzie — patrz O5 i test T9 w specu rdzenia nagrywania.
+
+⚠️ **Hipoteza, którą sonda musi rozstrzygnąć przed budową setupu:** co zwraca tap, gdy
+uprawnienia brak. Jeśli **ciszę zamiast błędu**, to mamy tryb awarii, w którym aplikacja
+nagrywa 85 minut niczego i wygląda przy tym na zdrową.
+
+#### Stały podpis przestaje być opcją
+
+Spec rdzenia §8: podpis ad-hoc zmienia `cdhash` przy każdej przebudowie, więc TCC resetuje
+uprawnienia. Z kreatorem na starcie oznaczałoby to przechodzenie przez setup po każdym
+`swift build`. 🔴 **Stały certyfikat samopodpisany jest zadaniem na dzień pierwszy.**
+
+### 1.4 Trzy języki
+
+Ustalone 2026-09-24. **Interfejs aplikacji jest po angielsku.**
+
+| Język | Ustawienie | Wartość domyślna |
+|---|---|---|
+| **Interfejs** | angielski, stały | — |
+| **Transkrypcja** | jawny wybór w profilu ASR | 🔴 **brak** — profilu bez języka nie da się zapisać (P7) |
+| **Notatka** | wybór per spotkanie | = język transkrypcji tego spotkania |
+
+🔴 **Język interfejsu nigdy nie podpowiada języka transkrypcji.** Aplikacja po angielsku przy
+polskich spotkaniach to dokładnie ten układ, w którym naiwne „domyślny język = język
+aplikacji" ustawi `en`. To jest katastrofa z rozdz. 14: 62% zmyślonej angielszczyzny, która
+czyta się jak notatka. Byłoby to `auto` wprowadzone tylnymi drzwiami.
+
+**Domyślny język notatki to nie wykrywanie.** Kopiuje jawny wybór użytkownika z profilu
+ASR, więc nie łamie zasady „nigdy auto".
+
+**Wybór jest odwracalny.** Notatka jest pochodną transkryptu, a transkrypt zostaje
+w oryginale. Notatkę w innym języku da się wygenerować w dowolnym momencie, także dla
+starych spotkań.
+
+⚠️ Notatka w innym języku niż spotkanie jest **tłumaczeniem**. Każda nieścisłość ASR
+przechodzi wtedy przez drugi model, więc nazwiska i cytaty trzeba w prompcie chronić przed
+tłumaczeniem. To zadanie specyfikacji notatek (faza 3).
+
 ---
 
 ## 2. Ustalenia zamknięte, z dowodami
@@ -376,3 +476,5 @@ wiedzę**.
 | O2 | Próg energii bramki i czas kwalifikowanej ciszy | strojenie na korpusie |
 | O3 | Czy `transcribeUtterance` ma trafić do fazy 1 jako działająca funkcja, czy tylko jako dowiedziony kontrakt (P9) | przed planem |
 | O4 | Limit sekund na żądanie: sondowany czy konfigurowany per dostawca | przed planem |
+| O5 | Stan uprawnienia dźwięku systemowego: prywatne TCC (Wispr Flow, Spokenly) czy próba i obserwacja (Narada)? §1.3 | po sondzie T9, przed budową setupu |
+| O6 | Czy setup otwiera właściwy panel Ustawień głębokim linkiem, zamiast opisywać, gdzie kliknąć? Interfejs jest po angielsku, a system użytkownika po polsku — opis ścieżki rozjedzie się z tym, co widać na ekranie | przed budową setupu |
