@@ -2,7 +2,7 @@
 
 > Data: 2026-09-24 · Status: do recenzji
 >
-> **Zakres:** rejestr dostawców API, cztery sloty ról, odkrywanie modeli z sondą,
+> **Zakres:** rejestr dostawców API, presety (język + role), odkrywanie modeli z sondą,
 > transkrypcja nagrań przez API. **Bez modeli lokalnych. Bez diaryzacji.**
 >
 > ⚠️ **Zmiana zakresu z 2026-09-24, po pierwszym zapisie.** Pierwotnie faza 1 miała
@@ -55,7 +55,7 @@ To dwa przepływy o sprzecznych wymaganiach, dzielące dokładnie jedną warstw�
 | Diaryzacja | tak (faza 2+) | nigdy |
 | Wynik | archiwum i notatka | tekst w aktywnej aplikacji |
 
-**Wspólne: warstwa dostawców, słownik, profil języka.**
+**Wspólne: warstwa dostawców, słownik, presety (§1.5).**
 
 🔴 Konsekwencja dla kontraktu ASR: dwa kształty wywołania — `transcribeFile` (długi, cięty,
 z postępem) i `transcribeUtterance` (jedno żądanie, niskie opóźnienie). Faza 1 implementuje
@@ -68,11 +68,12 @@ Ustalona 2026-09-24. Pełna struktura, z zaznaczeniem, co buduje faza 1.
 
 | Zakładka | Treść | Faza |
 |---|---|---|
-| **Notatki** (główna) | nadchodzące spotkania, oś czasu nagrań z podziałem na dni, chat nad archiwum, przycisk „nagraj spotkanie" | 1 częściowo — oś czasu i nagrywanie; kalendarz i chat w fazie 3 |
+| **Notatki** (główna) | układ B: oś nagrań po dniach, wyróżnione najbliższe spotkanie na górze, szyna „Coming up", chat nad archiwum, przycisk „nagraj spotkanie" | 1 częściowo — oś nagrań i nagrywanie; wyróżnione spotkanie, szyna kalendarza i chat w fazie 3 |
 | **Zadania** | agregacja **między** spotkaniami: właściciel, spotkanie źródłowe, termin | 3 |
 | **Dyktowanie** | oś czasu historii dyktowania | 2+ |
 | **Słownik** | własne terminy oraz słowa poprawione bezpośrednio w transkrypcji | 3 |
-| **Ustawienia** | dostawcy, cztery sloty ról, język, MCP | **1** |
+| **Presety** | nazwane zestawy: język + ASR + korekta + podsumowanie + prompty (§1.5) | **1** |
+| **Ustawienia** | połączenia z dostawcami (adres, klucz, odświeżanie), **globalny** model embeddingu, MCP | **1** |
 
 Dwie powierzchnie poza nawigacją:
 
@@ -80,21 +81,42 @@ Dwie powierzchnie poza nawigacją:
   rozmówców, notatka. Największy ekran aplikacji. Faza 1 daje jego zalążek: transkrypt
   i skok w nagraniu.
 - **Pływające okno** — 🆕 W§6 mówi, że to jest miejsce na wybór języka i modelu, a nie tylko
-  przycisk nagrywania.
+  przycisk nagrywania. Wybiera się w nim preset, który łączy jedno i drugie (§1.5).
 
 **Rozróżnienie, którego nie wolno zgubić:** W§4 wymaga chatu **nad jednym spotkaniem** i
 **nad archiwum**. To dwie różne rzeczy. Chat nad archiwum („kiedy pytałem o to i o to")
-należy do strony głównej i potrzebuje slotu `embedding`. Chat nad jednym spotkaniem należy
+należy do strony głównej i potrzebuje globalnego modelu embeddingu (§1.5). Chat nad jednym spotkaniem należy
 do widoku spotkania, nie przeszukuje niczego i embeddingu nie potrzebuje.
 
 🔴 **Zakładka zadań zależy od stabilnej tożsamości mówcy** (W§4). Wispr Flow zwrócił poprawne
 streszczenie, w którym `Speaker 2` to były dwie różne osoby — z takiego materiału zadania nie
 mają właściciela. Dlatego jest w fazie 3, po diaryzacji.
 
-⚠️ **Design wizualny nie jest jeszcze ustalony.** Zrzuty konkurentów pokazują dwie różne
-odpowiedzi na to samo pytanie: Narada robi ze strony głównej pulpit ze wskaźnikami (czas
-spotkań, koszt przełączania kontekstu), Granola robi listę notatek z kalendarzem z boku.
-To decyzja do podjęcia przed implementacją powłoki.
+#### Układ strony głównej: wariant B
+
+Ustalony 2026-09-24 po porównaniu dwóch makiet.
+
+| | A: pulpit dnia | **B: oś nagrań z szyną kalendarza** ✅ |
+|---|---|---|
+| W centrum | „co mam dziś": plan dnia na osi godzin, lista dzisiejszych spotkań | „co już mam": nagrania po dniach, ze stanem każdego |
+| Nadchodzące | lista „Today" w centrum | wąska szyna „Coming up" po prawej |
+| Bliżej | Narady | układu z kolumną „Coming up" (siódmy zrzut użytkownika) |
+
+**Dlaczego B — powód praktyczny, z kolejności faz.** Kalendarz przychodzi w fazie 3. W A plan
+dnia i lista „Today" są w całości napędzane kalendarzem, więc w fazach 1–2 połowa strony
+głównej byłaby pusta. W B znika tylko szyna, a oś nagrań — czyli wszystko, co faza 1 robi —
+wypełnia ekran od pierwszego dnia.
+
+**Z A przejęty jeden element: wyróżnione najbliższe spotkanie na górze osi**, z przyciskiem
+nagrywania. ⚠️ Wymaga kalendarza, więc w fazach 1–2 to miejsce zajmuje trwające nagranie
+albo nic.
+
+Elementy wspólne obu makiet, wynikające ze speców, a nie z gustu:
+
+- 🔴 **Preset (z językiem) widoczny przy przycisku nagrywania**, przed startem
+- **Stan nagrywania nigdy samym kolorem** — czerwień zawsze z napisem „Recording" i licznikiem
+  (`docs/design/macos.md` §6.1)
+- **Postęp transkrypcji w procentach** (W§1)
 
 ### 1.3 Setup: uprawnienia przy pierwszym uruchomieniu
 
@@ -177,16 +199,16 @@ Ustalone 2026-09-24. **Interfejs aplikacji jest po angielsku.**
 | Język | Ustawienie | Wartość domyślna |
 |---|---|---|
 | **Interfejs** | angielski, stały | — |
-| **Transkrypcja** | jawny wybór w profilu ASR | 🔴 **brak** — profilu bez języka nie da się zapisać (P7) |
-| **Notatka** | wybór per spotkanie | = język transkrypcji tego spotkania |
+| **Transkrypcja** | jawny wybór w presecie (§1.5) | 🔴 **brak** — presetu bez języka nie da się zapisać (P7) |
+| **Notatka** | wybór per spotkanie | = język presetu użytego do spotkania |
 
 🔴 **Język interfejsu nigdy nie podpowiada języka transkrypcji.** Aplikacja po angielsku przy
 polskich spotkaniach to dokładnie ten układ, w którym naiwne „domyślny język = język
 aplikacji" ustawi `en`. To jest katastrofa z rozdz. 14: 62% zmyślonej angielszczyzny, która
 czyta się jak notatka. Byłoby to `auto` wprowadzone tylnymi drzwiami.
 
-**Domyślny język notatki to nie wykrywanie.** Kopiuje jawny wybór użytkownika z profilu
-ASR, więc nie łamie zasady „nigdy auto".
+**Domyślny język notatki to nie wykrywanie.** Kopiuje jawny wybór użytkownika z presetu,
+więc nie łamie zasady „nigdy auto".
 
 **Wybór jest odwracalny.** Notatka jest pochodną transkryptu, a transkrypt zostaje
 w oryginale. Notatkę w innym języku da się wygenerować w dowolnym momencie, także dla
@@ -197,6 +219,87 @@ przechodzi wtedy przez drugi model, więc nazwiska i cytaty trzeba w prompcie ch
 tłumaczeniem. To zadanie specyfikacji notatek (faza 3).
 
 ---
+
+### 1.5 Presety
+
+Ustalone 2026-09-24. **Preset to nazwany zestaw: język + model ASR + model i prompt korekty +
+model i prompt podsumowania.** Osobna pozycja w nawigacji, między Dictionary a Settings.
+
+Uzasadnienie wprost z pomiarów. Rozdz. 4: *„język i model muszą być jednym bytem, nie dwoma
+niezależnymi ustawieniami"* — polskie „raz dwa trzy" na modelu angielskim dało „Ras dwaire
+Pindish". Preset jest takim bytem, z nazwą i własnym miejscem. W osobnych slotach ustawień
+język i model dało się rozjechać; w presecie nie.
+
+**Podział odpowiedzialności:** Settings trzyma **połączenia** (dostawcy, klucze, odświeżanie),
+Presets trzymają **to, co z nimi robisz**.
+
+| Pole presetu | Uwagi |
+|---|---|
+| Nazwa | np. „Polish" |
+| 🔴 Język | obowiązkowy, bez wartości domyślnej (P7) |
+| ASR: dostawca + model | z klasą obsługi języka (niżej) |
+| Korekta: dostawca + model + prompt | |
+| Podsumowanie: dostawca + model + prompt | 🔴 osobny prompt niż korekta (W§2) |
+| Domyślny język notatki | = język presetu; zmienialny per spotkanie (§1.4) |
+
+#### 🔴 Czego w presecie być nie może: embeddingu
+
+Wektory z różnych modeli nie są porównywalne. Gdyby polskie spotkania szły przez jeden model
+embeddingu, a angielskie przez drugi, chat nad archiwum przestałby znajdować cokolwiek między
+nimi. **Embedding jest globalny, w Settings.** Zmiana modelu embeddingu przelicza całe
+archiwum, nigdy jego część (P13).
+
+#### Przebieg zapisuje migawkę, nie odwołanie
+
+Zmiana modelu w presecie „Polish" za miesiąc nie może zmienić tego, co archiwum mówi o starych
+spotkaniach. Przebieg zapisuje nazwę presetu **i** jego rozwiązane wartości (§8, P12).
+
+#### 🔴 „Język" w presecie znaczy trzy różne rzeczy
+
+📐 Wyszło przy weryfikacji przykładu użytkownika („OpenRouter + Parakeet + Polish"). Parakeet v3
+**nie ma parametru języka** — karta modelu: *„automatically detects the language of the audio
+and transcribes it without requiring additional prompting"*. Pole „Polish" przy Parakeecie może
+zostać po cichu zignorowane, a to jest wprost mechanizm katastrofy z rozdz. 14.
+
+📐 FluidAudio mimo to przyjmuje `language` aż do dekodera i robi z nim dwie rzeczy
+(`TokenLanguageFilter.swift`, `TdtDecoderV3.swift`):
+
+1. **Filtr pisma** — dla polskiego tylko tokeny łacińskie. Chroni przed cyrylicą, ale **nie
+   przed angielskim**, bo angielski też jest łaciński.
+2. **Blokada kilkunastu angielskich tokenów** (*the, and, they, you, with, that*…) — wymierzona
+   dokładnie w konfabulację z rozdz. 14, ale to łatka: *„Mr. President, I am very happy to be
+   here"* w większości przez nią przechodzi.
+
+| Klasa | Przykład | Czy „Polish" w presecie działa |
+|---|---|---|
+| **Wymuszony** — model przyjmuje język | MAI-Transcribe-2 (`"language": "pl"`, rozdz. 11) | tak |
+| **Filtrowany** — model wykrywa sam, dekoder przycina wynik | Parakeet lokalnie przez FluidAudio (faza 2) | częściowo |
+| **Automatyczny** — model wykrywa sam, nic nie przycina | Parakeet przez API — ⚠️ do rozstrzygnięcia sondą (P10) | nie |
+
+Trzy wymagania, które z tego wynikają:
+
+1. **Klasa widoczna przy wyborze modelu** w presecie (§9).
+2. **Sonda honorowania języka** — to samo krótkie nagranie dwa razy, z `language` i bez.
+   Identyczny wynik = parametr nic nie robi = klasa „automatyczny". Dwa mikroskopijne żądania,
+   rozstrzygają bez zgadywania (P10). Nagranie próbne jest w języku presetu; rozdz. 4 daje
+   gotową frazę: „raz, dwa, trzy".
+3. **Strażnik języka na wyjściu** — fragment, który w presecie polskim czyta się jak angielski,
+   zostaje w transkrypcie **jawnie oznaczony** i nie trafia do notatki jako fakt (P11). Dla
+   klasy „automatyczny" to jedyna obrona, dla „filtrowanego" siatka bezpieczeństwa.
+
+**Konsekwencja dla fazy 1:** w presecie polskim MAI-Transcribe-2 jest modelem, w którym język
+faktycznie da się ustawić. Parakeet przez API to porównanie — i to cenne: **faza 1 i faza 2 mogą
+zmierzyć API i uruchomienie lokalne na tych samych wagach**, więc różnica w wyniku będzie
+pochodzić z dekodowania i otoczenia, a nie z modelu.
+
+#### Gdzie wybiera się preset
+
+Chip przy przycisku nagrywania na stronie głównej oraz pływające okno. 🆕 W§6 mówi, że
+pływające okno to miejsce na wybór języka i modelu — preset łączy oba w jeden wybór.
+
+⚠️ **Ryzyko do świadomego przyjęcia:** domyślny preset „ostatnio użyty" może po cichu zastosować
+angielski preset do polskiego spotkania. Chip pokazuje preset przed startem, więc ryzyko jest
+widoczne, a nie ukryte. Później kalendarz może podpowiadać preset według spotkania.
 
 ## 2. Ustalenia zamknięte, z dowodami
 
@@ -211,10 +314,12 @@ tłumaczeniem. To zadanie specyfikacji notatek (faza 3).
 | 🔴 Cisza zatruwa transkrypt | Kanał mikrofonu: 82% halucynacji przy milczącym użytkowniku (rozdz. 13) |
 | ⚠️ Warstwa korekty nie wygrywa sama z siebie | FluidVoice „z AI": 16 wtrętów zamiast 1, pewność 87,7% zamiast 92,9%, 5,5× wolniej (rozdz. 13) |
 | 📐 FluidVoice **nie dostraja** ASR | `SelectedSpeechModel = "parakeet-tdt"` → `FluidInference/parakeet-tdt-0.6b-v3-coreml`. Ich `fluid-1` to model **tekstowy** (`altic-dev`: Pico 0.8B, Mini 2B, Quad 4B, wszystkie `text-generation`), oznaczony w UI „For dictation only" |
+| 📐 Parakeet v3 **jest na OpenRouterze** | `nvidia/parakeet-tdt-0.6b-v3` w kolekcji speech-to-text: 22 modele ASR, **żaden** nie występuje w `/api/v1/models` |
+| 📐 🔴 Parakeet v3 **nie ma parametru języka** | karta modelu NVIDII: *„automatically detects the language of the audio and transcribes it without requiring additional prompting"*. FluidAudio dokłada na dekodowaniu filtr pisma i blokadę kilkunastu angielskich tokenów (`TokenLanguageFilter.swift`, `TdtDecoderV3.swift`) — §1.5 |
 
 **Wniosek z ostatniego wiersza:** jakość, którą użytkownik ceni u FluidVoice, nie pochodzi
 z lepszego ASR — pochodzi z **warstwy porządkującej po ASR**. Rozdz. 13 doszedł do tego
-niezależnie i nazwał ją „tanią rzeczą do zrobienia przez API". Slot „korekta" jest dokładnie
+niezależnie i nazwał ją „tanią rzeczą do zrobienia przez API". Rola „korekta" w presecie jest dokładnie
 tą warstwą i dlatego faza 1 ma sens jako pierwsza.
 
 ### 2.1 Runtime'y a ASR — stan na 2026-09-24
@@ -244,8 +349,8 @@ kluczami to dwaj dostawcy.
 
 **Rola** — `asr`, `korekta`, `embedding`, `podsumowanie`.
 
-**Profil** — przypisanie roli: dostawca + model + parametry. 🔴 Dla ASR język jest
-parametrem **obowiązkowym i jawnym**.
+**Preset** — nazwany zestaw: język + przypisania ról (dostawca, model, prompt). 🔴 Język jest
+polem **obowiązkowym i jawnym**. Zastępuje wcześniejsze pojęcie „profilu" (§1.5).
 
 **Rozróżnienie, na którym stoi cały ten design:** dialekty są w kodzie, możliwości są
 sondowane. „Bez wiedzy na sztywno" znaczy, że nie zapisujemy, *który model co potrafi*. Nie
@@ -311,14 +416,14 @@ Stąd zasada: **lista to wygoda, sonda to autorytet, wpisanie z ręki to wyjści
 
 ---
 
-## 5. Cztery sloty
+## 5. Cztery role i gdzie mieszkają
 
-| Rola | Parametry | Uwagi |
-|---|---|---|
-| **ASR** | 🔴 język, limit sekund na żądanie, kształt wywołania | Ollama, oMLX i LM Studio odpadną **przez sondę**, nie przez wpis w kodzie |
-| **Korekta** | własny system prompt | ⚠️ patrz ostrzeżenie w §2 — ta warstwa potrafi pogorszyć |
-| **Embedding** | wymiar wektora | konsument (RAG) dochodzi później; slot działa już teraz |
-| **Podsumowanie** | 🔴 **własny** system prompt, osobny od korekty | wymaganie W§2 |
+| Rola | Gdzie | Parametry | Uwagi |
+|---|---|---|---|
+| **ASR** | preset | 🔴 język, klasa obsługi języka, limit sekund na żądanie, kształt wywołania | Ollama, oMLX i LM Studio odpadną **przez sondę**, nie przez wpis w kodzie |
+| **Korekta** | preset | własny system prompt | ⚠️ patrz ostrzeżenie w §2 — ta warstwa potrafi pogorszyć |
+| **Podsumowanie** | preset | 🔴 **własny** system prompt, osobny od korekty | wymaganie W§2 |
+| **Embedding** | 🔴 **Settings, globalnie** | wymiar wektora | nigdy w presecie — §1.5 |
 
 Ładne w tym jest to, że 🔴 z rozdz. 19 egzekwuje się samo. Nie piszemy w kodzie „Ollama nie
 robi ASR" — sonda wyśle sekundę audio i dostanie odmowę. A gdyby Ollama kiedyś ASR dodała,
@@ -328,7 +433,10 @@ zadziała bez naszego wydania.
 
 ## 6. Transkrypcja pliku
 
-### 6.1 Twarde limity dostawcy fazy 1
+### 6.1 Twarde limity MAI-Transcribe-2
+
+Limity są **cechą modelu, nie dostawcy**: u jednego OpenRoutera jest 22 modeli ASR i każdy
+może mieć inne (O4). Poniżej wartości dla MAI-Transcribe-2 (rozdz. 11).
 
 | Limit | Wartość | Skutek |
 |---|---|---|
@@ -399,8 +507,12 @@ po zapisaniu widoczne wyłącznie ostatnie cztery znaki.
 
 ## 8. Metadane przebiegu
 
-Każdy przebieg zapisuje: **dostawcę, model, kształt wywołania, język, wersję słownika,
-datę, liczbę kawałków, koszt**.
+Każdy przebieg zapisuje: **nazwę presetu oraz jego rozwiązane wartości** (dostawcę, model,
+kształt wywołania, język, klasę obsługi języka, prompty), **wersję słownika, datę, liczbę
+kawałków, koszt i wynik strażnika języka**.
+
+🔴 Zapisujemy **migawkę**, nie odwołanie do presetu. Zmiana modelu w presecie za miesiąc nie
+może zmienić tego, co archiwum mówi o starych spotkaniach.
 
 Powód jest zmierzony. Rozdz. 16: cztery z pięciu aplikacji nie pokazują wybranego wariantu
 i przez to milcząco jadą na złym modelu. Rozdz. 14: nagłówek `Language: en` był jedynym
@@ -421,13 +533,18 @@ zweryfikowania. Ich „Verified providers" to nasza sonda pod inną nazwą.
 
 1. 🔴 **Żadnej pojedynczej liczby dokładności.** FluidVoice pokazuje „Acc 92%" niezależnie od
    wybranego języka. Karta modelu v3 na FLEURS ma rozrzut od 3,00% WER (włoski) do 24,03%
-   (słoweński) — ósemka razy; polski 7,31%. Pokazujemy WER **dla wybranego języka** albo nic.
+   (słoweński) — ósemka razy; polski 7,31%. Pokazujemy WER **dla języka presetu** albo nic.
    W notatniku, w którym najgroźniejsza awaria wygląda jak wiedza, fałszywa pewność na ekranie
    wyboru jest kosztowna.
 2. **Rola widoczna przy dostawcy** jako cztery znaczniki z wyniku sondy, a nie przypis
    drobnym drukiem w rodzaju „For dictation only".
 
-🔴 Wybrany język jest widoczny **przed** startem transkrypcji, nie w nagłówku wyniku.
+🔴 Wybrany preset — z językiem — jest widoczny **przed** startem: chip przy przycisku
+nagrywania i pływające okno. Nie w nagłówku wyniku.
+
+**Ekran presetu** pokazuje przy wybranym modelu ASR jego **klasę obsługi języka** (§1.5).
+Przy klasie „automatyczny" wprost: *„This model detects language itself — your language
+setting can't be enforced"*.
 
 ---
 
@@ -441,17 +558,21 @@ zweryfikowania. Ich „Verified providers" to nasza sonda pod inną nazwą.
 | **P4** | Plik 85+ min: cięcie, scalanie, ciągłe znaczniki słów w czasie pliku | brak skoków i nakładek na granicach kawałków |
 | **P5** | Przerwanie w połowie serii i wznowienie | zero powtórzonych opłaconych kawałków |
 | **P6** | Bramka energii odcina ciszę | fragment ciszy nie generuje żadnego żądania |
-| **P7** | Profilu ASR bez jawnego języka **nie da się zapisać** | bramka, nie ostrzeżenie |
+| **P7** | Presetu bez jawnego języka **nie da się zapisać** | bramka, nie ostrzeżenie |
 | **P8** | Klucz nie pojawia się w logu, pliku ustawień ani raporcie błędu | wyszukanie po całym drzewie danych |
 | **P9** | Kontrakt obsługuje krótkie okno (`transcribeUtterance`) | jedno żądanie, bez cięcia |
+| **P10** | Sonda honorowania języka klasyfikuje każdy model ASR użyty w presecie | klasa zapisana; `nvidia/parakeet-tdt-0.6b-v3` przez API sklasyfikowany wynikiem, nie założeniem |
+| **P11** | Strażnik języka: preset polski + fragment po angielsku w nagraniu | fragment oznaczony w transkrypcie i **wyłączony z notatki** |
+| **P12** | Edycja presetu po przebiegu | metadane starego przebiegu bez zmian |
+| **P13** | Jeden model embeddingu w archiwum | wszystkie wektory mają ten sam identyfikator modelu; zmiana modelu przelicza **całe** archiwum |
 
 🔴 Każdy test dostaje **mutację** — wstrzykujemy błąd, sprawdzamy czerwień, cofamy. Rozdz. 1:
 zielony test bez mutacji nie dowodzi niczego, a w poprzednim projekcie trzykrotnie okazało
 się, że testy chroniły nie to, co miały.
 
-**P6 i P7 są bramkami produktowymi, nie technicznymi.** Halucynacja na ciszy i konfabulacja
-z niewłaściwym językiem to dwa najgroźniejsze tryby awarii notatnika, bo oba **wyglądają na
-wiedzę**.
+**P6, P7 i P11 są bramkami produktowymi, nie technicznymi.** Halucynacja na ciszy i
+konfabulacja z niewłaściwym językiem to dwa najgroźniejsze tryby awarii notatnika, bo oba
+**wyglądają na wiedzę**. P11 jest jedyną obroną tam, gdzie model sam wybiera język.
 
 ---
 
@@ -462,7 +583,7 @@ wiedzę**.
 | Modele lokalne, FluidAudio, cache ANE | faza 2 |
 | Diaryzacja, próg klastrowania, tożsamość mówcy | faza 2 |
 | Tap systemowy, archiwum, AEC, kotwice czasu | **faza 1**, ale osobny dokument: `2026-09-24-rdzen-nagrywania-design.md` |
-| Design wizualny powłoki, układ strony głównej | przed implementacją powłoki — nierozstrzygnięte |
+| Szczegółowy design widoku spotkania i ekranu presetów | przed implementacją powłoki. Układ strony głównej **rozstrzygnięty**: §1.2, wariant B |
 | Import słownika z `GCX/dictation` i pętla uczenia | osobna specyfikacja; faza 1 zapisuje tylko **wersję** słownika |
 | Treść promptów korekty i podsumowania | strojenie na korpusie, nie decyzja projektowa |
 | Framework UI i magazyn danych | start implementacji |
@@ -475,6 +596,8 @@ wiedzę**.
 | O1 | Czy pliki korpusu z rozdz. 13, 14 i 17 nadal istnieją? Bez nich P4 nie ma punktu odniesienia | przed implementacją |
 | O2 | Próg energii bramki i czas kwalifikowanej ciszy | strojenie na korpusie |
 | O3 | Czy `transcribeUtterance` ma trafić do fazy 1 jako działająca funkcja, czy tylko jako dowiedziony kontrakt (P9) | przed planem |
-| O4 | Limit sekund na żądanie: sondowany czy konfigurowany per dostawca | przed planem |
+| ~~O4~~ | ~~Limit sekund na żądanie: sondowany czy konfigurowany per dostawca~~ → **rozstrzygnięte:** per **model**, nie per dostawca (22 modele ASR u jednego dostawcy). Wartość z sondy albo dokumentacji, nadpisywalna ręcznie | — |
 | O5 | Stan uprawnienia dźwięku systemowego: prywatne TCC (Wispr Flow, Spokenly) czy próba i obserwacja (Narada)? §1.3 | po sondzie T9, przed budową setupu |
+| O7 | Słownik per preset (per język) czy globalny z terminami oznaczonymi językiem? | specyfikacja słownika, faza 3 |
+| O8 | Dyktowanie: te same presety czy osobne pole „ASR do dyktowania" (opóźnienie ważniejsze niż przy spotkaniach)? | razem z dyktowaniem |
 | O6 | Czy setup otwiera właściwy panel Ustawień głębokim linkiem, zamiast opisywać, gdzie kliknąć? Interfejs jest po angielsku, a system użytkownika po polsku — opis ścieżki rozjedzie się z tym, co widać na ekranie | przed budową setupu |
