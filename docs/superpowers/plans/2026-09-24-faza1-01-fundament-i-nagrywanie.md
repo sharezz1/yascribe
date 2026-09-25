@@ -2185,7 +2185,7 @@ Status: 🔧 skompilowane (źródła sprzętowe nigdy nie uruchomione) + ✅ `Sy
 
 ⚠️ Tego kodu nie da się sprawdzić testem jednostkowym: mikrofonu i głośników nie da się zaskryptować. Działanie sprawdza A10 na sprzęcie.
 
-- [ ] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesRecordingTests/SystemAudioCheckTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesRecordingTests/SystemAudioCheckTests.swift`:
 
 ```swift
 import Testing
@@ -2205,9 +2205,9 @@ import Testing
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter SystemAudioCheck` — oczekiwane: kod `1`, `cannot find 'SystemAudioCheck' in scope`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter SystemAudioCheck` — oczekiwane: kod `1`, `cannot find 'SystemAudioCheck' in scope`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesRecording/CoreAudioDevices.swift`:
 
@@ -2647,9 +2647,9 @@ final class LevelCollector: @unchecked Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 44/44 testów uruchomionych i zaliczonych.` Jedno ostrzeżenie `consider using asynchronous alternative function` przy `scheduleBuffer` jest świadome: wersja `async` czeka na koniec odtwarzania i przy zatrzymanym silniku zawiesiłaby sprawdzenie.
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 44/44 testów uruchomionych i zaliczonych.` Jedno ostrzeżenie `consider using asynchronous alternative function` przy `scheduleBuffer` jest świadome: wersja `async` czeka na koniec odtwarzania i przy zatrzymanym silniku zawiesiłaby sprawdzenie.
 
-- [ ] **Krok 5: Commit.**
+- [x] **Krok 5: Commit.**
 
 ```bash
 git add Sources/MeetNotesRecording Tests/MeetNotesRecordingTests
