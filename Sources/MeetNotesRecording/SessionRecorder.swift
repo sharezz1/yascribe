@@ -146,9 +146,14 @@ public final class SessionRecorder: @unchecked Sendable {
                     watchZerosLocked(trackID: trackID, chunk: chunk, journal: journal)
                     lastChunkAt = max(lastChunkAt, chunk.hostTime)
                     lastChunkByTrack[trackID] = chunk.hostTime
-                    if stalledTracks.contains(trackID) { // tor ożył — podsumowanie nie może dalej mówić „stalled" (P6)
-                        try? journal.append(.trackRecovered(trackID, hostTime: chunk.hostTime))
-                        stalledTracks.remove(trackID)
+                    // Tor ożył — podsumowanie nie może dalej mówić „stalled" (P6). Tylko gdy stall był
+                    // ostatnią awarią: późniejsza prawdziwa przyczyna zostaje w podsumowaniu (P2).
+                    // Niezapisane zdarzenie = spróbuj przy następnej porcji (jak P3).
+                    if stalledTracks.contains(trackID) && !failedTracks.contains(trackID) {
+                        do {
+                            try journal.append(.trackRecovered(trackID, hostTime: chunk.hostTime))
+                            stalledTracks.remove(trackID)
+                        } catch {}
                     }
                     if Levels.rmsDBFS(chunk.samples) > silenceThreshold { lastLoudAt = max(lastLoudAt, chunk.hostTime) }
                     reason = evaluateLocked(now: chunk.hostTime)
@@ -158,8 +163,12 @@ public final class SessionRecorder: @unchecked Sendable {
             case .deviceChanged(let uid):
                 try? journal.append(.deviceChanged(trackID, deviceUID: uid, hostTime: clock.now()))
             case .failed(let why):
-                try? journal.append(.trackFailed(trackID, reason: why, hostTime: clock.now()))
-                failedTracks.insert(trackID)
+                // Zdarzenie jednorazowe, bez ponowienia. Insert tylko po udanym zapisie: inaczej
+                // tor nie miałby w dzienniku żadnego track.failed — niech wtedy zapisze go nadzór (stalled).
+                do {
+                    try journal.append(.trackFailed(trackID, reason: why, hostTime: clock.now()))
+                    failedTracks.insert(trackID)
+                } catch {}
             case .endOfStream:
                 ended.insert(trackID)
                 if ended.count == started.count { reason = .endOfInput }
@@ -182,9 +191,11 @@ public final class SessionRecorder: @unchecked Sendable {
         let first = zeroFirstChunk[trackID] ?? chunk.hostTime
         zeroFirstChunk[trackID] = first
         if timebase.secondsBetween(chunk.hostTime, first) >= window {
-            try? journal.append(.trackFailed(trackID, reason: "allZeros\(Int(window))s", hostTime: chunk.hostTime))
-            zeroResolved.insert(trackID)
-            failedTracks.insert(trackID)
+            zeroResolved.insert(trackID) // jednorazowo, bez ponowienia — jak .failed w handle()
+            do {
+                try journal.append(.trackFailed(trackID, reason: "allZeros\(Int(window))s", hostTime: chunk.hostTime))
+                failedTracks.insert(trackID)
+            } catch {}
         }
     }
 

@@ -59,7 +59,10 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     private func reopen() {
         lock.lock(); let c = capture; capture = nil; let h = handler; lock.unlock()
         c?.stop()
-        do { h?(.deviceChanged(try open())) } catch { h?(.failed("reopen: \(error)")) }
+        do {
+            let uid = try open()
+            if !uid.isEmpty { h?(.deviceChanged(uid)) } // "" = spóźniony stop(), bez zdarzenia
+        } catch { h?(.failed("reopen: \(error)")) }
     }
 }
 

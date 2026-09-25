@@ -247,6 +247,31 @@ private final class Pump: AudioSource, @unchecked Sendable {
     #expect(sys.failure?.contains("CreateIOProc") == true)
 }
 
+@Test func failedTrackKeepsItsReasonThroughStallAndResume() throws {
+    // Przegląd poprawek U4/U2: .failed ze źródła nie jest nadpisywany przez stalled30s,
+    // a późniejsza prawdziwa awaria nie znika z podsumowania, gdy tor znów daje porcje.
+    let dir = sessionDir()
+    let clock = ManualHostClock(0)
+    let early = Pump("system"), late = Pump("mic_aec"), mic = Pump("mic_raw")
+    let r = SessionRecorder(directory: dir, sources: [early, late, mic], conditions: [], clock: clock, timebase: ns, zeroWatch: [:])
+    try r.start()
+    for k in 1...45 {
+        clock.set(UInt64(k) * s)
+        if k == 1 { early.handler?(.failed("reopen: A")) }
+        if k == 35 { late.handler?(.failed("reopen: B")) } // po stalled30s z k=30
+        mic.pump(at: k)
+        if k > 40 { late.pump(at: k) }
+        r.tick()
+    }
+    r.stop()
+    let events = try SessionJournal.read(url: SessionDirectory(url: dir).journalURL)
+    #expect(!events.contains { $0.type == .trackFailed && $0.trackID == "system" && $0.reason == "stalled30s" })
+    #expect(!events.contains { $0.type == .trackRecovered && $0.trackID == "mic_aec" })
+    let tracks = try SessionDirectory(url: dir).summarize().tracks
+    #expect(tracks.first { $0.id == "system" }?.failure == "reopen: A")
+    #expect(tracks.first { $0.id == "mic_aec" }?.failure == "reopen: B")
+}
+
 @Test func unsafeTrackIDNeverLeavesSessionDirectory() throws {
     // S4 P12: trackID idzie do nazwy pliku.
     let dir = sessionDir()
