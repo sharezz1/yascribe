@@ -95,3 +95,28 @@ Poza punktami, uwaga formalna z S4 o śmieceniu `$TMPDIR` przez testy — nie ru
 2. **P11** — czy wydzielić zadanie „dziennik poza blokadą rejestratora" (np. do E2/E4), czy uznać obecny stan za wystarczający?
 3. **`positional` traktuje wartości opcji jako argumenty pozycyjne**, gdy opcja stoi przed ścieżką (np. `record --seconds 5 /tmp/x` → katalog „5"). Poza zakresem przeglądów, nie poprawiałem — plany B/C wołają `positional` z opcjami na końcu. Poprawić przy okazji B4/C4?
 4. **Nieznane opcje** (np. literówka `--second 5`) nadal są cicho ignorowane — S3-3 dotyczył tylko wartości. Czy walidować listę opcji per polecenie?
+
+## Runda CLI (pozycje 3+4 z decyzje.md)
+
+Zmiana tylko w `Sources/meetnotes-cli/CLI.swift`: `static let valued` (6 opcji z wartością, w tym `--language`/`--shape`/`--run` z B4/C4); `positional` pomija element stojący zaraz po opcji z `valued`; w `main` każde `--x` spoza `valued ∪ ["--no-aec", "--no-system"]` → `nieznana opcja: …`, `usage`, `exit(64)`. Sygnatury `positional`/`option` bez zmian. Bez nowych `@Test` (kompromis z decyzje.md).
+
+Dymy (bez sprzętu):
+
+| Wywołanie | Wynik | exit |
+|---|---|---|
+| `fit --max-lag-ms 100 /nie/ma/a /nie/ma/b` | `błąd: Error Domain=com.apple.coreaudio.avfaudio Code=2003334207 … ExtAudioFileOpenURL` | 1 |
+| `record /tmp/mn-x --second 5` | `nieznana opcja: --second`, katalog nie powstał | 64 |
+| `record /tmp/mn-x --seconds abc --no-system --no-aec` | `--seconds wymaga liczby dodatniej`, katalog nie powstał | 64 |
+| `summarize /nie/ma` | `błąd: … journal.jsonl couldn't be opened …` | 1 |
+
+**Odstępstwo od oczekiwania dla dymu `fit`:** oczekiwano „błąd o `/nie/ma/a`, exit 64". Nieosiągalne bez zmiany `fit`: błąd CoreAudio nie zawiera ścieżki, a brak pliku to błąd wykonania (exit 1) — przed poprawką wynik jest identyczny (tam otwierał „100"). Ten dym nie rozróżnia stanu przed/po. `fit` nie zmieniałem (poza zakresem). Dymy rozróżniające, uruchomione na HEAD przed poprawką (`git stash`) i po niej (`/tmp/mn-ref.aiff` z `say`):
+
+| Wywołanie | przed | po |
+|---|---|---|
+| `fit --max-lag-ms 100 /tmp/mn-ref.aiff /tmp/mn-ref.aiff` | błąd otwarcia pliku („100"), 1 | `błąd: notOurLayout("magic")`, 1 — wzorzec otwarty, odrzucone nagranie (aiff to nie nasz CAF) |
+| `fit --max-lag-ms 100 /nie/ma/a` (jedna ścieżka) | błąd CoreAudio, 1 | `usage`, 64 |
+| `fit --max-lag-ms -3 …` | `--max-lag-ms wymaga liczby dodatniej`, 64 | to samo, 64 |
+
+Do decyzji: czy `fit`/`summarize` mają w błędzie podawać ścieżkę pliku (osobna drobna zmiana).
+
+`scripts/test.sh`: `test.sh: 52/52 testów uruchomionych i zaliczonych.`
