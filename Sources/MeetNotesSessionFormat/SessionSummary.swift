@@ -116,6 +116,8 @@ public struct SessionSummary: Codable, Equatable, Sendable {
                 }
             case .trackFailed:
                 if let i = e.trackID.flatMap({ index[$0] }) { summary.tracks[i].failure = e.reason }
+            case .trackRecovered:
+                if let i = e.trackID.flatMap({ index[$0] }) { summary.tracks[i].failure = nil }
             case .trackClosed:
                 if let i = e.trackID.flatMap({ index[$0] }) { summary.tracks[i].frames = e.frames }
             case .sessionEnded:

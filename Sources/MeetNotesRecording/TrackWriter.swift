@@ -58,7 +58,13 @@ public final class TrackWriter {
     }
 
     public func close(hostTime: UInt64) throws {
-        try journal.append(.trackClosed(trackID, frames: caf.framesWritten, hostTime: hostTime))
+        // Błąd dziennika nie może zostawić otwartego, niezsynchronizowanego pliku (P9).
+        do {
+            try journal.append(.trackClosed(trackID, frames: caf.framesWritten, hostTime: hostTime))
+        } catch {
+            try? caf.close()
+            throw error
+        }
         try caf.close()
     }
 }

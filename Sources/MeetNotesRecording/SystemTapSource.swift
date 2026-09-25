@@ -17,6 +17,8 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
     private var capture: HALCapture?
     private var format: TrackFormat?
     private var handler: (@Sendable (AudioSourceEvent) -> Void)?
+    /// Po `stop()` przebudowa z kolejki obserwatora nie może zostawić capture ani tapu (P8).
+    private var stopped = false
     private let watcher = DeviceWatcher(selector: kAudioHardwarePropertyDefaultOutputDevice)
 
     public init() {}
@@ -36,7 +38,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
 
     public func stop() {
         watcher.stop()
-        lock.lock(); let c = capture; capture = nil; lock.unlock()
+        lock.lock(); stopped = true; let c = capture; capture = nil; lock.unlock()
         c?.stop()
         teardown()
     }
@@ -84,14 +86,15 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
 
     private func startCapture() throws {
         lock.lock()
-        guard let f = format, let h = handler else { lock.unlock(); return }
+        guard let f = format, let h = handler, !stopped else { lock.unlock(); return }
         let agg = aggregate, tapID = tap
         lock.unlock()
         let c = try HALCapture(device: agg, inputFormat: try CoreAudioDevices.tapFormat(of: tapID),
                                sampleRate: f.sampleRate, channels: f.channels,
                                onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
-        lock.lock(); capture = c; lock.unlock()
+        lock.lock(); let late = stopped; if !late { capture = c }; lock.unlock()
+        if late { c.stop() }
     }
 
     private func teardown() {
@@ -115,5 +118,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         } catch {
             h?(.failed("rebuild: \(error)"))
         }
+        lock.lock(); let late = stopped; lock.unlock()
+        if late { teardown() } // build() po stop() założył tap i urządzenie zbiorcze od nowa
     }
 }

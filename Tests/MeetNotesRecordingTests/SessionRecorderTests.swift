@@ -181,13 +181,79 @@ private final class DeniedSource: AudioSource, @unchecked Sendable {
     let r = SessionRecorder(directory: dir, sources: [Silent(), mic], conditions: [StallCondition(seconds: 30)],
                             clock: clock, timebase: ns, zeroWatch: [:])
     try r.start()
+    let failure = { (id: String) in try SessionDirectory(url: dir).summarize().tracks.first { $0.id == id }?.failure }
     for k in 1...40 {
         clock.set(UInt64(k) * s)
         mic.handler?(.chunk(AudioChunk(samples: sine(frames: 1_600, channels: 1, rate: 16_000), hostTime: UInt64(k) * s)))
         r.tick()
+        // Granica przypięta z obu stron (S4 P4): mutacje progu `* 10` i `/ 10` też dają czerwień.
+        if k == 29 { #expect(try failure("system") == nil) }
+        if k == 30 { #expect(try failure("system") == "stalled30s") }
     }
     #expect(r.endReason == nil) // mikrofon żyje, sesja trwa
     r.stop()
+    #expect(try failure("system") == "stalled30s")
+    #expect(try failure("mic_raw") == nil) // żywy tor nie jest oznaczany
+}
+
+private final class Pump: AudioSource, @unchecked Sendable {
+    let trackID: String
+    var handler: (@Sendable (AudioSourceEvent) -> Void)?
+    init(_ id: String) { trackID = id }
+    func prepare() throws -> TrackFormat { TrackFormat(sampleRate: 16_000, channels: 1, deviceUID: "m") }
+    func start(_ h: @escaping @Sendable (AudioSourceEvent) -> Void) throws { handler = h }
+    func stop() {}
+    func pump(at k: Int) {
+        handler?(.chunk(AudioChunk(samples: sine(frames: 1_600, channels: 1, rate: 16_000), hostTime: UInt64(k) * s)))
+    }
+}
+
+@Test func stalledTrackThatResumesIsNotLeftFailed() throws {
+    // S4 P6: tor ożył po stalled30s — podsumowanie nie może go dalej pokazywać jako awarii.
+    let dir = sessionDir()
+    let clock = ManualHostClock(0)
+    let sys = Pump("system"), mic = Pump("mic_raw")
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: clock, timebase: ns, zeroWatch: [:])
+    try r.start()
+    for k in 1...45 {
+        clock.set(UInt64(k) * s)
+        mic.pump(at: k)
+        if k > 40 { sys.pump(at: k) }
+        r.tick()
+    }
+    r.stop()
+    let events = try SessionJournal.read(url: SessionDirectory(url: dir).journalURL)
+    #expect(events.contains { $0.type == .trackFailed && $0.trackID == "system" })
+    #expect(events.contains { $0.type == .trackRecovered && $0.trackID == "system" })
+    #expect(try SessionDirectory(url: dir).summarize().tracks.first { $0.id == "system" }?.failure == nil)
+}
+
+@Test func stallDoesNotOverwriteEarlierFailure() throws {
+    // S4 P2: tor, którego start() rzucił, nie dostaje po 30 s drugiego track.failed nadpisującego przyczynę.
+    final class Broken: AudioSource, @unchecked Sendable {
+        let trackID = "system"
+        func prepare() throws -> TrackFormat { TrackFormat(sampleRate: 48_000, channels: 2, deviceUID: "x") }
+        func start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws { throw AudioSourceError.coreAudio("CreateIOProc", -1) }
+        func stop() {}
+    }
+    let dir = sessionDir()
+    let clock = ManualHostClock(0)
+    let mic = Pump("mic_raw")
+    let r = SessionRecorder(directory: dir, sources: [Broken(), mic], conditions: [], clock: clock, timebase: ns, zeroWatch: [:])
+    try r.start()
+    for k in 1...40 { clock.set(UInt64(k) * s); mic.pump(at: k); r.tick() }
+    r.stop()
     let sys = try #require(try SessionDirectory(url: dir).summarize().tracks.first { $0.id == "system" })
-    #expect(sys.failure == "stalled30s")
+    #expect(sys.failure?.contains("CreateIOProc") == true)
+}
+
+@Test func unsafeTrackIDNeverLeavesSessionDirectory() throws {
+    // S4 P12: trackID idzie do nazwy pliku.
+    let dir = sessionDir()
+    let evil = FileSource(trackID: "../evil", samples: sine(frames: 160, channels: 1, rate: 16_000), sampleRate: 16_000,
+                          channels: 1, startHostTime: 0, timebase: ns)
+    let r = SessionRecorder(directory: dir, sources: [evil], conditions: [], clock: ManualHostClock(), timebase: ns)
+    try r.start()
+    #expect(r.endReason == .noSources)
+    #expect(!FileManager.default.fileExists(atPath: dir.deletingLastPathComponent().appendingPathComponent("evil.caf").path))
 }

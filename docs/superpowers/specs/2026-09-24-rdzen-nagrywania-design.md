@@ -149,7 +149,7 @@ Faza 1 bez kalendarza: koniec sesji to najlepsza próba — cisza na wszystkich 
 
 Spina powyższe. Jedyny moduł widzący całość.
 
-Każdy tor nadzorowany osobno: brak porcji przez 30 s → track.failed (stalled30s), sesja trwa z pozostałymi.
+Każdy tor nadzorowany osobno: brak porcji przez 30 s (licząc od `track.opened`) → track.failed (stalled30s), sesja trwa z pozostałymi. Tor, który już ma track.failed z innego powodu, nie dostaje stalled30s. Gdy tor po stalled30s znów dostarcza porcje → `track.recovered`, a podsumowanie zdejmuje `failure`.
 
 ---
 

@@ -11,6 +11,13 @@ public final class FormatConverter {
     /// Nieudane konwersje — źródło zgłasza je jako .failed zamiast po cichu gubić dźwięk.
     public private(set) var failures = 0
 
+    /// Czy zgłosić `.failed` po wywołaniu, które zmieniło licznik z `before` na `after`:
+    /// pierwsza awaria i każde przekroczenie kolejnego tysiąca. Liczone na sumie,
+    /// bo jedno `convert` tnie bufor na plasterki i potrafi dodać kilka naraz (P1).
+    static func shouldReport(before: Int, after: Int) -> Bool {
+        after > before && (before == 0 || after / 1_000 > before / 1_000)
+    }
+
     public init(input: AVAudioFormat, sampleRate: Double, channels: Int) throws {
         guard let out = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate,
                                       channels: AVAudioChannelCount(channels), interleaved: true),
