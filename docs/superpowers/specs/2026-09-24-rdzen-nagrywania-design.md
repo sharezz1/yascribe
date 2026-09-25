@@ -73,7 +73,7 @@ Domykają część eksperymentów zaprojektowanych przez Hermesa jako E0 (patrz 
 | 📐7 | Tempo wydań: `v0.15.2` → `v0.17.1` w 3 tygodnie, 2 głównych autorów | GitHub API |
 | 📐8 | Cache ANE MacParakeeta: **7,0 GB → 32 KB**. Cache jest odzyskiwany przez system | `du ~/Library/Caches/*/com.apple.e5rt.e5bundlecache` |
 | 📐9 | Żadna z 5 aplikacji nie jest w App Store; tylko Narada ma sandbox | `_MASReceipt`, `codesign -d --entitlements` |
-| 📐10 | SwiftUI + Core Audio budują się bez Xcode (25 s) | próbka SwiftPM w katalogu tymczasowym |
+| 📐10 | SwiftUI + Core Audio budują się bez Xcode (25 s) | próbka SwiftPM w katalogu tymczasowym ⚠️ Poprawka: prawdziwe dla SwiftUI bez makr. W SDK macOS 27 @State, @Entry, @Animatable i #Preview są makrami z pluginu SwiftUIMacros, którego nie ma w Command Line Tools. Bez Xcode stan lokalny widoku idzie przez ObservableObject/@StateObject. |
 
 ⚠️ **Czego nie zmierzyłem:** ile cache'u ANE generuje Parakeet v3 uruchomiony przez
 **naszą** aplikację. 📐8 pokazuje, że rachunek jest zwracalny, nie że jest mały. To pytanie
@@ -125,8 +125,8 @@ w kodzie, który wyglądał poprawnie.
 Dziennik `jsonl`, dopisywany i synchronizowany z dyskiem przy każdym zdarzeniu.
 
 Zdarzenia: `session.started`, `track.opened` (id, czas hosta, częstotliwość, kanały,
-`deviceUID`, format), `track.firstSample`, `device.changed`, `track.gap` (początek, długość),
-`track.permissionDenied` (które uprawnienie, jak wykryte — patrz T9), `track.closed` (liczba
+`deviceUID`, format), `track.firstSample`, `track.clock` (indeks ramki, czas hosta — kotwica dla T8), `device.changed`, `track.gap` (początek, długość),
+`track.permissionDenied` (które uprawnienie, jak wykryte — patrz T9), `track.failed` (powód: błąd źródła, a także `allZeros60s` — T9), `track.closed` (liczba
 ramek), `session.ended` (powód).
 
 ### `DeviceWatcher`
@@ -143,9 +143,13 @@ Pierwszy warunek, który zadziała, wygrywa; jego tożsamość trafia do `sessio
 Kalendarz dojdzie później jako kolejna implementacja — bez dotykania rdzenia. To jest
 konkretny powód, dla którego warunki są listą.
 
+Faza 1 bez kalendarza: koniec sesji to najlepsza próba — cisza na wszystkich torach albo 4 h. Muzyka albo rozmowa w pokoju po spotkaniu utrzymają nagranie. W§1 jest w pełni spełnione dopiero z kalendarzem (faza 3); zamknięcie okna rozmowy — backlog fazy 3.
+
 ### `SessionRecorder`
 
 Spina powyższe. Jedyny moduł widzący całość.
+
+Każdy tor nadzorowany osobno: brak porcji przez 30 s → track.failed (stalled30s), sesja trwa z pozostałymi.
 
 ---
 
@@ -229,6 +233,8 @@ Pierwotnie zapisane tu jako „do rozstrzygnięcia w planie". Po dodaniu setupu 
 uruchomieniu (spec fazy 1, §1.3) to już nie niedogodność: bez stałego podpisu kreator
 uruchamiałby się po każdym `swift build`. **Zadanie na dzień pierwszy.**
 
+⚠️ Poprawka: prawdziwe dla SwiftUI bez makr. W SDK macOS 27 @State, @Entry, @Animatable i #Preview są makrami z pluginu SwiftUIMacros, którego nie ma w Command Line Tools. Bez Xcode stan lokalny widoku idzie przez ObservableObject/@StateObject.
+
 ### Kontenery: nie
 
 `container` Apple'a, Colima i OrbStack uruchamiają maszyny wirtualne z **Linuksem** —
@@ -275,18 +281,24 @@ a w poprzednim projekcie trzy razy okazało się, że testy chroniły nie to, co
 | **T1** | Odsłuch jest tapem. Odtwarzamy znany plik przez wyjście, nagrywamy, dopasowujemy `system ≈ a·oryginał` | R² ≥ 0,999 | domieszać 1% mikrofonu → czerwień |
 | **T2** | Rozjazd startu jest **zmierzony i zapisany**, nie mały | obecność w manifeście | sztuczne 500 ms → manifest ma pokazać ~500 ms |
 | **T3** | AEC działa. Głośniki grają, użytkownik milczy | korelacja `mic_aec` × `system` ≤ 0,12 | wyłączyć AEC → czerwień |
-| **T4** | Zero miksu. Dopasowanie `mic_raw ≈ a·system` | a ≈ 0 | domieszać system → czerwień |
+| **T4** | Zero miksu w odsłuchu. W słuchawkach (bez echa akustycznego), użytkownik mówi, nic nie gra: dopasowanie `system ≈ a·mic_raw` | a ≈ 0 | domieszać mikrofon do ścieżki systemowej → czerwień |
 | **T5** | Koniec z ciszy. Konfiguracja testowa N = 1 min | `reason == silence` w ciągu 90 s | usunąć warunek → czerwień |
 | **T6** | Przepięcie urządzenia w trakcie | sesja trwa, `device.changed` i `track.gap` w dzienniku | — |
-| **T7** | `kill -9` w połowie sesji | dziennik odtwarza `session.json`, pliki grają | skasować `fsync` → czerwień |
-| **T8** | Sesja 85+ min | każda ścieżka z osobna: różnica między czasem hosta a długością z liczby ramek ≤ 50 ms. Różnica **między** ścieżkami ma być **zapisana**, nie zerowa | skasować przeliczanie zegara → czerwień |
+| **T7** | `kill -9` w połowie sesji | dziennik odtwarza `session.json`, pliki grają | zapisać rozmiar bloku data 0 zamiast -1 → czerwień |
+| **T8** | Sesja 85+ min | czas hosta dowolnej ramki, odtworzony z kotwic `track.clock`, różni się od prawdziwego o ≤ 50 ms; rzeczywista częstotliwość każdej ścieżki jest zapisana w podsumowaniu | liczyć czas z nominalnej częstotliwości → czerwień |
 | **T9** | Odmowa uprawnienia dźwięku systemowego daje **jawny błąd**, nie cichy plik | sesja nie startuje albo dziennik ma `track.permissionDenied`; zero ścieżek pełnych zer udających nagranie | wyłączyć sprawdzenie → czerwień |
+
+✏️ **Korekta.** Pierwsza wersja dopasowywała mic_raw ≈ a·system i żądała a ≈ 0 — ale surowy mikrofon przy głośnikach musi zawierać echo systemu. Intencja testu: mikrofon nie trafia do pliku odsłuchu.
+
+✏️ **Korekta.** Usunięcie fsync nie da się wykazać testem: po kill -9 dane z pamięci podręcznej systemu i tak trafiają na dysk, fsync chroni tylko przed utratą zasilania. Mutacją T7 jest więc nagłówek CAF.
 
 ⚠️ **T9 wyrasta z hipotezy, nie z pomiaru.** Nie ma publicznego API do sprawdzenia stanu tego
 uprawnienia (spec fazy 1, §1.3). Jeśli tap przy odmowie oddaje **ciszę zamiast błędu**,
 aplikacja nagra 85 minut niczego i będzie przy tym wyglądać na zdrową. Rdzeń ma chronić
 archiwum właśnie przed takim scenariuszem, więc zanim powstanie setup, trzeba to sprawdzić
 sondą. Jeśli tap zwraca błąd, T9 staje się zwykłym testem obsługi błędu.
+
+Zakres: strażnik zer obejmuje ścieżkę system. Odmowę mikrofonu wykrywa publiczne API (AVCaptureDevice.authorizationStatus) w prepare(); gdyby mikrofon przy odmowie oddawał zera zamiast błędu, nic tego nie wykryje — świadoma luka fazy 1, do rozszerzenia strażnika, jeśli S1 albo D3 pokażą taki przypadek.
 
 ⚠️ **T3 i T4 wymagają przepróbkowania.** `system.caf` jest w 48 kHz stereo, kanały mikrofonu
 w 16 kHz mono — korelacji nie liczy się na surowych plikach. Test przepróbkowuje obie ścieżki
@@ -298,6 +310,12 @@ klasa awarii, przed którą ostrzega rozdz. 1.
 i musi być bliski zeru. Rozjazd *między* ścieżkami to realna różnica zegarów dwóch urządzeń
 — Narada zmierzyła 901,269 s wobec 901,056 s, czyli 213 ms na 901 s. Tego nie wolno
 „naprawiać", tylko zapisać, bo wyrównanie to zadanie odtwarzania, nie nagrywania.
+
+✏️ **Korekta z pisania planu.** Pierwsza wersja T8 porównywała czas hosta z długością liczoną
+z nominalnej częstotliwości i żądała ≤ 50 ms na ścieżkę. To nie przejdzie na żadnej długiej
+sesji: zegar urządzenia dryfuje względem zegara hosta o setki ppm (Narada: 213 ms na 901 s),
+czyli o ~0,5 s na 85 minut — i to nie jest błąd, tylko fizyka. Rdzeń zapisuje więc kotwice
+`(ramka, czas hosta)` co 10 s i po każdej luce, a T8 sprawdza odtworzenie czasu z kotwic.
 
 T1, T3 i T4 to dokładnie te trzy liczby, które odróżniły Naradę od MacParakeeta i Spokenly
 (rozdz. 18). Jeśli przechodzą, rdzeń jest mierzalnie lepszy od czterech z pięciu zmierzonych
@@ -347,3 +365,4 @@ kosztem wydajności przy zimnym starcie, nie kosztem instalacji. Nie zmienia to 
 | Sprawdzanie stanu uprawnienia dźwięku systemowego | spec fazy 1, §1.3 i O5; sonda przed T9 |
 | Framework UI i magazyn danych | poza rdzeniem nagrywania |
 | Retencja archiwum | domyślnie brak kasowania; polityka to osobna decyzja |
+| Czy surowy mikrofon (HAL) i mikrofon z AEC (AVAudioEngine + przetwarzanie głosu) dają się nagrywać jednocześnie | sonda S2 w planie A (A10). Jeśli nie — decyzja użytkownika, który strumień porzucić |

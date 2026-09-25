@@ -62,6 +62,8 @@ z postępem) i `transcribeUtterance` (jedno żądanie, niskie opóźnienie). Faz
 pierwszy i **dowodzi testem**, że drugi jest osiągalny tym samym kontraktem. Bez tego
 założenia dyktowanie wymusi później przepisanie warstwy.
 
+Realizacja w fazie 1: transcribeFile to TranscriptionRunner, a transcribeUtterance to OpenAICompatibleClient.transcribe wołane wprost, jednym żądaniem, bez cięcia. Dowód testem: B1 transcriptionSendsLanguageAndAsksForWordTimestamps i sonda ASR (B2), która wysyła ~2 s audio jednym żądaniem. Osobnej funkcji o tej nazwie nie ma — kontrakt jest ten sam.
+
 ### 1.2 Nawigacja aplikacji
 
 Ustalona 2026-09-24. Pełna struktura, z zaznaczeniem, co buduje faza 1.
@@ -279,10 +281,12 @@ zostać po cichu zignorowane, a to jest wprost mechanizm katastrofy z rozdz. 14.
 Trzy wymagania, które z tego wynikają:
 
 1. **Klasa widoczna przy wyborze modelu** w presecie (§9).
-2. **Sonda honorowania języka** — to samo krótkie nagranie dwa razy, z `language` i bez.
-   Identyczny wynik = parametr nic nie robi = klasa „automatyczny". Dwa mikroskopijne żądania,
-   rozstrzygają bez zgadywania (P10). Nagranie próbne jest w języku presetu; rozdz. 4 daje
-   gotową frazę: „raz, dwa, trzy".
+2. **Sonda honorowania języka** — nagranie w **innym** języku niż preset (dla presetu polskiego
+   „one, two, three"), wysłane trzy razy: A z językiem presetu, B1 i B2 bez języka. B1 ≠ B2 →
+   model niedeterministyczny → „nie wiadomo". A = B1 → parametr nic nie robi → „automatyczny".
+   Inaczej → „wymuszony". Odrzucony parametr języka → „automatyczny" (P10). ✏️ Pierwsza wersja
+   wysyłała nagranie w języku presetu — na nim model z działającym parametrem dałby ten sam
+   wynik co bez niego i zostałby błędnie uznany za „automatyczny".
 3. **Strażnik języka na wyjściu** — fragment, który w presecie polskim czyta się jak angielski,
    zostaje w transkrypcie **jawnie oznaczony** i nie trafia do notatki jako fakt (P11). Dla
    klasy „automatyczny" to jedyna obrona, dla „filtrowanego" siatka bezpieczeństwa.
@@ -300,6 +304,8 @@ pływające okno to miejsce na wybór języka i modelu — preset łączy oba w 
 ⚠️ **Ryzyko do świadomego przyjęcia:** domyślny preset „ostatnio użyty" może po cichu zastosować
 angielski preset do polskiego spotkania. Chip pokazuje preset przed startem, więc ryzyko jest
 widoczne, a nie ukryte. Później kalendarz może podpowiadać preset według spotkania.
+
+Preset jest zamrażany przy starcie nagrania (<sesja>/preset.json) i to on idzie do transkrypcji; zmiana chipa w trakcie nie zmienia bieżącej sesji. Pływające okno służy do wyboru presetu przed nagraniem, a w trakcie pokazuje zamrożony.
 
 ## 2. Ustalenia zamknięte, z dowodami
 
@@ -343,9 +349,7 @@ tą warstwą i dlatego faza 1 ma sens jako pierwsza.
 **Dostawca** — instancja, nie typ: nazwa, adres bazowy, klucz. Dwa OpenRoutery z różnymi
 kluczami to dwaj dostawcy.
 
-**Dialekt** — kształt API, kod nasz. W fazie 1 dwa: *zgodny z OpenAI* (`/v1/models`,
-`/v1/chat/completions`, `/v1/audio/transcriptions`, `/v1/embeddings`) i *natywny Ollama*
-(`/api/tags`, `/api/embed`).
+**Dialekt** — kształt API, kod nasz. W fazie 1 jeden: zgodny z OpenAI. Ollama, oMLX i LM Studio wystawiają /v1/*, więc natywny dialekt Ollamy okazał się zbędny (YAGNI).
 
 **Rola** — `asr`, `korekta`, `embedding`, `podsumowanie`.
 
@@ -395,7 +399,7 @@ późniejszym wywołaniu.
 ⚠️ Modele idące przez czat **nie deklarują znaczników czasu słów ani diaryzacji**. Przy
 cięciu długiego nagrania znaczniki słów są jedynym spoiwem (§6), więc ta ścieżka nadaje się
 do dyktowania i krótkich plików, a nie do godzinnych spotkań. Interfejs ma to mówić przy
-wyborze, nie po fakcie.
+wyborze, nie po fakcie. Decyzja 2026-09-24: kształt czatowy jest blokowany w presetach spotkań — zapis presetu i migawka przebiegu go odrzucają. Zostaje do dyktowania.
 
 ### 4.2 Sondowanie jest leniwe i cache'owane
 
@@ -474,6 +478,8 @@ W fazie 1 ma to dodatkowo **bezpośredni skutek finansowy** — za ciszę się n
 Faza 2 podmienia bramkę na `silero-vad` (1 MB, 📐 już leży w magazynie FluidAudio) bez zmiany
 kontraktu.
 
+Uzupełnienie po recenzji ChatGPT: bramka energii nie odsiewa przesłuchu z głośników. Dla toru mikrofonu dochodzi CrosstalkFilter — fragment, którego obwiednia energii koreluje (≥ 0,8, opóźnienie do 0,3 s) z kanałem systemowym, odpada przed ASR (W§1, rozdz. 17).
+
 ### 6.4 Postęp i wznawianie
 
 - **Postęp w procentach** = kawałki skończone / wszystkie. ✅ W§1 wymaga działania na plikach
@@ -508,8 +514,7 @@ po zapisaniu widoczne wyłącznie ostatnie cztery znaki.
 ## 8. Metadane przebiegu
 
 Każdy przebieg zapisuje: **nazwę presetu oraz jego rozwiązane wartości** (dostawcę, model,
-kształt wywołania, język, klasę obsługi języka, prompty), **wersję słownika, datę, liczbę
-kawałków, koszt i wynik strażnika języka**.
+kształt wywołania, język, klasę obsługi języka, prompty), **wersję słownika, datę, liczbę okien i żądań, sekundy audio wysłane do API i wynik strażnika języka**. Koszt = sekundy × cena modelu; cena nie przychodzi z API transkrypcji, więc nie jest zapisywana.
 
 🔴 Zapisujemy **migawkę**, nie odwołanie do presetu. Zmiana modelu w presecie za miesiąc nie
 może zmienić tego, co archiwum mówi o starych spotkaniach.
@@ -597,7 +602,7 @@ konfabulacja z niewłaściwym językiem to dwa najgroźniejsze tryby awarii nota
 | O2 | Próg energii bramki i czas kwalifikowanej ciszy | strojenie na korpusie |
 | O3 | Czy `transcribeUtterance` ma trafić do fazy 1 jako działająca funkcja, czy tylko jako dowiedziony kontrakt (P9) | przed planem |
 | ~~O4~~ | ~~Limit sekund na żądanie: sondowany czy konfigurowany per dostawca~~ → **rozstrzygnięte:** per **model**, nie per dostawca (22 modele ASR u jednego dostawcy). Wartość z sondy albo dokumentacji, nadpisywalna ręcznie | — |
-| O5 | Stan uprawnienia dźwięku systemowego: prywatne TCC (Wispr Flow, Spokenly) czy próba i obserwacja (Narada)? §1.3 | po sondzie T9, przed budową setupu |
+| ~~O5~~ | ~~Stan uprawnienia dźwięku systemowego~~ → **rozstrzygnięte:** sprawdzamy działanie, nie flagę — setup odtwarza ton i mierzy, czy tap go usłyszał (SystemAudioCheck). Publiczne API, niezależne od tego, czy odmowa daje błąd, czy zera | — |
 | O7 | Słownik per preset (per język) czy globalny z terminami oznaczonymi językiem? | specyfikacja słownika, faza 3 |
 | O8 | Dyktowanie: te same presety czy osobne pole „ASR do dyktowania" (opóźnienie ważniejsze niż przy spotkaniach)? | razem z dyktowaniem |
 | O6 | Czy setup otwiera właściwy panel Ustawień głębokim linkiem, zamiast opisywać, gdzie kliknąć? Interfejs jest po angielsku, a system użytkownika po polsku — opis ścieżki rozjedzie się z tym, co widać na ekranie | przed budową setupu |

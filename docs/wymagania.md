@@ -5,7 +5,7 @@ Scalenie dwóch źródeł:
 - **wymagania biznesowe** (rozmowa 2026-09-23) — co ma robić
 - **pomiary techniczne** (sesja GCX, 2026-09-23) — co się da i czego nie wolno
   → `/Users/michalprzytulski/GCX/docs/superpowers/logs/2026-09-23-openwhispr-lessons-learned.md`
-  (18 rozdziałów, pomiary na 6 aplikacjach — **nie powtarzaj tych badań**)
+  (19 rozdziałów, pomiary na 6 aplikacjach — **nie powtarzaj tych badań**)
 
 Oznaczenia: ✅ potwierdzone pomiarem · ⚠️ ograniczenie · 🔴 zmienia wymaganie · 🆕 dochodzi z pomiarów
 

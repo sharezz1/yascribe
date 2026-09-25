@@ -134,7 +134,7 @@ przez użytkownika, jednym commitem, przed A1.
 - Zmień: `docs/superpowers/specs/2026-09-24-faza1-warstwa-dostawcow-design.md`
 - Zmień: `docs/wymagania.md`
 
-- [ ] **Krok 1: Rdzeń, §9 — T8.** Zamień wiersz zaczynający się od `| **T8** |` na:
+- [x] **Krok 1: Rdzeń, §9 — T8.** Zamień wiersz zaczynający się od `| **T8** |` na:
 
 ```markdown
 | **T8** | Sesja 85+ min | czas hosta dowolnej ramki, odtworzony z kotwic `track.clock`, różni się od prawdziwego o ≤ 50 ms; rzeczywista częstotliwość każdej ścieżki jest zapisana w podsumowaniu | liczyć czas z nominalnej częstotliwości → czerwień |
@@ -150,7 +150,7 @@ czyli o ~0,5 s na 85 minut — i to nie jest błąd, tylko fizyka. Rdzeń zapisu
 `(ramka, czas hosta)` co 10 s i po każdej luce, a T8 sprawdza odtworzenie czasu z kotwic.
 ```
 
-- [ ] **Krok 2: Rdzeń, §9 — T4.** Zamień wiersz zaczynający się od `| **T4** |` na:
+- [x] **Krok 2: Rdzeń, §9 — T4.** Zamień wiersz zaczynający się od `| **T4** |` na:
 
 ```markdown
 | **T4** | Zero miksu w odsłuchu. W słuchawkach (bez echa akustycznego), użytkownik mówi, nic nie gra: dopasowanie `system ≈ a·mic_raw` | a ≈ 0 | domieszać mikrofon do ścieżki systemowej → czerwień |
@@ -158,13 +158,13 @@ czyli o ~0,5 s na 85 minut — i to nie jest błąd, tylko fizyka. Rdzeń zapisu
 
 i dopisz pod tabelą: `✏️ **Korekta.** Pierwsza wersja dopasowywała mic_raw ≈ a·system i żądała a ≈ 0 — ale surowy mikrofon przy głośnikach musi zawierać echo systemu. Intencja testu: mikrofon nie trafia do pliku odsłuchu.`
 
-- [ ] **Krok 3: Rdzeń, §4 — zdarzenia dziennika.** W akapicie „Zdarzenia:" pod `SessionJournal` dopisz po `track.firstSample`: `` `track.clock` (indeks ramki, czas hosta — kotwica dla T8), `` i po `track.permissionDenied (...)`: `` `track.failed` (powód: błąd źródła, a także `allZeros60s` — T9), ``.
+- [x] **Krok 3: Rdzeń, §4 — zdarzenia dziennika.** W akapicie „Zdarzenia:" pod `SessionJournal` dopisz po `track.firstSample`: `` `track.clock` (indeks ramki, czas hosta — kotwica dla T8), `` i po `track.permissionDenied (...)`: `` `track.failed` (powód: błąd źródła, a także `allZeros60s` — T9), ``.
 
-- [ ] **Krok 4: Rdzeń, §2.1 wiersz 📐10 i §8 „Bez Xcode".** W obu miejscach dopisz: `⚠️ Poprawka: prawdziwe dla SwiftUI bez makr. W SDK macOS 27 @State, @Entry, @Animatable i #Preview są makrami z pluginu SwiftUIMacros, którego nie ma w Command Line Tools. Bez Xcode stan lokalny widoku idzie przez ObservableObject/@StateObject.`
+- [x] **Krok 4: Rdzeń, §2.1 wiersz 📐10 i §8 „Bez Xcode".** W obu miejscach dopisz: `⚠️ Poprawka: prawdziwe dla SwiftUI bez makr. W SDK macOS 27 @State, @Entry, @Animatable i #Preview są makrami z pluginu SwiftUIMacros, którego nie ma w Command Line Tools. Bez Xcode stan lokalny widoku idzie przez ObservableObject/@StateObject.`
 
-- [ ] **Krok 5: Rdzeń, §11 — nowe ryzyko.** Dopisz wiersz: `| Czy surowy mikrofon (HAL) i mikrofon z AEC (AVAudioEngine + przetwarzanie głosu) dają się nagrywać jednocześnie | sonda S2 w planie A (A10). Jeśli nie — decyzja użytkownika, który strumień porzucić |`.
+- [x] **Krok 5: Rdzeń, §11 — nowe ryzyko.** Dopisz wiersz: `| Czy surowy mikrofon (HAL) i mikrofon z AEC (AVAudioEngine + przetwarzanie głosu) dają się nagrywać jednocześnie | sonda S2 w planie A (A10). Jeśli nie — decyzja użytkownika, który strumień porzucić |`.
 
-- [ ] **Krok 6: Faza 1, §1.5 — sonda honorowania języka.** Zamień punkt 2 listy „Trzy wymagania, które z tego wynikają" na:
+- [x] **Krok 6: Faza 1, §1.5 — sonda honorowania języka.** Zamień punkt 2 listy „Trzy wymagania, które z tego wynikają" na:
 
 ```markdown
 2. **Sonda honorowania języka** — nagranie w **innym** języku niż preset (dla presetu polskiego
@@ -175,31 +175,31 @@ i dopisz pod tabelą: `✏️ **Korekta.** Pierwsza wersja dopasowywała mic_raw
    wynik co bez niego i zostałby błędnie uznany za „automatyczny".
 ```
 
-- [ ] **Krok 7: Faza 1, §3 — dialekty.** Zamień zdanie o dwóch dialektach na: `**Dialekt** — kształt API, kod nasz. W fazie 1 jeden: zgodny z OpenAI. Ollama, oMLX i LM Studio wystawiają /v1/*, więc natywny dialekt Ollamy okazał się zbędny (YAGNI).`
+- [x] **Krok 7: Faza 1, §3 — dialekty.** Zamień zdanie o dwóch dialektach na: `**Dialekt** — kształt API, kod nasz. W fazie 1 jeden: zgodny z OpenAI. Ollama, oMLX i LM Studio wystawiają /v1/*, więc natywny dialekt Ollamy okazał się zbędny (YAGNI).`
 
-- [ ] **Krok 8: Faza 1, §8 — koszt.** Zamień `**wersję słownika, datę, liczbę kawałków, koszt i wynik strażnika języka**` na `**wersję słownika, datę, liczbę okien i żądań, sekundy audio wysłane do API i wynik strażnika języka**. Koszt = sekundy × cena modelu; cena nie przychodzi z API transkrypcji, więc nie jest zapisywana.`
+- [x] **Krok 8: Faza 1, §8 — koszt.** Zamień `**wersję słownika, datę, liczbę kawałków, koszt i wynik strażnika języka**` na `**wersję słownika, datę, liczbę okien i żądań, sekundy audio wysłane do API i wynik strażnika języka**. Koszt = sekundy × cena modelu; cena nie przychodzi z API transkrypcji, więc nie jest zapisywana.`
 
-- [ ] **Krok 9: Faza 1, §12 — O5.** Zamień wiersz O5 na: `| ~~O5~~ | ~~Stan uprawnienia dźwięku systemowego~~ → **rozstrzygnięte:** sprawdzamy działanie, nie flagę — setup odtwarza ton i mierzy, czy tap go usłyszał (SystemAudioCheck). Publiczne API, niezależne od tego, czy odmowa daje błąd, czy zera | — |`.
+- [x] **Krok 9: Faza 1, §12 — O5.** Zamień wiersz O5 na: `| ~~O5~~ | ~~Stan uprawnienia dźwięku systemowego~~ → **rozstrzygnięte:** sprawdzamy działanie, nie flagę — setup odtwarza ton i mierzy, czy tap go usłyszał (SystemAudioCheck). Publiczne API, niezależne od tego, czy odmowa daje błąd, czy zera | — |`.
 
-- [ ] **Krok 10: Rdzeń, §9 — mutacja T7.** W wierszu `| **T7** |` zamień ostatnią kolumnę (dziś: skasować fsync → czerwień) na `zapisać rozmiar bloku data 0 zamiast -1 → czerwień`, a pod tabelą dopisz: `✏️ **Korekta.** Usunięcie fsync nie da się wykazać testem: po kill -9 dane z pamięci podręcznej systemu i tak trafiają na dysk, fsync chroni tylko przed utratą zasilania. Mutacją T7 jest więc nagłówek CAF.`
+- [x] **Krok 10: Rdzeń, §9 — mutacja T7.** W wierszu `| **T7** |` zamień ostatnią kolumnę (dziś: skasować fsync → czerwień) na `zapisać rozmiar bloku data 0 zamiast -1 → czerwień`, a pod tabelą dopisz: `✏️ **Korekta.** Usunięcie fsync nie da się wykazać testem: po kill -9 dane z pamięci podręcznej systemu i tak trafiają na dysk, fsync chroni tylko przed utratą zasilania. Mutacją T7 jest więc nagłówek CAF.`
 
-- [ ] **Krok 11: Rdzeń, §9 — zakres T9.** Pod akapitem „⚠️ **T9 wyrasta z hipotezy…**" dopisz: `Zakres: strażnik zer obejmuje ścieżkę system. Odmowę mikrofonu wykrywa publiczne API (AVCaptureDevice.authorizationStatus) w prepare(); gdyby mikrofon przy odmowie oddawał zera zamiast błędu, nic tego nie wykryje — świadoma luka fazy 1, do rozszerzenia strażnika, jeśli S1 albo D3 pokażą taki przypadek.`
+- [x] **Krok 11: Rdzeń, §9 — zakres T9.** Pod akapitem „⚠️ **T9 wyrasta z hipotezy…**" dopisz: `Zakres: strażnik zer obejmuje ścieżkę system. Odmowę mikrofonu wykrywa publiczne API (AVCaptureDevice.authorizationStatus) w prepare(); gdyby mikrofon przy odmowie oddawał zera zamiast błędu, nic tego nie wykryje — świadoma luka fazy 1, do rozszerzenia strażnika, jeśli S1 albo D3 pokażą taki przypadek.`
 
-- [ ] **Krok 12: Faza 1, §1.1 — dowód P9.** Po akapicie kończącym się na `założenia dyktowanie wymusi później przepisanie warstwy.` dopisz: `Realizacja w fazie 1: transcribeFile to TranscriptionRunner, a transcribeUtterance to OpenAICompatibleClient.transcribe wołane wprost, jednym żądaniem, bez cięcia. Dowód testem: B1 transcriptionSendsLanguageAndAsksForWordTimestamps i sonda ASR (B2), która wysyła ~2 s audio jednym żądaniem. Osobnej funkcji o tej nazwie nie ma — kontrakt jest ten sam.`
+- [x] **Krok 12: Faza 1, §1.1 — dowód P9.** Po akapicie kończącym się na `założenia dyktowanie wymusi później przepisanie warstwy.` dopisz: `Realizacja w fazie 1: transcribeFile to TranscriptionRunner, a transcribeUtterance to OpenAICompatibleClient.transcribe wołane wprost, jednym żądaniem, bez cięcia. Dowód testem: B1 transcriptionSendsLanguageAndAsksForWordTimestamps i sonda ASR (B2), która wysyła ~2 s audio jednym żądaniem. Osobnej funkcji o tej nazwie nie ma — kontrakt jest ten sam.`
 
-- [ ] **Krok 13: Wymagania — liczba rozdziałów.** W `docs/wymagania.md`, linia 8, zamień `(18 rozdziałów,` na `(19 rozdziałów,`.
+- [x] **Krok 13: Wymagania — liczba rozdziałów.** W `docs/wymagania.md`, linia 8, zamień `(18 rozdziałów,` na `(19 rozdziałów,`.
 
-- [ ] **Krok 14: Faza 1, §6.3 — przesłuch.** Na końcu podsekcji dopisz: `Uzupełnienie po recenzji ChatGPT: bramka energii nie odsiewa przesłuchu z głośników. Dla toru mikrofonu dochodzi CrosstalkFilter — fragment, którego obwiednia energii koreluje (≥ 0,8, opóźnienie do 0,3 s) z kanałem systemowym, odpada przed ASR (W§1, rozdz. 17).`
+- [x] **Krok 14: Faza 1, §6.3 — przesłuch.** Na końcu podsekcji dopisz: `Uzupełnienie po recenzji ChatGPT: bramka energii nie odsiewa przesłuchu z głośników. Dla toru mikrofonu dochodzi CrosstalkFilter — fragment, którego obwiednia energii koreluje (≥ 0,8, opóźnienie do 0,3 s) z kanałem systemowym, odpada przed ASR (W§1, rozdz. 17).`
 
-- [ ] **Krok 15: Faza 1, §4.1 — kształt czatowy.** Akapit zaczynający się od „⚠️ Modele idące przez czat" zakończ zdaniem: `Decyzja 2026-09-24: kształt czatowy jest blokowany w presetach spotkań — zapis presetu i migawka przebiegu go odrzucają. Zostaje do dyktowania.`
+- [x] **Krok 15: Faza 1, §4.1 — kształt czatowy.** Akapit zaczynający się od „⚠️ Modele idące przez czat" zakończ zdaniem: `Decyzja 2026-09-24: kształt czatowy jest blokowany w presetach spotkań — zapis presetu i migawka przebiegu go odrzucają. Zostaje do dyktowania.`
 
-- [ ] **Krok 16: Faza 1, §1.5 — preset zamrożony.** W „Gdzie wybiera się preset" dopisz: `Preset jest zamrażany przy starcie nagrania (<sesja>/preset.json) i to on idzie do transkrypcji; zmiana chipa w trakcie nie zmienia bieżącej sesji. Pływające okno służy do wyboru presetu przed nagraniem, a w trakcie pokazuje zamrożony.`
+- [x] **Krok 16: Faza 1, §1.5 — preset zamrożony.** W „Gdzie wybiera się preset" dopisz: `Preset jest zamrażany przy starcie nagrania (<sesja>/preset.json) i to on idzie do transkrypcji; zmiana chipa w trakcie nie zmienia bieżącej sesji. Pływające okno służy do wyboru presetu przed nagraniem, a w trakcie pokazuje zamrożony.`
 
-- [ ] **Krok 17: Rdzeń, §4 `EndCondition` — uczciwy zakres.** Dopisz: `Faza 1 bez kalendarza: koniec sesji to najlepsza próba — cisza na wszystkich torach albo 4 h. Muzyka albo rozmowa w pokoju po spotkaniu utrzymają nagranie. W§1 jest w pełni spełnione dopiero z kalendarzem (faza 3); zamknięcie okna rozmowy — backlog fazy 3.`
+- [x] **Krok 17: Rdzeń, §4 `EndCondition` — uczciwy zakres.** Dopisz: `Faza 1 bez kalendarza: koniec sesji to najlepsza próba — cisza na wszystkich torach albo 4 h. Muzyka albo rozmowa w pokoju po spotkaniu utrzymają nagranie. W§1 jest w pełni spełnione dopiero z kalendarzem (faza 3); zamknięcie okna rozmowy — backlog fazy 3.`
 
-- [ ] **Krok 18: Rdzeń, §4 `SessionRecorder` — nadzór torów.** Dopisz: `Każdy tor nadzorowany osobno: brak porcji przez 30 s → track.failed (stalled30s), sesja trwa z pozostałymi.`
+- [x] **Krok 18: Rdzeń, §4 `SessionRecorder` — nadzór torów.** Dopisz: `Każdy tor nadzorowany osobno: brak porcji przez 30 s → track.failed (stalled30s), sesja trwa z pozostałymi.`
 
-- [ ] **Krok 19: Commit.**
+- [x] **Krok 19: Commit.**
 
 ```bash
 git add docs/superpowers/specs/ docs/wymagania.md
