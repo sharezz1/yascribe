@@ -17,7 +17,7 @@
 
 ## 0. Instrukcja dla Hermesa (wykonawca)
 
-Claude Code jest orkiestratorem: pisze i poprawia plan, ocenia raporty. Hermes wykonuje zadania.
+**Hermes jest orkiestratorem**: prowadzi sesje z runbooka (`2026-09-25-faza1-runbook.md`), przydziela je agentom według modeli niżej, czyta raporty i przeglądy, decyduje, czy iść dalej. Autorem planu jest Claude Code; plan zmienia się tylko przez użytkownika. Decyzje projektowe (bramki, STOP) idą do użytkownika.
 
 **Kolejność:** 0 → A1…A9 → **E1** → A10 → B1…B3 → **E2** → B4, B5 → C1…C3 → **E3** → C4, C5 → D1, D2 → **E4** → D3.
 
@@ -27,19 +27,20 @@ Claude Code jest orkiestratorem: pisze i poprawia plan, ocenia raporty. Hermes w
 2. Kod przepisuj dosłownie. Nie „ulepszaj", nie zmieniaj nazw, nie dodawaj zależności.
 3. Po każdym „Uruchom" porównaj wynik z „oczekiwane". Rozbieżność = **STOP i raport**, nie naprawa na ślepo. Wyjątek: zadania ⚠️ — błąd *kompilacji* napraw minimalnie i opisz w raporcie.
 4. Kroki „wymaga użytkownika": wypisz polecenia, poczekaj na wynik. Nie przestawiasz Ustawień systemowych ani pęku kluczy, nie czytasz i nie wpisujesz klucza API.
-5. „STOP" w planie = zatrzymaj się i zgłoś orkiestratorowi. Decyzji projektowych nie podejmujesz.
+5. „STOP" w planie = agent zatrzymuje się i zgłasza orkiestratorowi. Orkiestrator nie podejmuje decyzji projektowych — przekazuje je użytkownikowi.
 6. Testy wyłącznie przez `scripts/test.sh`. Commit po zadaniu, poleceniem z planu.
 
 **Raport po zadaniu** — plik `docs/superpowers/reports/<zadanie>.md` i ta sama treść w odpowiedzi: zadanie, hash commita, ostatnia linia `scripts/test.sh`, odchylenia od planu z powodem, pytania do orkiestratora.
 
-**Modele OpenCode Go** — propozycja, nie pomiar:
+**Modele** (decyzja użytkownika 2026-09-25):
 
-| Typ zadania | Model |
-|---|---|
-| ✅ przepisanie zweryfikowanego kodu i testy (A1–A8, B1–B3, C1–C3) | `deepseek-v4.1-flash` albo `glm-5.3-flash` |
-| ⚠️ kod niekompilowany (A9, B4, C4, D1, D2, E1–E4) | `kimi-k2.7-code` albo `deepseek-v4-pro` |
-| kroki z użytkownikiem (A10, B5, C5, D3) | `deepseek-v4.1-flash` — tylko prowadzi i zapisuje |
-| przegląd po każdym zadaniu ⚠️ | model z **innej rodziny** niż wykonawca, np. `glm-5.3` albo `gpt-6-luna` |
+| Rola | Model | Dostawca | Zadania |
+|---|---|---|---|
+| **szybki** | `deepseek-v4.1-flash` | OpenCode Go | ✅ przepisanie zweryfikowanego kodu (A1–A8, B1–B3, C1–C3), zadanie 0, prowadzenie sesji z użytkownikiem (A10, B5, C5, D3) |
+| **kodowy** | Claude Opus 5.5 | Claude Code | kod 🔧/⚠️ i poprawki (A9, B4, C4, D1, D2, E1–E4) |
+| **przegląd** | GPT 6 Sol | OpenRouter | przegląd po każdej sesji oznaczonej „Przegląd po: tak" i przegląd całej gałęzi (S18) |
+
+Przegląd robi zawsze inna rodzina modeli niż wykonawca.
 
 ---
 

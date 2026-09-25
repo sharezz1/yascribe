@@ -1,8 +1,39 @@
 # Faza 1 — runbook wykonania
 
-> Dla operatora (użytkownik) i wykonawcy (Hermes na modelach OpenCode Go albo Claude Code).
+> Dla orkiestratora (Hermes). Użytkownik wkleja Hermesowi jedno polecenie (§0); dalej Hermes sam prowadzi sesje, przydziela agentów i czyta raporty.
 > Plan: `2026-09-24-faza1-00-przeglad.md` (zasady §0, ograniczenia §4) + plany 01–05.
 > Ten dokument mówi **w jakiej kolejności, jakim modelem i jakim poleceniem** uruchamiać sesje.
+
+## 0. Polecenie główne dla Hermesa (wkleja użytkownik, raz)
+
+```text
+Jesteś orkiestratorem wykonania fazy 1 aplikacji MeetNotes.
+Repozytorium: /Users/michalprzytulski/meetnotes.
+
+Przeczytaj w całości, w tej kolejności:
+1. docs/superpowers/plans/2026-09-25-faza1-runbook.md — Twój plan pracy.
+2. docs/superpowers/plans/2026-09-24-faza1-00-przeglad.md — §0 (zasady, modele) i §4 (ograniczenia).
+
+Twoja rola:
+- Prowadzisz sesje S0–S18 z runbooka §2, po kolei. Każdą sesję zlecasz agentowi na modelu
+  z kolumny „Model" (F = deepseek-v4.1-flash przez OpenCode Go, K = Claude Opus 5.5 przez
+  Claude Code, R = GPT 6 Sol przez OpenRouter), poleceniem z runbooka §3 z podstawionymi
+  polami.
+- Po każdej sesji czytasz raport docs/superpowers/reports/<sesja>.md. Idziesz dalej tylko,
+  jeśli ostatnia linia scripts/test.sh zgadza się z kolumną „Testy po sesji" i raport nie
+  zgłasza rozbieżności.
+- Po sesjach z „Przegląd po: tak" zlecasz przegląd modelowi R poleceniem z runbooka §4.
+  Uwagi z przeglądu wracają do tego samego agenta K jako poprawki; potem przegląd jeszcze raz.
+  Najwyżej dwie rundy — trzecia runda = zgłoś użytkownikowi.
+- Sesje z „Ty? tak" (S5, S9, S13, S14 krok 1, S17) prowadzisz z użytkownikiem: agent wypisuje
+  polecenia, użytkownik je wykonuje i odsyła wynik. Nie zmieniasz za niego Ustawień
+  systemowych, pęku kluczy ani klucza API.
+- Bramki z runbooka §2 i każde „STOP" z planu: zatrzymujesz się i pytasz użytkownika.
+  Nie zmieniasz planu, speców ani kolejności sesji sam.
+- Po każdej sesji wysyłasz użytkownikowi jedną linię: sesja, wynik testów, co dalej.
+
+Zacznij od sesji S0.
+```
 
 ## 1. Zanim ruszysz (jednorazowo, użytkownik)
 
@@ -17,7 +48,7 @@ Praca na gałęzi `faza1`, nie na `master`. Tworzy ją sesja 0.
 
 ## 2. Sesje
 
-Legenda kolumny **Model**: `F` = szybki (`deepseek-v4.1-flash` albo `glm-5.3-flash`), `K` = kodowy (`kimi-k2.7-code` albo `deepseek-v4-pro`), `R` = przegląd, model z **innej rodziny** niż wykonawca (`glm-5.3` albo `gpt-6-luna`). **Ty** = sesja wymaga użytkownika przy komputerze.
+Legenda kolumny **Model**: `F` = szybki (`deepseek-v4.1-flash`, OpenCode Go), `K` = kodowy (Claude Opus 5.5, Claude Code), `R` = przegląd (GPT 6 Sol, OpenRouter). **Ty** = sesja wymaga użytkownika przy komputerze.
 
 Sesje ✅ z tego samego wiersza wolno łączyć w jedną rozmowę. Zatrzymaj się przy pierwszej rozbieżności z „oczekiwane".
 
@@ -43,14 +74,14 @@ Sesje ✅ z tego samego wiersza wolno łączyć w jedną rozmowę. Zatrzymaj si�
 | S17 | D3 (odbiór ręczny) | 04 | F | **tak** | — | nie |
 | S18 | przegląd całej gałęzi | wszystkie | R | — | 99 | — |
 
-**Bramki, na których sesja się zatrzymuje i czeka na orkiestratora:**
+**Bramki — orkiestrator zatrzymuje się i pyta użytkownika:**
 - S5: wynik S1 (błąd czy zera przy odmowie) i S2 (dwa strumienie mikrofonu naraz). Przy niepowodzeniu S2 — decyzja użytkownika.
 - S9: jeśli `mai-transcribe-2` nie przechodzi sondy z błędem formatu żądania → zmiana na multipart, decyzja orkiestratora.
 - S13: pamięć ponad 3 GB → plan awaryjny z C5 krok 6.
 
-## 3. Polecenie startowe sesji (wklej Hermesowi)
+## 3. Polecenie startowe sesji (orkiestrator wysyła agentowi)
 
-Podmień `{SESJA}`, `{ZADANIA}` i `{PLIK}` z tabeli §2.
+Orkiestrator podmienia `{SESJA}`, `{ZADANIA}` i `{PLIK}` z tabeli §2.
 
 ```text
 Jesteś wykonawcą planu MeetNotes. Repozytorium: /Users/michalprzytulski/meetnotes, gałąź faza1
@@ -67,7 +98,7 @@ Jesteś wykonawcą planu MeetNotes. Repozytorium: /Users/michalprzytulski/meetno
    pęku kluczy ani klucza API.
 7. Na koniec zapisz raport do docs/superpowers/reports/{SESJA}.md: zadania, hashe commitów,
    ostatnia linia scripts/test.sh, odchylenia od planu z powodem, pytania do orkiestratora.
-   Dodaj raport do ostatniego commita.
+   Dodaj raport do ostatniego commita. Zakończ odpowiedź ostatnią linią scripts/test.sh.
 
 Sesja: {SESJA}. Zadania: {ZADANIA}.
 ```
