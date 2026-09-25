@@ -185,7 +185,7 @@ Status: ✅ zweryfikowane (4 testy).
 **Interfejsy:**
 - Dostarcza: `Timebase(numer:denom:)`, `Timebase.current`, `seconds(ticks:) -> Double`, `ticks(seconds:) -> UInt64`, `secondsBetween(_:_:) -> Double` (ze znakiem). `JournalEvent` (płaska struktura: `type: Kind`, `hostTime: UInt64` + pola opcjonalne) z fabrykami `.sessionStarted(hostTime:timebase:wallClock:)`, `.trackOpened(_:hostTime:sampleRate:channels:deviceUID:)`, `.trackFirstSample(_:hostTime:)`, `.trackClock(_:frameIndex:hostTime:)`, `.deviceChanged(_:deviceUID:hostTime:)`, `.trackGap(_:frameIndex:gapFrames:hostTime:)`, `.trackPermissionDenied(_:permission:detection:hostTime:)`, `.trackFailed(_:reason:hostTime:)`, `.trackClosed(_:frames:hostTime:)`, `.sessionEnded(reason:hostTime:)`. `SessionJournal(url:) throws` (nie nadpisuje istniejącego pliku), `append(_:) throws` (z `synchronize()`), `close() throws`, `static read(url:) throws -> [JournalEvent]`. `JournalError.alreadyExists(String)`, `.corruptLine(Int)`.
 
-- [ ] **Krok 1: Test, który padnie.** Usuń obie zaślepki formatu sesji i utwórz `Tests/MeetNotesSessionFormatTests/SessionJournalTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Usuń obie zaślepki formatu sesji i utwórz `Tests/MeetNotesSessionFormatTests/SessionJournalTests.swift`:
 
 ```swift
 import Foundation
@@ -237,9 +237,9 @@ private func tempDir() throws -> URL {
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesSessionFormatTests` — oczekiwane: kod `1`, błędy kompilacji `cannot find … in scope` dla `SessionJournal`, `Timebase`, `JournalError`. Kod `3` to nie ten błąd — `rm -rf .build` i powtórz.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesSessionFormatTests` — oczekiwane: kod `1`, błędy kompilacji `cannot find … in scope` dla `SessionJournal`, `Timebase`, `JournalError`. Kod `3` to nie ten błąd — `rm -rf .build` i powtórz.
 
-- [ ] **Krok 3: Implementacja.** Utwórz trzy pliki:
+- [x] **Krok 3: Implementacja.** Utwórz trzy pliki:
 
 `Sources/MeetNotesSessionFormat/Timebase.swift`:
 
@@ -466,9 +466,9 @@ public final class SessionJournal: @unchecked Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 4/4 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 4/4 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Commit.**
+- [x] **Krok 5: Commit.**
 
 ```bash
 git add Sources/MeetNotesSessionFormat Tests/MeetNotesSessionFormatTests
