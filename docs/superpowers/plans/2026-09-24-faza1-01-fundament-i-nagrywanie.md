@@ -50,7 +50,7 @@ Status: ✅ zweryfikowane (skrypt sprawdzony w 5 czystych przebiegach i dwiema m
 **Interfejsy:**
 - Dostarcza: cele `MeetNotesSessionFormat`, `MeetNotesRecording` (→ SessionFormat), `MeetNotesProviders`, `MeetNotesTranscription` (→ SessionFormat, Providers), `meetnotes-cli`, `MeetNotesApp`; testy `MeetNotesTranscriptionTests` zależą też od `MeetNotesRecording` (tylko testy). Polecenie `scripts/test.sh [--filter X]`.
 
-- [ ] **Krok 1: Pakiet.** Utwórz `Package.swift`:
+- [x] **Krok 1: Pakiet.** Utwórz `Package.swift`:
 
 ```swift
 // swift-tools-version:6.0
@@ -78,7 +78,7 @@ let package = Package(
 )
 ```
 
-- [ ] **Krok 2: Zaślepki.** SwiftPM wymaga co najmniej jednego pliku w każdym celu. Każda zaślepka znika w zadaniu, które wnosi pierwszy prawdziwy plik do celu.
+- [x] **Krok 2: Zaślepki.** SwiftPM wymaga co najmniej jednego pliku w każdym celu. Każda zaślepka znika w zadaniu, które wnosi pierwszy prawdziwy plik do celu.
 
 ```bash
 for t in MeetNotesSessionFormat MeetNotesRecording MeetNotesProviders MeetNotesTranscription; do
@@ -91,7 +91,7 @@ echo 'print("meetnotes-cli")' > Sources/meetnotes-cli/main.swift
 echo 'print("MeetNotesApp")' > Sources/MeetNotesApp/main.swift
 ```
 
-- [ ] **Krok 3: Skrypt testów.** Utwórz `scripts/test.sh` i nadaj mu prawo wykonania (`chmod +x scripts/test.sh`):
+- [x] **Krok 3: Skrypt testów.** Utwórz `scripts/test.sh` i nadaj mu prawo wykonania (`chmod +x scripts/test.sh`):
 
 ```bash
 #!/bin/bash
@@ -143,9 +143,9 @@ fi
 echo "test.sh: $RAN/$EXPECTED testów uruchomionych i zaliczonych."
 ```
 
-- [ ] **Krok 4: Uruchom.** `scripts/test.sh` — oczekiwane: kod `0` i ostatnia linia `test.sh: 0/0 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom.** `scripts/test.sh` — oczekiwane: kod `0` i ostatnia linia `test.sh: 0/0 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja — test znika.** Bezpiecznik ma łapać test, który jest w kodzie, ale się nie uruchamia.
+- [x] **Krok 5: Mutacja — test znika.** Bezpiecznik ma łapać test, który jest w kodzie, ale się nie uruchamia.
 
 ```bash
 printf 'import Testing\n#if false\n@Test func vanished() {}\n#endif\n' > Tests/MeetNotesRecordingTests/Mutant.swift
@@ -154,7 +154,7 @@ scripts/test.sh; echo "kod=$?"
 
 Oczekiwane: `kod=4` i komunikat `uruchomiono 0 testów, a w Tests/ jest 1 deklaracji @Test. Wynik NIEWAŻNY.`
 
-- [ ] **Krok 6: Mutacja — test pada.**
+- [x] **Krok 6: Mutacja — test pada.**
 
 ```bash
 printf 'import Testing\n@Test func mutantFails() { #expect(1 == 2) }\n' > Tests/MeetNotesRecordingTests/Mutant.swift
@@ -164,7 +164,7 @@ rm Tests/MeetNotesRecordingTests/Mutant.swift
 
 Oczekiwane: `kod=1` i `✘ Test mutantFails() failed`. Po usunięciu pliku `scripts/test.sh` znów daje `0/0`.
 
-- [ ] **Krok 7: Commit.**
+- [x] **Krok 7: Commit.**
 
 ```bash
 git add Package.swift scripts/test.sh Sources Tests
