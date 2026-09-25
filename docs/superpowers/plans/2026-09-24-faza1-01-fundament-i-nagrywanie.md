@@ -1118,7 +1118,7 @@ Status: ✅ zweryfikowane (6 testów).
 - Pobiera: `CAFWriter` (A4), `SessionJournal`, `Timebase`.
 - Dostarcza: `TrackFormat(sampleRate:channels:deviceUID:)`, `AudioChunk(samples:hostTime:)` (czas hosta **pierwszej** próbki), `AudioSourceEvent` (`.chunk`, `.deviceChanged(String)`, `.failed(String)`, `.endOfStream`), `AudioSourceError` (`.permissionDenied(String)`, `.deviceUnavailable(String)`, `.coreAudio(String, Int32)`), protokół `AudioSource` (`trackID`, `prepare() throws -> TrackFormat`, `start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws`, `stop()`). `TrackWriter(trackID:url:format:journal:timebase:gapToleranceSeconds: = 0.03, clockIntervalSeconds: = 10) throws`, `write(_:) throws`, `close(hostTime:) throws`, `framesWritten`.
 
-- [ ] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesRecordingTests/TrackWriterTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesRecordingTests/TrackWriterTests.swift`:
 
 ```swift
 import Foundation
@@ -1204,9 +1204,9 @@ private func makeWriter(rate: Double = 16_000, tolerance: Double = 0.03) throws 
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `TrackWriter`, `TrackFormat`, `AudioChunk`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `TrackWriter`, `TrackFormat`, `AudioChunk`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesRecording/AudioSource.swift`:
 
@@ -1329,11 +1329,11 @@ public final class TrackWriter {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 23/23 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 23/23 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (dryf nie może rodzić luk).** W `TrackWriter.write` zamień `expectedNextHost = chunk.hostTime + timebase.ticks(` na `expectedNextHost = (expectedNextHost ?? chunk.hostTime) + timebase.ticks(` — oczekiwany czas zaczyna się kumulować od pierwszej porcji. `scripts/test.sh --filter jitterBelowToleranceIsNotAGap` — oczekiwane: pada (2 ms jittera na porcję kumuluje się ponad 30 ms). Przywróć; `23/23`.
+- [x] **Krok 5: Mutacja (dryf nie może rodzić luk).** W `TrackWriter.write` zamień `expectedNextHost = chunk.hostTime + timebase.ticks(` na `expectedNextHost = (expectedNextHost ?? chunk.hostTime) + timebase.ticks(` — oczekiwany czas zaczyna się kumulować od pierwszej porcji. `scripts/test.sh --filter jitterBelowToleranceIsNotAGap` — oczekiwane: pada (2 ms jittera na porcję kumuluje się ponad 30 ms). Przywróć; `23/23`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Sources/MeetNotesRecording Tests/MeetNotesRecordingTests
