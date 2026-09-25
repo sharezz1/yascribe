@@ -69,7 +69,8 @@ Poza punktami, uwaga formalna z S4 o śmieceniu `$TMPDIR` przez testy — nie ru
 4. **E1 krok 4/5/7 (literalny kod):** zmieniony warunek raportowania błędów konwersji (P1), `try?` przy stall (P3), callback watchera `mic_aec` (P5), zbiór `failedTracks` (P2). Zgodnie z poleceniem — propozycja przeglądu ma pierwszeństwo.
 5. **Nowy typ zdarzenia `track.recovered`** w `JournalEvent.Kind` (P6). Jedyny `switch` po `e.type` w kodzie i planach to `SessionSummary.rebuild` — obsłużony.
 6. **Spec rdzenia** (`2026-09-24-rdzen-nagrywania-design.md`, l. 152) — dopisane: liczenie od `track.opened`, brak nadpisywania innej awarii, `track.recovered`. Tylko to jedno zdanie.
-7. **Liczba testów 47 → 52.** Dalsze plany mają zaszyte oczekiwane liczby (`51/51`, `58/58`, `65/65` w B; `70/70`, `99/99` w E2/E3; `80/80`, `84/84`, `92/92` w C). Każda będzie teraz o **+5** wyższa. Planów nie zmieniałem — patrz pytania.
+7. **Walidacja `CLI.number()` szersza niż S3-3** (runda 2, U6): poza brakiem wartości i wartością nieliczbową odrzuca też wartości ≤ 0 i nieskończone (`--max-lag-ms 0`, `--silence 0`, `--seconds 0` → `exit(64)`). Świadome rozszerzenie, zachowanie zostaje (decyzja orkiestratora); plany wywołują te opcje wyłącznie z wartościami dodatnimi.
+8. **Liczba testów 47 → 52.** Dalsze plany mają zaszyte oczekiwane liczby (`51/51`, `58/58`, `65/65` w B; `70/70`, `99/99` w E2/E3; `80/80`, `84/84`, `92/92` w C). Każda będzie teraz o **+5** wyższa. Planów nie zmieniałem — patrz pytania.
 
 ## Decyzje przy wariantach
 
@@ -81,13 +82,14 @@ Poza punktami, uwaga formalna z S4 o śmieceniu `$TMPDIR` przez testy — nie ru
 - **P5:** wariant „faktycznie zatrzymać tor", nie zmiana treści — treść „mic_aec stopped, mic_raw continues" i intencja E1 krok 7 („tor zgłasza awarię; surowy mikrofon nagrywa dalej") zostają prawdziwe.
 - **P6:** wariant z jawnym zdarzeniem `track.recovered`, nie heurystyka „po `track.failed` przyszły jeszcze dane" w podsumowaniu — dziennik ma pozostać źródłem prawdy, a heurystyka na `frames` myliłaby tor, który nagrywał przed awarią.
 - **P8:** flaga `stopped` (propozycja minimalna), nie wspólna kolejka seryjna dla rekonfiguracji i `stop()`.
-- **P9:** zamknięcie CAF przy błędzie dziennika (kolejność „dziennik, potem plik" zostaje — `track.closed` nie może wyprzedzić ostatnich ramek na dysku).
+- **P9:** zamknięcie CAF przy błędzie dziennika. Kolejność „dziennik, potem plik" zostaje: zdarzenie `track.closed` zamyka licznik ramek po wywołaniach `write`, a synchronizacja pliku (`caf.close()`) to już tylko kwestia trwałości. (Poprawione w rundzie 2, U5 — wcześniejsze uzasadnienie było odwrócone względem kodu.)
 - **P11 — świadomie niezrobione.** `SessionJournal.append` ma własną blokadę, więc przeniesienie appendów z `tick()` za `lock.unlock()` jest technicznie możliwe, ale otwiera wyścig z `finish()`, które zamyka dziennik (zapis do zamkniętego `FileHandle`) i może dopisać `track.failed` za `session.ended`. Zysk jest pomijalny: nadzór zapisuje najwyżej jedno zdarzenie na tor na sesję, a ten sam wzorzec (append + fsync pod blokadą) występuje w `handle()` przy każdej luce i kotwicy zegara — dużo częściej. Właściwa poprawka to cały zapis dziennika poza blokadą rejestratora — osobne zadanie (pytanie 2).
 - **P12:** walidacja w `SessionRecorder.start()` (propozycja), nie w `SessionDirectory.trackURL` — ta zwraca `URL` bez `throws` i jest używana w planach C/D; zmiana sygnatury rozlałaby się na plany.
 
 ## Czego nie uruchamiałem
 
 - `record` na sprzęcie, `check-system-audio` — wymagają mikrofonu/tapu i uprawnień TCC. P5 i P8 (Core Audio, zmiana urządzenia) zweryfikowane tylko kompilacją i przeglądem kodu; sprawdzi je A10 (T6: przepięcie słuchawek).
+- **P1 — ograniczenie pokrycia** (runda 2, U3): test `conversionFailuresAreReportedEvenWhenTheyComeInBursts` przypina tylko predykat `FormatConverter.shouldReport`. Okablowania w `HALCapture` i `VoiceProcessedMicrophoneSource` żaden test nie dotyka (wymaga Core Audio) — mutacja przywracająca stary warunek w miejscach wywołań zostaje zielona. Sprawdzi to A10 na sprzęcie.
 
 ## Pytania do orkiestratora
 
@@ -120,3 +122,21 @@ Dymy (bez sprzętu):
 Do decyzji: czy `fit`/`summarize` mają w błędzie podawać ścieżkę pliku (osobna drobna zmiana).
 
 `scripts/test.sh`: `test.sh: 52/52 testów uruchomionych i zaliczonych.`
+
+## Runda 2 (U1–U7)
+
+Wejście: `S3-S4-poprawki-przeglad.md`. Zmiany: `SessionRecorder.swift`, `MicrophoneSources.swift`, nowy test w `SessionRecorderTests.swift`, ten raport.
+
+| Uwaga | Stan | Co zrobione / uzasadnienie |
+|---|---|---|
+| U1 (P6) `try?` gubi `track.recovered` | ✅ | Wzorzec P3 1:1: `do { try append(.trackRecovered); stalledTracks.remove } catch {}` — przy błędzie zapisu tor zostaje w `stalledTracks`, zdarzenie ponawia się przy następnej porcji. Bez testu (wymaga wstrzyknięcia błędu zapisu — jak P3). |
+| U2 (P6/P2) recovery czyści prawdziwą awarię | ✅ | Wariant (a): `track.recovered` tylko gdy tor nie jest w `failedTracks`. Zgodne z decyzją P2 — prawdziwa, późniejsza przyczyna zostaje w podsumowaniu. `SessionSummary` bez zmian. Mutacja (usunięcie `!failedTracks.contains`) → nowy test czerwony (2 asercje), przywrócone. |
+| U3 (P1) test tylko predykatu | 📝 udokumentowane | Dopisane w „Czego nie uruchamiałem": okablowanie `HALCapture`/`MicrophoneSources` sprawdzi A10 na sprzęcie. |
+| U4 (P2) inserty `failedTracks` | ✅ | (a) `.failed` w `handle` i `allZeros` w `watchZerosLocked`: `failedTracks.insert` tylko po udanym `try journal.append`. **Kompromis:** oba zdarzenia jednorazowe, bez ponowienia (`allZeros` — `zeroResolved` ustawiane niezależnie od zapisu). Przy błędzie zapisu tor nie trafia do `failedTracks`, więc nadzór może dopisać `stalled30s` — w dzienniku zostaje przynajmniej ten ślad, zamiast żadnego `track.failed`. (b)+(c) test `failedTrackKeepsItsReasonThroughStallAndResume`: `system` wysyła `.failed` w k=1, potem 44 s ticków → brak `stalled30s`, `failure == "reopen: A"`; `mic_aec` dostaje `stalled30s` (k=30), potem `.failed` (k=35), potem porcje (k>40) → brak `track.recovered`, `failure == "reopen: B"`. Mutacja usunięcia insertu w `.failed` → czerwień (4 asercje), przywrócone. |
+| U5 (P9) odwrócone uzasadnienie | ✅ | Poprawiony raport („Decyzje", P9). Kod bez zmian — jest bezpieczny. |
+| U6 (CLI) `number()` odrzuca ≤ 0 | 📝 udokumentowane | Dopisane w „Odchyleniach" (pkt 7). Zachowanie zostaje (decyzja orkiestratora). |
+| U7 (P8) `.deviceChanged("")` | ✅ | `reopen()`: gdy `open()` zwróci `""` (spóźniony `stop()`), bez zdarzenia. Bez testu — Core Audio. |
+
+Planów ani liczb testów w planach nie zmieniałem (osobny krok). Liczba testów 52 → 53 (+1 nowy `@Test`), więc przesunięcie w planach to teraz **+6** względem liczb z planów.
+
+`scripts/test.sh`: `test.sh: 53/53 testów uruchomionych i zaliczonych.`
