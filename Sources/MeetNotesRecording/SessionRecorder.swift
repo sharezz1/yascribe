@@ -27,13 +27,16 @@ public final class SessionRecorder: @unchecked Sendable {
     private var finishing = false
     private var zeroFirstChunk: [String: UInt64] = [:]
     private var zeroResolved: Set<String> = []
+    private let trackStallSeconds: Double
+    private var lastChunkByTrack: [String: UInt64] = [:]
+    private var stalledTracks: Set<String> = []
     public private(set) var endReason: EndReason?
 
     public var onEnded: (@Sendable (EndReason) -> Void)?
 
     public init(directory: URL, sources: [any AudioSource], conditions: [any EndCondition] = .standard,
                 clock: any HostClock = MachHostClock(), timebase: Timebase = .current,
-                silenceThresholdDBFS: Double = -50, zeroWatch: [String: Double] = ["system": 60]) {
+                silenceThresholdDBFS: Double = -50, zeroWatch: [String: Double] = ["system": 60], trackStallSeconds: Double = 30) {
         self.directory = SessionDirectory(url: directory)
         self.sources = sources
         self.conditions = conditions
@@ -41,6 +44,7 @@ public final class SessionRecorder: @unchecked Sendable {
         self.timebase = timebase
         self.silenceThreshold = silenceThresholdDBFS
         self.zeroWatch = zeroWatch
+        self.trackStallSeconds = trackStallSeconds
     }
 
     public func start() throws {
@@ -96,7 +100,18 @@ public final class SessionRecorder: @unchecked Sendable {
     public func tick() {
         let now = clock.now()
         lock.lock()
-        let reason = finishing ? nil : evaluateLocked(now: now)
+        var reason: EndReason?
+        if !finishing, let journal { // bez dziennika sesja jeszcze nie ruszyła (Hermes 2.1)
+            reason = evaluateLocked(now: now)
+            // Każdy tor z osobna: martwy tor nie chowa się za żywym (ChatGPT #9).
+            for s in started where !ended.contains(s.trackID) && !stalledTracks.contains(s.trackID) {
+                let last = lastChunkByTrack[s.trackID] ?? startedAt
+                if timebase.secondsBetween(now, last) >= trackStallSeconds {
+                    try? journal.append(.trackFailed(s.trackID, reason: "stalled\(Int(trackStallSeconds))s", hostTime: now))
+                    stalledTracks.insert(s.trackID)
+                }
+            }
+        }
         lock.unlock()
         if let reason { finish(reason) }
     }
@@ -111,6 +126,7 @@ public final class SessionRecorder: @unchecked Sendable {
                     try writers[trackID]?.write(chunk)
                     watchZerosLocked(trackID: trackID, chunk: chunk, journal: journal)
                     lastChunkAt = max(lastChunkAt, chunk.hostTime)
+                    lastChunkByTrack[trackID] = chunk.hostTime
                     if Levels.rmsDBFS(chunk.samples) > silenceThreshold { lastLoudAt = max(lastLoudAt, chunk.hostTime) }
                     reason = evaluateLocked(now: chunk.hostTime)
                 } catch {

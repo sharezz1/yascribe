@@ -151,3 +151,43 @@ private final class DeniedSource: AudioSource, @unchecked Sendable {
     try SessionRecorder(directory: dir, sources: [sys], conditions: [], clock: ManualHostClock(), timebase: ns).start()
     #expect(try SessionDirectory(url: dir).summarize().tracks.first?.failure == nil)
 }
+
+@Test func tickBeforeStartDoesNothing() {
+    // Hermes 2.1: tick przed start nie może zakończyć sesji jako cisza.
+    let r = SessionRecorder(directory: sessionDir(), sources: [], conditions: [SilenceCondition(seconds: 1)],
+                            clock: ManualHostClock(10 * s), timebase: ns)
+    r.tick()
+    #expect(r.endReason == nil)
+}
+
+@Test func deadTrackIsFlaggedWhileOtherContinues() throws {
+    // ChatGPT #9: tap umiera, mikrofon dostarcza dalej — awaria nie może się schować za żywym torem.
+    final class Silent: AudioSource, @unchecked Sendable {
+        let trackID = "system"
+        func prepare() throws -> TrackFormat { TrackFormat(sampleRate: 48_000, channels: 2, deviceUID: "x") }
+        func start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws {}
+        func stop() {}
+    }
+    final class Pump: AudioSource, @unchecked Sendable {
+        let trackID = "mic_raw"
+        var handler: (@Sendable (AudioSourceEvent) -> Void)?
+        func prepare() throws -> TrackFormat { TrackFormat(sampleRate: 16_000, channels: 1, deviceUID: "m") }
+        func start(_ h: @escaping @Sendable (AudioSourceEvent) -> Void) throws { handler = h }
+        func stop() {}
+    }
+    let dir = sessionDir()
+    let clock = ManualHostClock(0)
+    let mic = Pump()
+    let r = SessionRecorder(directory: dir, sources: [Silent(), mic], conditions: [StallCondition(seconds: 30)],
+                            clock: clock, timebase: ns, zeroWatch: [:])
+    try r.start()
+    for k in 1...40 {
+        clock.set(UInt64(k) * s)
+        mic.handler?(.chunk(AudioChunk(samples: sine(frames: 1_600, channels: 1, rate: 16_000), hostTime: UInt64(k) * s)))
+        r.tick()
+    }
+    #expect(r.endReason == nil) // mikrofon żyje, sesja trwa
+    r.stop()
+    let sys = try #require(try SessionDirectory(url: dir).summarize().tracks.first { $0.id == "system" })
+    #expect(sys.failure == "stalled30s")
+}

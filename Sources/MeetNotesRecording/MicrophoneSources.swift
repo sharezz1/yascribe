@@ -46,7 +46,8 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
         lock.lock(); let h = handler; lock.unlock()
         guard let h else { return "" }
         let c = try HALCapture(device: dev, inputFormat: try CoreAudioDevices.inputFormat(of: dev),
-                               sampleRate: Self.sampleRate, channels: 1) { h(.chunk($0)) }
+                               sampleRate: Self.sampleRate, channels: 1,
+                               onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
         lock.lock(); capture = c; lock.unlock()
         return try CoreAudioDevices.uid(of: dev)
@@ -68,6 +69,7 @@ public final class VoiceProcessedMicrophoneSource: AudioSource, @unchecked Senda
     public static let sampleRate = 16_000.0
     private let engine = AVAudioEngine()
     private var converter: FormatConverter?
+    private let watcher = DeviceWatcher(selector: kAudioHardwarePropertyDefaultInputDevice)
 
     public init() {}
 
@@ -87,13 +89,19 @@ public final class VoiceProcessedMicrophoneSource: AudioSource, @unchecked Senda
         let input = engine.inputNode
         input.installTap(onBus: 0, bufferSize: 1_024, format: input.outputFormat(forBus: 0)) { buf, when in
             guard when.isHostTimeValid else { return }
+            let before = conv.failures
             let s = conv.convert(buf)
+            if conv.failures > before && (conv.failures == 1 || conv.failures % 1_000 == 0) {
+                handler(.failed("convert failures: \(conv.failures)"))
+            }
             if !s.isEmpty { handler(.chunk(AudioChunk(samples: s, hostTime: when.hostTime))) }
         }
         try engine.start()
+        watcher.start { handler(.failed("inputDeviceChanged: mic_aec stopped, mic_raw continues")) }
     }
 
     public func stop() {
+        watcher.stop()
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
     }

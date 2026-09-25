@@ -45,7 +45,7 @@ Status: ✅ zweryfikowane przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonn
 **Interfejsy:**
 - Dostarcza: `SessionRecorder(…, trackStallSeconds: Double = 30)` — tor bez porcji przez 30 s dostaje `track.failed` z powodem `stalled30s`, sesja trwa. `tick()` przed `start()` nic nie robi. `FormatConverter.failures: Int`. `HALCapture(…, onChunk:, onFailure:)`. `VoiceProcessedMicrophoneSource` zgłasza `.failed("inputDeviceChanged…")` przy zmianie wejścia.
 
-- [ ] **Krok 1: Testy, które padną.** Na końcu `SessionJournalTests.swift` dopisz:
+- [x] **Krok 1: Testy, które padną.** Na końcu `SessionJournalTests.swift` dopisz:
 
 ```swift
 @Test func completeButCorruptLastLineIsAnError() throws {
@@ -100,9 +100,9 @@ Na końcu `SessionRecorderTests.swift` dopisz:
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh` — oczekiwane: kod `1`; `completeButCorruptLastLineIsAnError` i `tickBeforeStartDoesNothing` padają, a `deadTrackIsFlaggedWhileOtherContinues` pada błędem kompilacji albo oczekiwaniem.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh` — oczekiwane: kod `1`; `completeButCorruptLastLineIsAnError` i `tickBeforeStartDoesNothing` padają, a `deadTrackIsFlaggedWhileOtherContinues` pada błędem kompilacji albo oczekiwaniem.
 
-- [ ] **Krok 3: Dziennik.** W `SessionJournal.read` zamień:
+- [x] **Krok 3: Dziennik.** W `SessionJournal.read` zamień:
 
 ```swift
         let lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
@@ -136,7 +136,7 @@ na:
         }
 ```
 
-- [ ] **Krok 4: Rejestrator — nadzór torów.** W `SessionRecorder.swift`:
+- [x] **Krok 4: Rejestrator — nadzór torów.** W `SessionRecorder.swift`:
 
 (a) pod `private var zeroResolved: Set<String> = []` dopisz:
 
@@ -173,7 +173,7 @@ na:
     }
 ```
 
-- [ ] **Krok 5: Błędy konwersji nie znikają (ChatGPT #10).** W `FormatConverter.swift`:
+- [x] **Krok 5: Błędy konwersji nie znikają (ChatGPT #10).** W `FormatConverter.swift`:
   - pod `private let converter: AVAudioConverter` dopisz `/// Nieudane konwersje — źródło zgłasza je jako .failed zamiast po cichu gubić dźwięk.\n    public private(set) var failures = 0`;
   - w `convertSlice` zamień `guard let out = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { return [] }` na `guard let out = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { failures += 1; return [] }` oraz `guard error == nil, status != .error, let p = out.int16ChannelData else { return [] }` na `guard error == nil, status != .error, let p = out.int16ChannelData else { failures += 1; return [] }`;
   - w `convert` zamień `if let slice = Self.slice(buffer, from: start, count: n) { out += convertSlice(slice) }` na `if let slice = Self.slice(buffer, from: start, count: n) { out += convertSlice(slice) } else { failures += 1 }`.
@@ -214,7 +214,7 @@ W `VoiceProcessedMicrophoneSource`, w bloku `installTap`, zamień `let s = conv.
 
 Testu jednostkowego na błąd konwertera nie ma: niezgodny format bufora może skończyć się wyjątkiem Objective-C zamiast błędu, więc taki test mógłby wywrócić cały proces testów.
 
-- [ ] **Krok 6: Wyciek tapu (Hermes 2.3).** W `SystemTapSource.build()` zamień:
+- [x] **Krok 6: Wyciek tapu (Hermes 2.3).** W `SystemTapSource.build()` zamień:
 
 ```swift
         let fmt = try CoreAudioDevices.tapFormat(of: tapID)
@@ -235,16 +235,16 @@ na:
         lock.lock(); tap = tapID; aggregate = aggID; lock.unlock()
 ```
 
-- [ ] **Krok 7: Mikrofon z AEC przy zmianie wejścia (ChatGPT #9, Hermes 4.2).** `AVAudioEngine` z przetwarzaniem głosu nie przebudowuje się tu sam. Zamiast udawać ciągłość, tor zgłasza awarię; surowy mikrofon przebudowuje się i nagrywa dalej, a E3 przełącza transkrypcję na `mic_raw`. W `VoiceProcessedMicrophoneSource`:
+- [x] **Krok 7: Mikrofon z AEC przy zmianie wejścia (ChatGPT #9, Hermes 4.2).** `AVAudioEngine` z przetwarzaniem głosu nie przebudowuje się tu sam. Zamiast udawać ciągłość, tor zgłasza awarię; surowy mikrofon przebudowuje się i nagrywa dalej, a E3 przełącza transkrypcję na `mic_raw`. W `VoiceProcessedMicrophoneSource`:
   - pod `private var converter: FormatConverter?` dopisz `private let watcher = DeviceWatcher(selector: kAudioHardwarePropertyDefaultInputDevice)`;
   - w `start`, pod `try engine.start()` dopisz `watcher.start { handler(.failed("inputDeviceChanged: mic_aec stopped, mic_raw continues")) }`;
   - w `stop`, na początku dopisz `watcher.stop()`.
 
-- [ ] **Krok 8: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 47/47 testów uruchomionych i zaliczonych.`
+- [x] **Krok 8: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 47/47 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 9: Mutacja.** W nowym `tick()` zamień `>= trackStallSeconds` na `>= trackStallSeconds * 100`. `scripts/test.sh --filter deadTrackIsFlaggedWhileOtherContinues` — oczekiwane: pada. Przywróć; `47/47`.
+- [x] **Krok 9: Mutacja.** W nowym `tick()` zamień `>= trackStallSeconds` na `>= trackStallSeconds * 100`. `scripts/test.sh --filter deadTrackIsFlaggedWhileOtherContinues` — oczekiwane: pada. Przywróć; `47/47`.
 
-- [ ] **Krok 10: Commit.**
+- [x] **Krok 10: Commit.**
 
 ```bash
 git add Sources Tests

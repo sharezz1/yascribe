@@ -70,7 +70,14 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
             AudioHardwareDestroyProcessTap(tapID)
             throw AudioSourceError.coreAudio("CreateAggregateDevice", st2)
         }
-        let fmt = try CoreAudioDevices.tapFormat(of: tapID)
+        let fmt: AVAudioFormat
+        do {
+            fmt = try CoreAudioDevices.tapFormat(of: tapID)
+        } catch {
+            AudioHardwareDestroyAggregateDevice(aggID)
+            AudioHardwareDestroyProcessTap(tapID)
+            throw error
+        }
         lock.lock(); tap = tapID; aggregate = aggID; lock.unlock()
         return (fmt, outputUID)
     }
@@ -81,7 +88,8 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         let agg = aggregate, tapID = tap
         lock.unlock()
         let c = try HALCapture(device: agg, inputFormat: try CoreAudioDevices.tapFormat(of: tapID),
-                               sampleRate: f.sampleRate, channels: f.channels) { h(.chunk($0)) }
+                               sampleRate: f.sampleRate, channels: f.channels,
+                               onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
         lock.lock(); capture = c; lock.unlock()
     }

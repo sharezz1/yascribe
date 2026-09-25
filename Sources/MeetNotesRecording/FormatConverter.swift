@@ -8,6 +8,8 @@ public final class FormatConverter {
     public let input: AVAudioFormat
     public let output: AVAudioFormat
     private let converter: AVAudioConverter
+    /// Nieudane konwersje — źródło zgłasza je jako .failed zamiast po cichu gubić dźwięk.
+    public private(set) var failures = 0
 
     public init(input: AVAudioFormat, sampleRate: Double, channels: Int) throws {
         guard let out = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: sampleRate,
@@ -38,7 +40,7 @@ public final class FormatConverter {
         var start: AVAudioFrameCount = 0
         while start < buffer.frameLength {
             let n = min(Self.sliceFrames, buffer.frameLength - start)
-            if let slice = Self.slice(buffer, from: start, count: n) { out += convertSlice(slice) }
+            if let slice = Self.slice(buffer, from: start, count: n) { out += convertSlice(slice) } else { failures += 1 }
             start += n
         }
         return out
@@ -47,7 +49,7 @@ public final class FormatConverter {
     private func convertSlice(_ buffer: AVAudioPCMBuffer) -> [Int16] {
         let ratio = output.sampleRate / input.sampleRate
         let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 64
-        guard let out = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { return [] }
+        guard let out = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { failures += 1; return [] }
         var supplied = false
         var error: NSError?
         let status = converter.convert(to: out, error: &error) { _, st in
@@ -59,7 +61,7 @@ public final class FormatConverter {
             st.pointee = .haveData
             return buffer
         }
-        guard error == nil, status != .error, let p = out.int16ChannelData else { return [] }
+        guard error == nil, status != .error, let p = out.int16ChannelData else { failures += 1; return [] }
         return Array(UnsafeBufferPointer(start: p[0], count: Int(out.frameLength) * Int(output.channelCount)))
     }
 
