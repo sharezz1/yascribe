@@ -45,3 +45,10 @@ private func tempDir() throws -> URL {
     try Data("{\"type\":\"session.started\",\"hostTime\":1}\nGARBAGE\n{\"type\":\"session.ended\",\"hostTime\":2}\n".utf8).write(to: url)
     #expect(throws: JournalError.corruptLine(2)) { _ = try SessionJournal.read(url: url) }
 }
+
+@Test func completeButCorruptLastLineIsAnError() throws {
+    // ChatGPT #12: tolerujemy tylko urwany fragment BEZ kończącego LF.
+    let url = try tempDir().appendingPathComponent("journal.jsonl")
+    try Data("{\"type\":\"session.started\",\"hostTime\":1}\nGARBAGE\n".utf8).write(to: url)
+    #expect(throws: JournalError.corruptLine(2)) { _ = try SessionJournal.read(url: url) }
+}

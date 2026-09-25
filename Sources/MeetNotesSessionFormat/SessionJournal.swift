@@ -49,13 +49,15 @@ public final class SessionJournal: @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
+        // Tylko ostatni fragment BEZ kończącego LF może być urwanym zapisem: append pisze
+        // linię razem z LF jednym wywołaniem. Zakończona, a niepoprawna linia to uszkodzenie.
+        let unterminatedLast = data.last != 0x0A ? lines.count - 1 : -1
         var events: [JournalEvent] = []
         for (index, line) in lines.enumerated() where !line.isEmpty {
             do {
                 events.append(try decoder.decode(JournalEvent.self, from: Data(line)))
             } catch {
-                let isLast = lines[(index + 1)...].allSatisfy { $0.isEmpty }
-                if isLast { break }
+                if index == unterminatedLast { break }
                 throw JournalError.corruptLine(index + 1)
             }
         }
