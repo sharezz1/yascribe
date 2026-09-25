@@ -435,9 +435,9 @@ public enum WAVEncoder {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 80/80 testów uruchomionych i zaliczonych.`
+- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 86/86 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (P6).** W `EnergyGate.Config` zamień `public var thresholdDBFS: Double = -45` na `= -200`. `scripts/test.sh --filter pureSilenceProducesNoRegions` — oczekiwane: pada (cisza cyfrowa −160 dBFS jest „głośniejsza" niż próg). Przywróć; `80/80`.
+- [ ] **Krok 5: Mutacja (P6).** W `EnergyGate.Config` zamień `public var thresholdDBFS: Double = -45` na `= -200`. `scripts/test.sh --filter pureSilenceProducesNoRegions` — oczekiwane: pada (cisza cyfrowa −160 dBFS jest „głośniejsza" niż próg). Przywróć; `86/86`.
 
 - [ ] **Krok 6: Commit.**
 
@@ -535,7 +535,7 @@ public enum LanguageGuard {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 84/84 testów uruchomionych i zaliczonych.` Test sparametryzowany liczy się jako jeden test.
+- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 90/90 testów uruchomionych i zaliczonych.` Test sparametryzowany liczy się jako jeden test.
 
 - [ ] **Krok 5: Commit.**
 
@@ -1048,11 +1048,11 @@ public struct TranscriptionRunner: Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 92/92 testów uruchomionych i zaliczonych.` (84 z poprzednich zadań, 7 testów przebiegu ze spike'a i test 48 kHz stereo). Jeśli pada tylko nowy test, a pozostałe przechodzą, to wada nowego testu albo realny problem potoku z 48 kHz — rozstrzygnij, zanim przejdziesz dalej; tolerancji nie zwiększaj na ślepo.
+- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 98/98 testów uruchomionych i zaliczonych.` (90 z poprzednich zadań, 7 testów przebiegu ze spike'a i test 48 kHz stereo). Jeśli pada tylko nowy test, a pozostałe przechodzą, to wada nowego testu albo realny problem potoku z 48 kHz — rozstrzygnij, zanim przejdziesz dalej; tolerancji nie zwiększaj na ślepo.
 
 - [ ] **Krok 5: Mutacja (P5).** W `TranscriptionRunner.run` zamień `if let saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {` na `if false, let saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {`. `scripts/test.sh --filter interruptedRunResumesWithoutPayingAgain` — oczekiwane: pada (drugi przebieg płaci za wszystkie okna). Przywróć.
 
-- [ ] **Krok 6: Mutacja (P11).** W `Merger.merge` zamień `utterances[i].languageMismatch = LanguageGuard.mismatch(utterances[i].text, expected: language)` na `utterances[i].languageMismatch = nil`. `scripts/test.sh --filter confabulatedEnglishIsFlaggedAndExcludedFromNotes` — oczekiwane: pada. Przywróć; `92/92`.
+- [ ] **Krok 6: Mutacja (P11).** W `Merger.merge` zamień `utterances[i].languageMismatch = LanguageGuard.mismatch(utterances[i].text, expected: language)` na `utterances[i].languageMismatch = nil`. `scripts/test.sh --filter confabulatedEnglishIsFlaggedAndExcludedFromNotes` — oczekiwane: pada. Przywróć; `98/98`.
 
 - [ ] **Krok 7: Commit.**
 
@@ -1137,7 +1137,7 @@ Po co `session-from-file`: spec fazy 1 §1.0 odrzuca import plików jako funkcj�
 
 - [ ] **Krok 7: Sesja z pliku, bez sieci.** `say -v Zosia -o /tmp/mn-pl.aiff "Dzień dobry, zaczynamy spotkanie."`, potem `swift run meetnotes-cli session-from-file /tmp/mn-pl.aiff /tmp/mn-fromfile` — oczekiwane: `koniec: endOfInput` i ścieżka `system` z ramkami > 0.
 
-- [ ] **Krok 8: Pełne testy.** `scripts/test.sh` — oczekiwane: `99/99` (po E3).
+- [ ] **Krok 8: Pełne testy.** `scripts/test.sh` — oczekiwane: `105/105` (po E3).
 
 - [ ] **Krok 9: Commit.**
 

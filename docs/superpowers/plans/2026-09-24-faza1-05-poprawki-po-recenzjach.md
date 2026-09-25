@@ -20,9 +20,9 @@ Obowiązują w całości: przegląd §4. Dodatkowo:
 | Zadanie | Wykonaj po | Przed | Liczba testów po zadaniu |
 |---|---|---|---|
 | **E1** rdzeń: dziennik, nadzór torów, sprzątanie Core Audio | A9 | A10 | 47 |
-| **E2** dostawcy: sonda, cache, klucz, walidacja | B3 | B4 | 70 |
-| **E3** transkrypcja: przesłuch, wznawianie, migawka, luki | C3 | C4 | 99 |
-| **E4** aplikacja: preset przy starcie, pływające okno, odtwarzanie, wznowienie | D2 | D3 | 99 |
+| **E2** dostawcy: sonda, cache, klucz, walidacja | B3 | B4 | 76 |
+| **E3** transkrypcja: przesłuch, wznawianie, migawka, luki | C3 | C4 | 105 |
+| **E4** aplikacja: preset przy starcie, pływające okno, odtwarzanie, wznowienie | D2 | D3 | 105 |
 
 ## Na co patrzeć przy przeglądzie
 
@@ -407,7 +407,7 @@ na:
 
 - [ ] **Krok 6: Pusty model.** W `Preset.validate()` zamień `guard asr != nil else { throw PresetError.missingASR }` na `guard let asr, !asr.model.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingASR }`.
 
-- [ ] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 70/70 testów uruchomionych i zaliczonych.`
+- [ ] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 76/76 testów uruchomionych i zaliczonych.`
 
 - [ ] **Krok 8: Commit.**
 
@@ -698,9 +698,9 @@ na:
 
 (i) w wywołaniu `Merger.merge(…)` zamień `clock: SessionClock(summary: summary)` na `clock: clock`.
 
-- [ ] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 99/99 testów uruchomionych i zaliczonych.` Test 85-minutowy trwa około minuty.
+- [ ] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 105/105 testów uruchomionych i zaliczonych.` Test 85-minutowy trwa około minuty.
 
-- [ ] **Krok 8: Mutacja (przesłuch).** W `CrosstalkFilter` zamień `public var correlationThreshold = 0.8` na `= 1.1`. `scripts/test.sh --filter crosstalkFromSpeakersIsDroppedBeforeASR` — oczekiwane: pada. Przywróć; `99/99`.
+- [ ] **Krok 8: Mutacja (przesłuch).** W `CrosstalkFilter` zamień `public var correlationThreshold = 0.8` na `= 1.1`. `scripts/test.sh --filter crosstalkFromSpeakersIsDroppedBeforeASR` — oczekiwane: pada. Przywróć; `105/105`.
 
 - [ ] **Krok 9: Commit.**
 
@@ -1042,7 +1042,7 @@ na:
                         if case .works = result { UserDefaults.standard.set(true, forKey: "systemAudioVerified") }
 ```
 
-- [ ] **Krok 7: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. `scripts/test.sh` — `99/99`. `scripts/bundle.sh` — `.build/MeetNotes.app`.
+- [ ] **Krok 7: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. `scripts/test.sh` — `105/105`. `scripts/bundle.sh` — `.build/MeetNotes.app`.
 
 - [ ] **Krok 8: Commit.**
 

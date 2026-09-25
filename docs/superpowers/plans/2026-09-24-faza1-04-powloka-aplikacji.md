@@ -1145,7 +1145,7 @@ struct SetupView: View {
 
 - [ ] **Krok 6: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. Jeśli pojawi się `plugin for module 'SwiftUIMacros' not found`, ktoś użył `@State` — zamień na `ObservableObject` + `@StateObject` (przegląd §4). Nie instaluj Xcode, żeby to obejść: to decyzja użytkownika.
 
-- [ ] **Krok 7: Złóż paczkę i testy.** `scripts/bundle.sh` — `.build/MeetNotes.app`. `scripts/test.sh` — `99/99`.
+- [ ] **Krok 7: Złóż paczkę i testy.** `scripts/bundle.sh` — `.build/MeetNotes.app`. `scripts/test.sh` — `105/105`.
 
 - [ ] **Krok 8: Commit.**
 
