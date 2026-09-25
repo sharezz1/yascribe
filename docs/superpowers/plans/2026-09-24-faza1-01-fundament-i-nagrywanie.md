@@ -1908,7 +1908,7 @@ Status: ✅ zweryfikowane (7 testów).
 - Pobiera: `Levels` (A6), `AudioSourceError` (A5).
 - Dostarcza: `FormatConverter(input: AVAudioFormat, sampleRate:channels:) throws`, `convert(_: AVAudioPCMBuffer) -> [Int16]` (bez ditheringu, bez rozgrzewania, bufory krojone po 1024 ramki). `AudioFit.fit(reference:recorded:maxLagFrames:) -> Result` (`gain`, `rSquared`, `lagFrames`, `correlation`), `mono(_:channels:) -> [Float]`, `resample(_:from:to:) -> [Float]` (liniowe, tylko do analizy).
 
-- [ ] **Krok 1: Testy, które padną.** Utwórz oba pliki testów:
+- [x] **Krok 1: Testy, które padną.** Utwórz oba pliki testów:
 
 `Tests/MeetNotesRecordingTests/FormatConverterTests.swift`:
 
@@ -2001,9 +2001,9 @@ private func noise(_ n: Int, seed: UInt64) -> [Float] {
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `FormatConverter`, `AudioFit`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `FormatConverter`, `AudioFit`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesRecording/FormatConverter.swift`:
 
@@ -2158,11 +2158,11 @@ public enum AudioFit {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 41/41 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 41/41 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (przetrzymywanie ramek).** Zamień `static let sliceFrames: AVAudioFrameCount = 1_024` na `= 1_000_000`. `scripts/test.sh --filter sameRateConversionKeepsFrameCountAndShape` — oczekiwane: pada (8192 zamiast 9600 próbek, 📐 w spike'u). Przywróć; `41/41`.
+- [x] **Krok 5: Mutacja (przetrzymywanie ramek).** Zamień `static let sliceFrames: AVAudioFrameCount = 1_024` na `= 1_000_000`. `scripts/test.sh --filter sameRateConversionKeepsFrameCountAndShape` — oczekiwane: pada (8192 zamiast 9600 próbek, 📐 w spike'u). Przywróć; `41/41`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Sources/MeetNotesRecording Tests/MeetNotesRecordingTests
