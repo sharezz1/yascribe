@@ -100,8 +100,11 @@ public final class SessionRecorder: @unchecked Sendable {
             do {
                 try source.start { [weak self] event in self?.handle(trackID: id, event) }
             } catch {
-                try? journal.append(.trackFailed(id, reason: "\(error)", hostTime: clock.now()))
-                lock.lock(); failedTracks.insert(id); lock.unlock()
+                // Jak .failed w handle(): insert tylko po udanym zapisie, bez ponowienia (P3).
+                do {
+                    try journal.append(.trackFailed(id, reason: "\(error)", hostTime: clock.now()))
+                    lock.lock(); failedTracks.insert(id); lock.unlock()
+                } catch {}
             }
         }
     }
