@@ -489,7 +489,7 @@ Status: ✅ zweryfikowane (7 testów).
 - Pobiera: `Timebase`, `JournalEvent`, `SessionJournal` (A2).
 - Dostarcza: `CAFLayout.headerSize` (= 68), `bytesPerSample` (= 2), `bytesPerFrame(channels:)`, `frames(fileSize:channels:)`. `SessionSummary` (`startedHostTime`, `timebase`, `wallClock`, `endReason: String?`, `crashed: Bool`, `tracks: [Track]`), `SessionSummary.timelineTrackID = "system"`, `static rebuild(from:) throws -> SessionSummary`, `hostTime(track:frame:) -> UInt64?`, `write(to:) throws`; `Track` (`id`, `sampleRate`, `channels`, `deviceUIDs`, `firstSampleHostTime`, `offsetSeconds`, `frames: Int?`, `gaps: [Gap]`, `clock: [ClockAnchor]`, `permissionDenied`, `failure`, `effectiveSampleRate`) z publicznym `init` z wartościami domyślnymi; `SessionSummaryError.missingSessionStart`. `SessionDirectory(url:)`: `journalURL`, `summaryURL`, `trackURL(_:)`, `summarize() throws`, `rebuildSummaryFile() throws`.
 
-- [ ] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesSessionFormatTests/SessionSummaryTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesSessionFormatTests/SessionSummaryTests.swift`:
 
 ```swift
 import Foundation
@@ -586,9 +586,9 @@ private func baseEvents() -> [JournalEvent] {
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesSessionFormatTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `SessionSummary`, `SessionDirectory`, `CAFLayout`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesSessionFormatTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `SessionSummary`, `SessionDirectory`, `CAFLayout`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesSessionFormat/CAFLayout.swift`:
 
@@ -834,11 +834,11 @@ public struct SessionDirectory: Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 11/11 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 11/11 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (T8).** W `SessionSummary.swift`, w gałęzi `case .trackClock:`, zamień `summary.tracks[i].clock.append(ClockAnchor(frameIndex: f, hostTime: e.hostTime))` na `_ = (i, f)`. `scripts/test.sh --filter clockAnchorsAbsorbDeviceClockDrift` — oczekiwane: pada (błąd ponad 50 ms, `effectiveSampleRate` puste). Przywróć linię; `scripts/test.sh` znów `11/11`.
+- [x] **Krok 5: Mutacja (T8).** W `SessionSummary.swift`, w gałęzi `case .trackClock:`, zamień `summary.tracks[i].clock.append(ClockAnchor(frameIndex: f, hostTime: e.hostTime))` na `_ = (i, f)`. `scripts/test.sh --filter clockAnchorsAbsorbDeviceClockDrift` — oczekiwane: pada (błąd ponad 50 ms, `effectiveSampleRate` puste). Przywróć linię; `scripts/test.sh` znów `11/11`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Sources/MeetNotesSessionFormat Tests/MeetNotesSessionFormatTests
