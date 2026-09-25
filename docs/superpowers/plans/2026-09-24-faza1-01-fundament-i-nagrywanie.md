@@ -1354,7 +1354,7 @@ Status: ✅ zweryfikowane (11 testów).
 - Pobiera: `AudioSource`, `TrackWriter` (A5), `SessionJournal`, `SessionDirectory` (A3).
 - Dostarcza: `HostClock` (`now() -> UInt64`), `MachHostClock()`, `ManualHostClock(_:)` z `set(_:)`. `Levels.rmsDBFS(_:) -> Double` (cisza = −160). `EndReason` (`button`, `silence`, `hardLimit`, `sourceStalled`, `endOfInput`, `diskFull`, `writeError`, `noSources`), `RecorderState`, protokół `EndCondition` (`check(_:) -> EndReason?`), `SilenceCondition(seconds:)`, `HardLimitCondition(seconds:)`, `StallCondition(seconds:)`, `[any EndCondition].standard`. `FileSource(trackID:samples:sampleRate:channels:deviceUID:startHostTime:timebase:chunkFrames:jumps:)` — emituje synchronicznie w `start`. `SessionRecorder(directory:sources:conditions: = .standard, clock: = MachHostClock(), timebase: = .current, silenceThresholdDBFS: = -50, zeroWatch: = ["system": 60])`, `start() throws`, `stop(reason:)`, `tick()`, `endReason`, `onEnded`, `static isDiskFull(_:) -> Bool`.
 
-- [ ] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesRecordingTests/SessionRecorderTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesRecordingTests/SessionRecorderTests.swift`:
 
 ```swift
 import Foundation
@@ -1512,9 +1512,9 @@ private final class DeniedSource: AudioSource, @unchecked Sendable {
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `FileSource`, `SessionRecorder`, `ManualHostClock`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `FileSource`, `SessionRecorder`, `ManualHostClock`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesRecording/HostClock.swift`:
 
@@ -1881,13 +1881,13 @@ public final class SessionRecorder: @unchecked Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 34/34 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 34/34 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (T5).** W `SilenceCondition.check` zamień `>= seconds ? .silence : nil` na `>= seconds * 100 ? .silence : nil`. `scripts/test.sh --filter silenceEndsTheSession` — oczekiwane: pada (`endOfInput` zamiast `silence`). Przywróć.
+- [x] **Krok 5: Mutacja (T5).** W `SilenceCondition.check` zamień `>= seconds ? .silence : nil` na `>= seconds * 100 ? .silence : nil`. `scripts/test.sh --filter silenceEndsTheSession` — oczekiwane: pada (`endOfInput` zamiast `silence`). Przywróć.
 
-- [ ] **Krok 6: Mutacja (T9).** W `watchZerosLocked` usuń linię z `try? journal.append(.trackFailed(trackID, reason: "allZeros`. `scripts/test.sh --filter systemTrackOfPureZerosIsFlagged` — oczekiwane: pada. Przywróć; `34/34`.
+- [x] **Krok 6: Mutacja (T9).** W `watchZerosLocked` usuń linię z `try? journal.append(.trackFailed(trackID, reason: "allZeros`. `scripts/test.sh --filter systemTrackOfPureZerosIsFlagged` — oczekiwane: pada. Przywróć; `34/34`.
 
-- [ ] **Krok 7: Commit.**
+- [x] **Krok 7: Commit.**
 
 ```bash
 git add Sources/MeetNotesRecording Tests/MeetNotesRecordingTests
