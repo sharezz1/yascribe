@@ -16,10 +16,18 @@ struct CLI {
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
     """
 
+    /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
+    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run"]
+    static let known = valued.union(["--no-aec", "--no-system"])
+
     static func main() async {
         var args = Array(CommandLine.arguments.dropFirst())
         guard !args.isEmpty else { print(usage); exit(64) }
         let cmd = args.removeFirst()
+        if let bad = args.first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
+            FileHandle.standardError.write(Data("nieznana opcja: \(bad)\n".utf8))
+            print(usage); exit(64)
+        }
         do {
             switch cmd {
             case "record": try await record(args)
@@ -51,7 +59,9 @@ struct CLI {
     }
 
     static func positional(_ args: [String], _ n: Int) throws -> String {
-        let p = args.filter { !$0.hasPrefix("--") }
+        let p = args.indices.filter { i in
+            !args[i].hasPrefix("--") && !(i > 0 && valued.contains(args[i - 1]))
+        }.map { args[$0] }
         guard n < p.count else { print(usage); exit(64) }
         return p[n]
     }
