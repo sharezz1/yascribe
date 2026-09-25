@@ -39,6 +39,17 @@ struct CLI {
         return args[i + 1]
     }
 
+    /// Opcja liczbowa: brak = `nil`, a podana bez wartości albo z wartością
+    /// nieliczbową/niedodatnią to błąd użycia — nie cicha wartość domyślna (S3-3).
+    static func number(_ args: [String], _ name: String) -> Double? {
+        guard args.contains(name) else { return nil }
+        guard let v = option(args, name).flatMap(Double.init), v.isFinite, v > 0 else {
+            FileHandle.standardError.write(Data("\(name) wymaga liczby dodatniej\n".utf8))
+            print(usage); exit(64)
+        }
+        return v
+    }
+
     static func positional(_ args: [String], _ n: Int) throws -> String {
         let p = args.filter { !$0.hasPrefix("--") }
         guard n < p.count else { print(usage); exit(64) }
@@ -52,20 +63,27 @@ struct CLI {
         sources.append(RawMicrophoneSource())
         if !args.contains("--no-aec") { sources.append(VoiceProcessedMicrophoneSource()) }
         var conditions: [any EndCondition] = .standard
-        if let s = option(args, "--seconds").flatMap(Double.init) { conditions.append(HardLimitCondition(seconds: s)) }
+        if let s = number(args, "--seconds") { // zastępuje 4 h ze standardu, inaczej > 4 h nie działa (S3-5)
+            conditions.removeAll { $0 is HardLimitCondition }
+            conditions.append(HardLimitCondition(seconds: s))
+        }
         // ⚠️ Po recenzji (R1): krótszy próg ciszy do sprzętowego T5. Pierwszy na liście wygrywa.
-        if let s = option(args, "--silence").flatMap(Double.init) { conditions.insert(SilenceCondition(seconds: s), at: 0) }
+        if let s = number(args, "--silence") { conditions.insert(SilenceCondition(seconds: s), at: 0) }
         let recorder = SessionRecorder(directory: dir, sources: sources, conditions: conditions)
         let done = AsyncStream<EndReason> { cont in recorder.onEnded = { cont.yield($0); cont.finish() } }
         signal(SIGINT, SIG_IGN)
         let sigint = DispatchSource.makeSignalSource(signal: SIGINT)
         sigint.setEventHandler { recorder.stop(reason: .button) }
         sigint.resume()
-        let ticker = Task { while !Task.isCancelled { try? await Task.sleep(for: .seconds(1)); recorder.tick() } }
+        // sleep rzuca po cancel(), więc po anulowaniu nie ma już ani jednego tick() (S3-7).
+        let ticker = Task { while (try? await Task.sleep(for: .seconds(1))) != nil { recorder.tick() } }
         try recorder.start()
         print("nagrywam do \(dir.path) — Ctrl-C kończy")
-        for await reason in done { print("koniec: \(reason.rawValue)") }
+        for await _ in done {} // „koniec:" wypisuje summarize (S3-8)
         ticker.cancel()
+        await ticker.value
+        sigint.cancel()
+        signal(SIGINT, SIG_DFL)
         try summarize([dir.path])
     }
 
@@ -83,32 +101,17 @@ struct CLI {
 
     static func fit(_ args: [String]) throws {
         // Wzorzec w dowolnym formacie (np. aiff z `say`), nagranie — nasz CAF.
-        let ref = try readAnyAudio(URL(fileURLWithPath: try positional(args, 0)))
-        let rec = try CAFReader(url: URL(fileURLWithPath: try positional(args, 1)))
-        let rate = 16_000.0
-        let a = AudioFit.resample(AudioFit.mono(ref.samples, channels: ref.channels), from: ref.rate, to: rate)
-        let b = AudioFit.resample(AudioFit.mono(rec.samples, channels: rec.channels), from: rec.sampleRate, to: rate)
-        let lagMs = option(args, "--max-lag-ms").flatMap(Double.init) ?? 500
-        let r = AudioFit.fit(reference: a, recorded: b, maxLagFrames: Int(lagMs / 1000 * rate))
+        // Oba argumenty przed otwarciem czegokolwiek: brak drugiego = kod 64, nie błąd CoreAudio (S3-4).
+        let refURL = URL(fileURLWithPath: try positional(args, 0))
+        let recURL = URL(fileURLWithPath: try positional(args, 1))
+        let lagMs = number(args, "--max-lag-ms") ?? 500
+        let r = try AudioFit.fitFiles(reference: refURL, recording: recURL, maxLagMs: lagMs)
         print(String(format: "a = %.4f  R² = %.4f  korelacja = %.4f  opóźnienie = %.1f ms",
-                     r.gain, r.rSquared, r.correlation, Double(r.lagFrames) / rate * 1000))
+                     r.gain, r.rSquared, r.correlation, Double(r.lagFrames) / AudioFit.analysisRate * 1000))
     }
 
-    /// Czyta dowolny plik audio jako Int16 przeplatany. W pętli: jedno `read(into:)`
-    /// potrafi oddać mniej ramek niż pojemność bufora (📐 63 454 z 64 000).
+    /// Czyta dowolny plik audio jako Int16 przeplatany — patrz `AudioFit.readAnyAudio`.
     static func readAnyAudio(_ url: URL) throws -> (samples: [Int16], rate: Double, channels: Int) {
-        let f = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: true)
-        let ch = Int(f.processingFormat.channelCount)
-        guard let buf = AVAudioPCMBuffer(pcmFormat: f.processingFormat, frameCapacity: 8_192) else {
-            throw AudioSourceError.coreAudio("AVAudioPCMBuffer", -1)
-        }
-        var out: [Int16] = []
-        while f.framePosition < f.length {
-            try f.read(into: buf)
-            if buf.frameLength == 0 { break }
-            guard let p = buf.int16ChannelData else { break }
-            out.append(contentsOf: UnsafeBufferPointer(start: p[0], count: Int(buf.frameLength) * ch))
-        }
-        return (out, f.processingFormat.sampleRate, ch)
+        try AudioFit.readAnyAudio(url)
     }
 }
