@@ -140,3 +140,18 @@ Wejście: `S3-S4-poprawki-przeglad.md`. Zmiany: `SessionRecorder.swift`, `Microp
 Planów ani liczb testów w planach nie zmieniałem (osobny krok). Liczba testów 52 → 53 (+1 nowy `@Test`), więc przesunięcie w planach to teraz **+6** względem liczb z planów.
 
 `scripts/test.sh`: `test.sh: 53/53 testów uruchomionych i zaliczonych.`
+
+## Runda 3 (uwagi z przeglądu kontrolnego)
+
+Wejście: `S3-S4-runda2-przeglad.md`, uwagi 1–4. Zmiany: `SessionRecorder.swift` (uwaga 4), trzy istniejące testy w `SessionRecorderTests.swift` (bez nowych `@Test`), ten raport. Mutacje robione na kopii i przywrócone (`cmp` z kopią zapasową, drzewo bez zmian poza commitowanymi).
+
+| Uwaga | Co zmienione | Mutacja → wynik |
+|---|---|---|
+| 1 (M3) warunek `stalledTracks.contains` | `failedTrackKeepsItsReasonThroughStallAndResume`: asercja braku `track.recovered` dla `mic_raw` (nigdy nie stawał). | Zdjęcie `stalledTracks.contains(trackID)` z warunku recovery → **czerwień**, 2 asercje: nowa (`mic_raw`) i liczba recovery `system` z uwagi 3. |
+| 2 (M4) insert w `watchZerosLocked` | `systemTrackOfPureZerosIsFlagged` przepisany z `FileSource` na `Pump`: `FileSource` kończy się `.endOfStream`, a tor w `ended` nie jest nadzorowany — samo dołożenie ticków nic by nie przypięło. Teraz 61 porcji zer (k=1…61, `allZeros60s` w k=61), potem ticki do k=100 bez porcji; asercje: brak `stalled30s` w dzienniku, `failure == "allZeros60s"`. | Usunięcie `failedTracks.insert` w `watchZerosLocked` → **czerwień**, 2 asercje (`stalled30s` w k=91 nadpisuje przyczynę). |
+| 3 (M5) `stalledTracks.remove` | `stalledTrackThatResumesIsNotLeftFailed`: `contains` zamienione na dokładnie 1 zdarzenie `track.recovered` dla `system`. | Usunięcie `stalledTracks.remove(trackID)` → **czerwień** (duplikaty recovery przy każdej porcji k=41…45). |
+| 4 `try?` w `catch` przy `source.start()` | Wzorzec P3: `do { try journal.append(.trackFailed); failedTracks.insert } catch {}` — zdarzenie jednorazowe, bez ponowienia; przy błędzie zapisu nadzór może później dopisać `stalled30s`. Bez testu (wymaga wstrzyknięcia błędu zapisu — jak U1). | Nie dotyczy (zmiana wzorca, zachowanie przy udanym zapisie bez zmian; `stallDoesNotOverwriteEarlierFailure` zielony). |
+
+Planów ani liczb testów nie zmieniałem — liczba `@Test` bez zmian (53).
+
+`scripts/test.sh`: `test.sh: 53/53 testów uruchomionych i zaliczonych.`

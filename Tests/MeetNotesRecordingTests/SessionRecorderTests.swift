@@ -133,11 +133,21 @@ private final class DeniedSource: AudioSource, @unchecked Sendable {
 }
 
 @Test func systemTrackOfPureZerosIsFlagged() throws {
-    // T9: 70 s zer cyfrowych na ścieżce systemowej → track.failed, a nie cichy plik.
+    // T9: 61 s zer cyfrowych na ścieżce systemowej → track.failed, a nie cichy plik.
+    // Potem ~40 s bez porcji: nadzór nie może nadpisać przyczyny stalled30s (runda 3, M4).
     let dir = sessionDir()
-    let sys = FileSource(trackID: "system", samples: [Int16](repeating: 0, count: 70 * 8_000), sampleRate: 8_000,
-                         channels: 1, startHostTime: 0, timebase: ns, chunkFrames: 800)
-    try SessionRecorder(directory: dir, sources: [sys], conditions: [], clock: ManualHostClock(), timebase: ns).start()
+    let clock = ManualHostClock(0)
+    let sys = Pump("system")
+    let r = SessionRecorder(directory: dir, sources: [sys], conditions: [], clock: clock, timebase: ns)
+    try r.start()
+    for k in 1...100 {
+        clock.set(UInt64(k) * s)
+        if k <= 61 { sys.handler?(.chunk(AudioChunk(samples: [Int16](repeating: 0, count: 1_600), hostTime: UInt64(k) * s))) }
+        r.tick()
+    }
+    r.stop()
+    let events = try SessionJournal.read(url: SessionDirectory(url: dir).journalURL)
+    #expect(!events.contains { $0.type == .trackFailed && $0.reason == "stalled30s" })
     let t = try #require(try SessionDirectory(url: dir).summarize().tracks.first)
     #expect(t.failure == "allZeros60s")
 }
@@ -224,7 +234,8 @@ private final class Pump: AudioSource, @unchecked Sendable {
     r.stop()
     let events = try SessionJournal.read(url: SessionDirectory(url: dir).journalURL)
     #expect(events.contains { $0.type == .trackFailed && $0.trackID == "system" })
-    #expect(events.contains { $0.type == .trackRecovered && $0.trackID == "system" })
+    // Dokładnie jedno: tor wychodzi ze stalledTracks, kolejne porcje nie powielają zdarzenia (runda 3, M5).
+    #expect(events.filter { $0.type == .trackRecovered && $0.trackID == "system" }.count == 1)
     #expect(try SessionDirectory(url: dir).summarize().tracks.first { $0.id == "system" }?.failure == nil)
 }
 
@@ -267,6 +278,7 @@ private final class Pump: AudioSource, @unchecked Sendable {
     let events = try SessionJournal.read(url: SessionDirectory(url: dir).journalURL)
     #expect(!events.contains { $0.type == .trackFailed && $0.trackID == "system" && $0.reason == "stalled30s" })
     #expect(!events.contains { $0.type == .trackRecovered && $0.trackID == "mic_aec" })
+    #expect(!events.contains { $0.type == .trackRecovered && $0.trackID == "mic_raw" }) // nigdy nie stawał (M3)
     let tracks = try SessionDirectory(url: dir).summarize().tracks
     #expect(tracks.first { $0.id == "system" }?.failure == "reopen: A")
     #expect(tracks.first { $0.id == "mic_aec" }?.failure == "reopen: B")
