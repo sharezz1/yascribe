@@ -40,3 +40,11 @@ private func floatBuffer(frames: Int, rate: Double, channels: Int, hz: Double) t
     let conv = try FormatConverter(input: src.format, sampleRate: 48_000, channels: 2)
     for _ in 0..<20 { #expect(conv.convert(src).count == 1_024) }
 }
+
+@Test func conversionFailuresAreReportedEvenWhenTheyComeInBursts() {
+    // S4 P1: jedno convert potrafi dodać kilka awarii naraz (plasterki).
+    #expect(FormatConverter.shouldReport(before: 0, after: 5))
+    #expect(!FormatConverter.shouldReport(before: 5, after: 9))
+    #expect(FormatConverter.shouldReport(before: 998, after: 1_001))
+    #expect(!FormatConverter.shouldReport(before: 3, after: 3))
+}

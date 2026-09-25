@@ -12,6 +12,8 @@ public struct JournalEvent: Codable, Equatable, Sendable {
         case trackGap = "track.gap"
         case trackPermissionDenied = "track.permissionDenied"
         case trackFailed = "track.failed"
+        /// Tor oznaczony `stalled…` znów dostarcza porcje.
+        case trackRecovered = "track.recovered"
         case trackClosed = "track.closed"
         case sessionEnded = "session.ended"
     }
@@ -96,6 +98,12 @@ public extension JournalEvent {
         var e = JournalEvent(type: .trackFailed, hostTime: hostTime)
         e.trackID = trackID
         e.reason = reason
+        return e
+    }
+
+    static func trackRecovered(_ trackID: String, hostTime: UInt64) -> JournalEvent {
+        var e = JournalEvent(type: .trackRecovered, hostTime: hostTime)
+        e.trackID = trackID
         return e
     }
 

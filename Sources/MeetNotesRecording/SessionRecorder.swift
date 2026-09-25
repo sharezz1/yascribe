@@ -30,6 +30,9 @@ public final class SessionRecorder: @unchecked Sendable {
     private let trackStallSeconds: Double
     private var lastChunkByTrack: [String: UInt64] = [:]
     private var stalledTracks: Set<String> = []
+    /// Tory z już zapisanym `track.failed` z innego powodu — nadzór ich nie
+    /// nadpisuje swoim `stalled30s` (P2).
+    private var failedTracks: Set<String> = []
     public private(set) var endReason: EndReason?
 
     public var onEnded: (@Sendable (EndReason) -> Void)?
@@ -53,15 +56,21 @@ public final class SessionRecorder: @unchecked Sendable {
         let now = clock.now()
         try journal.append(.sessionStarted(hostTime: now, timebase: timebase, wallClock: Date()))
 
-        var ready: [(any AudioSource, TrackWriter)] = []
+        var ready: [(any AudioSource, TrackWriter, UInt64)] = []
         for source in sources {
+            // trackID idzie do nazwy pliku — tylko bezpieczne znaki, nic poza katalogiem sesji (P12).
+            guard Self.isSafeTrackID(source.trackID) else {
+                try journal.append(.trackFailed(source.trackID, reason: "invalidTrackID", hostTime: clock.now()))
+                continue
+            }
             do {
                 let fmt = try source.prepare()
                 let writer = try TrackWriter(trackID: source.trackID, url: directory.trackURL(source.trackID),
                                              format: fmt, journal: journal, timebase: timebase)
-                try journal.append(.trackOpened(source.trackID, hostTime: clock.now(), sampleRate: fmt.sampleRate,
+                let opened = clock.now()
+                try journal.append(.trackOpened(source.trackID, hostTime: opened, sampleRate: fmt.sampleRate,
                                                 channels: fmt.channels, deviceUID: fmt.deviceUID))
-                ready.append((source, writer))
+                ready.append((source, writer, opened))
             } catch AudioSourceError.permissionDenied(let permission) {
                 try journal.append(.trackPermissionDenied(source.trackID, permission: permission,
                                                           detection: "prepare", hostTime: clock.now()))
@@ -72,7 +81,10 @@ public final class SessionRecorder: @unchecked Sendable {
 
         lock.lock()
         self.journal = journal
-        for (s, w) in ready { writers[s.trackID] = w }
+        for (s, w, opened) in ready {
+            writers[s.trackID] = w
+            lastChunkByTrack[s.trackID] = opened // 30 s liczone od otwarcia toru, nie od startu sesji (P7)
+        }
         started = ready.map { $0.0 }
         startedAt = now
         lastLoudAt = now
@@ -83,12 +95,13 @@ public final class SessionRecorder: @unchecked Sendable {
             finish(.noSources)
             return
         }
-        for (source, _) in ready {
+        for (source, _, _) in ready {
             let id = source.trackID
             do {
                 try source.start { [weak self] event in self?.handle(trackID: id, event) }
             } catch {
                 try? journal.append(.trackFailed(id, reason: "\(error)", hostTime: clock.now()))
+                lock.lock(); failedTracks.insert(id); lock.unlock()
             }
         }
     }
@@ -104,11 +117,17 @@ public final class SessionRecorder: @unchecked Sendable {
         if !finishing, let journal { // bez dziennika sesja jeszcze nie ruszyła (Hermes 2.1)
             reason = evaluateLocked(now: now)
             // Każdy tor z osobna: martwy tor nie chowa się za żywym (ChatGPT #9).
-            for s in started where !ended.contains(s.trackID) && !stalledTracks.contains(s.trackID) {
+            // ponytail: append (fsync) pod blokadą jak w handle(); ≤ 1 na tor na sesję.
+            // Całość dziennika poza blokadą — osobne zadanie (P11).
+            for s in started where !ended.contains(s.trackID) && !stalledTracks.contains(s.trackID)
+                && !failedTracks.contains(s.trackID) {
                 let last = lastChunkByTrack[s.trackID] ?? startedAt
                 if timebase.secondsBetween(now, last) >= trackStallSeconds {
-                    try? journal.append(.trackFailed(s.trackID, reason: "stalled\(Int(trackStallSeconds))s", hostTime: now))
-                    stalledTracks.insert(s.trackID)
+                    // Niezapisane zdarzenie = spróbuj przy następnym tick(), nie wyłączaj toru z nadzoru (P3).
+                    do {
+                        try journal.append(.trackFailed(s.trackID, reason: "stalled\(Int(trackStallSeconds))s", hostTime: now))
+                        stalledTracks.insert(s.trackID)
+                    } catch {}
                 }
             }
         }
@@ -127,6 +146,10 @@ public final class SessionRecorder: @unchecked Sendable {
                     watchZerosLocked(trackID: trackID, chunk: chunk, journal: journal)
                     lastChunkAt = max(lastChunkAt, chunk.hostTime)
                     lastChunkByTrack[trackID] = chunk.hostTime
+                    if stalledTracks.contains(trackID) { // tor ożył — podsumowanie nie może dalej mówić „stalled" (P6)
+                        try? journal.append(.trackRecovered(trackID, hostTime: chunk.hostTime))
+                        stalledTracks.remove(trackID)
+                    }
                     if Levels.rmsDBFS(chunk.samples) > silenceThreshold { lastLoudAt = max(lastLoudAt, chunk.hostTime) }
                     reason = evaluateLocked(now: chunk.hostTime)
                 } catch {
@@ -136,6 +159,7 @@ public final class SessionRecorder: @unchecked Sendable {
                 try? journal.append(.deviceChanged(trackID, deviceUID: uid, hostTime: clock.now()))
             case .failed(let why):
                 try? journal.append(.trackFailed(trackID, reason: why, hostTime: clock.now()))
+                failedTracks.insert(trackID)
             case .endOfStream:
                 ended.insert(trackID)
                 if ended.count == started.count { reason = .endOfInput }
@@ -160,6 +184,7 @@ public final class SessionRecorder: @unchecked Sendable {
         if timebase.secondsBetween(chunk.hostTime, first) >= window {
             try? journal.append(.trackFailed(trackID, reason: "allZeros\(Int(window))s", hostTime: chunk.hostTime))
             zeroResolved.insert(trackID)
+            failedTracks.insert(trackID)
         }
     }
 
@@ -188,6 +213,10 @@ public final class SessionRecorder: @unchecked Sendable {
         try? journal?.close()
         lock.unlock()
         onEnded?(reason)
+    }
+
+    static func isSafeTrackID(_ id: String) -> Bool {
+        !id.isEmpty && id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
     }
 
     static func isDiskFull(_ error: any Error) -> Bool {

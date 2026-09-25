@@ -34,7 +34,7 @@ final class HALCapture: @unchecked Sendable {
                   let buf = AVAudioPCMBuffer(pcmFormat: fmt, bufferListNoCopy: inInputData, deallocator: nil) else { return }
             let before = conv.failures
             let samples = conv.convert(buf)
-            if conv.failures > before && (conv.failures == 1 || conv.failures % 1_000 == 0) {
+            if FormatConverter.shouldReport(before: before, after: conv.failures) {
                 fail("convert failures: \(conv.failures)")
             }
             if !samples.isEmpty { emit(AudioChunk(samples: samples, hostTime: inInputTime.pointee.mHostTime)) }

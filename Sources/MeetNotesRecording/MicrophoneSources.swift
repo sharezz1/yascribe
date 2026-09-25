@@ -18,6 +18,8 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     private let lock = NSLock()
     private var capture: HALCapture?
     private var handler: (@Sendable (AudioSourceEvent) -> Void)?
+    /// Po `stop()` przebudowa z kolejki obserwatora nie może podpiąć nowego capture (P8).
+    private var stopped = false
     private let watcher = DeviceWatcher(selector: kAudioHardwarePropertyDefaultInputDevice)
 
     public init() {}
@@ -36,20 +38,21 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
 
     public func stop() {
         watcher.stop()
-        lock.lock(); let c = capture; capture = nil; lock.unlock()
+        lock.lock(); stopped = true; let c = capture; capture = nil; lock.unlock()
         c?.stop()
     }
 
     @discardableResult
     private func open() throws -> String {
         let dev = try CoreAudioDevices.defaultInputDevice()
-        lock.lock(); let h = handler; lock.unlock()
-        guard let h else { return "" }
+        lock.lock(); let h = handler, late = stopped; lock.unlock()
+        guard let h, !late else { return "" }
         let c = try HALCapture(device: dev, inputFormat: try CoreAudioDevices.inputFormat(of: dev),
                                sampleRate: Self.sampleRate, channels: 1,
                                onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
-        lock.lock(); capture = c; lock.unlock()
+        lock.lock(); let lateStop = stopped; if !lateStop { capture = c }; lock.unlock()
+        if lateStop { c.stop(); return "" }
         return try CoreAudioDevices.uid(of: dev)
     }
 
@@ -91,13 +94,20 @@ public final class VoiceProcessedMicrophoneSource: AudioSource, @unchecked Senda
             guard when.isHostTimeValid else { return }
             let before = conv.failures
             let s = conv.convert(buf)
-            if conv.failures > before && (conv.failures == 1 || conv.failures % 1_000 == 0) {
+            if FormatConverter.shouldReport(before: before, after: conv.failures) {
                 handler(.failed("convert failures: \(conv.failures)"))
             }
             if !s.isEmpty { handler(.chunk(AudioChunk(samples: s, hostTime: when.hostTime))) }
         }
         try engine.start()
-        watcher.start { handler(.failed("inputDeviceChanged: mic_aec stopped, mic_raw continues")) }
+        // Zdarzenie mówi „stopped", więc tor naprawdę staje — bez tego pisałby dalej
+        // ze starego wejścia obok zgłoszonej awarii (P5).
+        let engine = engine
+        watcher.start {
+            engine.inputNode.removeTap(onBus: 0)
+            engine.stop()
+            handler(.failed("inputDeviceChanged: mic_aec stopped, mic_raw continues"))
+        }
     }
 
     public func stop() {
