@@ -860,7 +860,7 @@ Status: ✅ zweryfikowane (6 testów), z jedną poprawką po recenzji w `CAFRead
 - Pobiera: `CAFLayout` (A3).
 - Dostarcza: `CAFWriter(url:sampleRate:channels:) throws`, `append(_ samples: [Int16]) throws` (przeplatane, pełne ramki), `appendSilence(frames:) throws`, `framesWritten`, `close() throws`, `static header(sampleRate:channels:) -> Data`. `CAFReader(url:) throws` (`sampleRate`, `channels`, `samples: [Int16]`, `frames`), `CAFReadError.tooShort`, `.notOurLayout(String)`.
 
-- [ ] **Krok 1: Test, który padnie.** Usuń obie zaślepki nagrywania i utwórz `Tests/MeetNotesRecordingTests/CAFWriterTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Usuń obie zaślepki nagrywania i utwórz `Tests/MeetNotesRecordingTests/CAFWriterTests.swift`:
 
 ```swift
 import AVFoundation
@@ -958,9 +958,9 @@ func readInt16(_ url: URL) throws -> (samples: [Int16], rate: Double, channels: 
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `CAFWriter`, `CAFReader`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `CAFWriter`, `CAFReader`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesRecording/CAFWriter.swift`:
 
@@ -1093,11 +1093,11 @@ public struct CAFReader: Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 17/17 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 17/17 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (T7).** W `CAFWriter.header` zamień `fourCC("data"); i64(-1)` na `fourCC("data"); i64(0)`. `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: padają m.in. `fileIsReadableWithoutClose` i `ownReaderMatchesSystemReader`. Przywróć; `17/17`.
+- [x] **Krok 5: Mutacja (T7).** W `CAFWriter.header` zamień `fourCC("data"); i64(-1)` na `fourCC("data"); i64(0)`. `scripts/test.sh --filter MeetNotesRecordingTests` — oczekiwane: padają m.in. `fileIsReadableWithoutClose` i `ownReaderMatchesSystemReader`. Przywróć; `17/17`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Sources Tests/MeetNotesRecordingTests
