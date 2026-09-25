@@ -2672,7 +2672,7 @@ Status: 🔧 pełny CLI (A9 + B4 + C4 razem) skompilowany i sprawdzony dymnie pr
 
 ⚠️ Uruchomione z terminala dziedziczy uprawnienia TCC aplikacji terminala, nie aplikacji MeetNotes.
 
-- [ ] **Krok 1: Implementacja.** Usuń zaślepkę i utwórz `Sources/meetnotes-cli/CLI.swift`:
+- [x] **Krok 1: Implementacja.** Usuń zaślepkę i utwórz `Sources/meetnotes-cli/CLI.swift`:
 
 ```swift
 import AVFoundation
@@ -2791,13 +2791,13 @@ struct CLI {
 }
 ```
 
-- [ ] **Krok 2: Zbuduj.** `swift build --product meetnotes-cli` — oczekiwane: `Build complete!`. Błąd kompilacji tu oznacza błąd w złożeniu planu, nie w kodzie ze spike'a — napraw i zanotuj w dokumencie sondy.
+- [x] **Krok 2: Zbuduj.** `swift build --product meetnotes-cli` — oczekiwane: `Build complete!`. Błąd kompilacji tu oznacza błąd w złożeniu planu, nie w kodzie ze spike'a — napraw i zanotuj w dokumencie sondy.
 
-- [ ] **Krok 3: Test dymny bez sprzętu.** `swift run meetnotes-cli` — oczekiwane: tekst pomocy i kod wyjścia 64. `swift run meetnotes-cli summarize /nie/ma` — oczekiwane: `błąd:` i kod 1.
+- [x] **Krok 3: Test dymny bez sprzętu.** `swift run meetnotes-cli` — oczekiwane: tekst pomocy i kod wyjścia 64. `swift run meetnotes-cli summarize /nie/ma` — oczekiwane: `błąd:` i kod 1.
 
-- [ ] **Krok 4: Pełne testy.** `scripts/test.sh` — oczekiwane: `44/44`.
+- [x] **Krok 4: Pełne testy.** `scripts/test.sh` — oczekiwane: `44/44`.
 
-- [ ] **Krok 5: Commit.**
+- [x] **Krok 5: Commit.**
 
 ```bash
 git add Sources/meetnotes-cli
