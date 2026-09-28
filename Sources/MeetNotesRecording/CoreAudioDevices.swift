@@ -41,7 +41,7 @@ public enum CoreAudioDevices {
         var asbd = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         let st = AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &asbd)
-        guard st == noErr, let f = AVAudioFormat(streamDescription: &asbd) else {
+        guard st == noErr, let f = format(asbd) else {
             throw AudioSourceError.coreAudio("StreamFormat", st)
         }
         return f
@@ -52,9 +52,19 @@ public enum CoreAudioDevices {
         var asbd = AudioStreamBasicDescription()
         var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
         let st = AudioObjectGetPropertyData(tap, &addr, 0, nil, &size, &asbd)
-        guard st == noErr, let f = AVAudioFormat(streamDescription: &asbd) else {
+        guard st == noErr, let f = format(asbd) else {
             throw AudioSourceError.coreAudio("TapFormat", st)
         }
         return f
+    }
+
+    /// `AVAudioFormat` z opisu strumienia. Powyżej 2 kanałów AVAudioFormat wymaga
+    /// układu kanałów, inaczej zwraca nil — a tak wystawia się wbudowany mikrofon
+    /// MacBooka, gdy działa przetwarzanie głosu (3 kanały, sonda S2).
+    static func format(_ asbd: AudioStreamBasicDescription) -> AVAudioFormat? {
+        var d = asbd
+        if let f = AVAudioFormat(streamDescription: &d) { return f }
+        guard let layout = AVAudioChannelLayout(layoutTag: kAudioChannelLayoutTag_DiscreteInOrder | d.mChannelsPerFrame) else { return nil }
+        return AVAudioFormat(streamDescription: &d, channelLayout: layout)
     }
 }
