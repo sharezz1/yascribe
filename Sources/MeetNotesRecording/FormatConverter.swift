@@ -28,7 +28,13 @@ public final class FormatConverter {
         // Bez „rozgrzewania" filtra: wyjście zaczyna się razem z wejściem, więc czas
         // hosta pierwszej próbki wejścia jest też czasem pierwszej próbki wyjścia.
         conv.primeMethod = .none
-        if input.channelCount > 1 && channels == 1 { conv.downmix = true }
+        if input.channelCount > 2 {
+            // Układ dyskretny (np. mikrofon pod przetwarzaniem głosu): downmix daje ciszę,
+            // więc bierzemy pierwsze kanały wprost.
+            conv.channelMap = (0..<channels).map { NSNumber(value: $0) }
+        } else if input.channelCount > 1 && channels == 1 {
+            conv.downmix = true
+        }
         self.input = input
         self.output = out
         self.converter = conv
