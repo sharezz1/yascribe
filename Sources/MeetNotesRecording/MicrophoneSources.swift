@@ -73,6 +73,7 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
 /// surowego — decyzja o AEC zostaje odwracalna (spec rdzenia §2).
 /// 🔴 Przetwarzanie głosu domyślnie ścisza inne aplikacje, w tym Teams, i to
 /// ściszenie trafiłoby też do kanału systemowego — ustawiamy je na minimum.
+/// Minimum nadal ścisza (sonda S5), więc tor jest opcją `--aec`, nie domyślnym.
 public final class VoiceProcessedMicrophoneSource: AudioSource, @unchecked Sendable {
     public let trackID = "mic_aec"
     public static let sampleRate = 16_000.0
@@ -87,7 +88,7 @@ public final class VoiceProcessedMicrophoneSource: AudioSource, @unchecked Senda
         let input = engine.inputNode
         try input.setVoiceProcessingEnabled(true)
         input.voiceProcessingOtherAudioDuckingConfiguration =
-            AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: true, duckingLevel: .min)
+            AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
         let dev = try CoreAudioDevices.defaultInputDevice()
         converter = try FormatConverter(input: input.outputFormat(forBus: 0), sampleRate: Self.sampleRate, channels: 1)
         return TrackFormat(sampleRate: Self.sampleRate, channels: 1, deviceUID: try CoreAudioDevices.uid(of: dev))

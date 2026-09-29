@@ -223,3 +223,25 @@ Jak czytać wynik: jeśli `mic_raw` (c) różni się od (d) o więcej niż ok. 5
 `arrayGainDB` o tę różnicę. Wzmocnienie jest liniowe, więc to jedna liczba. Jeśli słychać
 przester albo zniekształcenia fazowe (średnia kapsuł na wysokich częstotliwościach), wynik wraca
 do mnie. Wtedy alternatywą jest sam kanał 0 × 35 dB.
+
+## Runda 4 — opcja B wdrożona (decyzja użytkownika)
+
+Źródło: `S5-ducking-konsultacja.md`, gdzie rekomendacja brzmiała „B teraz, C później". Decyzja użytkownika: „robimy tak jak mówi Opus". Bez nagrywania dźwięku.
+
+### Zmiany plik po pliku
+
+- `Sources/MeetNotesRecording/MicrophoneSources.swift`: eksperyment z rundy 2 jest cofnięty (`enableAdvancedDucking: false`, poziom `.min` zostaje; zgodnie z plan01:2557). W komentarzu klasy dopisane: minimum nadal ścisza, dlatego tor jest opcją `--aec`.
+- `Sources/meetnotes-cli/CLI.swift`: `record` bez flagi nagrywa `system` + `mic_raw`. `VoiceProcessedMicrophoneSource` powstaje tylko z `--aec`. `--no-aec` nadal jest akceptowane i równa się domyślnemu (plany i runbook go używają). Usage pokazuje `[--aec]`.
+- `SessionRecorder` / rdzeń: bez zmian, bo źródła przychodzą z zewnątrz, a jedynym miejscem, które tworzyło tor AEC, był CLI. Powrót do `mic_raw`: `TranscriptionRunner` jeszcze nie istnieje w kodzie. W planie `tracks(in:)` bierze `mic_aec`, a jeśli go nie ma, `mic_raw` (plan 05, poprawka E3 i test `["system", "mic_raw"]`). Sesja bez `mic_aec` trafi więc na `mic_raw` bez żadnej dodatkowej zmiany.
+- `arrayGainDB` (35 dB): bez zmian. `HALCapture.converterInput` włącza miks kapsuł tylko przy >2 kanałach wejścia, czyli pod VP. Bez `--aec` gałka nie działa.
+- `docs/superpowers/specs/2026-09-24-rdzen-nagrywania-design.md`: pod tabelą §2 i przy T3 dopisane korekty ✏️ z datą 2026-09-29 i odwołaniem do konsultacji/sondy. Treść: domyślnie bez VP, `mic_aec` opt-in (`--aec`) ze stałym ściszaniem, AEC offline (`mic_raw` + `system`) po planie 05. Runbook nie jest ruszany (przełącznik w Ustawieniach zrobi R5 b).
+
+### Testy
+
+`scripts/test.sh`: 54/54. Żaden istniejący test nie zakładał domyślnego AEC. Test `SessionRecorderTests.swift:266` używa `mic_aec` tylko jako nazwy pompy. Nowych `@Test` nie dodano.
+
+### Do sprawdzenia przez użytkownika
+
+1. Świeży build: `swift build`.
+2. `meetnotes-cli record <katalog>` bez flagi, z muzyką w tle: w katalogu są dwie ścieżki (`system.caf`, `mic_raw.caf`), nie ma `mic_aec.caf`, a muzyka **nie cichnie** w trakcie nagrania.
+3. `meetnotes-cli record <katalog> --aec`: trzy ścieżki, muzyka ściszona przez całe nagranie. To znane ograniczenie trybu opt-in.

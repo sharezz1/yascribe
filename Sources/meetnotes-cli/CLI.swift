@@ -10,7 +10,7 @@ import MeetNotesSessionFormat
 struct CLI {
     static let usage = """
     meetnotes-cli <polecenie>
-      record <katalog> [--seconds N] [--silence N] [--no-aec] [--no-system]   nagrywa sesję (Ctrl-C = Stop)
+      record <katalog> [--seconds N] [--silence N] [--aec] [--no-system]   nagrywa sesję (Ctrl-C = Stop)
       summarize <katalog>                                         odtwarza session.json z dziennika
       fit <wzorzec> <nagranie.caf> [--max-lag-ms N]              T1/T3/T4: dopasowanie nagranie ≈ a·wzorzec
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
@@ -18,7 +18,7 @@ struct CLI {
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
     static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run"]
-    static let known = valued.union(["--no-aec", "--no-system"])
+    static let known = valued.union(["--aec", "--no-aec", "--no-system"])
 
     static func main() async {
         var args = Array(CommandLine.arguments.dropFirst())
@@ -71,7 +71,8 @@ struct CLI {
         var sources: [any AudioSource] = []
         if !args.contains("--no-system") { sources.append(SystemTapSource()) }
         sources.append(RawMicrophoneSource())
-        if !args.contains("--no-aec") { sources.append(VoiceProcessedMicrophoneSource()) }
+        // Domyślnie bez VP: ścisza inne aplikacje (S5-ducking-konsultacja). `--no-aec` = domyślne, z planów.
+        if args.contains("--aec") { sources.append(VoiceProcessedMicrophoneSource()) }
         var conditions: [any EndCondition] = .standard
         if let s = number(args, "--seconds") { // zastępuje 4 h ze standardu, inaczej > 4 h nie działa (S3-5)
             conditions.removeAll { $0 is HardLimitCondition }

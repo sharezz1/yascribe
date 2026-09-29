@@ -58,6 +58,8 @@ możliwa dystrybucja przez Homebrew. App Store świadomie poza zakresem — uzas
 | Sandbox | **Nie** w v1 | 📐 sandbox odcina wspólny magazyn modeli — §8 |
 | Xcode | **Nie jest potrzebny** | 📐 SwiftUI + `CATapDescription` budują się na Command Line Tools |
 
+✏️ **Korekta 2026-09-29 (wiersz „AEC").** Sonda S5 (`reports/S5-ducking-konsultacja.md`): żywe przetwarzanie głosu przez całe nagranie ścisza inne aplikacje, a na macOS nie da się tego wyłączyć (poziom `Min` + advanced też ściszają). Domyślnie nagrywamy więc **bez VP**: `system` + `mic_raw`. `mic_aec` jest opcją (`--aec`), a jej znanym ograniczeniem jest stałe ściszanie. Docelowo AEC offline z `mic_raw` + `system`, planowane po planie 05. Surowy mikrofon zostaje zawsze.
+
 ### 2.1 Pomiary wykonane w tej sesji
 
 Domykają część eksperymentów zaprojektowanych przez Hermesa jako E0 (patrz §10).
@@ -289,6 +291,8 @@ a w poprzednim projekcie trzy razy okazało się, że testy chroniły nie to, co
 | **T9** | Odmowa uprawnienia dźwięku systemowego daje **jawny błąd**, nie cichy plik | sesja nie startuje albo dziennik ma `track.permissionDenied`; zero ścieżek pełnych zer udających nagranie | wyłączyć sprawdzenie → czerwień |
 
 ✏️ **Korekta.** Pierwsza wersja dopasowywała mic_raw ≈ a·system i żądała a ≈ 0 — ale surowy mikrofon przy głośnikach musi zawierać echo systemu. Intencja testu: mikrofon nie trafia do pliku odsłuchu.
+
+✏️ **Korekta 2026-09-29 (T3).** Po sondzie S5 (`reports/S5-ducking-konsultacja.md`) `mic_aec` powstaje tylko z `--aec`, więc T3 dotyczy wyłącznie tego trybu. Nagranie domyślne nie ma `mic_aec` i T3 go nie obejmuje. Echo w domyślnym `mic_raw` usunie AEC offline (`mic_raw` + `system`), planowany po planie 05.
 
 ✏️ **Korekta.** Usunięcie fsync nie da się wykazać testem: po kill -9 dane z pamięci podręcznej systemu i tak trafiają na dysk, fsync chroni tylko przed utratą zasilania. Mutacją T7 jest więc nagłówek CAF.
 
