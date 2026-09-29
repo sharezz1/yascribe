@@ -99,3 +99,55 @@ rm -rf /tmp/mn-s5nr && $B record /tmp/mn-s5nr --seconds 30 --no-aec && $B summar
 Jeśli `system` nadal ma 0 ramek, a w dzienniku jest `track.failed "buffer list does not match …"`
 albo `"cannot adapt …"`, to hipoteza „tap to ostatni strumień" jest fałszywa. Taki wynik
 wraca do mnie z dziennikiem.
+
+## Runda 2 — advanced ducking (eksperyment)
+
+Decyzja użytkownika z 2026-09-29: ściszenie innych aplikacji w trakcie nagrania nadal słychać, więc
+próbujemy opcji 2 z sekcji „Ducking".
+
+**Co zmienione.** Tylko jedna linia, `Sources/MeetNotesRecording/MicrophoneSources.swift:87` w
+`VoiceProcessedMicrophoneSource.prepare()`: `enableAdvancedDucking: false` → `true`. Poziom nadal
+`.min`. Nic więcej nie ruszone, w tym tor `mic_raw` (osobne zlecenie). Plan
+`2026-09-24-faza1-01-fundament-i-nagrywanie.md:2557` nadal ma `false`. Świadomie go nie zmieniam,
+bo to eksperyment. Po sondzie trzeba albo poprawić plan, albo cofnąć zmianę w kodzie.
+
+**Co mówi SDK** (`AVFAudio/AVAudioIONode.h:83–95, 259–267`; `AudioToolbox/AudioUnitProperties.h:2682–2725`):
+
+- `enableAdvancedDucking`: „Enables advanced ducking which ducks other audio based on the presence
+  of voice activity from local and/or remote chat participants". Ściszanie jest więc sterowane
+  aktywnością głosową, i to zarówno lokalnego mówcy (mikrofon), jak i zdalnych uczestników.
+  Nagłówek nie mówi wprost, że bez głosu ściszenia nie ma wcale, ani czym jest „zdalny uczestnik"
+  dla jednostki VP (prawdopodobnie sygnał odtwarzany przez jej wyjście). **Nie wiadomo więc, czy
+  głos z Teams odtwarzany przez system też wyzwala ściszenie.** To ma rozstrzygnąć sonda.
+- Poziomy bez zmian: `Default=0, Min=10, Mid=20, Max=30`. Poziomu „wyłączony" nie ma.
+- Brak dodatkowych wymagań i właściwości. Struktura ma tylko dwa pola, dostępność macOS 14+
+  (spełniona, cel `macos14.0`). Domyślnie advanced jest wyłączony, poziom `Default`.
+
+**Odczyt zwrotny** (skrypt `/tmp/duck-readback.swift`: `setVoiceProcessingEnabled(true)`, ustawienie
+konfiguracji, odczyt; bez `engine.start` i bez tapu, więc nic nie nagrano):
+`enableAdvancedDucking=true, level=10`. System przyjął wartość.
+
+**Testy:** `scripts/test.sh` → 53/53. Testy nie pokrywają duckingu, bo to zachowanie sprzętowe.
+
+**Co ma ocenić użytkownik (sonda uchem).** Muzyka z innej aplikacji (np. Spotify/YouTube) gra na
+stałej, znanej głośności przez cały czas.
+
+```sh
+B=$(swift build -c release --show-bin-path)/meetnotes-cli   # jak w rundzie 1
+rm -rf /tmp/mn-duck && $B record /tmp/mn-duck --seconds 60
+```
+
+W trakcie 60 s:
+1. **0–20 s: cisza w pokoju, nie mów.** Czy muzyka jest ściszona względem stanu sprzed startu?
+   Oczekiwanie przy advanced: nie, albo wyraźnie mniej niż w rundzie 1.
+2. **20–40 s: mów ciągle do mikrofonu.** Czy muzyka ścisza się, gdy mówisz, i wraca w pauzach?
+3. **40–60 s: puść w drugiej aplikacji nagranie mowy (np. podcast/Teams) obok muzyki, sam milcz.**
+   Czy muzyka ścisza się od głosu odtwarzanego przez system?
+4. Po zakończeniu: czy głośność wraca do normy (jak w S2)?
+
+Zapisz wynik jako trzy odpowiedzi tak/nie (1–3) plus pkt 4. Decyzja:
+- **1 = nie ściszona** → zostawić advanced, poprawić plan (`:2557`).
+- **1 = ściszona jak wcześniej** → advanced nic nie daje. Wrócić do `false` (albo zostawić, bo jest
+  neutralny) i rozważyć opcję 3 (`--no-aec` domyślnie, AEC offline).
+- **3 = ściszona** → w realnym spotkaniu Teams ściszenie będzie praktycznie ciągłe (ktoś zawsze
+  mówi), więc advanced nie rozwiązuje problemu dla kanału systemowego.
