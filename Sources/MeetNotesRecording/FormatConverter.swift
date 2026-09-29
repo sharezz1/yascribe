@@ -10,6 +10,7 @@ public final class FormatConverter {
     private let converter: AVAudioConverter
     /// Nieudane konwersje — źródło zgłasza je jako .failed zamiast po cichu gubić dźwięk.
     public private(set) var failures = 0
+    func recordFailure() { failures += 1 }
 
     /// Czy zgłosić `.failed` po wywołaniu, które zmieniło licznik z `before` na `after`:
     /// pierwsza awaria i każde przekroczenie kolejnego tysiąca. Liczone na sumie,

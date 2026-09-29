@@ -12,18 +12,21 @@ final class HALCapture: @unchecked Sendable {
     /// Zmieniane tylko z `queue` (IOProc) po starcie.
     private var inputFormat: AVAudioFormat
     private var converter: FormatConverter
+    /// Tylko surowy mikrofon: wzmocnienie miksu kapsuł, gdy urządzenie wystawia > 2 kanały; nil = bez miksu.
+    private let arrayGain: Float?
     private let onChunk: @Sendable (AudioChunk) -> Void
     private let onFailure: @Sendable (String) -> Void
     private let queue = DispatchQueue(label: "meetnotes.hal", qos: .userInteractive)
     private var procID: AudioDeviceIOProcID?
 
-    init(device: AudioObjectID, inputFormat: AVAudioFormat, sampleRate: Double, channels: Int,
+    init(device: AudioObjectID, inputFormat: AVAudioFormat, sampleRate: Double, channels: Int, arrayGain: Float? = nil,
          onChunk: @escaping @Sendable (AudioChunk) -> Void, onFailure: @escaping @Sendable (String) -> Void = { _ in }) throws {
         self.device = device
         self.sampleRate = sampleRate
         self.channels = channels
         self.inputFormat = inputFormat
-        self.converter = try FormatConverter(input: inputFormat, sampleRate: sampleRate, channels: channels)
+        self.arrayGain = arrayGain
+        self.converter = try FormatConverter(input: Self.converterInput(inputFormat, arrayGain), sampleRate: sampleRate, channels: channels)
         self.onChunk = onChunk
         self.onFailure = onFailure
     }
@@ -64,7 +67,13 @@ final class HALCapture: @unchecked Sendable {
             return
         }
         let before = converter.failures
-        let samples = converter.convert(buf)
+        let samples: [Int16]
+        if let g = arrayGain, buf.format.channelCount > 2 {
+            guard let mono = Self.mixArray(buf, gain: g) else { converter.recordFailure(); return }
+            samples = converter.convert(mono)
+        } else {
+            samples = converter.convert(buf)
+        }
         if FormatConverter.shouldReport(before: before, after: converter.failures) {
             onFailure("convert failures: \(converter.failures)")
         }
@@ -77,13 +86,41 @@ final class HALCapture: @unchecked Sendable {
         d.mBytesPerFrame = n * (d.mBitsPerChannel / 8)
         d.mBytesPerPacket = d.mBytesPerFrame * d.mFramesPerPacket
         guard let f = CoreAudioDevices.format(d),
-              let c = try? FormatConverter(input: f, sampleRate: sampleRate, channels: channels) else {
+              let c = try? FormatConverter(input: Self.converterInput(f, arrayGain), sampleRate: sampleRate, channels: channels) else {
             reportMismatch("cannot adapt to \(n) channels")
             return false
         }
         inputFormat = f
         converter = c
         return true
+    }
+
+    /// Pod przetwarzaniem głosu wbudowany mikrofon wystawia surowe kapsuły macierzy
+    /// (MacBook Air: 3 kanały zamiast 1 kanału po beamformingu i DSP) — sonda runda 3:
+    /// kanał 0 jest ~35 dB cichszy od toru bez VP. Konwerter dostaje wtedy mono z `mixArray`.
+    static func converterInput(_ f: AVAudioFormat, _ arrayGain: Float?) -> AVAudioFormat {
+        guard arrayGain != nil, f.channelCount > 2,
+              let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: f.sampleRate, channels: 1, interleaved: false)
+        else { return f }
+        return mono
+    }
+
+    /// Średnia kanałów × `gain`, obcięta do ±1. Średnia trzyma poziom jednej kapsuły
+    /// (kalibracja z kanału 0 zostaje ważna), a nieskorelowany szum spada.
+    /// ponytail: stałe wzmocnienie zmierzone na jednym MacBooku Air; inny sprzęt → nowa sonda i nowa wartość.
+    static func mixArray(_ b: AVAudioPCMBuffer, gain: Float) -> AVAudioPCMBuffer? {
+        guard let src = b.floatChannelData,
+              let fmt = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: b.format.sampleRate, channels: 1, interleaved: false),
+              let out = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: b.frameLength), let dst = out.floatChannelData?[0]
+        else { return nil }
+        out.frameLength = b.frameLength
+        let n = Int(b.format.channelCount), stride = b.stride, il = b.format.isInterleaved, scale = gain / Float(n)
+        for i in 0..<Int(b.frameLength) {
+            var sum: Float = 0
+            for c in 0..<n { sum += il ? src[0][i * stride + c] : src[c][i] }
+            dst[i] = min(max(sum * scale, -1), 1)
+        }
+        return out
     }
 
     /// Raz na przechwytywanie: dawniej taki bufor znikał po cichu i tor miał 0 ramek bez śladu.
