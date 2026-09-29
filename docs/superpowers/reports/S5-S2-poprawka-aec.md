@@ -151,3 +151,75 @@ Zapisz wynik jako trzy odpowiedzi tak/nie (1–3) plus pkt 4. Decyzja:
   neutralny) i rozważyć opcję 3 (`--no-aec` domyślnie, AEC offline).
 - **3 = ściszona** → w realnym spotkaniu Teams ściszenie będzie praktycznie ciągłe (ktoś zawsze
   mówi), więc advanced nie rozwiązuje problemu dla kanału systemowego.
+
+## Runda 3 — mic_raw pod VP
+
+Baza `70193e6`. Testy: `scripts/test.sh` → **54/54. Dodany 1 nowy @Test**
+(`mixesMicArrayChannelsWithGain` w `FormatConverterTests.swift`). Plany są wyrównane do 53, więc
+przesunięcie liczb w planach to osobna decyzja użytkownika.
+
+**Objaw.** Ten sam głos i ta sama sesja: `--no-aec` daje `mic_raw` RMS −22,0 dBFS, a tryb domyślny
+−57,3 dBFS. Różnica to ok. 35 dB.
+
+**Przyczyna.** Pod VP wbudowany mikrofon nie wystawia już swojego zwykłego toru. Wystawia
+**surowe kapsuły macierzy mikrofonów**, bez beamformingu i bez DSP/wzmocnienia sterownika.
+Tor raw brał z nich kanał 0, czyli jedną kapsułę przed całym wzmocnieniem.
+
+Dowody pochodzą z sondy `/tmp/vp-chan-probe.swift`. Robi tylko `setVoiceProcessingEnabled(true)`
+i odczyt właściwości, bez IO i bez nagrywania. Sprzęt: `Mac16,12` (MacBook Air M4, macierz 3 mikrofonów).
+
+| mikrofon MacBooka (id 91) | przed VP | po VP |
+|---|---|---|
+| `StreamFormat` (wejście) | 1 kan. | 3 kan. |
+| `StreamConfiguration` (wejście) | `[1]` | **`[3]`** (w rundzie 1 odczyt dał `[1]`, teraz obie właściwości się zgadzają) |
+| strumień 92: format **fizyczny** i wirtualny | 1 kan. | **3 kan.** (zmienia się tryb sprzętu, to nie jest przemapowanie) |
+| nazwy elementów 1…n | `1` | `1`, `2`, `3` (same numery, brak etykiet) |
+| `PreferredChannelLayout` | tag 0, etykiety `Unknown` | tag 0, 3× `Unknown` |
+| głośność wejścia (master, jedyna kontrolka `vlme`) | 0,941 / **+10,6 dB** | 0,941 / **+10,6 dB** |
+| głośność per kanał | brak | brak |
+| `AVAudioInputNode` format | — | 7 kan. (3 mikrofony + 4 referencje głośników) |
+
+Wniosek: suwak głośności wejścia jest taki sam w obu trybach, więc różnica nie bierze się
+z ustawień wzmocnienia OS. Liczba kanałów (3) odpowiada liczbie kapsuł, a format fizyczny też
+się zmienia. VP zabiera więc urządzenie w tryb surowej macierzy, bo sam robi beamforming, AEC i AGC
+(stąd `mic_aec` ma poziom normalny, −26 dBFS). Toru „1 kanał po DSP" pod VP nie da się otworzyć:
+urządzenia zbiorcze VP (`VPAUAggregate…`, `CADefaultDeviceAggregate…`) mają `[3, 4]`, czyli te same
+3 kapsuły. Dlatego sam wybór kanału nie odzyska 35 dB. Każdy kanał to kapsuła bez wzmocnienia.
+
+**Zmiana.**
+- `HALCapture` dostaje opcjonalne `arrayGain`. Przekazuje je tylko `RawMicrophoneSource`, tap
+  nie dostaje nic. Gdy bufor ma > 2 kanały, `mixArray` liczy średnią kanałów × wzmocnienie,
+  obciętą do ±1, a konwerter dostaje mono Float32. Średnia utrzymuje poziom jednej kapsuły, więc
+  kalibracja zmierzona na kanale 0 pozostaje ważna, a nieskorelowany szum kapsuł spada o ok. 4,8 dB.
+  Nie ma znaczenia, która kapsuła jest „najlepsza".
+- `RawMicrophoneSource.arrayGainDB = 35`. To gałka kalibracyjna ustawiona z pomiaru
+  `mn-mic-a` vs `mn-mic-b`. Oznaczona `ponytail:`: zmierzona na jednym MacBooku Air, na innym
+  sprzęcie potrzebna nowa sonda.
+- `FormatConverter` **bez zmian** w logice (dodane tylko `recordFailure()`). Jego ścieżka
+  `channelMap` dla > 2 kanałów obsługuje też `mic_aec` (węzeł VP ma 7 kanałów, kanał 0 to wyjście VP),
+  więc zmiana tam zepsułaby `mic_aec`.
+- `--no-aec` bez zmian: mikrofon ma 1 kanał, a miks włącza się tylko przy > 2. Tap ma 2 kanały
+  i nie dostaje `arrayGain`.
+
+Pominięte: AGC/normalizacja w locie. Tor ma zostać surowy, a stałe wzmocnienie jest liniowe
+i odwracalne. Dodać, jeśli sonda pokaże duży rozrzut między sesjami.
+Ryzyko: przy bardzo bliskiej mowie +35 dB może obcinać. W `--no-aec` peak też był 0,0 dBFS,
+więc zachowanie jest porównywalne, zgodnie z poleceniem, by na razie tego nie ruszać.
+
+**Weryfikacja na sprzęcie (użytkownik).** Cisza w pokoju, ten sam tekst, ta sama odległość co w `mn-mic-a/b`.
+
+```sh
+swift build -c release --product meetnotes-cli
+B=$(swift build -c release --show-bin-path)/meetnotes-cli
+rm -rf /tmp/mn-mic-c && $B record /tmp/mn-mic-c --seconds 30            # tryb domyślny, mowa w 0–15 s
+$B summarize /tmp/mn-mic-c        # oczekiwane: mic_raw RMS ≈ −20…−30 dBFS (było −57,3); brak track.failed
+rm -rf /tmp/mn-mic-d && $B record /tmp/mn-mic-d --seconds 30 --no-aec   # regresja: ≈ −22 dBFS jak mn-mic-a
+$B summarize /tmp/mn-mic-d
+$B fit /tmp/mn-mic-c/mic_aec.caf /tmp/mn-mic-c/mic_raw.caf              # korelacja wyraźnie > 0; współczynnik a ≈ 1 zamiast 15×
+afplay /tmp/mn-mic-c/mic_raw.caf  # słychać normalny głos, bez przesteru
+```
+
+Jak czytać wynik: jeśli `mic_raw` (c) różni się od (d) o więcej niż ok. 5 dB, trzeba skorygować
+`arrayGainDB` o tę różnicę. Wzmocnienie jest liniowe, więc to jedna liczba. Jeśli słychać
+przester albo zniekształcenia fazowe (średnia kapsuł na wysokich częstotliwościach), wynik wraca
+do mnie. Wtedy alternatywą jest sam kanał 0 × 35 dB.

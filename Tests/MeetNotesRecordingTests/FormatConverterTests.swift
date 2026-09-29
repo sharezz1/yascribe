@@ -48,3 +48,19 @@ private func floatBuffer(frames: Int, rate: Double, channels: Int, hz: Double) t
     #expect(FormatConverter.shouldReport(before: 998, after: 1_001))
     #expect(!FormatConverter.shouldReport(before: 3, after: 3))
 }
+
+@Test func mixesMicArrayChannelsWithGain() throws {
+    // Mikrofon pod VP: 3 kapsuły, przeplatane Float32 (runda 3). Średnia × wzmocnienie, obcięta do ±1.
+    let fmt = try #require(CoreAudioDevices.format(AudioStreamBasicDescription(
+        mSampleRate: 48_000, mFormatID: kAudioFormatLinearPCM, mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+        mBytesPerPacket: 12, mFramesPerPacket: 1, mBytesPerFrame: 12, mChannelsPerFrame: 3, mBitsPerChannel: 32, mReserved: 0)))
+    let b = try #require(AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 2))
+    b.frameLength = 2
+    let p = b.floatChannelData![0]
+    for (i, v) in [0.01, 0.02, 0.03, 0.5, 0.5, 0.5].enumerated() { p[i] = Float(v) }
+    let m = try #require(HALCapture.mixArray(b, gain: 10))
+    #expect(abs(m.floatChannelData![0][0] - 0.2) < 1e-6)
+    #expect(m.floatChannelData![0][1] == 1)
+    #expect(HALCapture.converterInput(fmt, 10).channelCount == 1)
+    #expect(HALCapture.converterInput(fmt, nil).channelCount == 3)
+}

@@ -15,6 +15,9 @@ enum MicrophonePermission {
 public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     public let trackID = "mic_raw"
     public static let sampleRate = 16_000.0
+    /// Kalibracja miksu kapsuł pod VP (patrz `HALCapture.converterInput`): o tyle kanał 0
+    /// był cichszy od toru bez VP przy tym samym głosie (sonda /tmp/mn-mic-a vs mn-mic-b).
+    static let arrayGainDB: Float = 35
     private let lock = NSLock()
     private var capture: HALCapture?
     private var handler: (@Sendable (AudioSourceEvent) -> Void)?
@@ -48,7 +51,7 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
         lock.lock(); let h = handler, late = stopped; lock.unlock()
         guard let h, !late else { return "" }
         let c = try HALCapture(device: dev, inputFormat: try CoreAudioDevices.inputFormat(of: dev),
-                               sampleRate: Self.sampleRate, channels: 1,
+                               sampleRate: Self.sampleRate, channels: 1, arrayGain: pow(10, Self.arrayGainDB / 20),
                                onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
         lock.lock(); let lateStop = stopped; if !lateStop { capture = c }; lock.unlock()
