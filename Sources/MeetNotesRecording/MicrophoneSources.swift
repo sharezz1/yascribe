@@ -84,7 +84,7 @@ public final class VoiceProcessedMicrophoneSource: AudioSource, @unchecked Senda
         let input = engine.inputNode
         try input.setVoiceProcessingEnabled(true)
         input.voiceProcessingOtherAudioDuckingConfiguration =
-            AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
+            AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: true, duckingLevel: .min)
         let dev = try CoreAudioDevices.defaultInputDevice()
         converter = try FormatConverter(input: input.outputFormat(forBus: 0), sampleRate: Self.sampleRate, channels: 1)
         return TrackFormat(sampleRate: Self.sampleRate, channels: 1, deviceUID: try CoreAudioDevices.uid(of: dev))
