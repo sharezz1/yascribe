@@ -416,6 +416,25 @@ git add Sources/MeetNotesProviders Tests/MeetNotesProvidersTests
 git commit -m "Dostawcy: surowsza sonda jezyka, cache per jezyk, klucz usuwany z tresci bledu" -m "Po recenzji ChatGPT: automatic tylko przy odrzuceniu parametru (400/422), inne bledy i niestabilne odpowiedzi daja unknown. Pusty model ASR nie przechodzi walidacji."
 ```
 
+- [ ] **Krok 9: Poprawki po przeglądzie S7 (U2–U4).** Bez nowych testów — liczba zostaje 77.
+  1. *U4, sonda bez języka.* W `Probe.swift`, w `probe(...)` dla `.asr`, zamień linię `r.languageHandling = shape == .chatAudio ? .unknown : await classifyLanguage(model: model, language: lang)` na:
+
+```swift
+                        if shape == .chatAudio {
+                            r.languageHandling = .unknown
+                        } else if let language {
+                            r.languageHandling = await classifyLanguage(model: model, language: language)
+                        } // bez języka (CLI bez --language) nie klasyfikujemy — wynik byłby dla angielskiego, a klucz cache to nil
+```
+
+  2. *U2, język w wyniku.* W `ProbeTests.swift`, w `transcriptionModelTypedByHandPassesTheProbe`, po ostatnim `#expect` dopisz `#expect(r.language == LanguageCode.polish)`.
+  3. *U3, testy naprawdę żyją (mutacja, bez commitu).* Każdą mutację cofnij `git checkout -- <plik>` zaraz po sprawdzeniu:
+     - w `OpenAICompatibleClient.swift` zakomentuj linię `if let key, !key.isEmpty { body = body.replacingOccurrences(...) }` → `scripts/test.sh --filter errorBodyEchoingTheKeyIsSanitized` musi paść (✘);
+     - w `Probe.swift` w `classifyLanguage` zamień ostatnie `return .unknown` w gałęzi `failure` na `return .automatic` → `--filter rateLimitDuringLanguageProbeIsUnknownNotAutomatic` musi paść.
+     Po cofnięciu `git status --short Sources` ma być puste. Wynik obu mutacji wpisz do raportu sesji.
+  4. `scripts/test.sh` → `test.sh: 77/77 testów uruchomionych i zaliczonych.`
+  5. Commit: `git add Sources/MeetNotesProviders Tests/MeetNotesProvidersTests && git commit -m "Dostawcy: sonda bez jezyka nie klasyfikuje, test jezyka w wyniku"`
+
 ---
 
 ### Zadanie E3: Transkrypcja — przesłuch, wznawianie, migawka, luki
