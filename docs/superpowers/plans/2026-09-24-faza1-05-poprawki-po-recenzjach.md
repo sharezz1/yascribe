@@ -1031,6 +1031,19 @@ na:
                     }
 ```
 
+- [ ] **Krok 5b: Odznaka sondy czyta wynik dla języka presetu.** Od E2 wynik sondy ASR leży w cache pod kluczem z językiem; odczyt bez języka dawałby zawsze „Not tested" (pytanie z S7). W `PresetsView.swift`, w `RoleEditor`, zamień:
+
+```swift
+                    ProbeBadges(result: model.probeCache.result(provider: a.providerID, model: a.model, role: role))
+```
+
+na:
+
+```swift
+                    // `language` jest ustawiony tylko dla roli ASR — dla pozostałych ról to nil, jak przy zapisie.
+                    ProbeBadges(result: model.probeCache.result(provider: a.providerID, model: a.model, role: role, language: language))
+```
+
 - [ ] **Krok 6: Setup.** W `SetupView.swift`:
   - klucz `"systemAudioVerified"` występuje w `AppModel` i `SetupView` jako ten sam napis — przepisz go identycznie;
   - zamień `.disabled(state.checking)` na `.disabled(state.checking || model.recording.isRecording)` (Hermes 4.8: bez drugiego tapu w trakcie nagrania);
