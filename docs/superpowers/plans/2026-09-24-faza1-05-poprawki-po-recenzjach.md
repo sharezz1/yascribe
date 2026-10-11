@@ -264,7 +264,7 @@ Status: ✅ zweryfikowane przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonn
 **Interfejsy:**
 - Dostarcza: `ProbeResult.language: LanguageCode?` (ostatni parametr `init`, domyślnie `nil`); `ProbeCache.result(provider:model:role:language: LanguageCode? = nil)` — klucz zawiera język. `classifyLanguage`: „automatic" tylko przy odrzuceniu parametru (HTTP 400/422); każdy inny błąd albo niestabilna odpowiedź z językiem → „unknown". Treść błędu HTTP bez klucza. `Preset.validate()` odrzuca pusty model ASR.
 
-- [ ] **Krok 1: Testy, które padną.** Na końcu `ProbeTests.swift`:
+- [x] **Krok 1: Testy, które padną.** Na końcu `ProbeTests.swift`:
 
 ```swift
 @Test func rateLimitDuringLanguageProbeIsUnknownNotAutomatic() async {
@@ -324,9 +324,9 @@ Na końcu `PresetTests.swift`:
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh` — oczekiwane: kod `1` (m.in. brak parametru `language:` w `ProbeResult`).
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh` — oczekiwane: kod `1` (m.in. brak parametru `language:` w `ProbeResult`).
 
-- [ ] **Krok 3: `ProbeResult.language` i klucz cache.** W `Probe.swift`:
+- [x] **Krok 3: `ProbeResult.language` i klucz cache.** W `Probe.swift`:
   - pod `public var checkedAt: Date` dopisz `/// Język, dla którego sonda ASR klasyfikowała obsługę języka. Część klucza cache.\n    public var language: LanguageCode?`;
   - w `init` zamień `checkedAt: Date = Date()) {` na `checkedAt: Date = Date(), language: LanguageCode? = nil) {` i dopisz `self.language = language`;
   - w `probe`, w gałęzi `case .asr:` pod `let lang = language ?? .english` dopisz `r.language = language`.
@@ -359,7 +359,7 @@ na:
     }
 ```
 
-- [ ] **Krok 4: Surowsza klasyfikacja.** W `Probe.swift` zamień całe `classifyLanguage` na:
+- [x] **Krok 4: Surowsza klasyfikacja.** W `Probe.swift` zamień całe `classifyLanguage` na:
 
 ```swift
     public func classifyLanguage(model: String, language: LanguageCode) async -> LanguageHandling {
@@ -389,7 +389,7 @@ na:
     }
 ```
 
-- [ ] **Krok 5: Klucz w treści błędu.** W `OpenAICompatibleClient.json` zamień:
+- [x] **Krok 5: Klucz w treści błędu.** W `OpenAICompatibleClient.json` zamień:
 
 ```swift
             throw ProviderError.http(resp.statusCode, String(decoding: data.prefix(300), as: UTF8.self))
@@ -405,11 +405,11 @@ na:
             throw ProviderError.http(resp.statusCode, String(body.prefix(300)))
 ```
 
-- [ ] **Krok 6: Pusty model.** W `Preset.validate()` zamień `guard asr != nil else { throw PresetError.missingASR }` na `guard let asr, !asr.model.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingASR }`.
+- [x] **Krok 6: Pusty model.** W `Preset.validate()` zamień `guard asr != nil else { throw PresetError.missingASR }` na `guard let asr, !asr.model.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingASR }`.
 
-- [ ] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 77/77 testów uruchomionych i zaliczonych.`
+- [x] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 77/77 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 8: Commit.**
+- [x] **Krok 8: Commit.**
 
 ```bash
 git add Sources/MeetNotesProviders Tests/MeetNotesProvidersTests

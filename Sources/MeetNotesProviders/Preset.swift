@@ -49,7 +49,7 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
     public func validate() throws {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingName }
         guard language != nil else { throw PresetError.missingLanguage }
-        guard asr != nil else { throw PresetError.missingASR }
+        guard let asr, !asr.model.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingASR }
     }
 }
 
@@ -69,13 +69,13 @@ public struct ProbeCache: Codable, Equatable, Sendable {
 
     public init() {}
 
-    static func key(_ provider: UUID, _ model: String, _ role: Role) -> String {
-        "\(provider.uuidString)|\(model)|\(role.rawValue)"
+    static func key(_ provider: UUID, _ model: String, _ role: Role, _ language: LanguageCode?) -> String {
+        "\(provider.uuidString)|\(model)|\(role.rawValue)|\(language?.rawValue ?? "-")"
     }
 
-    public mutating func record(_ r: ProbeResult) { results[Self.key(r.providerID, r.model, r.role)] = r }
+    public mutating func record(_ r: ProbeResult) { results[Self.key(r.providerID, r.model, r.role, r.language)] = r }
 
-    public func result(provider: UUID, model: String, role: Role) -> ProbeResult? {
-        results[Self.key(provider, model, role)]
+    public func result(provider: UUID, model: String, role: Role, language: LanguageCode? = nil) -> ProbeResult? {
+        results[Self.key(provider, model, role, language)]
     }
 }

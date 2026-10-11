@@ -56,7 +56,11 @@ public struct OpenAICompatibleClient: Sendable {
     func json(_ req: URLRequest) async throws -> [String: Any] {
         let (data, resp) = try await http.send(req)
         guard (200..<300).contains(resp.statusCode) else {
-            throw ProviderError.http(resp.statusCode, String(decoding: data.prefix(300), as: UTF8.self))
+            // Najpierw usuń klucz z całej treści, dopiero potem przytnij — inaczej przycięcie
+            // w połowie klucza zostawiłoby jego fragment (ChatGPT #11).
+            var body = String(decoding: data, as: UTF8.self)
+            if let key, !key.isEmpty { body = body.replacingOccurrences(of: key, with: "••••") }
+            throw ProviderError.http(resp.statusCode, String(body.prefix(300)))
         }
         guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ProviderError.badResponse("not a JSON object")

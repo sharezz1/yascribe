@@ -51,3 +51,14 @@ import Testing
         #expect(!"\(error)".contains("SECRET123"))
     }
 }
+
+@Test func errorBodyEchoingTheKeyIsSanitized() async throws {
+    // ChatGPT #11: serwer odsyła nagłówek w treści błędu — klucz nie może trafić do cache ani komunikatu.
+    let http = StubHTTP { _, _ in fail(400, "{\"error\":\"bad header Authorization: Bearer test-fake-SECRET123\"}") }
+    do {
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "test-fake-SECRET123", http: http).listModels()
+        Issue.record("oczekiwano błędu")
+    } catch {
+        #expect(!"\(error)".contains("SECRET123"))
+    }
+}

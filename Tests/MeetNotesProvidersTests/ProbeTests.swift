@@ -80,3 +80,23 @@ final class Counter: @unchecked Sendable {
     private var n = 0
     func next() -> Int { lock.withLock { n += 1; return n } }
 }
+
+@Test func rateLimitDuringLanguageProbeIsUnknownNotAutomatic() async {
+    // ChatGPT #5: 429 to nie odrzucony parametr języka.
+    let http = StubHTTP { _, body in
+        if body["language"] != nil && !isPolishClip(body) { return fail(429, "{\"error\":\"rate limited\"}") }
+        return transcript(isPolishClip(body) ? "raz dwa trzy" : "one two three")
+    }
+    let h = await runner(http).classifyLanguage(model: "x", language: .polish)
+    #expect(h == LanguageHandling.unknown)
+}
+
+@Test func unstableAnswerWithLanguageIsNotEnforced() async {
+    // ChatGPT #5: jedna różna odpowiedź to jeszcze nie dowód wymuszania.
+    let counter = Counter()
+    let http = StubHTTP { _, body in
+        body["language"] != nil ? transcript("jeden dwa \(counter.next())") : transcript("one two three")
+    }
+    let h = await runner(http).classifyLanguage(model: "x", language: .polish)
+    #expect(h == LanguageHandling.unknown)
+}
