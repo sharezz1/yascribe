@@ -74,3 +74,34 @@ kluczy sprawdza D3 przez aplikację.
 - Ciało `input_audio` (rozdz. 11) działa z OpenRouterem dla obu modeli — bez multipartu.
 - `mai-transcribe-2`: obsługa języka `enforced`; `parakeet`: `automatic`; modele czatowe: `chatAudio unknown`.
 - Oba modele transkrypcyjne są ZDR i poza domyślną listą katalogu (filtr modalności).
+
+---
+
+## Aneks (2026-10-12, poza planem): ElevenLabs Scribe v2 — test bezpośredni
+
+Rozszerzenie po sesji S9, na życzenie użytkownika (klucz ElevenLabs użytkownika, wpisany
+w jego terminalu; nigdzie nie zapisany). Cel: sprawdzić klucz, jakość polską i kształt API
+(pod ewentualny adapter bezpośredni w przyszłości).
+
+Próbka: `say -v Zosia -o /tmp/el-probka.aiff "Sprawdzam nagrywanie, raz, dwa, trzy, cztery, pięć"`
+→ `afconvert -f WAVE -d LEI16@16000` → WAV 16 kHz mono.
+
+```
+POST https://api.elevenlabs.io/v1/speech-to-text
+Header: xi-api-key: … (klucz użytkownika)
+multipart: file=@el-probka.wav, model_id=scribe_v2, language_code=pl
+→ HTTP 200
+language: pol
+text: Sprawdzam nagrywanie. Raz, dwa, trzy, cztery, pięć
+```
+
+**Transkrypcja idealna** (jedyna różnica: kropka po „nagrywanie" zamiast przecinka —
+normalizacja interpunkcji). Pola odpowiedzi: `audio_duration_secs`, `language_code`,
+`language_probability`, `text`, `transcription_id`, `words` (timestampy słów).
+
+Uwagi:
+- Direct API ElevenLabs **nie jest OpenAI-compatible** (`xi-api-key` + multipart) — adapter
+  bezpośredni w aplikacji byłby zmianą architektury/planu (decyzja właściciela planu).
+- Ścieżka bez zmian: przez OpenRouter jako `elevenlabs/scribe-v2` (provider ElevenLabs,
+  na liście ZDR; promo −50% na modele ElevenLabs do 19.10) — do porównania w razie potrzeby.
+- `scribe_v2_medical` — ten sam kształt żądania i ta sama cena (nie testowany).
