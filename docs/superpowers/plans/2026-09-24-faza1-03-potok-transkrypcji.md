@@ -44,7 +44,7 @@ Status: ✅ zweryfikowane (10 testów). `Signals.swift` to początek zweryfikowa
 **Interfejsy:**
 - Dostarcza: `Resampler.asrRate` (= 16 000), `Resampler.toASR(_ samples: [Int16], sampleRate:channels:) throws -> [Float]`, `ResampleError.converter`. `EnergyGate(_ config:)`, `EnergyGate.Config` (`thresholdDBFS`, `attackSeconds`, `releaseSeconds`, `paddingSeconds`), `EnergyGate.frameSeconds` (= 0,02), `frameLevels(_:rate:)`, `speechRegions(_:rate:) -> [Range<Int>]`. `ChunkSegment(sourceStart:sourceEnd:chunkStart:)`, `Chunk(index:segments:length:)` z `sourceSeconds(chunkSeconds:rate:)`, `sourceStartSeconds`, `sourceEndSeconds`; `ChunkPacker(maxSeconds:)` z `pack(_:samples:) -> [Chunk]`. `WAVEncoder.encode(_:samples:rate:) -> Data`, `WAVEncoder.wav(_:rate:) -> Data`.
 
-- [ ] **Krok 1: Testy, które padną.** Usuń obie zaślepki transkrypcji i utwórz:
+- [x] **Krok 1: Testy, które padną.** Usuń obie zaślepki transkrypcji i utwórz:
 
 `Tests/MeetNotesTranscriptionTests/Signals.swift`:
 
@@ -159,9 +159,9 @@ private func floats(_ s: [Int16]) -> [Float] { s.map { Float($0) / 32_768 } }
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesTranscriptionTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `Resampler`, `EnergyGate`, `ChunkPacker`, `WAVEncoder`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesTranscriptionTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `Resampler`, `EnergyGate`, `ChunkPacker`, `WAVEncoder`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesTranscription/Resampler.swift`:
 
@@ -435,11 +435,11 @@ public enum WAVEncoder {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 87/87 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 87/87 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (P6).** W `EnergyGate.Config` zamień `public var thresholdDBFS: Double = -45` na `= -200`. `scripts/test.sh --filter pureSilenceProducesNoRegions` — oczekiwane: pada (cisza cyfrowa −160 dBFS jest „głośniejsza" niż próg). Przywróć; `87/87`.
+- [x] **Krok 5: Mutacja (P6).** W `EnergyGate.Config` zamień `public var thresholdDBFS: Double = -45` na `= -200`. `scripts/test.sh --filter pureSilenceProducesNoRegions` — oczekiwane: pada (cisza cyfrowa −160 dBFS jest „głośniejsza" niż próg). Przywróć; `87/87`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Sources/MeetNotesTranscription Tests/MeetNotesTranscriptionTests
