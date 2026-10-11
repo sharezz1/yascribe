@@ -1090,24 +1090,24 @@ git commit -m "CLI: models i probe"
 
 ### Zadanie B5: Sondy na żywo (bramka G3)
 
-Status: nigdy niewykonane. **Wymaga klucza OpenRoutera użytkownika** i kosztuje grosze (każda sonda ASR to 1–4 żądania po ~2 s audio przy 0,10 USD/h). Klucz ustawia użytkownik w swoim terminalu: `export MEETNOTES_API_KEY=…`. Wykonawca go nie widzi i nie wpisuje.
+Status: wykonane 2026-10-11 (sesja S9; wyniki w `docs/superpowers/spikes/2026-09-24-g3-sondy-na-zywo.md`). **Wymaga klucza OpenRoutera użytkownika** i kosztuje grosze (każda sonda ASR to 1–4 żądania po ~2 s audio przy 0,10 USD/h). Klucz ustawia użytkownik w swoim terminalu: `export MEETNOTES_API_KEY=…`. Wykonawca go nie widzi i nie wpisuje.
 
 **Pliki:**
 - Utwórz: `docs/superpowers/spikes/2026-09-24-g3-sondy-na-zywo.md` — polecenia i wyniki.
 
-- [ ] **Krok 1: Katalog kłamie przez przemilczenie.** `B=$(swift build --show-bin-path)/meetnotes-cli`, potem `$B models https://openrouter.ai/api/v1 | wc -l` (📐 było 458) i `$B models https://openrouter.ai/api/v1 | grep -c mai-transcribe` — oczekiwane: `0`.
+- [x] **Krok 1: Katalog kłamie przez przemilczenie.** `B=$(swift build --show-bin-path)/meetnotes-cli`, potem `$B models https://openrouter.ai/api/v1 | wc -l` (📐 było 458) i `$B models https://openrouter.ai/api/v1 | grep -c mai-transcribe` — oczekiwane: `0`.
 
-- [ ] **Krok 2: P2 — model wpisany z ręki.** `$B probe https://openrouter.ai/api/v1 microsoft/mai-transcribe-2 asr --language pl` — oczekiwane: `DZIAŁA audioTranscriptions enforced`. **STOP, jeśli `NIE DZIAŁA`** z błędem formatu żądania (np. 400 o `input_audio`): założenie o ciele JSON z rozdz. 11 jest błędne i trzeba przejść na `multipart/form-data`. To zmiana planu C, więc decyzja użytkownika.
+- [x] **Krok 2: P2 — model wpisany z ręki.** `$B probe https://openrouter.ai/api/v1 microsoft/mai-transcribe-2 asr --language pl` — oczekiwane: `DZIAŁA audioTranscriptions enforced`. **STOP, jeśli `NIE DZIAŁA`** z błędem formatu żądania (np. 400 o `input_audio`): założenie o ciele JSON z rozdz. 11 jest błędne i trzeba przejść na `multipart/form-data`. To zmiana planu C, więc decyzja użytkownika.
 
-- [ ] **Krok 3: P10 — Parakeet przez API.** `$B probe https://openrouter.ai/api/v1 nvidia/parakeet-tdt-0.6b-v3 asr --language pl` — hipoteza ze speca: `DZIAŁA audioTranscriptions automatic`. Zapisz wynik bez względu na to, jaki jest. To pomiar, nie test do zaliczenia.
+- [x] **Krok 3: P10 — Parakeet przez API.** `$B probe https://openrouter.ai/api/v1 nvidia/parakeet-tdt-0.6b-v3 asr --language pl` — hipoteza ze speca: `DZIAŁA audioTranscriptions automatic`. Zapisz wynik bez względu na to, jaki jest. To pomiar, nie test do zaliczenia.
 
-- [ ] **Krok 4: P3 — model tylko czatowy.** `$B probe https://openrouter.ai/api/v1 google/gemini-3.8-flash asr --language pl` — oczekiwane: `DZIAŁA chatAudio unknown`.
+- [x] **Krok 4: P3 — model tylko czatowy.** `$B probe https://openrouter.ai/api/v1 google/gemini-3.8-flash asr --language pl` — oczekiwane: `DZIAŁA chatAudio unknown`.
 
-- [ ] **Krok 5: P1 — Ollama na żywo (jeśli zainstalowana).** `ollama list`, potem dla jednego modelu tekstowego `$B probe http://localhost:11434/v1 <model> asr --language pl` — oczekiwane `NIE DZIAŁA` — i `$B probe http://localhost:11434/v1 <model> correction` — oczekiwane `DZIAŁA`. Bez Ollamy krok pomiń i zanotuj.
+- [x] **Krok 5: P1 — Ollama na żywo (jeśli zainstalowana).** `ollama list`, potem dla jednego modelu tekstowego `$B probe http://localhost:11434/v1 <model> asr --language pl` — oczekiwane `NIE DZIAŁA` — i `$B probe http://localhost:11434/v1 <model> correction` — oczekiwane `DZIAŁA`. Bez Ollamy krok pomiń i zanotuj. — **Pominięty 2026-10-11: Ollama nie zainstalowana.**
 
-- [ ] **Krok 6: Klucz nie wycieka do plików (P8).** `grep -rlF -- "$MEETNOTES_API_KEY" . ~/Library/Application\ Support/MeetNotes 2>/dev/null | grep -v '^./.build'` — oczekiwane: pusto (polecenie wypisuje tylko nazwy plików, nie klucz). Zapis i odczyt z pęku kluczy sprawdza D3 przez aplikację.
+- [x] **Krok 6: Klucz nie wycieka do plików (P8).** `grep -rlF -- "$MEETNOTES_API_KEY" . ~/Library/Application\ Support/MeetNotes 2>/dev/null | grep -v '^./.build'` — oczekiwane: pusto (polecenie wypisuje tylko nazwy plików, nie klucz). Zapis i odczyt z pęku kluczy sprawdza D3 przez aplikację.
 
-- [ ] **Krok 7: Zapisz wyniki i commit.**
+- [x] **Krok 7: Zapisz wyniki i commit.**
 
 ```bash
 git add docs/superpowers/spikes
