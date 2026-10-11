@@ -460,7 +460,7 @@ Status: ✅ zweryfikowane (4 testy, w tym jeden sparametryzowany zdaniami z rozd
 - Pobiera: `LanguageCode`, `ProbeClips.normalize` (plan B).
 - Dostarcza: `LanguageGuard.mismatch(_ text: String, expected: LanguageCode) -> LanguageCode?` — język, na który wygląda tekst, gdy wyraźnie różny od oczekiwanego; inaczej `nil`.
 
-- [ ] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesTranscriptionTests/LanguageGuardTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesTranscriptionTests/LanguageGuardTests.swift`:
 
 ```swift
 import Testing
@@ -491,9 +491,9 @@ func confabulatedEnglishInPolishMeetingIsFlagged(_ text: String) {
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter LanguageGuard` — oczekiwane: kod `1`, `cannot find 'LanguageGuard' in scope`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter LanguageGuard` — oczekiwane: kod `1`, `cannot find 'LanguageGuard' in scope`.
 
-- [ ] **Krok 3: Implementacja.** `Sources/MeetNotesTranscription/LanguageGuard.swift`:
+- [x] **Krok 3: Implementacja.** `Sources/MeetNotesTranscription/LanguageGuard.swift`:
 
 ```swift
 import Foundation
@@ -535,9 +535,9 @@ public enum LanguageGuard {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 91/91 testów uruchomionych i zaliczonych.` Test sparametryzowany liczy się jako jeden test.
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 91/91 testów uruchomionych i zaliczonych.` Test sparametryzowany liczy się jako jeden test.
 
-- [ ] **Krok 5: Commit.**
+- [x] **Krok 5: Commit.**
 
 ```bash
 git add Sources/MeetNotesTranscription Tests/MeetNotesTranscriptionTests
