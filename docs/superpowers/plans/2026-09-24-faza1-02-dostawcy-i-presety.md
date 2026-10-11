@@ -539,7 +539,7 @@ public struct OpenAICompatibleClient: Sendable {
 }
 ```
 
-- [ ] **Krok 5: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 57/57 testów uruchomionych i zaliczonych.`
+- [ ] **Krok 5: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 58/58 testów uruchomionych i zaliczonych.`
 
 - [ ] **Krok 6: Commit.**
 
@@ -765,9 +765,9 @@ public struct ProbeRunner: Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 64/64 testów uruchomionych i zaliczonych.`
+- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 65/65 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (P10).** W `classifyLanguage` zamień ostatnią linię `return ProbeClips.normalize(a.text) == ProbeClips.normalize(b1.text) ? .automatic : .enforced` na `return .enforced`. `scripts/test.sh --filter modelThatIgnoresLanguageIsAutomatic` — oczekiwane: pada. Przywróć; `64/64`.
+- [ ] **Krok 5: Mutacja (P10).** W `classifyLanguage` zamień ostatnią linię `return ProbeClips.normalize(a.text) == ProbeClips.normalize(b1.text) ? .automatic : .enforced` na `return .enforced`. `scripts/test.sh --filter modelThatIgnoresLanguageIsAutomatic` — oczekiwane: pada. Przywróć; `65/65`.
 
 - [ ] **Krok 6: Commit.**
 
@@ -1011,9 +1011,9 @@ public struct ProvidersFile: Codable, Equatable, Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 71/71 testów uruchomionych i zaliczonych.`
+- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 72/72 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (P7).** W `PresetsFile.upsert` usuń linię `try p.validate()`. `scripts/test.sh --filter presetWithoutLanguageCannotBeSaved` — oczekiwane: pada. Przywróć; `71/71`.
+- [ ] **Krok 5: Mutacja (P7).** W `PresetsFile.upsert` usuń linię `try p.validate()`. `scripts/test.sh --filter presetWithoutLanguageCannotBeSaved` — oczekiwane: pada. Przywróć; `72/72`.
 
 - [ ] **Krok 6: Commit.**
 
@@ -1077,7 +1077,7 @@ Status: 🔧 pełny CLI skompilowany przebiegiem kontrolnym 2026-09-25 (kopia sp
 
 - [ ] **Krok 5: Zbuduj i sprawdź bez sieci.** `swift build --product meetnotes-cli` — oczekiwane: `Build complete!`. `swift run meetnotes-cli probe http://127.0.0.1:9/v1 x asr` — oczekiwane: `NIE DZIAŁA` z opisem błędu połączenia dla obu kształtów.
 
-- [ ] **Krok 6: Pełne testy.** `scripts/test.sh` — oczekiwane: `76/76` (po E2).
+- [ ] **Krok 6: Pełne testy.** `scripts/test.sh` — oczekiwane: `77/77` (po E2).
 
 - [ ] **Krok 7: Commit.**
 

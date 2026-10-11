@@ -60,21 +60,21 @@ Sesje ✅ z tego samego wiersza wolno łączyć w jedną rozmowę. Zatrzymaj si�
 | S3 | A9 | 01 | K | — | 44 | **tak** |
 | S4 | E1 | 05 | K | — | 47 | **tak** |
 | S5 | A10 (sondy S1, S2, T1–T9) | 01 | F | **tak** | — | nie |
-| S6 | B1–B3 | 02 | F | — | 71 | nie |
-| S7 | E2 | 05 | K | — | 76 | **tak** |
-| S8 | B4 | 02 | K | — | 76 | nie |
+| S6 | B1–B3 | 02 | F | — | 72 | nie |
+| S7 | E2 | 05 | K | — | 77 | **tak** |
+| S8 | B4 | 02 | K | — | 77 | nie |
 | S9 | B5 (sondy na żywo, G3) | 02 | F | **tak** + klucz | — | nie |
-| S10 | C1–C3 | 03 | F | — | 98 | nie |
-| S11 | E3 | 05 | K | — | 105 | **tak** |
-| S12 | C4 | 03 | K | — | 105 | **tak** |
+| S10 | C1–C3 | 03 | F | — | 99 | nie |
+| S11 | E3 | 05 | K | — | 106 | **tak** |
+| S12 | C4 | 03 | K | — | 106 | **tak** |
 | S13 | C5 (transkrypcja na żywo) | 03 | F | **tak** + klucz | — | nie |
-| S14 | D1 (krok 1: certyfikat — użytkownik) | 04 | K | **tak** (krok 1) | 105 | nie |
-| S15 | D2 | 04 | K | — | 105 | **tak** |
-| S16 | E4 | 05 | K | — | 105 | **tak** |
+| S14 | D1 (krok 1: certyfikat — użytkownik) | 04 | K | **tak** (krok 1) | 106 | nie |
+| S15 | D2 | 04 | K | — | 106 | **tak** |
+| S16 | E4 | 05 | K | — | 106 | **tak** |
 | S17 | D3 (odbiór ręczny) | 04 | F | **tak** | — | nie |
-| S18 | przegląd całej gałęzi | wszystkie | R | — | 105 | — |
+| S18 | przegląd całej gałęzi | wszystkie | R | — | 106 | — |
 
-> Liczby od S6 przesunięte o +6 po poprawkach S3+S4 (decyzja użytkownika z 2026-09-25; `docs/superpowers/reports/S3-S4-poprawki-decyzje.md`).
+> Liczby od S6 przesunięte o +7: +6 po poprawkach S3+S4 (decyzja 2026-09-25) i +1 po torze `mic_raw` pod VP (test `mixesMicArrayChannelsWithGain`, sonda S5 2026-09-29; `docs/superpowers/reports/S5-S2-poprawka-aec.md`).
 
 **Bramki — orkiestrator zatrzymuje się i pyta użytkownika:**
 - S5: wynik S1 (błąd czy zera przy odmowie) i S2 (dwa strumienie mikrofonu naraz). Przy niepowodzeniu S2 — decyzja użytkownika.
