@@ -69,7 +69,11 @@ public struct ProbeRunner: Sendable {
                     if ProbeClips.matches(t.text, clip) {
                         r.works = true
                         r.shape = shape
-                        r.languageHandling = shape == .chatAudio ? .unknown : await classifyLanguage(model: model, language: lang)
+                        if shape == .chatAudio {
+                            r.languageHandling = .unknown
+                        } else if let language {
+                            r.languageHandling = await classifyLanguage(model: model, language: language)
+                        } // bez języka (CLI bez --language) nie klasyfikujemy — wynik byłby dla angielskiego, a klucz cache to nil
                         return r
                     }
                     failures.append("\(shape.rawValue): unexpected text \"\(t.text.prefix(60))\"")
