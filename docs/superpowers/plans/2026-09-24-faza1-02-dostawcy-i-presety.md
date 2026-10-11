@@ -45,7 +45,7 @@ Status: ✅ zweryfikowane (4 testy). Piąty test ze spike'a, `providerFileNeverC
 **Interfejsy:**
 - Dostarcza: `LanguageCode(_:) throws` (`rawValue`, `.polish`, `.english`, `selectable: [(code, name)]`), `LanguageCodeError.empty`, `.autoIsForbidden`, `.malformed(String)`. `ProbeClip` (`language`, `wav`, `expectedWords`), `ProbeClips.polish`, `.english`, `clip(for:)`, `mismatched(for:)`, `matches(_:_:)`, `normalize(_:)`. `Provider(id:name:baseURL:)`, `ProviderError.http(Int, String)`, `.badResponse(String)`, `.missingKey`. `SecretStore` (`get`, `set`, `delete` po UUID), `KeychainSecretStore(service:)`, `InMemorySecretStore()`, `maskedKey(_:)`. `HTTPClient` (`send(_:) async throws -> (Data, HTTPURLResponse)`), `URLSessionHTTPClient()`. `ASRShape` (`.audioTranscriptions`, `.chatAudio`), `ModelInfo` (`id`, `inputModalities`, `outputModalities`), `TranscribedWord(word:start:end:)`, `TranscriptionResult(text:words:)`. `OpenAICompatibleClient(provider:key:http:)`: `listModels()`, `transcribe(wav:model:language:shape:)`, `chat(model:system:user:)`, `embed(model:text:)`.
 
-- [ ] **Krok 1: Nagrania próbne.** Utwórz `scripts/make-probe-clips.sh` (`chmod +x`):
+- [x] **Krok 1: Nagrania próbne.** Utwórz `scripts/make-probe-clips.sh` (`chmod +x`):
 
 ```bash
 #!/bin/bash
@@ -74,7 +74,7 @@ echo "zapisano $OUT"
 
 Uruchom `scripts/make-probe-clips.sh` — oczekiwane: `zapisano Sources/MeetNotesProviders/ProbeClips+Data.swift`, plik ~170 KB. Wymaga głosów `Zosia` (pl_PL) i `Samantha` (en_US): `say -v '?' | grep -E 'Zosia|Samantha'`. Plik jest generowany, więc jego zawartość nie jest w planie. Testy porównują nagranie z samym sobą, więc każda wygenerowana wersja jest poprawna.
 
-- [ ] **Krok 2: Testy, które padną.** Usuń obie zaślepki dostawców i utwórz:
+- [x] **Krok 2: Testy, które padną.** Usuń obie zaślepki dostawców i utwórz:
 
 `Tests/MeetNotesProvidersTests/Stub.swift`:
 
@@ -177,9 +177,9 @@ import Testing
 }
 ```
 
-- [ ] **Krok 3: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesProvidersTests` — oczekiwane: kod `1`, `cannot find … in scope` m.in. dla `HTTPClient`, `Provider`, `ProbeClips`, `OpenAICompatibleClient`.
+- [x] **Krok 3: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesProvidersTests` — oczekiwane: kod `1`, `cannot find … in scope` m.in. dla `HTTPClient`, `Provider`, `ProbeClips`, `OpenAICompatibleClient`.
 
-- [ ] **Krok 4: Implementacja.**
+- [x] **Krok 4: Implementacja.**
 
 `Sources/MeetNotesProviders/LanguageCode.swift`:
 
@@ -539,9 +539,9 @@ public struct OpenAICompatibleClient: Sendable {
 }
 ```
 
-- [ ] **Krok 5: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 58/58 testów uruchomionych i zaliczonych.`
+- [x] **Krok 5: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 58/58 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add scripts/make-probe-clips.sh Sources/MeetNotesProviders Tests/MeetNotesProvidersTests
