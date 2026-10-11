@@ -410,7 +410,7 @@ final class RecordingController {
 
     func start(directory: URL, onEnded: @escaping @MainActor (EndReason) -> Void) throws {
         let r = SessionRecorder(directory: directory,
-                                sources: [SystemTapSource(), RawMicrophoneSource(), VoiceProcessedMicrophoneSource()])
+                                sources: [SystemTapSource(), RawMicrophoneSource()]) // bez VP: ściszałby Teams przez całe nagranie (S5, spec rdzenia §2 korekta 2026-09-29)
         r.onEnded = { reason in
             Task { @MainActor in
                 self.finish(reason)
