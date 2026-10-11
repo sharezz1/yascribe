@@ -416,7 +416,7 @@ git add Sources/MeetNotesProviders Tests/MeetNotesProvidersTests
 git commit -m "Dostawcy: surowsza sonda jezyka, cache per jezyk, klucz usuwany z tresci bledu" -m "Po recenzji ChatGPT: automatic tylko przy odrzuceniu parametru (400/422), inne bledy i niestabilne odpowiedzi daja unknown. Pusty model ASR nie przechodzi walidacji."
 ```
 
-- [ ] **Krok 9: Poprawki po przeglądzie S7 (U2–U4).** Bez nowych testów — liczba zostaje 77.
+- [x] **Krok 9: Poprawki po przeglądzie S7 (U2–U4).** Bez nowych testów — liczba zostaje 77.
   1. *U4, sonda bez języka.* W `Probe.swift`, w `probe(...)` dla `.asr`, zamień linię `r.languageHandling = shape == .chatAudio ? .unknown : await classifyLanguage(model: model, language: lang)` na:
 
 ```swift

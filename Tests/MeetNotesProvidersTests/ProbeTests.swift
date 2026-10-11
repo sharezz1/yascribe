@@ -17,6 +17,7 @@ private func runner(_ http: StubHTTP, provider: Provider = openRouter) -> ProbeR
     #expect(r.works)
     #expect(r.shape == ASRShape.audioTranscriptions)
     #expect(r.languageHandling == LanguageHandling.enforced)
+    #expect(r.language == LanguageCode.polish)
 }
 
 @Test func chatOnlyModelIsRecognizedWithUnknownLanguageHandling() async {
