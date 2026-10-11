@@ -65,7 +65,7 @@ Sesje ✅ z tego samego wiersza wolno łączyć w jedną rozmowę. Zatrzymaj si�
 | S8 | B4 | 02 | K | — | 77 | nie |
 | S9 | B5 (sondy na żywo, G3) | 02 | F | **tak** + klucz | — | nie |
 | S10 | C1–C3 | 03 | F | — | 99 | nie |
-| S11 | E3 | 05 | K | — | 106 | **tak** |
+| S11 | E3, potem E5 | 05 | K | — | 106, po E5: 106+N | **tak** |
 | S12 | C4 | 03 | K | — | 106 | **tak** |
 | S13 | C5 (transkrypcja na żywo) | 03 | F | **tak** + klucz | — | nie |
 | S14 | D1 (krok 1: certyfikat — użytkownik) | 04 | K | **tak** (krok 1) | 106 | nie |

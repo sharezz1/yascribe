@@ -730,6 +730,48 @@ git commit -m "Transkrypcja: odsiew przeslucha, bezpieczne wznawianie, pelna mig
 
 ---
 
+### Zadanie E5: Luki w pokryciu i sprzątanie po testach (check S10)
+
+Źródło: `checks/S10-check.md` orkiestratora (2026-10-12), uwagi 1–6. Uwaga 7 (`runID` z `../`) jest już w E3, uwaga 9 w C5 kroku 3, uwagi 8 i 10 to errata raportu `S10.md` (dopisuje orkiestrator). Wykonuj **po E3**, w tej samej sesji S11.
+
+To zadanie wyjątkowo nie ma gotowego kodu testów. Wykonawca pisze je sam. Dowodem poprawności każdego testu jest mutacja: przed testem przechodzi, po wprowadzeniu mutacji test **musi paść**. Gdzie się da, dopisz asercję do istniejącego testu zamiast tworzyć nowy.
+
+**Pliki:**
+- Zmień: `scripts/test.sh`
+- Test: `Tests/MeetNotesTranscriptionTests/*`, `Tests/MeetNotesSessionFormatTests/*` (tam, gdzie leży testowany kod)
+
+- [ ] **Krok 1: Sprzątanie katalogów testowych (uwaga 6).** Testy zakładają w `$TMPDIR` katalogi `mn-…-<UUID>` i ich nie usuwają (~265 MB na przebieg). W `scripts/test.sh` przed linią `OUT="$(mktemp)"` dopisz:
+
+```bash
+# Katalogi po poprzednich przebiegach (mn-[prefiks-]UUID). Wzorzec omija mn-s2, mn-corpus-* itp.
+find -E "${TMPDIR:-/tmp}" -maxdepth 1 -regex '.*/mn-([a-z]+-)?[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' -exec rm -rf {} + 2>/dev/null
+```
+
+Sprzątanie jest na początku przebiegu, więc katalogi z ostatniego przebiegu zostają do debugowania.
+
+- [ ] **Krok 2: Testy luk (uwagi 1–5).** Dla każdego wiersza: dopisz asercję lub test, wprowadź mutację, sprawdź `scripts/test.sh --filter <test>` → ✘, cofnij mutację (`git checkout -- <plik źródłowy>`).
+
+| # | Co musi być sprawdzone | Mutacja, która musi wywrócić test |
+|---|---|---|
+| 1 | `RunMetadata.requestCount` i `audioSecondsSent` po przebiegu z ciszą: liczba żądań = liczba okien, sekundy < długość sesji (na tym stoi bramka C5) | `requestCount` / `audioSecondsSent` zapisywane jako `0` |
+| 2 | Okno zapisane w `chunks/` przy innej geometrii (`saved.chunk != item.chunk`) jest wysyłane ponownie, nie brane z cache | usunięcie warunku `saved.chunk == item.chunk` |
+| 3 | Czas wypowiedzi liczony z kotwic zegara (`hostTime`, T8), nie tylko z `offsetSeconds`: dwie kotwice z dryfem, oczekiwany czas z interpolacji | ignorowanie kotwic (stały offset) |
+| 4 | `Merger.utteranceGap`: przerwa > 1,2 s dzieli wypowiedź, < 1,2 s ją łączy | `utteranceGap` = `.infinity` |
+| 5 | `LanguageGuard` dla presetu `.english`: obcy tekst oznaczony, angielski przepuszczony | gałąź `.english` zwraca wynik „bez zmian" |
+
+- [ ] **Krok 3: Uruchom całość.** `scripts/test.sh` — oczekiwane: `106+N/106+N`, gdzie N to liczba **nowych** `@Test` z kroku 2. Po przebiegu `ls -d "$TMPDIR"/mn-* | wc -l` ≈ liczba katalogów jednego przebiegu (nie rośnie z każdym uruchomieniem).
+
+- [ ] **Krok 4: Liczby w runbooku.** W `2026-09-25-faza1-runbook.md`, w tabeli sesji, wiersze od S11 wzwyż z liczbą `106` zamień na `106+N` (konkretna liczba). Pod tabelą dopisz: `> +N po E5 (luki pokrycia z checku S10).`
+
+- [ ] **Krok 5: Raport i commit.** W raporcie sesji tabela z kroku 2: test, mutacja, wynik ✘. Commit:
+
+```bash
+git add scripts/test.sh Tests docs/superpowers/plans/2026-09-25-faza1-runbook.md
+git commit -m "Testy: luki pokrycia z checku S10, sprzatanie katalogow tymczasowych"
+```
+
+---
+
 ### Zadanie E4: Aplikacja — preset przy starcie, pływające okno, odtwarzanie, wznowienie
 
 Status: ✅ zweryfikowane przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonnet): kompiluje się bez żadnej poprawki, `scripts/test.sh` 99/99 po całym planie E. Źródła: ChatGPT #2, #3, #7, #8, #16, #17; Hermes 1.1, 4.5, 4.8. Testów automatycznych nie ma (interfejs) — sprawdza D3.

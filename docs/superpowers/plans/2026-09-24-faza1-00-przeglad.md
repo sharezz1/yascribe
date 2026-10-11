@@ -312,4 +312,4 @@ Plan E zawiera poprawki; tu decyzje. Recenzje: `2026-09-24-faza1-recenzja-chatgp
 | Hermes 4.7 — wzorzec T1 w 22 050 Hz | przyjęte | A10 krok 4 |
 | Hermes 4.8 — test dźwięku w trakcie nagrania | przyjęte | E4 |
 
-**Liczby testów:** po E1–E3 bezwzględne liczby w B–D są przesunięte względem spike'a — B1 51, B2 58, B3 65, E2 70, C1 80, C2 84, C3 92, E3 99. Plan ma je już wpisane; gwarancją i tak jest porównanie z deklaracjami `@Test` w `scripts/test.sh`.
+**Liczby testów:** po E1–E3 bezwzględne liczby w B–D są przesunięte względem spike'a — B1 51, B2 58, B3 65, E2 70, C1 80, C2 84, C3 92, E3 99 — po poprawkach S3+S4 i torze `mic_raw` rzeczywiste są o 7 wyższe (C1 87, C2 91, C3 99, E3 106; aktualne liczby trzyma tabela sesji w runbooku); gwarancją i tak jest porównanie z deklaracjami `@Test` w `scripts/test.sh`.
