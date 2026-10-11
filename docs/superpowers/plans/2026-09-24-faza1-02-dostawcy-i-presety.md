@@ -790,7 +790,7 @@ Status: ✅ zweryfikowane (7 testów, w tym przeniesiony z B1).
 - Pobiera: `LanguageCode`, `Provider` (B1), `ProbeResult`, `Role` (B2).
 - Dostarcza: `RoleAssignment(providerID:model:prompt:)`, `Preset(id:name:language:asr:correction:summary:notesLanguage:)` z `effectiveNotesLanguage` i `validate() throws`, `PresetError.missingName`, `.missingLanguage`, `.missingASR`, `GlobalSettings(embedding:defaultPresetID:)`, `ProbeCache` (`record(_:)`, `result(provider:model:role:)`). `MeetNotesPaths(root:)`, `MeetNotesPaths.fromEnvironment(_:)` (`MEETNOTES_DATA_DIR`), `providers`, `presets`, `settings`, `probeCache`, `sessions`. `JSONFile.load(_:from:default:) throws`, `JSONFile.save(_:to:) throws`. `PresetsFile` z `upsert(_:) throws`, `ProvidersFile`.
 
-- [ ] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesProvidersTests/PresetTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesProvidersTests/PresetTests.swift`:
 
 ```swift
 import Foundation
@@ -853,9 +853,9 @@ private let asr = RoleAssignment(providerID: UUID(), model: "microsoft/mai-trans
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesProvidersTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `RoleAssignment`, `Preset`, `PresetsFile`, `MeetNotesPaths`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesProvidersTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `RoleAssignment`, `Preset`, `PresetsFile`, `MeetNotesPaths`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesProviders/Preset.swift`:
 
@@ -1011,11 +1011,11 @@ public struct ProvidersFile: Codable, Equatable, Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 72/72 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 72/72 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (P7).** W `PresetsFile.upsert` usuń linię `try p.validate()`. `scripts/test.sh --filter presetWithoutLanguageCannotBeSaved` — oczekiwane: pada. Przywróć; `72/72`.
+- [x] **Krok 5: Mutacja (P7).** W `PresetsFile.upsert` usuń linię `try p.validate()`. `scripts/test.sh --filter presetWithoutLanguageCannotBeSaved` — oczekiwane: pada. Przywróć; `72/72`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Sources/MeetNotesProviders Tests/MeetNotesProvidersTests
