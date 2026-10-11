@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import MeetNotesProviders
 import MeetNotesRecording
 import MeetNotesSessionFormat
 
@@ -14,6 +15,8 @@ struct CLI {
       summarize <katalog>                                         odtwarza session.json z dziennika
       fit <wzorzec> <nagranie.caf> [--max-lag-ms N]              T1/T3/T4: dopasowanie nagranie ≈ a·wzorzec
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
+      models <baseURL>                                            lista modeli (klucz: MEETNOTES_API_KEY)
+      probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
@@ -34,6 +37,8 @@ struct CLI {
             case "summarize": try summarize(args)
             case "fit": try fit(args)
             case "check-system-audio": print(await SystemAudioCheck.run())
+            case "models": try await models(args)
+            case "probe": try await probe(args)
             default: print(usage); exit(64)
             }
         } catch {
@@ -124,5 +129,25 @@ struct CLI {
     /// Czyta dowolny plik audio jako Int16 przeplatany — patrz `AudioFit.readAnyAudio`.
     static func readAnyAudio(_ url: URL) throws -> (samples: [Int16], rate: Double, channels: Int) {
         try AudioFit.readAnyAudio(url)
+    }
+
+    static func client(_ base: String) throws -> OpenAICompatibleClient {
+        guard let url = URL(string: base) else { throw ProviderError.badResponse("zły adres \(base)") }
+        return OpenAICompatibleClient(provider: Provider(name: "cli", baseURL: url),
+                                      key: ProcessInfo.processInfo.environment["MEETNOTES_API_KEY"])
+    }
+
+    static func models(_ args: [String]) async throws {
+        for m in try await client(try positional(args, 0)).listModels() {
+            print(m.id + (m.inputModalities.map { "  [\($0.joined(separator: ","))]" } ?? ""))
+        }
+    }
+
+    static func probe(_ args: [String]) async throws {
+        guard let role = Role(rawValue: try positional(args, 2)) else { print(usage); exit(64) }
+        let lang = try option(args, "--language").map { try LanguageCode($0) }
+        let r = await ProbeRunner(client: try client(try positional(args, 0))).probe(model: try positional(args, 1), role: role, language: lang)
+        print(r.works ? "DZIAŁA" : "NIE DZIAŁA", r.shape?.rawValue ?? "", r.languageHandling?.rawValue ?? "",
+              r.embeddingDimension.map { "wymiar \($0)" } ?? "", r.failure ?? "")
     }
 }

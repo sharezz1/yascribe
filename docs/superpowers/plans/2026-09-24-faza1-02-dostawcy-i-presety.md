@@ -1035,23 +1035,23 @@ Status: 🔧 pełny CLI skompilowany przebiegiem kontrolnym 2026-09-25 (kopia sp
 - Pobiera: `OpenAICompatibleClient`, `ProbeRunner`, `Role`, `LanguageCode` (B1–B2); `CLI.option`, `CLI.positional` (A9).
 - Dostarcza: `meetnotes-cli models <baseURL>`, `probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]`, `CLI.client(_:)` (używane w C4). Klucz ze zmiennej `MEETNOTES_API_KEY`.
 
-- [ ] **Krok 1: Import.** Pod `import Foundation` dopisz `import MeetNotesProviders`.
+- [x] **Krok 1: Import.** Pod `import Foundation` dopisz `import MeetNotesProviders`.
 
-- [ ] **Krok 2: Pomoc.** W `usage`, pod linią `check-system-audio`, dopisz:
+- [x] **Krok 2: Pomoc.** W `usage`, pod linią `check-system-audio`, dopisz:
 
 ```text
       models <baseURL>                                            lista modeli (klucz: MEETNOTES_API_KEY)
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
 ```
 
-- [ ] **Krok 3: Polecenia.** W `switch cmd`, pod `case "check-system-audio": …`, dopisz:
+- [x] **Krok 3: Polecenia.** W `switch cmd`, pod `case "check-system-audio": …`, dopisz:
 
 ```swift
             case "models": try await models(args)
             case "probe": try await probe(args)
 ```
 
-- [ ] **Krok 4: Funkcje.** Przed ostatnim `}` struktury `CLI` dopisz:
+- [x] **Krok 4: Funkcje.** Przed ostatnim `}` struktury `CLI` dopisz:
 
 ```swift
     static func client(_ base: String) throws -> OpenAICompatibleClient {
@@ -1075,11 +1075,11 @@ Status: 🔧 pełny CLI skompilowany przebiegiem kontrolnym 2026-09-25 (kopia sp
     }
 ```
 
-- [ ] **Krok 5: Zbuduj i sprawdź bez sieci.** `swift build --product meetnotes-cli` — oczekiwane: `Build complete!`. `swift run meetnotes-cli probe http://127.0.0.1:9/v1 x asr` — oczekiwane: `NIE DZIAŁA` z opisem błędu połączenia dla obu kształtów.
+- [x] **Krok 5: Zbuduj i sprawdź bez sieci.** `swift build --product meetnotes-cli` — oczekiwane: `Build complete!`. `swift run meetnotes-cli probe http://127.0.0.1:9/v1 x asr` — oczekiwane: `NIE DZIAŁA` z opisem błędu połączenia dla obu kształtów.
 
-- [ ] **Krok 6: Pełne testy.** `scripts/test.sh` — oczekiwane: `77/77` (po E2).
+- [x] **Krok 6: Pełne testy.** `scripts/test.sh` — oczekiwane: `77/77` (po E2).
 
-- [ ] **Krok 7: Commit.**
+- [x] **Krok 7: Commit.**
 
 ```bash
 git add Sources/meetnotes-cli
