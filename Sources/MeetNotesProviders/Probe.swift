@@ -26,10 +26,12 @@ public struct ProbeResult: Codable, Equatable, Sendable {
     public var languageHandling: LanguageHandling?
     public var embeddingDimension: Int?
     public var checkedAt: Date
+    /// Język, dla którego sonda ASR klasyfikowała obsługę języka. Część klucza cache.
+    public var language: LanguageCode?
 
     public init(providerID: UUID, model: String, role: Role, works: Bool = false, failure: String? = nil,
                 shape: ASRShape? = nil, languageHandling: LanguageHandling? = nil, embeddingDimension: Int? = nil,
-                checkedAt: Date = Date()) {
+                checkedAt: Date = Date(), language: LanguageCode? = nil) {
         self.providerID = providerID
         self.model = model
         self.role = role
@@ -39,6 +41,7 @@ public struct ProbeResult: Codable, Equatable, Sendable {
         self.languageHandling = languageHandling
         self.embeddingDimension = embeddingDimension
         self.checkedAt = checkedAt
+        self.language = language
     }
 }
 
@@ -56,6 +59,7 @@ public struct ProbeRunner: Sendable {
         switch role {
         case .asr:
             let lang = language ?? .english
+            r.language = language
             let clip = ProbeClips.clip(for: lang) ?? ProbeClips.english
             let langParam: LanguageCode? = clip.language == lang ? lang : nil
             var failures: [String] = []
@@ -96,14 +100,27 @@ public struct ProbeRunner: Sendable {
     /// „automatyczny". B1 ≠ B2 → model niedeterministyczny → nie rozstrzygamy.
     public func classifyLanguage(model: String, language: LanguageCode) async -> LanguageHandling {
         let clip = ProbeClips.mismatched(for: language)
-        guard let b1 = try? await client.transcribe(wav: clip.wav, model: model, language: nil, shape: .audioTranscriptions),
-              let b2 = try? await client.transcribe(wav: clip.wav, model: model, language: nil, shape: .audioTranscriptions) else {
+        func run(_ lang: LanguageCode?) async -> Result<String, any Error> {
+            do {
+                let t = try await client.transcribe(wav: clip.wav, model: model, language: lang, shape: .audioTranscriptions)
+                return .success(ProbeClips.normalize(t.text))
+            } catch {
+                return .failure(error)
+            }
+        }
+        guard case .success(let b1) = await run(nil), case .success(let b2) = await run(nil), b1 == b2 else {
+            return .unknown // model niedeterministyczny albo błąd bez języka
+        }
+        let a1 = await run(language)
+        if case .failure(let e) = a1 {
+            // „Automatyczny" tylko wtedy, gdy API odrzuciło sam parametr (400/422).
+            // 401, 429, 500, przekroczony czas → nie wiemy (ChatGPT #5).
+            if case ProviderError.http(let status, _)? = e as? ProviderError, status == 400 || status == 422 { return .automatic }
             return .unknown
         }
-        guard ProbeClips.normalize(b1.text) == ProbeClips.normalize(b2.text) else { return .unknown }
-        guard let a = try? await client.transcribe(wav: clip.wav, model: model, language: language, shape: .audioTranscriptions) else {
-            return .automatic // parametr języka odrzucony: ustawienia nie da się wymusić
+        guard case .success(let x1) = a1, case .success(let x2) = await run(language), x1 == x2 else {
+            return .unknown // różne odpowiedzi z językiem — wymuszania nie da się stwierdzić
         }
-        return ProbeClips.normalize(a.text) == ProbeClips.normalize(b1.text) ? .automatic : .enforced
+        return x1 == b1 ? .automatic : .enforced
     }
 }

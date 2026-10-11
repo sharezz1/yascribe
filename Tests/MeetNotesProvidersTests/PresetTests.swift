@@ -56,3 +56,20 @@ private let asr = RoleAssignment(providerID: UUID(), model: "microsoft/mai-trans
     #expect(!json.lowercased().contains("key"))
     #expect(maskedKey("sk-or-v1-abcdef1234") == "••••1234")
 }
+
+@Test func probeResultsForDifferentLanguagesDoNotOverwriteEachOther() {
+    // ChatGPT #6: klasa obsługi języka jest wynikiem dla KONKRETNEGO języka.
+    var cache = ProbeCache()
+    let id = UUID()
+    cache.record(ProbeResult(providerID: id, model: "m", role: .asr, works: true, languageHandling: .enforced, language: .polish))
+    cache.record(ProbeResult(providerID: id, model: "m", role: .asr, works: true, languageHandling: .automatic, language: .english))
+    #expect(cache.result(provider: id, model: "m", role: .asr, language: .polish)?.languageHandling == .enforced)
+    #expect(cache.result(provider: id, model: "m", role: .asr, language: .english)?.languageHandling == .automatic)
+}
+
+@Test func presetWithEmptyModelCannotBeSaved() {
+    var file = PresetsFile()
+    #expect(throws: PresetError.missingASR) {
+        try file.upsert(Preset(name: "Polish", language: .polish, asr: RoleAssignment(providerID: UUID(), model: " ")))
+    }
+}
