@@ -562,7 +562,7 @@ Status: ✅ zweryfikowane (7 testów).
 - Pobiera: `OpenAICompatibleClient`, `ProbeClips`, `LanguageCode` (B1).
 - Dostarcza: `Role` (`.asr`, `.correction`, `.summary`, `.embedding`), `LanguageHandling` (`.enforced`, `.filtered`, `.automatic`, `.unknown`), `ProbeResult(providerID:model:role:works:failure:shape:languageHandling:embeddingDimension:checkedAt:)` (wartości domyślne poza trzema pierwszymi), `ProbeRunner(client:)`: `probe(model:role:language:now:) async -> ProbeResult`, `classifyLanguage(model:language:) async -> LanguageHandling`.
 
-- [ ] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesProvidersTests/ProbeTests.swift`:
+- [x] **Krok 1: Test, który padnie.** Utwórz `Tests/MeetNotesProvidersTests/ProbeTests.swift`:
 
 ```swift
 import Foundation
@@ -649,9 +649,9 @@ final class Counter: @unchecked Sendable {
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesProvidersTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `ProbeRunner`, `ASRShape` w porównaniach, `LanguageHandling`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesProvidersTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `ProbeRunner`, `ASRShape` w porównaniach, `LanguageHandling`.
 
-- [ ] **Krok 3: Implementacja.** `Sources/MeetNotesProviders/Probe.swift`:
+- [x] **Krok 3: Implementacja.** `Sources/MeetNotesProviders/Probe.swift`:
 
 ```swift
 import Foundation
@@ -765,11 +765,11 @@ public struct ProbeRunner: Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 65/65 testów uruchomionych i zaliczonych.`
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 65/65 testów uruchomionych i zaliczonych.`
 
-- [ ] **Krok 5: Mutacja (P10).** W `classifyLanguage` zamień ostatnią linię `return ProbeClips.normalize(a.text) == ProbeClips.normalize(b1.text) ? .automatic : .enforced` na `return .enforced`. `scripts/test.sh --filter modelThatIgnoresLanguageIsAutomatic` — oczekiwane: pada. Przywróć; `65/65`.
+- [x] **Krok 5: Mutacja (P10).** W `classifyLanguage` zamień ostatnią linię `return ProbeClips.normalize(a.text) == ProbeClips.normalize(b1.text) ? .automatic : .enforced` na `return .enforced`. `scripts/test.sh --filter modelThatIgnoresLanguageIsAutomatic` — oczekiwane: pada. Przywróć; `65/65`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Sources/MeetNotesProviders Tests/MeetNotesProvidersTests
