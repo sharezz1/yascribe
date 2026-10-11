@@ -558,7 +558,7 @@ Status: ✅ zweryfikowane (7 testów) + jeden test i parametr `systemChannels` w
 - Pobiera: C1, C2; `SessionDirectory`, `SessionSummary`, `CAFReader` (plan A); `OpenAICompatibleClient`, `Preset`, `Provider`, `ProbeResult`, `JSONFile` (plan B).
 - Dostarcza: `Speaker` (`.me`, `.them`), `Word(text:start:end:)` (sekundy osi sesji), `Utterance` (`speaker`, `start`, `end`, `text`, `words`, `approximateTiming`, `languageMismatch`, `excludedFromNotes`), `ChunkFailure`, `Transcript` (`utterances`, `failedChunks`, `languageFlagCount`). `RunSnapshot(preset:provider:probe:dictionaryVersion:) throws` — migawka, nie odwołanie. `RunMetadata`. `ChunkResult`, `SessionClock(summary:)` z `sessionSeconds(track:trackSeconds:)`, `Merger.merge(_:speakers:clock:language:failures:)`. `TranscriptionProgress` (`done`, `total`, `fraction`), `RunDirectory(session:runID:)`, `TranscriptionRunner(session:runID:snapshot:client:maxChunkSeconds: = 59, gate:)` z `run(progress:) async throws -> Transcript`.
 
-- [ ] **Krok 1: Testy, które padną.**
+- [x] **Krok 1: Testy, które padną.**
 
 `Tests/MeetNotesTranscriptionTests/SessionFixtures.swift`:
 
@@ -763,9 +763,9 @@ Następnie ⚠️ **dopisz na końcu `RunnerTests.swift`** (po recenzji, W5 — 
 }
 ```
 
-- [ ] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesTranscriptionTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `RunSnapshot`, `TranscriptionRunner`, `RunDirectory`, `RunMetadata`.
+- [x] **Krok 2: Uruchom i sprawdź, że pada.** `scripts/test.sh --filter MeetNotesTranscriptionTests` — oczekiwane: kod `1`, `cannot find … in scope` dla `RunSnapshot`, `TranscriptionRunner`, `RunDirectory`, `RunMetadata`.
 
-- [ ] **Krok 3: Implementacja.**
+- [x] **Krok 3: Implementacja.**
 
 `Sources/MeetNotesTranscription/Transcript.swift`:
 
@@ -1048,13 +1048,13 @@ public struct TranscriptionRunner: Sendable {
 }
 ```
 
-- [ ] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 99/99 testów uruchomionych i zaliczonych.` (91 z poprzednich zadań, 7 testów przebiegu ze spike'a i test 48 kHz stereo). Jeśli pada tylko nowy test, a pozostałe przechodzą, to wada nowego testu albo realny problem potoku z 48 kHz — rozstrzygnij, zanim przejdziesz dalej; tolerancji nie zwiększaj na ślepo.
+- [x] **Krok 4: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 99/99 testów uruchomionych i zaliczonych.` (91 z poprzednich zadań, 7 testów przebiegu ze spike'a i test 48 kHz stereo). Jeśli pada tylko nowy test, a pozostałe przechodzą, to wada nowego testu albo realny problem potoku z 48 kHz — rozstrzygnij, zanim przejdziesz dalej; tolerancji nie zwiększaj na ślepo.
 
-- [ ] **Krok 5: Mutacja (P5).** W `TranscriptionRunner.run` zamień `if let saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {` na `if false, let saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {`. `scripts/test.sh --filter interruptedRunResumesWithoutPayingAgain` — oczekiwane: pada (drugi przebieg płaci za wszystkie okna). Przywróć.
+- [x] **Krok 5: Mutacja (P5).** W `TranscriptionRunner.run` zamień `if let saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {` na `if false, let saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {`. `scripts/test.sh --filter interruptedRunResumesWithoutPayingAgain` — oczekiwane: pada (drugi przebieg płaci za wszystkie okna). Przywróć.
 
-- [ ] **Krok 6: Mutacja (P11).** W `Merger.merge` zamień `utterances[i].languageMismatch = LanguageGuard.mismatch(utterances[i].text, expected: language)` na `utterances[i].languageMismatch = nil`. `scripts/test.sh --filter confabulatedEnglishIsFlaggedAndExcludedFromNotes` — oczekiwane: pada. Przywróć; `99/99`.
+- [x] **Krok 6: Mutacja (P11).** W `Merger.merge` zamień `utterances[i].languageMismatch = LanguageGuard.mismatch(utterances[i].text, expected: language)` na `utterances[i].languageMismatch = nil`. `scripts/test.sh --filter confabulatedEnglishIsFlaggedAndExcludedFromNotes` — oczekiwane: pada. Przywróć; `99/99`.
 
-- [ ] **Krok 7: Commit.**
+- [x] **Krok 7: Commit.**
 
 ```bash
 git add Sources/MeetNotesTranscription Tests/MeetNotesTranscriptionTests
