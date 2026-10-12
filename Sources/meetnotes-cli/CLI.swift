@@ -3,6 +3,7 @@ import Foundation
 import MeetNotesProviders
 import MeetNotesRecording
 import MeetNotesSessionFormat
+import MeetNotesTranscription
 
 /// Narzędzie deweloperskie: sondy i testy odbiorcze bez interfejsu.
 /// Uwaga: uruchomione z terminala dziedziczy uprawnienia TCC terminala
@@ -17,6 +18,8 @@ struct CLI {
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
       models <baseURL>                                            lista modeli (klucz: MEETNOTES_API_KEY)
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
+      transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions|chatAudio] [--run ID]
+      session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
@@ -39,6 +42,8 @@ struct CLI {
             case "check-system-audio": print(await SystemAudioCheck.run())
             case "models": try await models(args)
             case "probe": try await probe(args)
+            case "transcribe": try await transcribe(args)
+            case "session-from-file": try await sessionFromFile(args)
             default: print(usage); exit(64)
             }
         } catch {
@@ -149,5 +154,48 @@ struct CLI {
         let r = await ProbeRunner(client: try client(try positional(args, 0))).probe(model: try positional(args, 1), role: role, language: lang)
         print(r.works ? "DZIAŁA" : "NIE DZIAŁA", r.shape?.rawValue ?? "", r.languageHandling?.rawValue ?? "",
               r.embeddingDimension.map { "wymiar \($0)" } ?? "", r.failure ?? "")
+    }
+
+    static func transcribe(_ args: [String]) async throws {
+        let dir = URL(fileURLWithPath: try positional(args, 0))
+        let c = try client(try positional(args, 1))
+        guard let langRaw = option(args, "--language") else {
+            FileHandle.standardError.write(Data("--language jest obowiązkowe (nigdy auto)\n".utf8)); exit(64)
+        }
+        let preset = Preset(name: "cli", language: try LanguageCode(langRaw),
+                            asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)))
+        let shape = option(args, "--shape").flatMap(ASRShape.init(rawValue:)) ?? .audioTranscriptions
+        let probe = ProbeResult(providerID: c.provider.id, model: try positional(args, 2), role: .asr, works: true,
+                                shape: shape, languageHandling: .unknown)
+        let runID = option(args, "--run") ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") // E3: runID bez ':'
+        var snapshot = try RunSnapshot(preset: preset, provider: c.provider, probe: probe)
+        // Wznowienie (check S11 #2): CLI tworzy preset i dostawcę z nowymi UUID przy każdym uruchomieniu,
+        // więc przy tych samych parametrach bierzemy migawkę z pierwszego przebiegu. Inny model, język,
+        // adres albo kształt → runner rzuci inputMismatch, tak jak powinien.
+        if RunDirectory.isValid(runID: runID),
+           let saved = try JSONFile.load(RunInput?.self, from: RunDirectory(session: dir, runID: runID).input, default: nil),
+           (saved.snapshot.model, saved.snapshot.language, saved.snapshot.providerBaseURL, saved.snapshot.shape)
+               == (snapshot.model, snapshot.language, snapshot.providerBaseURL, snapshot.shape) {
+            snapshot = saved.snapshot
+        }
+        let t = try await TranscriptionRunner(session: dir, runID: runID, snapshot: snapshot, client: c).run { p in print(String(format: "\r%3.0f%%", p.fraction * 100), terminator: "") }
+        print()
+        for u in t.utterances {
+            let flag = u.languageMismatch.map { " [JĘZYK: \($0)]" } ?? ""
+            print(String(format: "[%7.1f] %@: ", u.start, u.speaker == .me ? "Me" : "Them") + u.text + flag)
+        }
+        if !t.failedChunks.isEmpty { print("nieudanych okien: \(t.failedChunks.count)") }
+    }
+
+    /// Tylko do testów (spec fazy 1, §1.0): sesja z istniejącego pliku, np. z korpusu
+    /// z rozdz. 13, 14 i 17. Import plików nie jest funkcją produktu.
+    static func sessionFromFile(_ args: [String]) async throws {
+        let src = try readAnyAudio(URL(fileURLWithPath: try positional(args, 0)))
+        let dir = URL(fileURLWithPath: try positional(args, 1))
+        let tb = Timebase.current
+        let source = FileSource(trackID: "system", samples: src.samples, sampleRate: src.rate, channels: src.channels,
+                                startHostTime: mach_absolute_time(), timebase: tb, chunkFrames: 4_800)
+        try SessionRecorder(directory: dir, sources: [source], conditions: [], timebase: tb, zeroWatch: [:]).start()
+        try summarize([dir.path])
     }
 }
