@@ -176,7 +176,7 @@ Status: 🔧 skompilowane (`swift build --product MeetNotesApp` → `Build compl
 - Pobiera: `SessionRecorder`, `SystemTapSource`, `RawMicrophoneSource`, `VoiceProcessedMicrophoneSource`, `SystemAudioCheck`, `EndReason` (A); `MeetNotesPaths`, `JSONFile`, `KeychainSecretStore`, `OpenAICompatibleClient`, `ProbeRunner`, `Preset`, `PresetsFile`, `ProvidersFile`, `GlobalSettings`, `ProbeCache`, `maskedKey`, `LanguageCode.selectable` (B); `TranscriptionRunner`, `RunSnapshot`, `RunDirectory`, `Transcript`, `Utterance` (C).
 - Dostarcza: aplikację. `AppModel`: `section`, `providers`, `presets`, `settings`, `probeCache`, `models`, `sessions: [SessionItem]`, `activePreset`, `startRecording()`, `transcribe(sessionURL:preset:)`, `savePreset(_:) -> String?`, `addProvider(name:baseURL:key:)`, `refreshModels(_:)`, `probe(providerID:model:role:language:)`. Po zakończeniu nagrania transkrypcja rusza sama z aktywnym presetem.
 
-- [ ] **Krok 1: Model i sterowanie nagraniem.** Usuń `Sources/MeetNotesApp/main.swift`.
+- [x] **Krok 1: Model i sterowanie nagraniem.** Usuń `Sources/MeetNotesApp/main.swift`.
 
 `Sources/MeetNotesApp/AppModel.swift`:
 
@@ -507,7 +507,7 @@ struct RecordingPanelView: View {
 }
 ```
 
-- [ ] **Krok 2: Punkt wejścia i nawigacja.** `Sources/MeetNotesApp/MeetNotesApp.swift`:
+- [x] **Krok 2: Punkt wejścia i nawigacja.** `Sources/MeetNotesApp/MeetNotesApp.swift`:
 
 ```swift
 import SwiftUI
@@ -582,7 +582,7 @@ struct LaterPhaseView: View {
 }
 ```
 
-- [ ] **Krok 3: Strona główna i widok spotkania.**
+- [x] **Krok 3: Strona główna i widok spotkania.**
 
 `Sources/MeetNotesApp/MeetingsView.swift`:
 
@@ -823,7 +823,7 @@ struct UtteranceRow: View {
 }
 ```
 
-- [ ] **Krok 4: Presety.** `Sources/MeetNotesApp/PresetsView.swift`:
+- [x] **Krok 4: Presety.** `Sources/MeetNotesApp/PresetsView.swift`:
 
 ```swift
 import MeetNotesProviders
@@ -1002,7 +1002,7 @@ na:
                 }
 ```
 
-- [ ] **Krok 5: Ustawienia i setup.**
+- [x] **Krok 5: Ustawienia i setup.**
 
 `Sources/MeetNotesApp/SettingsView.swift`:
 
@@ -1163,11 +1163,11 @@ struct SetupView: View {
 }
 ```
 
-- [ ] **Krok 6: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. Jeśli pojawi się `plugin for module 'SwiftUIMacros' not found`, ktoś użył `@State` — zamień na `ObservableObject` + `@StateObject` (przegląd §4). Nie instaluj Xcode, żeby to obejść: to decyzja użytkownika.
+- [x] **Krok 6: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. Jeśli pojawi się `plugin for module 'SwiftUIMacros' not found`, ktoś użył `@State` — zamień na `ObservableObject` + `@StateObject` (przegląd §4). Nie instaluj Xcode, żeby to obejść: to decyzja użytkownika.
 
-- [ ] **Krok 7: Złóż paczkę i testy.** `scripts/bundle.sh` — `.build/MeetNotes.app`. `scripts/test.sh` — `109/109`.
+- [x] **Krok 7: Złóż paczkę i testy.** `scripts/bundle.sh` — `.build/MeetNotes.app`. `scripts/test.sh` — `109/109`.
 
-- [ ] **Krok 8: Commit.**
+- [x] **Krok 8: Commit.**
 
 ```bash
 git add Sources/MeetNotesApp
