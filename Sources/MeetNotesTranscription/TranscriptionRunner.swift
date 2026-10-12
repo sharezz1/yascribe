@@ -4,7 +4,7 @@ import MeetNotesSessionFormat
 
 public enum RunError: Error, Equatable {
     case badRunID(String)
-    /// Ten sam runID, inne wejście (preset, bramka, limit okna, ramki ścieżek) — ChatGPT #4.
+    /// Ten sam runID, inne wejście (preset, bramka, limit okna, progi przesłuchu, ramki ścieżek) — ChatGPT #4.
     case inputMismatch
 }
 
