@@ -11,6 +11,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] `session-from-file`: drugi przebieg w tym samym katalogu pada (`alreadyExists` na `journal.jsonl`) — przy pracy na korpusie każdy plik wymaga świeżego katalogu (albo później `--force`). *(check S12 #7)*
 - [ ] CLI `transcribe` ze złym katalogiem sesji → surowy `NSCocoaErrorDomain` (zamiast czytelnego błędu użycia). *(check S12 #9)*
 - [ ] CLI `probe`: `--language` bez wartości po cichu daje `nil` (ten sam problem, co `--shape`/`--run` przed S12fix; poza zakresem tamtej rundy). *(K po S12fix)*
+- [ ] CLI `transcribe`: baseURL bez schematu (`openrouter.ai/api/v1`) → każde okno pada na `unsupported URL`, a powód widać tylko w `transcript.json` (`failedChunks[].error`); rozważyć walidację adresu z czytelnym błędem. *(S13 live)*
 
 ## Zapisane (dla kroniki)
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
