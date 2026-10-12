@@ -18,7 +18,7 @@ struct CLI {
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
       models <baseURL>                                            lista modeli (klucz: MEETNOTES_API_KEY)
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
-      transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions|chatAudio] [--run ID]
+      transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID]
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
     """
 
@@ -164,10 +164,18 @@ struct CLI {
         }
         let preset = Preset(name: "cli", language: try LanguageCode(langRaw),
                             asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)))
-        let shape = option(args, "--shape").flatMap(ASRShape.init(rawValue:)) ?? .audioTranscriptions
+        // Opcja bez wartości to błąd użycia, nie cicha wartość domyślna (S3-3, check S12 #4).
+        if let bad = ["--shape", "--run"].first(where: { args.contains($0) && (option(args, $0)?.hasPrefix("--") ?? true) }) {
+            FileHandle.standardError.write(Data("\(bad) wymaga wartości\n".utf8)); exit(64)
+        }
+        if let s = option(args, "--shape"), s != ASRShape.audioTranscriptions.rawValue {
+            FileHandle.standardError.write(Data("--shape \(s): w transcribe dozwolone tylko audioTranscriptions\n".utf8)); exit(64)
+        }
+        let shape = ASRShape.audioTranscriptions
         let probe = ProbeResult(providerID: c.provider.id, model: try positional(args, 2), role: .asr, works: true,
                                 shape: shape, languageHandling: .unknown)
         let runID = option(args, "--run") ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") // E3: runID bez ':'
+        print("runID: \(runID)")
         var snapshot = try RunSnapshot(preset: preset, provider: c.provider, probe: probe)
         // Wznowienie (check S11 #2): CLI tworzy preset i dostawcę z nowymi UUID przy każdym uruchomieniu,
         // więc przy tych samych parametrach bierzemy migawkę z pierwszego przebiegu. Inny model, język,
