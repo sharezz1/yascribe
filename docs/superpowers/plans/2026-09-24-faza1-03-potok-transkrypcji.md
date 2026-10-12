@@ -1107,9 +1107,17 @@ Po co `session-from-file`: spec fazy 1 §1.0 odrzuca import plików jako funkcj�
         let probe = ProbeResult(providerID: c.provider.id, model: try positional(args, 2), role: .asr, works: true,
                                 shape: shape, languageHandling: .unknown)
         let runID = option(args, "--run") ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") // E3: runID bez ':'
-        let t = try await TranscriptionRunner(session: dir, runID: runID,
-                                              snapshot: RunSnapshot(preset: preset, provider: c.provider, probe: probe),
-                                              client: c).run { p in print(String(format: "\r%3.0f%%", p.fraction * 100), terminator: "") }
+        var snapshot = try RunSnapshot(preset: preset, provider: c.provider, probe: probe)
+        // Wznowienie (check S11 #2): CLI tworzy preset i dostawcę z nowymi UUID przy każdym uruchomieniu,
+        // więc przy tych samych parametrach bierzemy migawkę z pierwszego przebiegu. Inny model, język,
+        // adres albo kształt → runner rzuci inputMismatch, tak jak powinien.
+        if RunDirectory.isValid(runID: runID),
+           let saved = try JSONFile.load(RunInput?.self, from: RunDirectory(session: dir, runID: runID).input, default: nil),
+           (saved.snapshot.model, saved.snapshot.language, saved.snapshot.providerBaseURL, saved.snapshot.shape)
+               == (snapshot.model, snapshot.language, snapshot.providerBaseURL, snapshot.shape) {
+            snapshot = saved.snapshot
+        }
+        let t = try await TranscriptionRunner(session: dir, runID: runID, snapshot: snapshot, client: c).run { p in print(String(format: "\r%3.0f%%", p.fraction * 100), terminator: "") }
         print()
         for u in t.utterances {
             let flag = u.languageMismatch.map { " [JĘZYK: \($0)]" } ?? ""
