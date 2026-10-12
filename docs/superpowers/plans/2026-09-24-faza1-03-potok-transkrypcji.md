@@ -1065,7 +1065,7 @@ git commit -m "Transkrypcja: scalanie po znacznikach slow, wznawialny wykonawca"
 
 ### Zadanie C4: CLI — transkrypcja i sesja z pliku testowego
 
-Status: 🔧 pełny CLI skompilowany i sprawdzony dymnie przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonnet): `session-from-file` z nagraniem z `say` daje `koniec: endOfInput`, bramka `--language` działa. Wersja pośrednia nie była kompilowana osobno. `transcribe` jest słowo w słowo z `CLI.swift` ze spike'a (🔧 skompilowany). `session-from-file` jest nowe — złożone z `readAnyAudio` (A9), `FileSource` i `SessionRecorder` (A6). Nigdy niekompilowane.
+Status: ✅ zweryfikowane (109 testów) — kompilacja i dym w S12 (2026-10-12, Opus); przebiegi wznowienia przez CLI (te same parametry → exit 0; inny model/język → `inputMismatch`) wykonane w checku S12 i powtórzone przez orkiestratora (dowód: `reports/S12.md`). Wcześniejsza wersja (2026-09-25, kopia spike'a, Sonnet): pełny CLI skompilowany dymnie, bramka `--language` działa; `transcribe` słowo w słowo z `CLI.swift` ze spike'a; `session-from-file` nowe — złożone z `readAnyAudio` (A9), `FileSource` i `SessionRecorder` (A6).
 
 Po co `session-from-file`: spec fazy 1 §1.0 odrzuca import plików jako funkcję produktu, ale zostawia plik jako materiał testowy. Bez tego polecenia korpus z rozdz. 13, 14 i 17 (nagrania z innych aplikacji) nie da się przepuścić przez potok, a P4 i porównanie jakości polskiego nie mają punktu odniesienia. Polecenie jest tylko w CLI; w aplikacji go nie ma.
 
