@@ -15,13 +15,15 @@ struct MeetingDetailView: View {
     let item: SessionItem
     @StateObject private var playback = PlaybackState()
     private var player: AVAudioPlayer? { playback.player }
+    private var busy: Bool { model.isTranscribing(item) }
 
     var body: some View {
         Group {
             if let t = item.transcript {
                 List {
                     if !t.failedChunks.isEmpty {
-                        Button("Retry Failed Parts") { model.resume(item) }
+                        Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item) }
+                            .disabled(busy)
                             .help("Sends only the parts that failed; finished parts aren't paid for again")
                     }
                     ForEach(Array(t.utterances.enumerated()), id: \.offset) { _, u in
@@ -39,17 +41,22 @@ struct MeetingDetailView: View {
                 ContentUnavailableView {
                     Label("No transcript yet", systemImage: "text.alignleft")
                 } actions: {
-                    if let p = model.activePreset {
-                        Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }
+                    if busy {
+                        ProgressView("Transcribing…")
+                    } else {
+                        // Preset zamrożony przy nagraniu, nie bieżący (spec §1.5); Resume bierze migawkę z input.json przebiegu.
+                        if let p = model.presetFor(sessionURL: item.url) {
+                            Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }
+                        }
+                        if item.runID != nil { Button("Resume Transcription") { model.resume(item) } }
                     }
-                    if item.runID != nil { Button("Resume Transcription") { model.resume(item) } }
                 }
             }
         }
         .navigationTitle(item.startedAt.formatted(date: .abbreviated, time: .shortened))
         .toolbar {
             Button {
-                if player?.isPlaying == true { player?.pause() } else { player?.play() }
+                if player?.isPlaying == true { player?.pause() } else if player != nil || load("system") { player?.play() }
             } label: {
                 Label("Play", systemImage: "playpause")
             }
@@ -64,12 +71,23 @@ struct MeetingDetailView: View {
         let aecOK = item.summary?.tracks.first { $0.id == "mic_aec" }.map { $0.failure == nil && $0.channels > 0 } ?? false
         let track = u.speaker == .them ? "system" : (aecOK ? "mic_aec" : "mic_raw")
         let offset = item.summary?.tracks.first { $0.id == track }?.offsetSeconds ?? 0
-        if playback.track != track {
-            playback.player = try? AVAudioPlayer(contentsOf: item.url.appendingPathComponent("\(track).caf"))
-            playback.track = track
-        }
+        guard playback.track == track || load(track) else { return }
         playback.player?.currentTime = max(0, u.start - offset)
         playback.player?.play()
+    }
+
+    /// Nieudane wczytanie nie zostaje zapamiętane jako wczytana ścieżka (check S15 #4).
+    private func load(_ track: String) -> Bool {
+        do {
+            playback.player = try AVAudioPlayer(contentsOf: item.url.appendingPathComponent("\(track).caf"))
+            playback.track = track
+            return true
+        } catch {
+            playback.player = nil
+            playback.track = nil
+            model.lastError = "Couldn't open the \(track) recording: \(error.localizedDescription)"
+            return false
+        }
     }
 
     static func time(_ s: Double) -> String {

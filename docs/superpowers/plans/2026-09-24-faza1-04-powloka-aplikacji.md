@@ -166,7 +166,7 @@ git commit -m "Skladanie MeetNotes.app bez Xcode, staly podpis" -m "Staly certyf
 
 ### Zadanie D2: Aplikacja
 
-Status: 🔧 skompilowane (`swift build --product MeetNotesApp` → `Build complete!` w spike'u), nigdy nieuruchomione. Filtr po modalnościach z kroku 4 skompilowany przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonnet). Jedno zadanie, bo `ContentView` odwołuje się do wszystkich ekranów — osobne zadania wymagałyby zaślepek widoków, których w spike'u nie ma.
+Status: ✅ wykonane (2026-10-12, S15 `a835dcc` + E4 `6915a71` + S15fix): kroki 1–8 odhaczone, `Build complete!`, `scripts/test.sh` 109/109 (bramka nie obejmuje `MeetNotesApp` — brak targetu testowego, BACKLOG), paczka podpisana „MeetNotes Dev". Aplikacja jeszcze nieuruchomiona — sprawdza D3 (użytkownik). Filtr po modalnościach z kroku 4 skompilowany przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonnet). Jedno zadanie, bo `ContentView` odwołuje się do wszystkich ekranów — osobne zadania wymagałyby zaślepek widoków, których w spike'u nie ma.
 
 **Pliki:**
 - Usuń: `Sources/MeetNotesApp/main.swift`

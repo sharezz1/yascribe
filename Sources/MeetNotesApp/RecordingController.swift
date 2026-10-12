@@ -20,11 +20,17 @@ final class RecordingController {
     private var started = Date()
     private var panel: NSPanel?
 
+    /// Drugi start przy żywym rejestratorze wyciekłby pierwszy (check S15 #1).
+    enum StartError: Error { case alreadyRecording }
+
     func start(directory: URL, presetLabel: String, onEnded: @escaping @MainActor (EndReason) -> Void) throws {
+        guard recorder == nil else { throw StartError.alreadyRecording }
         let r = SessionRecorder(directory: directory,
                                 sources: [SystemTapSource(), RawMicrophoneSource()]) // bez VP: ściszałby Teams przez całe nagranie (S5, spec rdzenia §2 korekta 2026-09-29)
-        r.onEnded = { reason in
+        r.onEnded = { [weak r] reason in
             Task { @MainActor in
+                // Tylko bieżący rejestrator kończy stan — spóźnione zakończenie innego go nie zeruje.
+                guard let r, self.recorder === r else { return }
                 self.finish(reason)
                 onEnded(reason)
             }
