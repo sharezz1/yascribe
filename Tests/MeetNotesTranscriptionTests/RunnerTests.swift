@@ -111,3 +111,79 @@ final class Recorder: @unchecked Sendable {
         #expect(abs(w.start - s) < 0.05, "słowo w \(w.start) s, dźwięk w \(s) s")
     }
 }
+
+@Test func crosstalkFromSpeakersIsDroppedBeforeASR() async throws {
+    // W§1, rozdz. 17, ChatGPT #1: mikrofon słyszy głośniki, bramka energii uznałaby to za mowę.
+    var sys = silence(seconds: 2, rate: 16_000)
+    for _ in 0..<5 { sys += tone(seconds: 0.4, rate: 16_000) + silence(seconds: 0.3, rate: 16_000) }
+    sys += silence(seconds: 5, rate: 16_000)
+    // echo: 100 ms drogi akustycznej, ~14 dB ciszej
+    let mic = Array(([Int16](repeating: 0, count: 1_600) + sys.map { Int16(Double($0) * 0.2) }).prefix(sys.count))
+    let dir = try makeSession(system: sys, mic: mic)
+    let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(ListeningASR())).run()
+    #expect(!t.utterances.isEmpty)
+    #expect(t.utterances.allSatisfy { $0.speaker == .them })
+}
+
+@Test func runIDEscapingTheRunsDirectoryIsRejected() async throws {
+    // ChatGPT #13.
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000))
+    await #expect(throws: RunError.badRunID("../x")) {
+        _ = try await TranscriptionRunner(session: dir, runID: "../x", snapshot: try snapshot(), client: client(ListeningASR())).run()
+    }
+}
+
+@Test func resumingWithADifferentPresetIsRefused() async throws {
+    // ChatGPT #4: te same granice okien nie mogą przenieść wyników na inny język albo model.
+    let (samples, _) = burstTrack(seconds: 60, rate: 16_000)
+    let dir = try makeSession(system: samples)
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(ListeningASR())).run()
+    await #expect(throws: RunError.inputMismatch) {
+        _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(language: .english),
+                                          client: client(ListeningASR())).run()
+    }
+}
+
+@Test func snapshotCarriesTheWholePresetAndRefusesChatShape() throws {
+    // ChatGPT #14 (pełna migawka) i #7 (bez znaczników słów nie ma spotkania).
+    let provider = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    let preset = Preset(name: "Polish", language: .polish, asr: RoleAssignment(providerID: provider.id, model: "m"),
+                        summary: RoleAssignment(providerID: provider.id, model: "s", prompt: "Decisions and owners"))
+    #expect(try RunSnapshot(preset: preset, provider: provider, probe: nil).preset.summary?.prompt == "Decisions and owners")
+    let chat = ProbeResult(providerID: provider.id, model: "m", role: .asr, works: true, shape: .chatAudio)
+    #expect(throws: RunSnapshotError.chatShapeNotForMeetings) { _ = try RunSnapshot(preset: preset, provider: provider, probe: chat) }
+}
+
+@Test func failedEchoCancelledMicFallsBackToRaw() {
+    // Hermes 4.2: martwy mic_aec nie może wypchnąć żywego mic_raw.
+    let sum = SessionSummary(startedHostTime: 0, timebase: ns, tracks: [
+        .init(id: "system", sampleRate: 48_000, channels: 2),
+        .init(id: "mic_raw", sampleRate: 16_000, channels: 1),
+        .init(id: "mic_aec", sampleRate: 16_000, channels: 1, failure: "inputDeviceChanged"),
+    ])
+    #expect(TranscriptionRunner.tracks(in: sum).map(\.id) == ["system", "mic_raw"])
+}
+
+@Test func gapTimesAreOnTheSessionTimeline() async throws {
+    // 🟡 ChatGPT: luka „Me" przesunięta o opóźnienie startu mikrofonu.
+    let mic = silence(seconds: 3, rate: 16_000) + tone(seconds: 2, rate: 16_000) + silence(seconds: 3, rate: 16_000)
+    let dir = try makeSession(system: silence(seconds: 8, rate: 16_000), mic: mic, micOffset: 0.5)
+    let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
+                                          client: client(ListeningASR(failWhen: { _ in true }))).run()
+    let f = try #require(t.failedChunks.first)
+    #expect(abs(f.start - 3.3) < 0.05) // 0,5 s przesunięcia + 2,8 s (ton w 3. s minus 0,2 s zapasu bramki)
+}
+
+@Test func eightyFiveMinutesStayAlignedAcrossWindowBoundaries() async throws {
+    // P4 deterministycznie, bez „jeśli jest plik" (ChatGPT #15, Hermes 3.2). Długi: ~1 min w debug.
+    let (samples, starts) = burstTrack(seconds: 85 * 60, rate: 16_000)
+    let dir = try makeSession(system: samples)
+    let asr = ListeningASR()
+    let t = try await TranscriptionRunner(session: dir, runID: "r85", snapshot: try snapshot(), client: client(asr)).run()
+    let words = t.utterances.flatMap(\.words).sorted { $0.start < $1.start }
+    #expect(words.count == starts.count)
+    #expect(asr.requests > 10) // wiele okien, więc wiele granic
+    for (w, s) in zip(words, starts) { #expect(abs(w.start - s) < 0.03) }
+    for (a, b) in zip(words, words.dropFirst()) { #expect(a.end <= b.start) } // bez nakładek
+    #expect(words.allSatisfy { $0.end > $0.start })
+}

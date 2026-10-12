@@ -450,7 +450,7 @@ Status: ✅ zweryfikowane przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonn
 **Interfejsy:**
 - Dostarcza: `CrosstalkFilter` (`correlationThreshold = 0.8`, `maxLagSeconds = 0.3`, `keep(_:mic:system:micOffsetSeconds:rate:)`). `RunSnapshot.preset: Preset` (pełna migawka) i `RunSnapshotError.chatShapeNotForMeetings`. `RunError.badRunID(String)`, `.inputMismatch`. `RunInput` (migawka, bramka, limit okna, ramki ścieżek) zapisany w `runs/<id>/input.json`; `RunDirectory.input`, `RunDirectory.isValid(runID:)`. `TranscriptionRunner(…, crosstalk: CrosstalkFilter = CrosstalkFilter())`.
 
-- [ ] **Krok 1: Stałe identyfikatory w danych testowych.** Wznawianie porównuje teraz migawkę; `snapshot()` z losowymi UUID dawałby przy każdym wywołaniu inną migawkę, a istniejący test P5 dostałby `inputMismatch`. W `SessionFixtures.swift` zamień:
+- [x] **Krok 1: Stałe identyfikatory w danych testowych.** Wznawianie porównuje teraz migawkę; `snapshot()` z losowymi UUID dawałby przy każdym wywołaniu inną migawkę, a istniejący test P5 dostałby `inputMismatch`. W `SessionFixtures.swift` zamień:
 
 ```swift
     let provider = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
@@ -466,7 +466,7 @@ na:
                         asr: RoleAssignment(providerID: provider.id, model: "microsoft/mai-transcribe-2"))
 ```
 
-- [ ] **Krok 2: Testy, które padną.** Na końcu `RunnerTests.swift` dopisz:
+- [x] **Krok 2: Testy, które padną.** Na końcu `RunnerTests.swift` dopisz:
 
 ```swift
 @Test func crosstalkFromSpeakersIsDroppedBeforeASR() async throws {
@@ -546,9 +546,9 @@ na:
 }
 ```
 
-- [ ] **Krok 3: Uruchom i sprawdź, że pada.** `scripts/test.sh` — oczekiwane: kod `1` (brak `RunError`, `RunSnapshotError`, `CrosstalkFilter`).
+- [x] **Krok 3: Uruchom i sprawdź, że pada.** `scripts/test.sh` — oczekiwane: kod `1` (brak `RunError`, `RunSnapshotError`, `CrosstalkFilter`).
 
-- [ ] **Krok 4: Odsiew przesłuchu.** Utwórz `Sources/MeetNotesTranscription/CrosstalkFilter.swift`:
+- [x] **Krok 4: Odsiew przesłuchu.** Utwórz `Sources/MeetNotesTranscription/CrosstalkFilter.swift`:
 
 ```swift
 import Foundation
@@ -604,7 +604,7 @@ public struct CrosstalkFilter: Sendable {
 }
 ```
 
-- [ ] **Krok 5: Pełna migawka i blokada czatu.** W `Transcript.swift`:
+- [x] **Krok 5: Pełna migawka i blokada czatu.** W `Transcript.swift`:
   - pod `public struct RunSnapshot: Codable, Equatable, Sendable {` dopisz `/// Pełny preset z chwili przebiegu — z korektą, podsumowaniem i promptami (spec §8, ChatGPT #14).\n    public var preset: Preset`;
   - w `init` pod `try preset.validate()` dopisz:
 
@@ -617,7 +617,7 @@ public struct CrosstalkFilter: Sendable {
 
   - nad `public struct RunSnapshot` dopisz `public enum RunSnapshotError: Error, Equatable {\n    case chatShapeNotForMeetings\n}\n`.
 
-- [ ] **Krok 6: Wykonawca.** W `TranscriptionRunner.swift`:
+- [x] **Krok 6: Wykonawca.** W `TranscriptionRunner.swift`:
 
 (a) nad `public struct TranscriptionProgress` dopisz:
 
@@ -717,11 +717,11 @@ na:
 
 (i) w wywołaniu `Merger.merge(…)` zamień `clock: SessionClock(summary: summary)` na `clock: clock`.
 
-- [ ] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 106/106 testów uruchomionych i zaliczonych.` Test 85-minutowy trwa około minuty.
+- [x] **Krok 7: Uruchom całość.** `scripts/test.sh` — oczekiwane: `test.sh: 106/106 testów uruchomionych i zaliczonych.` Test 85-minutowy trwa około minuty.
 
-- [ ] **Krok 8: Mutacja (przesłuch).** W `CrosstalkFilter` zamień `public var correlationThreshold = 0.8` na `= 1.1`. `scripts/test.sh --filter crosstalkFromSpeakersIsDroppedBeforeASR` — oczekiwane: pada. Przywróć; `106/106`.
+- [x] **Krok 8: Mutacja (przesłuch).** W `CrosstalkFilter` zamień `public var correlationThreshold = 0.8` na `= 1.1`. `scripts/test.sh --filter crosstalkFromSpeakersIsDroppedBeforeASR` — oczekiwane: pada. Przywróć; `106/106`.
 
-- [ ] **Krok 9: Commit.**
+- [x] **Krok 9: Commit.**
 
 ```bash
 git add Sources/MeetNotesTranscription Tests/MeetNotesTranscriptionTests
