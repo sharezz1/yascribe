@@ -12,6 +12,8 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] CLI `transcribe` ze złym katalogiem sesji → surowy `NSCocoaErrorDomain` (zamiast czytelnego błędu użycia). *(check S12 #9)*
 - [ ] CLI `probe`: `--language` bez wartości po cichu daje `nil` (ten sam problem, co `--shape`/`--run` przed S12fix; poza zakresem tamtej rundy). *(K po S12fix)*
 - [ ] CLI `transcribe`: baseURL bez schematu (`openrouter.ai/api/v1`) → każde okno pada na `unsupported URL`, a powód widać tylko w `transcript.json` (`failedChunks[].error`); rozważyć walidację adresu z czytelnym błędem. *(S13 live)*
+- [ ] CLI `transcribe`: pasek postępu stoi na `0%` do końca pierwszego okna (~25 s) — łatwo przerwać „za wcześnie"; rozważyć choćby licznik okien od razu (UX). *(S13)*
+- [ ] Oś sesji vs pliki ścieżek: czasy wypowiedzi są na osi sesji, a pliki mają własne offsety (`summarize` je pokazuje; `mic_raw` w S13: −3,647 s = plik +3,647 s względem osi). Przy ręcznych sprawdzeniach trzeba dodać offset — rozważyć notkę w CLI/dokumentacji. *(S13)*
 
 ## Zapisane (dla kroniki)
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
