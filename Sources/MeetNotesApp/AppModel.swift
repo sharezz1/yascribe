@@ -57,6 +57,8 @@ final class AppModel {
     var activePresetID: UUID?
     var lastError: String?
     var showSetup = false
+    /// Sesje z trwającym przebiegiem — drugi przebieg tej samej sesji płaciłby za te same okna (check S15 #2).
+    private(set) var transcribing: Set<String> = []
 
     let recording = RecordingController()
 
@@ -117,9 +119,23 @@ final class AppModel {
 
     // MARK: Dostawcy
 
+    /// nil = nie da się wysłać żądania (błąd w `lastError`): brak dostawcy, błąd Keychain albo brak klucza (check S15 #5).
     func client(for providerID: UUID) -> OpenAICompatibleClient? {
-        guard let p = provider(providerID) else { return nil }
-        return OpenAICompatibleClient(provider: p, key: try? secrets.get(p.id))
+        guard let p = provider(providerID) else {
+            lastError = "This provider no longer exists."
+            return nil
+        }
+        let key: String?
+        do { key = try secrets.get(p.id) } catch {
+            lastError = "Couldn't read the API key for \(p.name) from Keychain: \(error)"
+            return nil
+        }
+        // ponytail: „lokalny = bez klucza" po nazwie hosta; jawna flaga w Provider, gdy zdalny dostawca obejdzie się bez klucza.
+        guard key != nil || ["localhost", "127.0.0.1", "::1"].contains(p.baseURL.host() ?? "") else {
+            lastError = "No API key for \(p.name). Remove the provider and add it again with a key."
+            return nil
+        }
+        return OpenAICompatibleClient(provider: p, key: key)
     }
 
     func addProvider(name: String, baseURL: URL, key: String) {
@@ -176,6 +192,10 @@ final class AppModel {
     // MARK: Nagrywanie i transkrypcja
 
     func startRecording() {
+        guard !recording.isRecording else {
+            lastError = "A recording is already in progress."
+            return
+        }
         // ChatGPT #2: preset — z językiem — ustalony PRZED startem i zamrożony na całą sesję.
         guard let preset = activePreset, (try? preset.validate()) != nil else {
             lastError = "Choose a preset with a language before recording."
@@ -198,13 +218,22 @@ final class AppModel {
         }
     }
 
+    /// Spec §1.5: preset zamrożony przy starcie (`<sesja>/preset.json`) idzie do transkrypcji także po restarcie;
+    /// sesja bez pliku (np. z CLI) dostaje aktywny.
+    func presetFor(sessionURL: URL) -> Preset? {
+        (try? JSONFile.load(Preset?.self, from: sessionURL.appendingPathComponent("preset.json"), default: nil)) ?? activePreset
+    }
+
+    func isTranscribing(_ item: SessionItem) -> Bool { transcribing.contains(item.id) }
+
     static func label(_ p: Preset) -> String { "\(p.name) · \(p.language?.rawValue.uppercased() ?? "?")" }
 
     func transcribe(sessionURL: URL, preset: Preset) {
-        guard let asr = preset.asr, let provider = provider(asr.providerID), let c = client(for: asr.providerID) else {
+        guard let asr = preset.asr, let provider = provider(asr.providerID) else {
             lastError = "The preset's speech-to-text provider is missing."
             return
         }
+        guard let c = client(for: asr.providerID) else { return } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
             let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe)
@@ -220,16 +249,21 @@ final class AppModel {
     /// migawka z `input.json`, więc opłacone okna nie idą drugi raz (P5).
     func resume(_ item: SessionItem) {
         guard let runID = item.runID,
-              let input = try? JSONFile.load(RunInput?.self, from: RunDirectory(session: item.url, runID: runID).input, default: nil),
-              let c = client(for: input.snapshot.providerID) else {
+              let input = try? JSONFile.load(RunInput?.self, from: RunDirectory(session: item.url, runID: runID).input, default: nil) else {
             lastError = "Nothing to resume for this recording."
             return
         }
+        guard let c = client(for: input.snapshot.providerID) else { return } // powód już w lastError
         run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
     }
 
     private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: OpenAICompatibleClient) {
         let id = sessionURL.lastPathComponent
+        guard !transcribing.contains(id) else {
+            lastError = "This recording is already being transcribed."
+            return
+        }
+        transcribing.insert(id)
         Task {
             do {
                 _ = try await TranscriptionRunner(session: sessionURL, runID: runID, snapshot: snapshot, client: c).run { p in
@@ -240,6 +274,7 @@ final class AppModel {
             } catch {
                 self.lastError = "Transcription failed: \(error)"
             }
+            self.transcribing.remove(id)
             self.reloadSessions()
         }
     }
