@@ -14,6 +14,9 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] CLI `transcribe`: baseURL bez schematu (`openrouter.ai/api/v1`) → każde okno pada na `unsupported URL`, a powód widać tylko w `transcript.json` (`failedChunks[].error`); rozważyć walidację adresu z czytelnym błędem. *(S13 live)*
 - [ ] CLI `transcribe`: pasek postępu stoi na `0%` do końca pierwszego okna (~25 s) — łatwo przerwać „za wcześnie"; rozważyć choćby licznik okien od razu (UX). *(S13)*
 - [ ] Oś sesji vs pliki ścieżek: czasy wypowiedzi są na osi sesji, a pliki mają własne offsety (`summarize` je pokazuje; `mic_raw` w S13: −3,647 s = plik +3,647 s względem osi). Przy ręcznych sprawdzeniach trzeba dodać offset — rozważyć notkę w CLI/dokumentacji. *(S13)*
+- [ ] `scripts/test.sh` nie pokrywa skryptów składania (`bundle.sh`/`run.sh`/`Info.plist`) — bramka podpisu była ręczna i jednorazowa; rozważyć w S16/S18. *(check S14 #3)*
+- [ ] D3/Info.plist: process tap (dźwięk systemowy) a klucze TCC — plan D3 krok 1 oczekuje panelu „Nagrywanie ekranu i dźwięku systemowego", a w plist nie ma `NSScreenCaptureUsageDescription`; sprawdzić przy D3, ewentualna poprawka plist wróci do D1. *(check S14 #7)*
+- [ ] `Package.swift` `.macOS(15.0)` vs `Info.plist` `LSMinimumSystemVersion 27.0` — rozjazd tolerowany, ale niezweryfikowany. *(check S14 #8)*
 
 ## Zapisane (dla kroniki)
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
