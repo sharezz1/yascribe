@@ -135,7 +135,8 @@ final class Recorder: @unchecked Sendable {
     // echo: 100 ms drogi akustycznej, ~14 dB ciszej
     var mic = Array(([Int16](repeating: 0, count: 1_600) + sys.map { Int16(Double($0) * 0.2) }).prefix(sys.count))
     // check S11 #3: własna mowa w ciszy systemu (7–9 s), inny ton niż echo — musi zostać
-    mic.replaceSubrange(112_000..<144_000, with: tone(seconds: 2, rate: 16_000, hz: 500))
+    #expect(mic.count >= Int(9 * 16_000))
+    mic.replaceSubrange(Int(7 * 16_000)..<Int(9 * 16_000), with: tone(seconds: 2, rate: 16_000, hz: 500))
     let dir = try makeSession(system: sys, mic: mic)
     let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(ListeningASR())).run()
     #expect(t.utterances.contains { $0.speaker == .them })
