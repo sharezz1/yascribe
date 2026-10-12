@@ -15,7 +15,7 @@
 Obowiązują w całości: przegląd §4. Najważniejsze dla tego planu:
 
 - `MeetNotesTranscription` zależy od `MeetNotesSessionFormat` i `MeetNotesProviders`, **nie** od `MeetNotesRecording`. Testy tego modułu zależą od nagrywania — budują prawdziwe sesje rejestratorem.
-- Mówcy z kanałów: `system` → „Them", `mic_aec` → „Me", a gdy go brak — `mic_raw`.
+- Mówcy z kanałów: `system` → „Them", `mic_aec` → „Me", a gdy go brak albo ma awarię (`trackFailed`) — `mic_raw` (E3). Domyślnie aplikacja i CLI nagrywają bez VP, więc zwykle „Me" to `mic_raw` (S5).
 - Bramka: próg −45 dBFS, atak 0,1 s, zwolnienie 0,5 s, zapas 0,2 s, ramka 20 ms (wartości startowe do strojenia — O2).
 - Okno: limit 59 s (MAI-Transcribe-2: 60 s), przerwa między fragmentami 0,3 s, cięcie długiej mowy w najcichszej ramce z ostatnich 5 s przed limitem.
 - Wypowiedź: słowa jednego mówcy z przerwą < 1,2 s.

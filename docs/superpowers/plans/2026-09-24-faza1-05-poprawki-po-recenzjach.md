@@ -776,7 +776,7 @@ git commit -m "Testy: luki pokrycia z checku S10, sprzatanie katalogow tymczasow
 
 ### Zadanie E6: Poprawki po przeglądzie i checku S11
 
-Źródło: `docs/superpowers/reports/S11-przeglad.md` (uwagi 1–5) i `checks/S11-check.md` (#3). Sesja „S11fix", przed S12. Bez nowych `@Test`, liczba zostaje **109**. Check #2 (wznawianie w CLI) poprawia C4 krok 4, a uwagę 6 (wersja formatu `run.json`/`input.json`) świadomie odkładamy do powłoki (D). Sugestie #7/#8 z checku pomijamy.
+Źródło: `docs/superpowers/reports/S11-przeglad.md` (uwagi 1–5) i `checks/S11-check.md` (#3). Sesja „S11fix", przed S12. Bez nowych `@Test`, liczba zostaje **109**. Check #2 (wznawianie w CLI) poprawia C4 krok 4, a uwagę 6 (wersja formatu `run.json`/`input.json`) świadomie odkładamy do powłoki (D). Skutek: przebiegi zapisane przed E6 nie wczytają się po nim (błąd dekodowania `input.json` zamiast `inputMismatch`). Prawdziwych przebiegów jeszcze nie ma, bo pierwsze powstaną w C5, więc katalogi `runs/` sprzed E6 po prostu usuń i przelicz od nowa. Sugestie #7/#8 z checku pomijamy.
 
 - [x] **Krok 1: Progi przesłuchu w `RunInput` (uwaga 1).** W `CrosstalkFilter.swift`: `public struct CrosstalkFilter: Sendable` → `public struct CrosstalkFilter: Codable, Equatable, Sendable`. W `TranscriptionRunner.swift`: do `RunInput` dopisz pole `public var crosstalk: CrosstalkFilter` (po `maxChunkSeconds`), a w `run(progress:)` w `RunInput(…)` dopisz argument `crosstalk: crosstalk` w tym samym miejscu. W `resumingWithADifferentPresetIsRefused` dopisz na końcu drugi przypadek: ten sam `snapshot()`, ale `crosstalk:` z `correlationThreshold = 0.5` → `#expect(throws: RunError.inputMismatch)`. Mutacja: usuń pole `crosstalk` z porównania (np. ustaw w `RunInput(…)` zawsze `CrosstalkFilter()`) → test pada.
 
