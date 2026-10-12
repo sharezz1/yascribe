@@ -1137,7 +1137,7 @@ Po co `session-from-file`: spec fazy 1 §1.0 odrzuca import plików jako funkcj�
 
 - [ ] **Krok 7: Sesja z pliku, bez sieci.** `say -v Zosia -o /tmp/mn-pl.aiff "Dzień dobry, zaczynamy spotkanie."`, potem `swift run meetnotes-cli session-from-file /tmp/mn-pl.aiff /tmp/mn-fromfile` — oczekiwane: `koniec: endOfInput` i ścieżka `system` z ramkami > 0.
 
-- [ ] **Krok 8: Pełne testy.** `scripts/test.sh` — oczekiwane: `106/106` (po E3).
+- [ ] **Krok 8: Pełne testy.** `scripts/test.sh` — oczekiwane: `109/109` (po E3 i E5).
 
 - [ ] **Krok 9: Commit.**
 
@@ -1159,7 +1159,7 @@ Status: nigdy niewykonane. **Wymaga klucza OpenRoutera użytkownika** (bramka G3
 
 - [ ] **Krok 2: Skok w czasie.** Dla trzech wypowiedzi z wyniku: `afplay` nie przewija, więc otwórz `/tmp/mn-s2/system.caf` w QuickTime i sprawdź, że w podanej sekundzie słychać te słowa. Tolerancja: 0,5 s (granica „klikalnej linii czasu" z W§1).
 
-- [ ] **Krok 3: Wznowienie (P5) na żywo.** Uruchom transkrypcję z `--run p5` i przerwij Ctrl-C przy ~50%. Policz pliki w `runs/p5/chunks/` (przerwany przebieg nie zapisuje `run.json`, więc stan widać tylko tam). Uruchom ponownie z tym samym `--run p5` — `requestCount` w nowym `run.json` ma być równy liczbie okien, których nie było w `runs/p5/chunks/`.
+- [ ] **Krok 3: Wznowienie (P5) na żywo.** Uruchom transkrypcję z `--run p5` i przerwij Ctrl-C przy ~50%. Policz pliki w `runs/p5/chunks/` (przerwany przebieg nie zapisuje `run.json`, więc stan widać tylko tam). Uruchom ponownie z tym samym `--run p5` — liczniki w `run.json` dotyczą tylko bieżącego przebiegu, więc `requestCount` w nowym `run.json` ma być równy liczbie okien, których nie było w `runs/p5/chunks/`.
 
 - [ ] **Krok 4: Korpus (O1).** Użytkownik wskazuje pliki z rozdz. 13 (spotkanie WFM, 26 min), 14 (spotkanie 10:48) i 17 (debata, ~15 min), jeśli nadal istnieją. Dla każdego: `$B session-from-file <plik> /tmp/mn-corpus-<n>` i `$B transcribe /tmp/mn-corpus-<n> … --language pl`. Zapisz liczbę słów, liczbę `[JĘZYK: en]` i porównaj z tabelą z rozdz. 13 (Narada 2901 słów, 1 obcojęzyczny wtręt). Brakujących plików nie nagrywaj ponownie w tym zadaniu — zanotuj brak.
 

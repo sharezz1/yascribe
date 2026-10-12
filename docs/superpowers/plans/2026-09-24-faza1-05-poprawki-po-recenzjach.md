@@ -22,7 +22,8 @@ Obowiązują w całości: przegląd §4. Dodatkowo:
 | **E1** rdzeń: dziennik, nadzór torów, sprzątanie Core Audio | A9 | A10 | 47 |
 | **E2** dostawcy: sonda, cache, klucz, walidacja | B3 | B4 | 77 |
 | **E3** transkrypcja: przesłuch, wznawianie, migawka, luki | C3 | C4 | 106 |
-| **E4** aplikacja: preset przy starcie, pływające okno, odtwarzanie, wznowienie | D2 | D3 | 106 |
+| **E5** luki pokrycia i sprzątanie tmp (check S10) | E3 | C4 | 109 |
+| **E4** aplikacja: preset przy starcie, pływające okno, odtwarzanie, wznowienie | D2 | D3 | 109 |
 
 ## Na co patrzeć przy przeglądzie
 
@@ -1116,7 +1117,7 @@ na:
                         if case .works = result { UserDefaults.standard.set(true, forKey: "systemAudioVerified") }
 ```
 
-- [ ] **Krok 7: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. `scripts/test.sh` — `106/106`. `scripts/bundle.sh` — `.build/MeetNotes.app`.
+- [ ] **Krok 7: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. `scripts/test.sh` — `109/109`. `scripts/bundle.sh` — `.build/MeetNotes.app`.
 
 - [ ] **Krok 8: Commit.**
 
