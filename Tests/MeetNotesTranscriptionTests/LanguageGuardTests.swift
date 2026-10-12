@@ -24,3 +24,9 @@ func confabulatedEnglishInPolishMeetingIsFlagged(_ text: String) {
 @Test func unsupportedLanguageStaysSilent() throws {
     #expect(LanguageGuard.mismatch("the and is to of you that it", expected: try LanguageCode("de")) == nil)
 }
+
+@Test func polishInEnglishMeetingIsFlagged() {
+    // Check S10 #5: druga połowa pary pl/en.
+    #expect(LanguageGuard.mismatch("Wczoraj mieliśmy spotkanie i nie było czasu, żeby to omówić.", expected: .english) == .polish)
+    #expect(LanguageGuard.mismatch("I think there is a problem with the production of the products.", expected: .english) == nil)
+}
