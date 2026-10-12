@@ -13,6 +13,7 @@ public struct RunInput: Codable, Equatable, Sendable {
     public var snapshot: RunSnapshot
     public var gate: EnergyGate.Config
     public var maxChunkSeconds: Double
+    public var crosstalk: CrosstalkFilter
     public var trackFrames: [String: Int]
 }
 
@@ -61,7 +62,8 @@ public struct TranscriptionRunner: Sendable {
         self.crosstalk = crosstalk
     }
 
-    /// „Oni" = ścieżka systemowa; „ja" = mikrofon po AEC, a gdy go brak — surowy.
+    /// „Oni" = ścieżka systemowa; „ja" = mikrofon po AEC, a gdy go brak albo gdy jego ścieżka
+    /// zanotowała awarię (`trackFailed`, E3) — surowy `mic_raw`.
     static func tracks(in summary: SessionSummary) -> [(id: String, speaker: Speaker)] {
         let ids = Set(summary.tracks.filter { $0.channels > 0 }.map(\.id))
         var out: [(String, Speaker)] = []
@@ -77,7 +79,7 @@ public struct TranscriptionRunner: Sendable {
         let summary = try session.summarize()
         let dir = RunDirectory(session: session.url, runID: runID)
         try FileManager.default.createDirectory(at: dir.url.appendingPathComponent("chunks"), withIntermediateDirectories: true)
-        let input = RunInput(snapshot: snapshot, gate: gate.config, maxChunkSeconds: maxChunkSeconds,
+        let input = RunInput(snapshot: snapshot, gate: gate.config, maxChunkSeconds: maxChunkSeconds, crosstalk: crosstalk,
                              trackFrames: Dictionary(summary.tracks.map { ($0.id, $0.frames ?? -1) }, uniquingKeysWith: { a, _ in a }))
         if let saved = try JSONFile.load(RunInput?.self, from: dir.input, default: nil) {
             guard saved == input else { throw RunError.inputMismatch }

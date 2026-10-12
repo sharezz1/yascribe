@@ -21,9 +21,10 @@ if [ ! -f "$PLUGIN" ]; then
     exit 2
 fi
 
-# Katalogi po poprzednich przebiegach (mn-[prefiks-]UUID). Wzorzec omija mn-s2, mn-corpus-* itp.
-find -E "${TMPDIR:-/tmp}" -maxdepth 1 -regex '.*/mn-([a-z]+-)?[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' -exec rm -rf {} + 2>/dev/null
+# Katalogi testów: mn-[prefiks-]<UUID wielkimi literami>, starsze niż godzina. Nagrania jak mn-s2 czy mn-corpus-1 nie pasują (brak UUID).
+find -E "${TMPDIR:-/tmp}" -maxdepth 1 -regex '.*/mn-([a-z]+-)?[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' -mmin +60 -exec rm -rf {} + 2>/dev/null
 OUT="$(mktemp)"
+trap 'rm -f "$OUT"' EXIT
 swift test -Xswiftc -load-plugin-library -Xswiftc "$PLUGIN" "$@" 2>&1 | tee "$OUT"
 STATUS=${PIPESTATUS[0]}
 
