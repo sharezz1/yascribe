@@ -9,6 +9,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] `scripts/test.sh` — wzorzec sprzątania `mn-([a-z]+-)?UUID` złapie też hipotetyczny `mn-corpus-<UUID>` (komentarz to opisuje; ewentualne zacieśnienie wzorca — kosmetyka). *(przegląd S11 r2)*
 - [ ] CLI `transcribe`: klient powstaje przed sprawdzeniem `--language` — kolejność błędów zależy od tego, który argument jest zły (K: uwaga, nie błąd). *(S12)*
 - [ ] CLI `--shape` z literówką po cichu przechodzi na `audioTranscriptions` (tak mówi plan; K proponuje zamiast tego kod 64) — **propozycja zmiany zachowania, czeka na decyzję użytkownika**. *(S12)*
+- [ ] `session-from-file`: drugi przebieg w tym samym katalogu pada (`alreadyExists` na `journal.jsonl`) — przy pracy na korpusie każdy plik wymaga świeżego katalogu (albo później `--force`). *(check S12 #7)*
 
 ## Zapisane (dla kroniki)
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
