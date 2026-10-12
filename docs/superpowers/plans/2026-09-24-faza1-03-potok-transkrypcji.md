@@ -1076,23 +1076,23 @@ Po co `session-from-file`: spec fazy 1 §1.0 odrzuca import plików jako funkcj�
 - Pobiera: `TranscriptionRunner`, `RunSnapshot` (C3); `CLI.client` (B4); `CLI.readAnyAudio`, `CLI.summarize` (A9).
 - Dostarcza: `meetnotes-cli transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions|chatAudio] [--run ID]`, `session-from-file <plik audio> <katalog>`.
 
-- [ ] **Krok 1: Import.** Pod `import MeetNotesSessionFormat` dopisz `import MeetNotesTranscription`.
+- [x] **Krok 1: Import.** Pod `import MeetNotesSessionFormat` dopisz `import MeetNotesTranscription`.
 
-- [ ] **Krok 2: Pomoc.** W `usage`, pod linią `probe <baseURL> …`, dopisz:
+- [x] **Krok 2: Pomoc.** W `usage`, pod linią `probe <baseURL> …`, dopisz:
 
 ```text
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions|chatAudio] [--run ID]
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
 ```
 
-- [ ] **Krok 3: Polecenia.** W `switch cmd`, pod `case "probe": …`, dopisz:
+- [x] **Krok 3: Polecenia.** W `switch cmd`, pod `case "probe": …`, dopisz:
 
 ```swift
             case "transcribe": try await transcribe(args)
             case "session-from-file": try await sessionFromFile(args)
 ```
 
-- [ ] **Krok 4: Funkcje.** Przed ostatnim `}` struktury `CLI` dopisz:
+- [x] **Krok 4: Funkcje.** Przed ostatnim `}` struktury `CLI` dopisz:
 
 ```swift
     static func transcribe(_ args: [String]) async throws {
@@ -1139,15 +1139,15 @@ Po co `session-from-file`: spec fazy 1 §1.0 odrzuca import plików jako funkcj�
     }
 ```
 
-- [ ] **Krok 5: Zbuduj.** `swift build --product meetnotes-cli` — oczekiwane: `Build complete!`.
+- [x] **Krok 5: Zbuduj.** `swift build --product meetnotes-cli` — oczekiwane: `Build complete!`.
 
-- [ ] **Krok 6: Bramka „nigdy auto" w CLI.** `swift run meetnotes-cli transcribe /tmp/x https://openrouter.ai/api/v1 m` — oczekiwane: `--language jest obowiązkowe (nigdy auto)` i kod 64. Z `--language auto` — oczekiwane: `błąd: autoIsForbidden` i kod 1.
+- [x] **Krok 6: Bramka „nigdy auto" w CLI.** `swift run meetnotes-cli transcribe /tmp/x https://openrouter.ai/api/v1 m` — oczekiwane: `--language jest obowiązkowe (nigdy auto)` i kod 64. Z `--language auto` — oczekiwane: `błąd: autoIsForbidden` i kod 1.
 
-- [ ] **Krok 7: Sesja z pliku, bez sieci.** `say -v Zosia -o /tmp/mn-pl.aiff "Dzień dobry, zaczynamy spotkanie."`, potem `swift run meetnotes-cli session-from-file /tmp/mn-pl.aiff /tmp/mn-fromfile` — oczekiwane: `koniec: endOfInput` i ścieżka `system` z ramkami > 0.
+- [x] **Krok 7: Sesja z pliku, bez sieci.** `say -v Zosia -o /tmp/mn-pl.aiff "Dzień dobry, zaczynamy spotkanie."`, potem `swift run meetnotes-cli session-from-file /tmp/mn-pl.aiff /tmp/mn-fromfile` — oczekiwane: `koniec: endOfInput` i ścieżka `system` z ramkami > 0.
 
-- [ ] **Krok 8: Pełne testy.** `scripts/test.sh` — oczekiwane: `109/109` (po E3 i E5).
+- [x] **Krok 8: Pełne testy.** `scripts/test.sh` — oczekiwane: `109/109` (po E3 i E5).
 
-- [ ] **Krok 9: Commit.**
+- [x] **Krok 9: Commit.**
 
 ```bash
 git add Sources/meetnotes-cli
