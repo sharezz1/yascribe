@@ -38,13 +38,13 @@ Testy ręczne w D3 — każde z tych wejść ma tam osobny krok:
 
 ### Zadanie D1: Stały podpis i składanie `.app`
 
-Status: ✅ zweryfikowane (2026-10-12, S14): `bundle.sh` składa i podpisuje „MeetNotes Dev" (`Authority=MeetNotes Dev`, `codesign --verify --strict` OK); poprawka po STOP — warunek `security find-identity` bez `-v` (samopodpisany certyfikat ma `CSSMERR_TP_NOT_TRUSTED`), raport `reports/S14.md`. Krok 1 wykonuje **użytkownik**: to zmiana w jego pęku kluczy.
+Status: ✅ zweryfikowane (2026-10-12, S14 + S14fix): `bundle.sh` składa i podpisuje „MeetNotes Dev" (`Authority=MeetNotes Dev`). O tym, że TCC nie resetuje uprawnień, decyduje wymaganie wyznaczone (DR), nie `codesign --verify --strict` (ten sprawdza tylko integralność i przechodzi też dla ad-hoc): `codesign -d -r-` daje `identifier "io.github.sharezz1.meetnotes" and certificate leaf = H"7c8ca11f…"`, identyczne przed i po `touch Sources/MeetNotesApp/main.swift` + przebudowie (S14fix). Samego zachowania TCC nie da się sprawdzić na zaślepce; sprawdzi je D3. `run.sh` uruchomiony na zaślepce (S14fix). Poprawka po STOP — warunek `security find-identity` bez `-v` (samopodpisany certyfikat ma `CSSMERR_TP_NOT_TRUSTED`), raport `reports/S14.md`. Krok 1 wykonuje **użytkownik**: to zmiana w jego pęku kluczy.
 
 **Pliki:**
 - Utwórz: `Resources/Info.plist`, `scripts/bundle.sh`, `scripts/run.sh`
 
 **Interfejsy:**
-- Dostarcza: `scripts/bundle.sh` → wypisuje ścieżkę `.build/MeetNotes.app` (zmienne: `MEETNOTES_SIGN_IDENTITY`, `-` = ad-hoc; `CONFIG=release`). `scripts/run.sh` → buduje i uruchamia z `MEETNOTES_DATA_DIR=.devdata`.
+- Dostarcza: `scripts/bundle.sh` → na stdout wypisuje wyłącznie ścieżkę `.build/MeetNotes.app`, logi budowy idą na stderr (zmienne: `MEETNOTES_SIGN_IDENTITY`, `-` = ad-hoc; `CONFIG=release`). `scripts/run.sh` → buduje i uruchamia z `MEETNOTES_DATA_DIR=.devdata`; kod 1, gdy `MeetNotesApp` już działa (przed budową) albo gdy proces nie pojawi się w ciągu 5 s od `open`.
 
 - [x] **Krok 1 (użytkownik): certyfikat „MeetNotes Dev".** Dostęp do pęku kluczy → menu *Dostęp do pęku kluczy → Asystent certyfikatów → Utwórz certyfikat…*. Nazwa: `MeetNotes Dev`, Typ tożsamości: *Samopodpisany główny*, Typ certyfikatu: *Podpisywanie kodu*. Sprawdzenie: `security find-identity -p codesigning | grep "MeetNotes Dev"` (bez `-v`) wypisuje jedną linię, np. `1) 7C8C… "MeetNotes Dev" (CSSMERR_TP_NOT_TRUSTED)`. Dla certyfikatu samopodpisanego `CSSMERR_TP_NOT_TRUSTED` jest normalne, a `-v` pokazuje „0 valid identities" — to nie błąd; `codesign -s "MeetNotes Dev"` mimo to podpisuje (sprawdził użytkownik, S14).
 
@@ -101,7 +101,8 @@ Status: ✅ zweryfikowane (2026-10-12, S14): `bundle.sh` składa i podpisuje „
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG="${CONFIG:-debug}"
-swift build -c "$CONFIG" --product MeetNotesApp
+# Logi budowy na stderr: stdout to wyłącznie ścieżka paczki (kontrakt z run.sh).
+swift build -c "$CONFIG" --product MeetNotesApp >&2
 BIN="$(swift build -c "$CONFIG" --show-bin-path)/MeetNotesApp"
 APP=".build/MeetNotes.app"
 rm -rf "$APP"
@@ -111,12 +112,17 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 IDENTITY="${MEETNOTES_SIGN_IDENTITY:-MeetNotes Dev}"
-if [ "$IDENTITY" != "-" ] && security find-identity -p codesigning | grep -q "\"$IDENTITY\""; then
-    codesign --force --sign "$IDENTITY" "$APP"
-else
-    [ "$IDENTITY" != "-" ] && echo "UWAGA: brak certyfikatu \"$IDENTITY\" — podpis ad-hoc; TCC zresetuje uprawnienia po każdej przebudowie" >&2
-    codesign --force --sign - "$APP"
-fi
+# Pełny odczyt do zmiennej zamiast `| grep -q`: grep kończy na pierwszym trafieniu,
+# security dostaje SIGPIPE, a pipefail zamienia to w fałsz → cichy podpis ad-hoc.
+CERTS=""
+[ "$IDENTITY" = "-" ] || CERTS="$(security find-identity -p codesigning || true)"
+case "$CERTS" in
+    *"\"$IDENTITY\""*)
+        codesign --force --sign "$IDENTITY" "$APP" ;;
+    *)
+        [ "$IDENTITY" != "-" ] && echo "UWAGA: brak certyfikatu \"$IDENTITY\" — podpis ad-hoc; TCC zresetuje uprawnienia po każdej przebudowie" >&2
+        codesign --force --sign - "$APP" ;;
+esac
 codesign --verify --strict "$APP"
 echo "$APP"
 ```
@@ -128,17 +134,31 @@ echo "$APP"
 # Buduje i uruchamia aplikację z danymi w .devdata/ (czysto na dysku, spec rdzenia §8).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-APP="$(scripts/bundle.sh | tail -1)"
+# Druga instancja nagrywałaby do tego samego .devdata, a bundle.sh skasowałby
+# paczkę spod działającej — przerywamy przed budową.
+if pgrep -x MeetNotesApp >/dev/null; then
+    echo "run.sh: MeetNotesApp już działa (PID $(pgrep -x MeetNotesApp | xargs)) — zamknij ją i uruchom ponownie" >&2
+    exit 1
+fi
+APP="$(scripts/bundle.sh)"
+[ -d "$APP" ] || { echo "run.sh: bundle.sh nie zwrócił katalogu paczki: \"$APP\"" >&2; exit 1; }
 mkdir -p .devdata
 open -n --env MEETNOTES_DATA_DIR="$PWD/.devdata" "$APP"
+# open oddaje zlecenie LaunchServices i wychodzi z 0 — sprawdzamy, czy proces wstał.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    pgrep -x MeetNotesApp >/dev/null && exit 0
+    sleep 0.5
+done
+echo "run.sh: MeetNotesApp nie działa 5 s po open (nie wystartowała albo od razu się zakończyła)" >&2
+exit 1
 ```
 
-- [x] **Krok 5: Sprawdź składanie na zaślepce.** Cel `MeetNotesApp` ma jeszcze `main.swift` z A1, więc paczka zawiera program bez okna — to wystarcza do sprawdzenia skryptu. `scripts/bundle.sh` — oczekiwane: ostatnia linia `.build/MeetNotes.app`, bez komunikatu `UWAGA`, jeśli certyfikat z kroku 1 istnieje. `codesign -dvv .build/MeetNotes.app 2>&1 | grep -E 'Identifier|Authority'` — oczekiwane: `Identifier=io.github.sharezz1.meetnotes` i `Authority=MeetNotes Dev`. `plutil -extract LSMinimumSystemVersion raw .build/MeetNotes.app/Contents/Info.plist` — `27.0`.
+- [x] **Krok 5: Sprawdź składanie na zaślepce.** Cel `MeetNotesApp` ma jeszcze `main.swift` z A1, więc paczka zawiera program bez okna — to wystarcza do sprawdzenia skryptu. `scripts/bundle.sh 2>/dev/null` — oczekiwane: jedna linia `.build/MeetNotes.app`, a na stderr bez komunikatu `UWAGA`, jeśli certyfikat z kroku 1 istnieje. `codesign -dvv .build/MeetNotes.app 2>&1 | grep -E 'Identifier|Authority'` — oczekiwane: `Identifier=io.github.sharezz1.meetnotes` i `Authority=MeetNotes Dev`. `plutil -extract LSMinimumSystemVersion raw .build/MeetNotes.app/Contents/Info.plist` — `27.0`. Stabilność podpisu: `codesign -d -r- .build/MeetNotes.app` przed i po `touch Sources/MeetNotesApp/main.swift` + `scripts/bundle.sh` — DR identyczne (`… and certificate leaf = H"…"`, nie `cdhash`).
 
 - [x] **Krok 6: Commit.**
 
 ```bash
-git add Resources/Info.plist scripts/bundle.sh scripts/run.sh
+git add Resources/Info.plist scripts/bundle.sh scripts/run.sh docs/superpowers/plans/2026-09-24-faza1-04-powloka-aplikacji.md docs/superpowers/reports/S14.md
 git commit -m "Skladanie MeetNotes.app bez Xcode, staly podpis" -m "Staly certyfikat MeetNotes Dev, zeby TCC nie resetowal uprawnien po kazdej przebudowie. Info.plist: tylko mikrofon i dzwiek systemowy, nigdy ekran."
 ```
 
