@@ -2,6 +2,20 @@ import Foundation
 import MeetNotesProviders
 import MeetNotesSessionFormat
 
+public enum RunError: Error, Equatable {
+    case badRunID(String)
+    /// Ten sam runID, inne wejście (preset, bramka, limit okna, ramki ścieżek) — ChatGPT #4.
+    case inputMismatch
+}
+
+/// Wszystko, od czego zależą zapisane okna. Wznowienie tylko przy identycznym wejściu.
+public struct RunInput: Codable, Equatable, Sendable {
+    public var snapshot: RunSnapshot
+    public var gate: EnergyGate.Config
+    public var maxChunkSeconds: Double
+    public var trackFrames: [String: Int]
+}
+
 public struct TranscriptionProgress: Equatable, Sendable {
     public var done: Int
     public var total: Int
@@ -14,6 +28,13 @@ public struct RunDirectory: Sendable {
     public init(session: URL, runID: String) { url = session.appendingPathComponent("runs").appendingPathComponent(runID) }
     public var metadata: URL { url.appendingPathComponent("run.json") }
     public var transcript: URL { url.appendingPathComponent("transcript.json") }
+    public var input: URL { url.appendingPathComponent("input.json") }
+
+    /// Jeden bezpieczny komponent ścieżki: bez `/`, bez `..`, bez kropki na początku (ChatGPT #13).
+    public static func isValid(runID: String) -> Bool {
+        !runID.isEmpty && runID.count <= 64 && !runID.hasPrefix(".")
+            && runID.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }
+    }
     public func chunk(_ track: String, _ i: Int) -> URL { url.appendingPathComponent("chunks/\(track)-\(i).json") }
 }
 
@@ -27,15 +48,17 @@ public struct TranscriptionRunner: Sendable {
     public let client: OpenAICompatibleClient
     public let maxChunkSeconds: Double
     public let gate: EnergyGate
+    public let crosstalk: CrosstalkFilter
 
     public init(session: URL, runID: String, snapshot: RunSnapshot, client: OpenAICompatibleClient,
-                maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate()) {
+                maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter()) {
         self.session = SessionDirectory(url: session)
         self.runID = runID
         self.snapshot = snapshot
         self.client = client
         self.maxChunkSeconds = maxChunkSeconds
         self.gate = gate
+        self.crosstalk = crosstalk
     }
 
     /// „Oni" = ścieżka systemowa; „ja" = mikrofon po AEC, a gdy go brak — surowy.
@@ -43,23 +66,41 @@ public struct TranscriptionRunner: Sendable {
         let ids = Set(summary.tracks.filter { $0.channels > 0 }.map(\.id))
         var out: [(String, Speaker)] = []
         if ids.contains("system") { out.append(("system", .them)) }
-        if ids.contains("mic_aec") { out.append(("mic_aec", .me)) } else if ids.contains("mic_raw") { out.append(("mic_raw", .me)) }
+        let aecFailed = summary.tracks.first { $0.id == "mic_aec" }?.failure != nil // Hermes 4.2
+        if ids.contains("mic_aec") && !aecFailed { out.append(("mic_aec", .me)) }
+        else if ids.contains("mic_raw") { out.append(("mic_raw", .me)) }
         return out
     }
 
     public func run(progress: @Sendable (TranscriptionProgress) -> Void = { _ in }) async throws -> Transcript {
+        guard RunDirectory.isValid(runID: runID) else { throw RunError.badRunID(runID) }
         let summary = try session.summarize()
         let dir = RunDirectory(session: session.url, runID: runID)
         try FileManager.default.createDirectory(at: dir.url.appendingPathComponent("chunks"), withIntermediateDirectories: true)
+        let input = RunInput(snapshot: snapshot, gate: gate.config, maxChunkSeconds: maxChunkSeconds,
+                             trackFrames: Dictionary(summary.tracks.map { ($0.id, $0.frames ?? -1) }, uniquingKeysWith: { a, _ in a }))
+        if let saved = try JSONFile.load(RunInput?.self, from: dir.input, default: nil) {
+            guard saved == input else { throw RunError.inputMismatch }
+        } else {
+            try JSONFile.save(input, to: dir.input)
+        }
+        let clock = SessionClock(summary: summary)
         let started = Date()
 
         var plan: [(track: String, chunk: Chunk, samples: [Float])] = []
         var speakers: [String: Speaker] = [:]
-        for (id, speaker) in Self.tracks(in: summary) {
+        var systemX: [Float]?
+        for (id, speaker) in Self.tracks(in: summary) { // `tracks(in:)` zwraca `system` pierwszy
             speakers[id] = speaker
             let caf = try CAFReader(url: session.trackURL(id))
             let x = try Resampler.toASR(caf.samples, sampleRate: caf.sampleRate, channels: caf.channels)
-            let chunks = ChunkPacker(maxSeconds: maxChunkSeconds).pack(gate.speechRegions(x, rate: Resampler.asrRate), samples: x)
+            var regions = gate.speechRegions(x, rate: Resampler.asrRate)
+            if speaker == .me, let sys = systemX {
+                let offset = summary.tracks.first { $0.id == id }?.offsetSeconds ?? 0
+                regions = crosstalk.keep(regions, mic: x, system: sys, micOffsetSeconds: offset)
+            }
+            if id == "system" { systemX = x }
+            let chunks = ChunkPacker(maxSeconds: maxChunkSeconds).pack(regions, samples: x)
             for c in chunks { plan.append((id, c, x)) }
         }
 
@@ -84,15 +125,18 @@ public struct TranscriptionRunner: Sendable {
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
-                    failures.append(ChunkFailure(track: item.track, index: item.chunk.index, start: item.chunk.sourceStartSeconds,
-                                                 end: item.chunk.sourceEndSeconds, error: "\(error)"))
+                    failures.append(ChunkFailure(
+                        track: item.track, index: item.chunk.index,
+                        start: clock.sessionSeconds(track: item.track, trackSeconds: item.chunk.sourceStartSeconds),
+                        end: clock.sessionSeconds(track: item.track, trackSeconds: item.chunk.sourceEndSeconds),
+                        error: "\(error)"))
                 }
             }
             try Task.checkCancellation()
             progress(TranscriptionProgress(done: n + 1, total: plan.count))
         }
 
-        let transcript = Merger.merge(results, speakers: speakers, clock: SessionClock(summary: summary),
+        let transcript = Merger.merge(results, speakers: speakers, clock: clock,
                                       language: snapshot.language, failures: failures)
         try JSONFile.save(transcript, to: dir.transcript)
         try JSONFile.save(RunMetadata(runID: runID, snapshot: snapshot, startedAt: started, finishedAt: Date(),

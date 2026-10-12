@@ -46,7 +46,13 @@ public struct Transcript: Codable, Equatable, Sendable {
 }
 
 /// Migawka presetu w chwili przebiegu — nie odwołanie (spec fazy 1, §8, P12).
+public enum RunSnapshotError: Error, Equatable {
+    case chatShapeNotForMeetings
+}
+
 public struct RunSnapshot: Codable, Equatable, Sendable {
+    /// Pełny preset z chwili przebiegu — z korektą, podsumowaniem i promptami (spec §8, ChatGPT #14).
+    public var preset: Preset
     public var presetID: UUID
     public var presetName: String
     public var providerID: UUID
@@ -60,6 +66,10 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
 
     public init(preset: Preset, provider: Provider, probe: ProbeResult?, dictionaryVersion: String = "none") throws {
         try preset.validate()
+        // Bez znaczników słów pakowane okno rozciąga jedno „zdanie" na minuty ciszy,
+        // a klikalna linia czasu kłamie (ChatGPT #7). Kształt czatowy — tylko dyktowanie.
+        if probe?.shape == .chatAudio { throw RunSnapshotError.chatShapeNotForMeetings }
+        self.preset = preset
         guard let asr = preset.asr, let language = preset.language else { throw PresetError.missingASR }
         presetID = preset.id
         presetName = preset.name

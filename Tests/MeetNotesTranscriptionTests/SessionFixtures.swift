@@ -66,8 +66,10 @@ final class ListeningASR: HTTPClient, @unchecked Sendable {
 }
 
 func snapshot(language: LanguageCode = .polish) throws -> RunSnapshot {
-    let provider = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
-    let preset = Preset(name: "Polish", language: language, asr: RoleAssignment(providerID: provider.id, model: "microsoft/mai-transcribe-2"))
+    let provider = Provider(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, name: "OpenRouter",
+                            baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    let preset = Preset(id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, name: "Polish", language: language,
+                        asr: RoleAssignment(providerID: provider.id, model: "microsoft/mai-transcribe-2"))
     return try RunSnapshot(preset: preset, provider: provider, probe: nil)
 }
 
