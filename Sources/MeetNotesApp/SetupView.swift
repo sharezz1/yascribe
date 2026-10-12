@@ -31,11 +31,13 @@ struct SetupView: View {
                 Button(state.checking ? "Checking…" : "Test") {
                     state.checking = true
                     Task { @MainActor in
-                        state.systemAudio = await SystemAudioCheck.run()
+                        let result = await SystemAudioCheck.run()
+                        state.systemAudio = result
+                        if case .works = result { UserDefaults.standard.set(true, forKey: "systemAudioVerified") }
                         state.checking = false
                     }
                 }
-                .disabled(state.checking)
+                .disabled(state.checking || model.recording.isRecording)
                 .help("Plays a short tone and checks that it's captured")
             }
             if case .silent = state.systemAudio {
