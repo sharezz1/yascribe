@@ -38,7 +38,7 @@ Testy ręczne w D3 — każde z tych wejść ma tam osobny krok:
 
 ### Zadanie D1: Stały podpis i składanie `.app`
 
-Status: ⚠️ nieweryfikowane — skrypty napisane, nigdy nieuruchomione (przerwane przed wykonaniem). Krok 1 wykonuje **użytkownik**: to zmiana w jego pęku kluczy.
+Status: ✅ zweryfikowane (2026-10-12, S14): `bundle.sh` składa i podpisuje „MeetNotes Dev" (`Authority=MeetNotes Dev`, `codesign --verify --strict` OK); poprawka po STOP — warunek `security find-identity` bez `-v` (samopodpisany certyfikat ma `CSSMERR_TP_NOT_TRUSTED`), raport `reports/S14.md`. Krok 1 wykonuje **użytkownik**: to zmiana w jego pęku kluczy.
 
 **Pliki:**
 - Utwórz: `Resources/Info.plist`, `scripts/bundle.sh`, `scripts/run.sh`
@@ -46,9 +46,9 @@ Status: ⚠️ nieweryfikowane — skrypty napisane, nigdy nieuruchomione (przer
 **Interfejsy:**
 - Dostarcza: `scripts/bundle.sh` → wypisuje ścieżkę `.build/MeetNotes.app` (zmienne: `MEETNOTES_SIGN_IDENTITY`, `-` = ad-hoc; `CONFIG=release`). `scripts/run.sh` → buduje i uruchamia z `MEETNOTES_DATA_DIR=.devdata`.
 
-- [ ] **Krok 1 (użytkownik): certyfikat „MeetNotes Dev".** Dostęp do pęku kluczy → menu *Dostęp do pęku kluczy → Asystent certyfikatów → Utwórz certyfikat…*. Nazwa: `MeetNotes Dev`, Typ tożsamości: *Samopodpisany główny*, Typ certyfikatu: *Podpisywanie kodu*. Sprawdzenie: `security find-identity -v -p codesigning | grep "MeetNotes Dev"` wypisuje jedną linię.
+- [x] **Krok 1 (użytkownik): certyfikat „MeetNotes Dev".** Dostęp do pęku kluczy → menu *Dostęp do pęku kluczy → Asystent certyfikatów → Utwórz certyfikat…*. Nazwa: `MeetNotes Dev`, Typ tożsamości: *Samopodpisany główny*, Typ certyfikatu: *Podpisywanie kodu*. Sprawdzenie: `security find-identity -p codesigning | grep "MeetNotes Dev"` (bez `-v`) wypisuje jedną linię, np. `1) 7C8C… "MeetNotes Dev" (CSSMERR_TP_NOT_TRUSTED)`. Dla certyfikatu samopodpisanego `CSSMERR_TP_NOT_TRUSTED` jest normalne, a `-v` pokazuje „0 valid identities" — to nie błąd; `codesign -s "MeetNotes Dev"` mimo to podpisuje (sprawdził użytkownik, S14).
 
-- [ ] **Krok 2: `Resources/Info.plist`.**
+- [x] **Krok 2: `Resources/Info.plist`.**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -87,7 +87,7 @@ Status: ⚠️ nieweryfikowane — skrypty napisane, nigdy nieuruchomione (przer
 </plist>
 ```
 
-- [ ] **Krok 3: `scripts/bundle.sh`** (`chmod +x`).
+- [x] **Krok 3: `scripts/bundle.sh`** (`chmod +x`).
 
 ```bash
 #!/bin/bash
@@ -111,7 +111,7 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 IDENTITY="${MEETNOTES_SIGN_IDENTITY:-MeetNotes Dev}"
-if [ "$IDENTITY" != "-" ] && security find-identity -v -p codesigning | grep -q "\"$IDENTITY\""; then
+if [ "$IDENTITY" != "-" ] && security find-identity -p codesigning | grep -q "\"$IDENTITY\""; then
     codesign --force --sign "$IDENTITY" "$APP"
 else
     [ "$IDENTITY" != "-" ] && echo "UWAGA: brak certyfikatu \"$IDENTITY\" — podpis ad-hoc; TCC zresetuje uprawnienia po każdej przebudowie" >&2
@@ -121,7 +121,7 @@ codesign --verify --strict "$APP"
 echo "$APP"
 ```
 
-- [ ] **Krok 4: `scripts/run.sh`** (`chmod +x`).
+- [x] **Krok 4: `scripts/run.sh`** (`chmod +x`).
 
 ```bash
 #!/bin/bash
@@ -133,9 +133,9 @@ mkdir -p .devdata
 open -n --env MEETNOTES_DATA_DIR="$PWD/.devdata" "$APP"
 ```
 
-- [ ] **Krok 5: Sprawdź składanie na zaślepce.** Cel `MeetNotesApp` ma jeszcze `main.swift` z A1, więc paczka zawiera program bez okna — to wystarcza do sprawdzenia skryptu. `scripts/bundle.sh` — oczekiwane: ostatnia linia `.build/MeetNotes.app`, bez komunikatu `UWAGA`, jeśli certyfikat z kroku 1 istnieje. `codesign -dv .build/MeetNotes.app 2>&1 | grep -E 'Identifier|Authority'` — oczekiwane: `Identifier=io.github.sharezz1.meetnotes` i `Authority=MeetNotes Dev`. `plutil -extract LSMinimumSystemVersion raw .build/MeetNotes.app/Contents/Info.plist` — `27.0`.
+- [x] **Krok 5: Sprawdź składanie na zaślepce.** Cel `MeetNotesApp` ma jeszcze `main.swift` z A1, więc paczka zawiera program bez okna — to wystarcza do sprawdzenia skryptu. `scripts/bundle.sh` — oczekiwane: ostatnia linia `.build/MeetNotes.app`, bez komunikatu `UWAGA`, jeśli certyfikat z kroku 1 istnieje. `codesign -dvv .build/MeetNotes.app 2>&1 | grep -E 'Identifier|Authority'` — oczekiwane: `Identifier=io.github.sharezz1.meetnotes` i `Authority=MeetNotes Dev`. `plutil -extract LSMinimumSystemVersion raw .build/MeetNotes.app/Contents/Info.plist` — `27.0`.
 
-- [ ] **Krok 6: Commit.**
+- [x] **Krok 6: Commit.**
 
 ```bash
 git add Resources/Info.plist scripts/bundle.sh scripts/run.sh
