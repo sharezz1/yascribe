@@ -61,19 +61,34 @@ import MeetNotesSessionFormat
     let t2 = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(second)).run()
     #expect(second.requests == total - 1)
     #expect(t2.failedChunks.isEmpty)
+    // Check S10 #2: okno z inną geometrią niż w planie nie jest brane z dysku.
+    let file = RunDirectory(session: dir, runID: "r1").chunk("system", 0)
+    var stale = try #require(try JSONFile.load(ChunkResult?.self, from: file, default: nil))
+    stale.chunk.segments[0].sourceStart += 1_600
+    try JSONFile.save(stale, to: file)
+    let third = ListeningASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(third)).run()
+    #expect(third.requests == 1)
 }
 
 @Test func progressReachesOneAndMetadataCarriesTheSnapshot() async throws {
     let (samples, _) = burstTrack(seconds: 300, rate: 16_000)
     let dir = try makeSession(system: samples)
     let seen = Recorder()
-    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(ListeningASR()))
+    let asr = ListeningASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(asr))
         .run { seen.add($0.fraction) }
     #expect(seen.values.first == 0)
     #expect(seen.values.last == 1)
     let meta = try JSONFile.load(RunMetadata?.self, from: RunDirectory(session: dir, runID: "r1").metadata, default: nil)
     #expect(meta?.snapshot.model == "microsoft/mai-transcribe-2")
     #expect(meta?.snapshot.language == .polish)
+    // Check S10 #1: na tych licznikach stoi bramka C5 („cisza nie poszła").
+    #expect(asr.requests > 0)
+    #expect(meta?.requestCount == asr.requests)
+    #expect(meta?.chunkCount == asr.requests)
+    #expect((meta?.audioSecondsSent ?? 0) > 0)
+    #expect((meta?.audioSecondsSent ?? .infinity) < 300)
 }
 
 @Test func confabulatedEnglishIsFlaggedAndExcludedFromNotes() async throws {
@@ -186,4 +201,31 @@ final class Recorder: @unchecked Sendable {
     for (w, s) in zip(words, starts) { #expect(abs(w.start - s) < 0.03) }
     for (a, b) in zip(words, words.dropFirst()) { #expect(a.end <= b.start) } // bez nakładek
     #expect(words.allSatisfy { $0.end > $0.start })
+}
+
+@Test func sessionTimeComesFromClockAnchorsNotJustTheOffset() throws {
+    // Check S10 #3 (T8): zegar mikrofonu chodzi 0,1% wolniej — czas z kotwic, nie z offsetSeconds.
+    let anchors = try JSONDecoder().decode([SessionSummary.ClockAnchor].self, from: Data("""
+        [{"frameIndex": 0, "hostTime": 1200000000}, {"frameIndex": 1600000, "hostTime": 101300000000}]
+        """.utf8))
+    let sum = SessionSummary(startedHostTime: 0, timebase: ns, tracks: [
+        .init(id: "system", sampleRate: 16_000, channels: 1, firstSampleHostTime: 1_000_000_000, offsetSeconds: 0),
+        .init(id: "mic_raw", sampleRate: 16_000, channels: 1, firstSampleHostTime: 1_200_000_000, offsetSeconds: 0.2,
+              clock: anchors),
+    ])
+    // ramka 50 s → 50,05 s czasu hosta od startu mikrofonu; sam offset dałby 50,2
+    #expect(abs(SessionClock(summary: sum).sessionSeconds(track: "mic_raw", trackSeconds: 50) - 50.25) < 0.001)
+}
+
+@Test func utteranceBreaksOnlyAtTheGap() throws {
+    // Check S10 #4: przerwa 1,0 s łączy słowa, 1,5 s zaczyna nową wypowiedź (Merger.utteranceGap = 1,2 s).
+    let result = try JSONDecoder().decode(TranscriptionResult.self, from: Data("""
+        {"text": "a b c", "words": [{"word": "a", "start": 0, "end": 0.5}, {"word": "b", "start": 1.5, "end": 2},
+                                    {"word": "c", "start": 3.5, "end": 4}]}
+        """.utf8))
+    let chunk = Chunk(index: 0, segments: [ChunkSegment(sourceStart: 0, sourceEnd: 80_000, chunkStart: 0)], length: 80_000)
+    let t = Merger.merge([ChunkResult(track: "system", chunk: chunk, result: result)], speakers: ["system": .them],
+                         clock: SessionClock(summary: SessionSummary(startedHostTime: 0, timebase: ns, tracks: [])),
+                         language: .polish)
+    #expect(t.utterances.map(\.text) == ["a b", "c"])
 }

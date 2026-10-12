@@ -65,16 +65,17 @@ Sesje ✅ z tego samego wiersza wolno łączyć w jedną rozmowę. Zatrzymaj si�
 | S8 | B4 | 02 | K | — | 77 | nie |
 | S9 | B5 (sondy na żywo, G3) | 02 | F | **tak** + klucz | — | nie |
 | S10 | C1–C3 | 03 | F | — | 99 | nie |
-| S11 | E3, potem E5 | 05 | K | — | 106, po E5: 106+N | **tak** |
-| S12 | C4 | 03 | K | — | 106 | **tak** |
+| S11 | E3, potem E5 | 05 | K | — | 106, po E5: 109 | **tak** |
+| S12 | C4 | 03 | K | — | 109 | **tak** |
 | S13 | C5 (transkrypcja na żywo) | 03 | F | **tak** + klucz | — | nie |
-| S14 | D1 (krok 1: certyfikat — użytkownik) | 04 | K | **tak** (krok 1) | 106 | nie |
-| S15 | D2 | 04 | K | — | 106 | **tak** |
-| S16 | E4 | 05 | K | — | 106 | **tak** |
+| S14 | D1 (krok 1: certyfikat — użytkownik) | 04 | K | **tak** (krok 1) | 109 | nie |
+| S15 | D2 | 04 | K | — | 109 | **tak** |
+| S16 | E4 | 05 | K | — | 109 | **tak** |
 | S17 | D3 (odbiór ręczny) | 04 | F | **tak** | — | nie |
-| S18 | przegląd całej gałęzi | wszystkie | R | — | 106 | — |
+| S18 | przegląd całej gałęzi | wszystkie | R | — | 109 | — |
 
 > Liczby od S6 przesunięte o +7: +6 po poprawkach S3+S4 (decyzja 2026-09-25) i +1 po torze `mic_raw` pod VP (test `mixesMicArrayChannelsWithGain`, sonda S5 2026-09-29; `docs/superpowers/reports/S5-S2-poprawka-aec.md`).
+> +3 po E5 (luki pokrycia z checku S10).
 
 **Bramki — orkiestrator zatrzymuje się i pyta użytkownika:**
 - S5: wynik S1 (błąd czy zera przy odmowie) i S2 (dwa strumienie mikrofonu naraz). Przy niepowodzeniu S2 — decyzja użytkownika.

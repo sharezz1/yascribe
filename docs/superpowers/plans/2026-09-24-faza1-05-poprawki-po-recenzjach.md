@@ -740,7 +740,7 @@ To zadanie wyjątkowo nie ma gotowego kodu testów. Wykonawca pisze je sam. Dowo
 - Zmień: `scripts/test.sh`
 - Test: `Tests/MeetNotesTranscriptionTests/*`, `Tests/MeetNotesSessionFormatTests/*` (tam, gdzie leży testowany kod)
 
-- [ ] **Krok 1: Sprzątanie katalogów testowych (uwaga 6).** Testy zakładają w `$TMPDIR` katalogi `mn-…-<UUID>` i ich nie usuwają (~265 MB na przebieg). W `scripts/test.sh` przed linią `OUT="$(mktemp)"` dopisz:
+- [x] **Krok 1: Sprzątanie katalogów testowych (uwaga 6).** Testy zakładają w `$TMPDIR` katalogi `mn-…-<UUID>` i ich nie usuwają (~265 MB na przebieg). W `scripts/test.sh` przed linią `OUT="$(mktemp)"` dopisz:
 
 ```bash
 # Katalogi po poprzednich przebiegach (mn-[prefiks-]UUID). Wzorzec omija mn-s2, mn-corpus-* itp.
@@ -749,7 +749,7 @@ find -E "${TMPDIR:-/tmp}" -maxdepth 1 -regex '.*/mn-([a-z]+-)?[0-9A-F]{8}-([0-9A
 
 Sprzątanie jest na początku przebiegu, więc katalogi z ostatniego przebiegu zostają do debugowania.
 
-- [ ] **Krok 2: Testy luk (uwagi 1–5).** Dla każdego wiersza: dopisz asercję lub test, wprowadź mutację, sprawdź `scripts/test.sh --filter <test>` → ✘, cofnij mutację (`git checkout -- <plik źródłowy>`).
+- [x] **Krok 2: Testy luk (uwagi 1–5).** Dla każdego wiersza: dopisz asercję lub test, wprowadź mutację, sprawdź `scripts/test.sh --filter <test>` → ✘, cofnij mutację (`git checkout -- <plik źródłowy>`).
 
 | # | Co musi być sprawdzone | Mutacja, która musi wywrócić test |
 |---|---|---|
@@ -759,11 +759,11 @@ Sprzątanie jest na początku przebiegu, więc katalogi z ostatniego przebiegu z
 | 4 | `Merger.utteranceGap`: przerwa > 1,2 s dzieli wypowiedź, < 1,2 s ją łączy | `utteranceGap` = `.infinity` |
 | 5 | `LanguageGuard` dla presetu `.english`: obcy tekst oznaczony, angielski przepuszczony | gałąź `.english` zwraca wynik „bez zmian" |
 
-- [ ] **Krok 3: Uruchom całość.** `scripts/test.sh` — oczekiwane: `106+N/106+N`, gdzie N to liczba **nowych** `@Test` z kroku 2. Po przebiegu `ls -d "$TMPDIR"/mn-* | wc -l` ≈ liczba katalogów jednego przebiegu (nie rośnie z każdym uruchomieniem).
+- [x] **Krok 3: Uruchom całość.** `scripts/test.sh` — oczekiwane: `106+N/106+N`, gdzie N to liczba **nowych** `@Test` z kroku 2. Po przebiegu `ls -d "$TMPDIR"/mn-* | wc -l` ≈ liczba katalogów jednego przebiegu (nie rośnie z każdym uruchomieniem).
 
-- [ ] **Krok 4: Liczby w runbooku.** W `2026-09-25-faza1-runbook.md`, w tabeli sesji, wiersze od S11 wzwyż z liczbą `106` zamień na `106+N` (konkretna liczba). Pod tabelą dopisz: `> +N po E5 (luki pokrycia z checku S10).`
+- [x] **Krok 4: Liczby w runbooku.** W `2026-09-25-faza1-runbook.md`, w tabeli sesji, wiersze od S11 wzwyż z liczbą `106` zamień na `106+N` (konkretna liczba). Pod tabelą dopisz: `> +N po E5 (luki pokrycia z checku S10).`
 
-- [ ] **Krok 5: Raport i commit.** W raporcie sesji tabela z kroku 2: test, mutacja, wynik ✘. Commit:
+- [x] **Krok 5: Raport i commit.** W raporcie sesji tabela z kroku 2: test, mutacja, wynik ✘. Commit:
 
 ```bash
 git add scripts/test.sh Tests docs/superpowers/plans/2026-09-25-faza1-runbook.md
