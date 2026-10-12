@@ -11,12 +11,16 @@ final class RecordingController {
     private(set) var isRecording = false
     private(set) var elapsed: TimeInterval = 0
     private(set) var lastEndReason: EndReason?
+    /// Preset zamrożony przy starcie — pokazywany przez całe nagranie (ChatGPT #2).
+    private(set) var presetLabel = ""
+    /// Katalog trwającej sesji — lista sesji go pomija (Hermes 4.5: nie „Recovered").
+    private(set) var directory: URL?
     private var recorder: SessionRecorder?
     private var timer: Timer?
     private var started = Date()
     private var panel: NSPanel?
 
-    func start(directory: URL, onEnded: @escaping @MainActor (EndReason) -> Void) throws {
+    func start(directory: URL, presetLabel: String, onEnded: @escaping @MainActor (EndReason) -> Void) throws {
         let r = SessionRecorder(directory: directory,
                                 sources: [SystemTapSource(), RawMicrophoneSource()]) // bez VP: ściszałby Teams przez całe nagranie (S5, spec rdzenia §2 korekta 2026-09-29)
         r.onEnded = { reason in
@@ -27,6 +31,8 @@ final class RecordingController {
         }
         try r.start()
         recorder = r
+        self.directory = directory
+        self.presetLabel = presetLabel
         isRecording = r.endReason == nil
         started = Date()
         elapsed = 0
@@ -36,7 +42,6 @@ final class RecordingController {
                 self.recorder?.tick()
             }
         }
-        if isRecording { showPanel() }
     }
 
     func stop() { recorder?.stop(reason: .button) }
@@ -47,21 +52,25 @@ final class RecordingController {
         timer?.invalidate()
         timer = nil
         recorder = nil
-        panel?.close()
-        panel = nil
+        directory = nil
     }
 
-    /// 🔀 Odstępstwa 1 i 2 z `docs/design/macos.md` §10: pływające okno zostaje na
-    /// wierzchu, gdy aktywny jest Teams, i klik w nie nie odbiera fokusu spotkaniu.
-    private func showPanel() {
-        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 240, height: 56),
-                        styleMask: [.titled, .nonactivatingPanel, .utilityWindow], backing: .buffered, defer: false)
+    /// 🔀 Odstępstwa 1 i 2 (`docs/design/macos.md` §10): okno zostaje na wierzchu, gdy aktywny
+    /// jest Teams, i klik w nie nie odbiera fokusu spotkaniu.
+    func showPanel(model: AppModel) {
+        if let panel {
+            panel.orderFrontRegardless()
+            return
+        }
+        let p = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 64),
+                        styleMask: [.titled, .closable, .nonactivatingPanel, .utilityWindow], backing: .buffered, defer: false)
         p.title = "Recording"
         p.level = .floating
         p.isFloatingPanel = true
         p.hidesOnDeactivate = false
+        p.isReleasedWhenClosed = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        p.contentView = NSHostingView(rootView: RecordingPanelView(controller: self))
+        p.contentView = NSHostingView(rootView: RecordingPanelView(model: model))
         p.center()
         p.orderFrontRegardless()
         panel = p
@@ -69,23 +78,34 @@ final class RecordingController {
 }
 
 struct RecordingPanelView: View {
-    let controller: RecordingController
+    let model: AppModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let rec = model.recording
         HStack(spacing: 10) {
-            Image(systemName: "record.circle")
-                .foregroundStyle(.red)
-                .symbolEffect(.pulse, isActive: !reduceMotion)
-                .accessibilityHidden(true)
-            // Stan nigdy samym kolorem: napis i licznik (macos.md §6.1).
-            Text("Recording \(Self.clock(controller.elapsed))")
-                .monospacedDigit()
-            Spacer()
-            Button("Stop") { controller.stop() }
-                .keyboardShortcut(".", modifiers: .command)
+            if rec.isRecording {
+                Image(systemName: "record.circle")
+                    .foregroundStyle(.red)
+                    .symbolEffect(.pulse, isActive: !reduceMotion)
+                    .accessibilityHidden(true)
+                // Stan nigdy samym kolorem: napis i licznik (macos.md §6.1).
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Recording \(Self.clock(rec.elapsed))").monospacedDigit()
+                    Text(rec.presetLabel).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Stop") { rec.stop() }
+                    .keyboardShortcut(".", modifiers: .command)
+            } else {
+                // 🔴 Preset z językiem widoczny i wybierany przed startem (W§2, W§6).
+                PresetMenu()
+                Spacer()
+                Button("Record") { model.startRecording() }
+            }
         }
         .padding(12)
+        .environment(model)
     }
 
     static func clock(_ t: TimeInterval) -> String {

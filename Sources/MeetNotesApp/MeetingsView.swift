@@ -15,7 +15,8 @@ struct MeetingsView: View {
     private var days: [(Date, [SessionItem])] {
         let cal = Calendar.current
         let filtered = model.sessions.filter { s in
-            query.isEmpty || s.transcript?.utterances.contains { $0.text.localizedCaseInsensitiveContains(query) } == true
+            s.url != model.recording.directory
+                && (query.isEmpty || s.transcript?.utterances.contains { $0.text.localizedCaseInsensitiveContains(query) } == true)
         }
         let groups = Dictionary(grouping: filtered) { cal.startOfDay(for: $0.startedAt) }
         return groups.keys.sorted(by: >).map { ($0, groups[$0]!) }
@@ -26,7 +27,7 @@ struct MeetingsView: View {
         NavigationStack {
             List(selection: $model.selectedSessionID) {
                 if model.recording.isRecording {
-                    RecordingRow(elapsed: model.recording.elapsed, preset: model.activePreset?.name ?? "")
+                    RecordingRow(elapsed: model.recording.elapsed, preset: model.recording.presetLabel)
                 }
                 ForEach(days, id: \.0) { day, items in
                     SwiftUI.Section(day.formatted(date: .complete, time: .omitted)) {
@@ -107,6 +108,13 @@ struct SessionRow: View {
                 Text(item.startedAt.formatted(date: .omitted, time: .shortened)).monospacedDigit()
                 Text(item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) } ?? "—")
                     .foregroundStyle(.secondary)
+                if let bad = item.summary?.tracks.filter({ $0.failure != nil || $0.permissionDenied != nil }), !bad.isEmpty {
+                    // ChatGPT #16: brak „Oni" albo „Ja" widoczny na liście, nie tylko w dzienniku.
+                    Label("Problem: " + Set(bad.map { $0.id == "system" ? "system audio" : "microphone" }).sorted().joined(separator: ", "),
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption).foregroundStyle(.orange)
+                        .help(bad.map { "\($0.id): \($0.failure ?? $0.permissionDenied ?? "")" }.joined(separator: "\n"))
+                }
             }
             Spacer()
             status
@@ -118,6 +126,10 @@ struct SessionRow: View {
             ProgressView(value: p) { Text("Transcribing \(Int(p * 100))%") }.frame(width: 140)
         } else if item.summary?.crashed == true {
             Label("Recovered", systemImage: "bandage").foregroundStyle(.orange).help("The app stopped during this recording; the audio was kept")
+        } else if let t = item.transcript, !t.failedChunks.isEmpty {
+            Label("Partial — \(t.failedChunks.count) gaps", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+        } else if item.transcript == nil && item.runID != nil {
+            Label("Interrupted", systemImage: "pause.circle").foregroundStyle(.orange)
         } else if let t = item.transcript {
             if t.languageFlagCount > 0 {
                 Label("\(t.languageFlagCount) language flags", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)

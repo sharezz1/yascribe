@@ -107,7 +107,8 @@ struct RoleEditor: View {
                     }
                 }
                 HStack {
-                    ProbeBadges(result: model.probeCache.result(provider: a.providerID, model: a.model, role: role))
+                    // `language` jest ustawiony tylko dla roli ASR — dla pozostałych ról to nil, jak przy zapisie.
+                    ProbeBadges(result: model.probeCache.result(provider: a.providerID, model: a.model, role: role, language: language))
                     Spacer()
                     Button("Test") { Task { await model.probe(providerID: a.providerID, model: a.model, role: role, language: language) } }
                         .disabled(a.model.isEmpty)

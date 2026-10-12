@@ -7,6 +7,7 @@ import SwiftUI
 /// Odsłuch = ścieżka systemowa bit w bit (spec rdzenia §5); mikrofon osobno.
 final class PlaybackState: ObservableObject {
     var player: AVAudioPlayer?
+    var track: String?
 }
 
 struct MeetingDetailView: View {
@@ -19,8 +20,12 @@ struct MeetingDetailView: View {
         Group {
             if let t = item.transcript {
                 List {
+                    if !t.failedChunks.isEmpty {
+                        Button("Retry Failed Parts") { model.resume(item) }
+                            .help("Sends only the parts that failed; finished parts aren't paid for again")
+                    }
                     ForEach(Array(t.utterances.enumerated()), id: \.offset) { _, u in
-                        UtteranceRow(utterance: u) { play(from: u.start) }
+                        UtteranceRow(utterance: u) { play(u) }
                     }
                     if !t.failedChunks.isEmpty {
                         SwiftUI.Section("Gaps") {
@@ -37,6 +42,7 @@ struct MeetingDetailView: View {
                     if let p = model.activePreset {
                         Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }
                     }
+                    if item.runID != nil { Button("Resume Transcription") { model.resume(item) } }
                 }
             }
         }
@@ -52,12 +58,18 @@ struct MeetingDetailView: View {
         }
     }
 
-    private func play(from t: Double) {
-        if playback.player == nil {
-            playback.player = try? AVAudioPlayer(contentsOf: item.url.appendingPathComponent("system.caf"))
+    /// ChatGPT #8: „Me" nie ma w pliku odsłuchu (to tap systemowy) — gramy tor mikrofonu,
+    /// przeliczając czas sesji na czas tej ścieżki.
+    private func play(_ u: Utterance) {
+        let aecOK = item.summary?.tracks.first { $0.id == "mic_aec" }.map { $0.failure == nil && $0.channels > 0 } ?? false
+        let track = u.speaker == .them ? "system" : (aecOK ? "mic_aec" : "mic_raw")
+        let offset = item.summary?.tracks.first { $0.id == track }?.offsetSeconds ?? 0
+        if playback.track != track {
+            playback.player = try? AVAudioPlayer(contentsOf: item.url.appendingPathComponent("\(track).caf"))
+            playback.track = track
         }
-        player?.currentTime = max(0, t)
-        player?.play()
+        playback.player?.currentTime = max(0, u.start - offset)
+        playback.player?.play()
     }
 
     static func time(_ s: Double) -> String {

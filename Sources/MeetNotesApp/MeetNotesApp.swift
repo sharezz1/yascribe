@@ -25,6 +25,8 @@ struct MeetNotesApp: App {
                     model.recording.isRecording ? model.recording.stop() : model.startRecording()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Show Recording Window") { model.recording.showPanel(model: model) }
+                    .keyboardShortcut("r", modifiers: [.command, .option])
             }
         }
     }

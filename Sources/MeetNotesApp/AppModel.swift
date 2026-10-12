@@ -30,6 +30,8 @@ struct SessionItem: Identifiable, Equatable {
     var startedAt: Date
     var transcript: Transcript?
     var progress: Double?
+    /// Ostatni przebieg transkrypcji — do wznowienia po przerwie albo restarcie (ChatGPT #17).
+    var runID: String?
 
     var duration: Double? {
         guard let t = summary?.tracks.first(where: { $0.id == "system" }) ?? summary?.tracks.first,
@@ -60,7 +62,9 @@ final class AppModel {
 
     init() {
         load()
+        // ChatGPT #16: setup także wtedy, gdy dźwięk systemowy nigdy nie przeszedł testu tonem.
         showSetup = AVCaptureDevice.authorizationStatus(for: .audio) != .authorized
+            || !UserDefaults.standard.bool(forKey: "systemAudioVerified")
     }
 
     var activePreset: Preset? {
@@ -99,20 +103,16 @@ final class AppModel {
             let sd = SessionDirectory(url: url)
             guard fm.fileExists(atPath: sd.journalURL.path) else { return nil }
             let summary = try? sd.summarize()
-            let transcript = latestTranscript(in: url)
-            return SessionItem(url: url, summary: summary, startedAt: summary?.wallClock ?? .distantPast, transcript: transcript)
+            let run = latestRun(in: url)
+            return SessionItem(url: url, summary: summary, startedAt: summary?.wallClock ?? .distantPast,
+                               transcript: run?.transcript, runID: run?.id)
         }.sorted { $0.startedAt > $1.startedAt }
     }
 
-    func latestTranscript(in session: URL) -> Transcript? {
+    func latestRun(in session: URL) -> (id: String, transcript: Transcript?)? {
         let runs = session.appendingPathComponent("runs")
-        let ids = ((try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []).sorted()
-        for id in ids.reversed() {
-            if let t = try? JSONFile.load(Transcript?.self, from: RunDirectory(session: session, runID: id).transcript, default: nil) {
-                return t
-            }
-        }
-        return nil
+        guard let id = ((try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []).sorted().last else { return nil }
+        return (id, try? JSONFile.load(Transcript?.self, from: RunDirectory(session: session, runID: id).transcript, default: nil))
     }
 
     // MARK: Dostawcy
@@ -155,6 +155,9 @@ final class AppModel {
 
     func savePreset(_ p: Preset) -> String? {
         do {
+            if let a = p.asr, probeCache.result(provider: a.providerID, model: a.model, role: .asr, language: p.language)?.shape == .chatAudio {
+                return "This model returns no word timings, so it can't be used for meetings."
+            }
             try presets.upsert(p)
             if settings.defaultPresetID == nil { settings.defaultPresetID = p.id }
             save()
@@ -173,32 +176,59 @@ final class AppModel {
     // MARK: Nagrywanie i transkrypcja
 
     func startRecording() {
+        // ChatGPT #2: preset — z językiem — ustalony PRZED startem i zamrożony na całą sesję.
+        guard let preset = activePreset, (try? preset.validate()) != nil else {
+            lastError = "Choose a preset with a language before recording."
+            section = .presets
+            return
+        }
         let dir = paths.sessions.appendingPathComponent(Self.sessionName(Date()))
         do {
-            try recording.start(directory: dir) { [weak self] _ in
+            try recording.start(directory: dir, presetLabel: Self.label(preset)) { [weak self] _ in
                 Task { @MainActor in
                     self?.reloadSessions()
-                    if let self, let preset = self.activePreset { self.transcribe(sessionURL: dir, preset: preset) }
+                    self?.transcribe(sessionURL: dir, preset: preset)
                 }
             }
+            try? JSONFile.save(preset, to: dir.appendingPathComponent("preset.json"))
+            recording.showPanel(model: self)
             reloadSessions()
         } catch {
             lastError = "Couldn't start recording: \(error)"
         }
     }
 
+    static func label(_ p: Preset) -> String { "\(p.name) · \(p.language?.rawValue.uppercased() ?? "?")" }
+
     func transcribe(sessionURL: URL, preset: Preset) {
         guard let asr = preset.asr, let provider = provider(asr.providerID), let c = client(for: asr.providerID) else {
             lastError = "The preset's speech-to-text provider is missing."
             return
         }
-        let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr)
-        let snapshot: RunSnapshot
-        do { snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe) } catch {
+        let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
+        do {
+            let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe)
+            run(sessionURL: sessionURL, runID: Self.sessionName(Date()), snapshot: snapshot, client: c)
+        } catch RunSnapshotError.chatShapeNotForMeetings {
+            lastError = "This model returns no word timings, so it can't be used for meetings."
+        } catch {
             lastError = "\(error)"
+        }
+    }
+
+    /// ChatGPT #17: wznowienie w aplikacji, także po restarcie — ten sam runID i ta sama
+    /// migawka z `input.json`, więc opłacone okna nie idą drugi raz (P5).
+    func resume(_ item: SessionItem) {
+        guard let runID = item.runID,
+              let input = try? JSONFile.load(RunInput?.self, from: RunDirectory(session: item.url, runID: runID).input, default: nil),
+              let c = client(for: input.snapshot.providerID) else {
+            lastError = "Nothing to resume for this recording."
             return
         }
-        let runID = Self.sessionName(Date())
+        run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
+    }
+
+    private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: OpenAICompatibleClient) {
         let id = sessionURL.lastPathComponent
         Task {
             do {

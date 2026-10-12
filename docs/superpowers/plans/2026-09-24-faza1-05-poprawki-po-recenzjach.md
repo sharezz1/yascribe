@@ -809,7 +809,7 @@ Status: ✅ zweryfikowane przebiegiem kontrolnym 2026-09-25 (kopia spike'a, Sonn
 **Interfejsy:**
 - Dostarcza: `RecordingController.start(directory:presetLabel:onEnded:)`, `presetLabel`, `directory`, `showPanel(model:)`. `AppModel.startRecording()` odmawia bez ważnego presetu i zamraża preset (`<sesja>/preset.json`). `AppModel.transcribe(sessionURL:preset:)`, `AppModel.resume(_:)`. `SessionItem.runID`.
 
-- [ ] **Krok 1: `RecordingController.swift` w całości.** Pływające okno służy teraz do wyboru presetu **przed** nagraniem (W§6), a w trakcie pokazuje preset zamrożony przy starcie:
+- [x] **Krok 1: `RecordingController.swift` w całości.** Pływające okno służy teraz do wyboru presetu **przed** nagraniem (W§6), a w trakcie pokazuje preset zamrożony przy starcie:
 
 ```swift
 import AppKit
@@ -929,7 +929,7 @@ struct RecordingPanelView: View {
 }
 ```
 
-- [ ] **Krok 2: `AppModel` — preset przy starcie, wznowienie, blokada czatu.**
+- [x] **Krok 2: `AppModel` — preset przy starcie, wznowienie, blokada czatu.**
 
 (a) w `SessionItem` pod `var progress: Double?` dopisz `/// Ostatni przebieg transkrypcji — do wznowienia po przerwie albo restarcie (ChatGPT #17).\n    var runID: String?`.
 
@@ -1040,14 +1040,14 @@ i zamień całą funkcję `latestTranscript(in:)` na:
     }
 ```
 
-- [ ] **Krok 3: Menu.** W `MeetNotesApp.swift`, w `CommandMenu("Recording")`, pod przyciskiem nagrywania dopisz:
+- [x] **Krok 3: Menu.** W `MeetNotesApp.swift`, w `CommandMenu("Recording")`, pod przyciskiem nagrywania dopisz:
 
 ```swift
                 Button("Show Recording Window") { model.recording.showPanel(model: model) }
                     .keyboardShortcut("r", modifiers: [.command, .option])
 ```
 
-- [ ] **Krok 4: Strona główna.** W `MeetingsView.swift`:
+- [x] **Krok 4: Strona główna.** W `MeetingsView.swift`:
   - trwająca sesja jest w wierszu „Recording" na górze, nie na liście (Hermes 4.5). Zamień:
 
 ```swift
@@ -1087,7 +1087,7 @@ na:
             Label("Interrupted", systemImage: "pause.circle").foregroundStyle(.orange)
 ```
 
-- [ ] **Krok 5: Widok spotkania — odtwarzanie „Me" i wznowienie.** W `MeetingDetailView.swift`:
+- [x] **Krok 5: Widok spotkania — odtwarzanie „Me" i wznowienie.** W `MeetingDetailView.swift`:
   - w `PlaybackState` pod `var player: AVAudioPlayer?` dopisz `var track: String?`;
   - zamień `UtteranceRow(utterance: u) { play(from: u.start) }` na `UtteranceRow(utterance: u) { play(u) }`;
   - zamień całą funkcję `play(from:)` na:
@@ -1118,7 +1118,7 @@ na:
                     }
 ```
 
-- [ ] **Krok 5b: Odznaka sondy czyta wynik dla języka presetu.** Od E2 wynik sondy ASR leży w cache pod kluczem z językiem; odczyt bez języka dawałby zawsze „Not tested" (pytanie z S7). W `PresetsView.swift`, w `RoleEditor`, zamień:
+- [x] **Krok 5b: Odznaka sondy czyta wynik dla języka presetu.** Od E2 wynik sondy ASR leży w cache pod kluczem z językiem; odczyt bez języka dawałby zawsze „Not tested" (pytanie z S7). W `PresetsView.swift`, w `RoleEditor`, zamień:
 
 ```swift
                     ProbeBadges(result: model.probeCache.result(provider: a.providerID, model: a.model, role: role))
@@ -1131,7 +1131,7 @@ na:
                     ProbeBadges(result: model.probeCache.result(provider: a.providerID, model: a.model, role: role, language: language))
 ```
 
-- [ ] **Krok 6: Setup.** W `SetupView.swift`:
+- [x] **Krok 6: Setup.** W `SetupView.swift`:
   - klucz `"systemAudioVerified"` występuje w `AppModel` i `SetupView` jako ten sam napis — przepisz go identycznie;
   - zamień `.disabled(state.checking)` na `.disabled(state.checking || model.recording.isRecording)` (Hermes 4.8: bez drugiego tapu w trakcie nagrania);
   - zamień `state.systemAudio = await SystemAudioCheck.run()` na:
@@ -1142,9 +1142,9 @@ na:
                         if case .works = result { UserDefaults.standard.set(true, forKey: "systemAudioVerified") }
 ```
 
-- [ ] **Krok 7: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. `scripts/test.sh` — `109/109`. `scripts/bundle.sh` — `.build/MeetNotes.app`.
+- [x] **Krok 7: Zbuduj.** `swift build --product MeetNotesApp` — oczekiwane: `Build complete!`. `scripts/test.sh` — `109/109`. `scripts/bundle.sh` — `.build/MeetNotes.app`.
 
-- [ ] **Krok 8: Commit.**
+- [x] **Krok 8: Commit.**
 
 ```bash
 git add Sources/MeetNotesApp
