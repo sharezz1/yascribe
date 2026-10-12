@@ -66,16 +66,22 @@ Sesje ✅ z tego samego wiersza wolno łączyć w jedną rozmowę. Zatrzymaj si�
 | S9 | B5 (sondy na żywo, G3) | 02 | F | **tak** + klucz | — | nie |
 | S10 | C1–C3 | 03 | F | — | 99 | nie |
 | S11 | E3, potem E5 | 05 | K | — | 106, po E5: 109 | **tak** |
-| S12 | C4 | 03 | K | — | 109 | **tak** |
+| S12 | C4 | 03 | K | — | 109 | check |
 | S13 | C5 (transkrypcja na żywo) | 03 | F | **tak** + klucz | — | nie |
 | S14 | D1 (krok 1: certyfikat — użytkownik) | 04 | K | **tak** (krok 1) | 109 | nie |
-| S15 | D2 | 04 | K | — | 109 | **tak** |
-| S16 | E4 | 05 | K | — | 109 | **tak** |
+| S15 | D2 + E4 (jedna sesja) | 04, 05 | K | — | 109 | check (po E4) |
+| S16 | czyszczenie `BACKLOG.md` | — | K | — | 109 | nie |
 | S17 | D3 (odbiór ręczny) | 04 | F | **tak** | — | nie |
-| S18 | przegląd całej gałęzi | wszystkie | R | — | 109 | — |
+| S18 | przegląd całej gałęzi (mimo) | wszystkie | R | — | 109 | — |
 
 > Liczby od S6 przesunięte o +7: +6 po poprawkach S3+S4 (decyzja 2026-09-25) i +1 po torze `mic_raw` pod VP (test `mixesMicArrayChannelsWithGain`, sonda S5 2026-09-29; `docs/superpowers/reports/S5-S2-poprawka-aec.md`).
 > +3 po E5 (luki pokrycia z checku S10).
+
+**Protokół recenzji od S12 (decyzja użytkownika 2026-10-12)** — ma pierwszeństwo przed §4 i wcześniejszymi ustaleniami:
+1. Po sesji K tylko **check** (space-bunny). Przegląd (mimo) wyłącznie w S18.
+2. Uwagi kosmetyczne (komentarze, notki, nazwy, styl testów) → `docs/superpowers/BACKLOG.md`, **bez rundy poprawek**. Runda poprawek (maks. 1, bez ponownego checku) tylko dla błędów funkcjonalnych i brakujących testów na bramkach.
+3. Drobiazgi orkiestrator rozstrzyga sam. Do autora planu i użytkownika eskaluje tylko zmiany planu wpływające na zachowanie oraz bramki.
+4. S15 = D2 + E4 w jednej sesji K, jeden check na końcu. S16 czyści `BACKLOG.md` przed przeglądem S18.
 
 **Bramki — orkiestrator zatrzymuje się i pyta użytkownika:**
 - S5: wynik S1 (błąd czy zera przy odmowie) i S2 (dwa strumienie mikrofonu naraz). Przy niepowodzeniu S2 — decyzja użytkownika.
