@@ -778,18 +778,18 @@ git commit -m "Testy: luki pokrycia z checku S10, sprzatanie katalogow tymczasow
 
 Źródło: `docs/superpowers/reports/S11-przeglad.md` (uwagi 1–5) i `checks/S11-check.md` (#3). Sesja „S11fix", przed S12. Bez nowych `@Test`, liczba zostaje **109**. Check #2 (wznawianie w CLI) poprawia C4 krok 4, a uwagę 6 (wersja formatu `run.json`/`input.json`) świadomie odkładamy do powłoki (D). Sugestie #7/#8 z checku pomijamy.
 
-- [ ] **Krok 1: Progi przesłuchu w `RunInput` (uwaga 1).** W `CrosstalkFilter.swift`: `public struct CrosstalkFilter: Sendable` → `public struct CrosstalkFilter: Codable, Equatable, Sendable`. W `TranscriptionRunner.swift`: do `RunInput` dopisz pole `public var crosstalk: CrosstalkFilter` (po `maxChunkSeconds`), a w `run(progress:)` w `RunInput(…)` dopisz argument `crosstalk: crosstalk` w tym samym miejscu. W `resumingWithADifferentPresetIsRefused` dopisz na końcu drugi przypadek: ten sam `snapshot()`, ale `crosstalk:` z `correlationThreshold = 0.5` → `#expect(throws: RunError.inputMismatch)`. Mutacja: usuń pole `crosstalk` z porównania (np. ustaw w `RunInput(…)` zawsze `CrosstalkFilter()`) → test pada.
+- [x] **Krok 1: Progi przesłuchu w `RunInput` (uwaga 1).** W `CrosstalkFilter.swift`: `public struct CrosstalkFilter: Sendable` → `public struct CrosstalkFilter: Codable, Equatable, Sendable`. W `TranscriptionRunner.swift`: do `RunInput` dopisz pole `public var crosstalk: CrosstalkFilter` (po `maxChunkSeconds`), a w `run(progress:)` w `RunInput(…)` dopisz argument `crosstalk: crosstalk` w tym samym miejscu. W `resumingWithADifferentPresetIsRefused` dopisz na końcu drugi przypadek: ten sam `snapshot()`, ale `crosstalk:` z `correlationThreshold = 0.5` → `#expect(throws: RunError.inputMismatch)`. Mutacja: usuń pole `crosstalk` z porównania (np. ustaw w `RunInput(…)` zawsze `CrosstalkFilter()`) → test pada.
 
-- [ ] **Krok 2: Przesłuch nie wycina prawdziwej mowy (check #3).** W `crosstalkFromSpeakersIsDroppedBeforeASR` dodaj do ścieżki mikrofonu, w miejscu ciszy na ścieżce systemowej, własną mowę (`tone` o innej częstotliwości lub inny przebieg niż echo) i asercję, że w wyniku jest co najmniej jedna wypowiedź `.me`. Mutacja: w `CrosstalkFilter.keep` warunek zachowania fragmentu `&& false` → test pada (dziś przechodzi).
+- [x] **Krok 2: Przesłuch nie wycina prawdziwej mowy (check #3).** W `crosstalkFromSpeakersIsDroppedBeforeASR` dodaj do ścieżki mikrofonu, w miejscu ciszy na ścieżce systemowej, własną mowę (`tone` o innej częstotliwości lub inny przebieg niż echo) i asercję, że w wyniku jest co najmniej jedna wypowiedź `.me`. Mutacja: w `CrosstalkFilter.keep` warunek zachowania fragmentu `&& false` → test pada (dziś przechodzi).
 
-- [ ] **Krok 3: `scripts/test.sh` (uwagi 2–4).**
+- [x] **Krok 3: `scripts/test.sh` (uwagi 2–4).**
   - linia `find -E …`: przed `-exec` dopisz `-mmin +60` (nie kasuje katalogów przebiegu, który trwa równolegle);
   - zaraz pod `OUT="$(mktemp)"` dopisz `trap 'rm -f "$OUT"' EXIT`;
   - komentarz nad `find` zamień na: `# Katalogi testów: mn-[prefiks-]<UUID wielkimi literami>, starsze niż godzina. Nagrania jak mn-s2 czy mn-corpus-1 nie pasują (brak UUID).`
 
-- [ ] **Krok 4: Komentarz `tracks(in:)` (uwaga 5).** Dopisz regułę z E3: `mic_aec` z awarią (`trackFailed`) zastępuje `mic_raw`.
+- [x] **Krok 4: Komentarz `tracks(in:)` (uwaga 5).** Dopisz regułę z E3: `mic_aec` z awarią (`trackFailed`) zastępuje `mic_raw`.
 
-- [ ] **Krok 5: Uruchom i commit.** `scripts/test.sh` → `109/109`; `ls "$TMPDIR"/tmp.* 2>/dev/null | wc -l` nie rośnie po przebiegu z `--filter`. Wyniki obu mutacji do raportu.
+- [x] **Krok 5: Uruchom i commit.** `scripts/test.sh` → `109/109`; `ls "$TMPDIR"/tmp.* 2>/dev/null | wc -l` nie rośnie po przebiegu z `--filter`. Wyniki obu mutacji do raportu.
 
 ```bash
 git add Sources/MeetNotesTranscription Tests/MeetNotesTranscriptionTests scripts/test.sh

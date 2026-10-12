@@ -133,11 +133,15 @@ final class Recorder: @unchecked Sendable {
     for _ in 0..<5 { sys += tone(seconds: 0.4, rate: 16_000) + silence(seconds: 0.3, rate: 16_000) }
     sys += silence(seconds: 5, rate: 16_000)
     // echo: 100 ms drogi akustycznej, ~14 dB ciszej
-    let mic = Array(([Int16](repeating: 0, count: 1_600) + sys.map { Int16(Double($0) * 0.2) }).prefix(sys.count))
+    var mic = Array(([Int16](repeating: 0, count: 1_600) + sys.map { Int16(Double($0) * 0.2) }).prefix(sys.count))
+    // check S11 #3: własna mowa w ciszy systemu (7–9 s), inny ton niż echo — musi zostać
+    mic.replaceSubrange(112_000..<144_000, with: tone(seconds: 2, rate: 16_000, hz: 500))
     let dir = try makeSession(system: sys, mic: mic)
     let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(ListeningASR())).run()
-    #expect(!t.utterances.isEmpty)
-    #expect(t.utterances.allSatisfy { $0.speaker == .them })
+    #expect(t.utterances.contains { $0.speaker == .them })
+    let me = t.utterances.filter { $0.speaker == .me }
+    #expect(!me.isEmpty)
+    #expect(me.allSatisfy { $0.start > 6.5 }) // echo z 2–5,6 s odpadło
 }
 
 @Test func runIDEscapingTheRunsDirectoryIsRejected() async throws {
@@ -156,6 +160,12 @@ final class Recorder: @unchecked Sendable {
     await #expect(throws: RunError.inputMismatch) {
         _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(language: .english),
                                           client: client(ListeningASR())).run()
+    }
+    // przegląd S11 #1: inne progi przesłuchu → inne granice okien
+    let strict = { var c = CrosstalkFilter(); c.correlationThreshold = 0.5; return c }()
+    await #expect(throws: RunError.inputMismatch) {
+        _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
+                                          client: client(ListeningASR()), crosstalk: strict).run()
     }
 }
 

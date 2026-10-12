@@ -7,7 +7,7 @@ import Foundation
 /// do 0,3 s), odpada przed ASR. Obwiednia z ramek 20 ms, nie próbki: tanio i odpornie na
 /// barwę pokoju. Próg zachowawczy — gdy użytkownik mówi sam albo przez rozmówcę, obwiednie
 /// się rozjeżdżają i fragment zostaje.
-public struct CrosstalkFilter: Sendable {
+public struct CrosstalkFilter: Codable, Equatable, Sendable {
     public var correlationThreshold = 0.8
     public var maxLagSeconds = 0.3
 
