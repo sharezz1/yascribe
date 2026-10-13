@@ -180,3 +180,10 @@ i nie dają nagrania do ponownego przebiegu.
   Koszt: wiązanie ze Swiftem i z cudzym harmonogramem wydań.
 - **Czy odsłuch ma mieć wersję zmiksowaną** (obie strony w jednym pliku) — jeśli tak, to
   **po wyrównaniu**, a oryginały zostają.
+
+## 🆕 Z porównania z Granolą i Wispr Flow (2026-10-13, odbiór D3)
+
+- **Szablony podsumowania** wybierane po spotkaniu (1:1, rekrutacja, cotygodniowe, discovery…), z regeneracją notatki innym szablonem i własnymi szablonami. Szablon to druga oś obok presetu: preset = język + modele, szablon = rodzaj spotkania → prompt i struktura notatki. Dziś prompt podsumowania siedzi w presecie — do przemyślenia w fazie 1.5.
+- **Własne notatki w trakcie spotkania** („My thoughts"), wplatane w wygenerowaną notatkę.
+- **Transkrypt na żywo w trakcie spotkania** (Granola, Wispr Flow). Faza 1 transkrybuje po zakończeniu: długie okna dają modelowi więcej kontekstu, a bramka ciszy oszczędza koszt. Na żywo = wysyłanie okien w trakcie nagrania (koszt podobny, krótszy kontekst okna). Kandydat na fazę 1.5/2 — decyzja przy planowaniu; transkrypt po spotkaniu może pozostać „ostateczną" wersją (jak baner Wispra: „po spotkaniu poprawię transkrypt").
+
