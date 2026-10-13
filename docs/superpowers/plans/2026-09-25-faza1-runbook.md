@@ -31,6 +31,7 @@ Twoja rola:
 - Bramki z runbooka §2 i każde „STOP" z planu: zatrzymujesz się i pytasz użytkownika.
   Nie zmieniasz planu, speców ani kolejności sesji sam.
 - Po każdej sesji wysyłasz użytkownikowi jedną linię: sesja, wynik testów, co dalej.
+  Gdy raport ma „Merge Danger: NIEODWRACALNE", ta linia zaczyna się od „⚠️ NIEODWRACALNE:".
 
 Zacznij od sesji S0.
 ```
@@ -106,7 +107,9 @@ Jesteś wykonawcą planu MeetNotes. Repozytorium: /Users/michalprzytulski/meetno
 6. Kroki wymagające użytkownika: wypisz mu polecenia i czekaj. Nie zmieniaj Ustawień systemowych,
    pęku kluczy ani klucza API.
 7. Na koniec zapisz raport do docs/superpowers/reports/{SESJA}.md: zadania, hashe commitów,
-   ostatnia linia scripts/test.sh, odchylenia od planu z powodem, pytania do orkiestratora.
+   ostatnia linia scripts/test.sh, odchylenia od planu z powodem, pytania do orkiestratora,
+   linia „Merge Danger: odwracalne|NIEODWRACALNE — <dlaczego>". Nieodwracalne = zmienia format
+   sesji/plików na dysku, uprawnienia TCC, pęk kluczy albo usuwa dane; reszta = odwracalne.
    Dodaj raport do ostatniego commita. Ostatni commit opisz w raporcie jako „HEAD na faza1",
    bez hasha — amend go zmieni (hook scripts/check-hashes.sh odrzuci hash spoza gałęzi).
    Zakończ odpowiedź ostatnią linią scripts/test.sh.
