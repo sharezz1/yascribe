@@ -61,10 +61,18 @@ Dwa **niezależne** wybory silnika: ASR i AI. Tu wymagania trzymają się w cał
   To wyklucza diaryzację po stronie API. `microsoft/mai-transcribe-2` na OpenRouterze,
   ~0,10 USD/h, polski wspierany.
 - 🔴 **Diaryzacja zawsze lokalnie** — konsekwencja powyższego limitu.
-- 🆕 🔴 **Język wybierany jawnie i związany z modelem. Nigdy auto-detekcja.**
+- 🆕 🔴 **Język wybierany jawnie i związany z modelem. Domyślnie nigdy auto-detekcja.**
   Zmierzone: polskie spotkanie z `Language: en` dało **62% zmyślonej angielszczyzny**,
   czytającej się jak prawdziwa notatka. Ten sam plik w dwóch przebiegach dał dwa różne wyniki.
   To najgroźniejszy tryb awarii notatnika, bo **wygląda na wiedzę**.
+  - 🆕 **Zmiana 2026-10-13 (decyzja użytkownika):** preset może mieć język **„Auto"** jako
+    opcję awaryjną — nigdy domyślną, z widocznym ostrzeżeniem „niższa jakość, ryzyko zmyśleń".
+    Powód: spotkania mieszane PL/EN (realny przypadek użytkownika). Dowód ryzyka zostaje:
+    Granola „Multi-language" na tym samym spotkaniu zniekształciła polski
+    (`docs/design/inspiracje/granola.md`). Do rozważenia przy fazie 1.5: preset z **parą
+    języków** (np. PL + EN) jako bezpieczniejszy wariant od pełnego auto — wymaga pomiaru
+    na korpusie, czy MAI to obsługuje. Kod: `LanguageCode` dziś odrzuca `auto` — zmiana
+    w planie fazy 1.5, razem ze strażnikiem języka (przy auto nie ma czego pilnować).
 - 🆕 **Wybrany wariant modelu widoczny w UI** — nazwa, rozmiar, znacznik „Multilingual",
   przycisk testu. Wzór: ekran modeli Spokenly. Cztery z pięciu testowanych aplikacji tego
   nie pokazują i przez to milcząco jadą na złym modelu.
