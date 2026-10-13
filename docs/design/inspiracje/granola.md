@@ -6,3 +6,4 @@
 - **Zaznaczenie wypowiedzi** (`granola-zaznaczenie-wypowiedzi.png`): klik w dymek → czas (04:10), pasek Copy / Delete / Report.
 
 Do przeniesienia: notatka jako główna powierzchnia widoku spotkania, zwijany panel transkryptu na żywo, źródło dźwięku i preset widoczne w panelu nagrywania.
+- **Po spotkaniu** (`granola-po-spotkaniu.png`): tytuł notatki **sam się nadał** z treści („Scheduling forecast discrepancy and agent allocation with Piotr"), nad paskiem pojawia się przycisk **„Generate notes"**, pigułka zmienia się w „Resume" (wznowienie nagrywania do tej samej notatki), skrót w polu pytania zmienia się na „Write follow up email". Notatki generuje się na żądanie, nie automatycznie.
