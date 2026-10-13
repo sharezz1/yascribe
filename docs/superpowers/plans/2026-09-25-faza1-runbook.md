@@ -107,7 +107,9 @@ Jesteś wykonawcą planu MeetNotes. Repozytorium: /Users/michalprzytulski/meetno
    pęku kluczy ani klucza API.
 7. Na koniec zapisz raport do docs/superpowers/reports/{SESJA}.md: zadania, hashe commitów,
    ostatnia linia scripts/test.sh, odchylenia od planu z powodem, pytania do orkiestratora.
-   Dodaj raport do ostatniego commita. Zakończ odpowiedź ostatnią linią scripts/test.sh.
+   Dodaj raport do ostatniego commita. Ostatni commit opisz w raporcie jako „HEAD na faza1",
+   bez hasha — amend go zmieni (hook scripts/check-hashes.sh odrzuci hash spoza gałęzi).
+   Zakończ odpowiedź ostatnią linią scripts/test.sh.
 
 Sesja: {SESJA}. Zadania: {ZADANIA}.
 ```
