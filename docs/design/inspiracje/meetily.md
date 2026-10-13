@@ -1,0 +1,9 @@
+# Meetily (v0.4.1) — inspiracja (zrzuty użytkownika, 2026-10-13)
+
+- **Transkrypt na żywo** (`meetily-transkrypt-na-zywo.png`): wiersze z czasem `[04:11]`, ostatni wiersz w ramce w trakcie dopisywania, „Listening…", pływający pasek pauza/stop/poziom na dole.
+- **Widok spotkania** (`meetily-spotkanie.png`): dwie kolumny — transkrypt (Copy / Recording / **Enhance**) i podsumowanie („Generate Summary" + język + ustawienia modelu + eksport). Pod transkryptem pole **„Add context for AI summary"** (uczestnicy, cel spotkania) — kontekst dla modelu przed generowaniem.
+- **Szablony** (`meetily-szablony.png`): rozwijane przy „Generate Summary" — Daily Standup, Project Sync, Retrospective, Client/Sales, Standard Meeting Notes; opis szablonu w dymku.
+- **Wybór modelu z wyszukiwarką** (`meetily-wybor-modelu-z-wyszukiwarka.png`): dostawca w jednym polu, obok „Select model…" z polem „Search models…" nad listą. **Dokładnie to, czego brakuje nam w uwadze 2 z S17.**
+- **Modele lokalne** (`meetily-modele-lokalne.png`, `meetily-ustawienia-whisper.png`): karty modeli z rozmiarem, opisem, „Ready/Selected", „Download" — wzór dla fazy 2 (W§ „wariant modelu widoczny w UI").
+- **Ustawienia w zakładkach** (`meetily-ustawienia-*.png`): General / Recordings / Transcription / Summary / Beta. Summary: przełącznik **Auto Summary** po zakończeniu, **język podsumowania** (przypięty domyślny + szybkie przełączanie, „Auto = dominujący język transkryptu"), model z jawnym przyciskiem **Save**.
+- **Przechwytywanie dźwięku: wybór ScreenCaptureKit albo Core Audio** w ustawieniach (wg użytkownika; bez zrzutu). U nas: process tap Core Audio (spec rdzenia §1, pomiar Narady), ScreenCaptureKit przewidziany tylko jako miejsce podmiany w źródle systemowym.
