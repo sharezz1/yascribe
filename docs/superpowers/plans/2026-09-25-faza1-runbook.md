@@ -44,6 +44,7 @@ Zacznij od sesji S0.
 | P2 | ~~Zdecyduj R5, R8, W6~~ — zdecydowane 2026-09-25 (§5) | — |
 | P3 | Na dni sesji A10, B5, C5, D3 zarezerwuj czas przy komputerze | nagrywanie, uprawnienia, klucz API |
 | P4 | Klucz OpenRoutera pod ręką (dopiero od B5) | `export MEETNOTES_API_KEY=…` w Twoim terminalu |
+| P5 | W każdym nowym klonie: `git config core.hooksPath scripts/hooks` | hooki (`check-hashes`) nie działają bez tego, po cichu |
 
 Praca na gałęzi `faza1`, nie na `master`. Tworzy ją sesja 0.
 
