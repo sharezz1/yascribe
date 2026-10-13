@@ -79,3 +79,32 @@ Aplikacja nieuruchamiana (GUI); `swift build --product MeetNotesApp` → `Build 
 - Testy: 109 → 111 (+2: A i B).
 
 test.sh: 111/111 testów uruchomionych i zaliczonych.
+
+## Sprawdzenie ręczne `load()` w `.devdata` (orkiestrator, 2026-10-13 ~20:53)
+
+Środowisko: build debug z `scripts/run.sh` (podpis certyfikatem), dane `MEETNOTES_DATA_DIR=.devdata`.
+Test wykonany trzykrotnie — trzy starty aplikacji z zepsutym `probe-cache.json` (`{zepsute`):
+
+1. Start 1 → alert „Something went wrong — Couldn't read probe-cache.json (moved to
+   probe-cache.json.corrupt-20261013-165251): DecodingError.dataCorrupted … Unexpected character 'z'
+   around line 1, column 3."; plik odsunięty, `presets.json`/`providers.json`/`settings.json`
+   **nietknięte** (hashe bez zmian).
+2. Starty 2 i 3 (stemply `-20261013-201556` — zrzut użytkownika — i `-20261013-201908`) — identycznie.
+   Trzy pliki `.corrupt-*` (po 8 B, treść `{zepsute`) zachowane jako dowód:
+   `~/.hermes/cache/scratch/mn-s18/`.
+3. **Zapis po zepsutym starcie** (kryterium „presety i dostawcy zostają"): w oknie Settings zmieniono
+   i przywrócono wartość pola „Model" (embedding) → `save()` zapisał wszystkie cztery pliki. Wynik:
+   - `presets.json` = `68450f74…` i `providers.json` = `2ab53af4…` — **identyczne jak przed testem**
+     (w starym kodzie dokładnie tutaj następowała utrata danych);
+   - `probe-cache.json` odtworzony jako pusty cache (`{"results":{}}`);
+   - `settings.json` po przywróceniu wartości = `59e4611e…` (bit w bit jak przed testem).
+4. `.devdata` przywrócone do stanu sprzed testu (cztery hashe zgodne z kopią; `.corrupt-*` przeniesione
+   do `~/.hermes/cache/scratch/mn-s18/`).
+
+Uwagi wykonawcze (dla przyszłych sesji): okno aplikacji potrafi wylądować na widmowej przestrzeni po
+zmianie konfiguracji ekranów — wtedy `computer_use` odmawia wejścia („off_space_or_ax_unresolved");
+ratunek: `focus_app raise_window=true` albo `System Events → set frontmost of process "MeetNotes" to
+true`. Wejście syntetyczne do tej aplikacji działa przez `osascript`/System Events (klawiatura + focus
+walk przez `value of attribute "AXFocusedUIElement"`), a **nie** przez `computer_use` (background
+odmawiany; elementy bez tokenów). Runda nie zmienia formatu plików, uprawnień ani nie usuwa danych —
+**Merge Danger: odwracalne**.
