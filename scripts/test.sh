@@ -21,8 +21,9 @@ if [ ! -f "$PLUGIN" ]; then
     exit 2
 fi
 
-# Katalogi testów: mn-[prefiks-]<UUID wielkimi literami>, starsze niż godzina. Nagrania jak mn-s2 czy mn-corpus-1 nie pasują (brak UUID).
-find -E "${TMPDIR:-/tmp}" -maxdepth 1 -regex '.*/mn-([a-z]+-)?[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' -mmin +60 -exec rm -rf {} + 2>/dev/null
+# Katalogi testów: mn-[fit-|session-|tr-]<UUID wielkimi literami>, starsze niż godzina. Tylko prefiksy z Tests/
+# (nowy prefiks w testach = dopisz tutaj); nagrania jak mn-s2, mn-corpus-1 czy mn-corpus-<UUID> nie pasują.
+find -E "${TMPDIR:-/tmp}" -maxdepth 1 -regex '.*/mn-((fit|session|tr)-)?[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' -mmin +60 -exec rm -rf {} + 2>/dev/null
 OUT="$(mktemp)"
 trap 'rm -f "$OUT"' EXIT
 swift test -Xswiftc -load-plugin-library -Xswiftc "$PLUGIN" "$@" 2>&1 | tee "$OUT"
@@ -42,7 +43,6 @@ done
 
 RAN=$(grep -oE 'Test run with [0-9]+ tests' "$OUT" | grep -oE '[0-9]+' | paste -sd+ - | bc)
 EXPECTED=$(grep -rhE '^[[:space:]]*@Test' Tests | wc -l | tr -d ' ')
-rm -f "$OUT"
 if [ "${RAN:-0}" -ne "$EXPECTED" ]; then
     echo "test.sh: uruchomiono $RAN testów, a w Tests/ jest $EXPECTED deklaracji @Test. Wynik NIEWAŻNY." >&2
     exit 4

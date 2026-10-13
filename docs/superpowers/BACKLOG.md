@@ -5,22 +5,25 @@ trafiają tutaj i czekają; rundy poprawek dotyczą wyłącznie błędów funkcj
 testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 ## Otwarte
-- [ ] `scripts/test.sh` — linia `rm -f "$OUT"` po `trap` jest redundantna (nieszkodliwa) — sprzątnąć przy okazji. *(przegląd S11 r2)*
-- [ ] `scripts/test.sh` — wzorzec sprzątania `mn-([a-z]+-)?UUID` złapie też hipotetyczny `mn-corpus-<UUID>` (komentarz to opisuje; ewentualne zacieśnienie wzorca — kosmetyka). *(przegląd S11 r2)*
-- [ ] CLI `transcribe`: klient powstaje przed sprawdzeniem `--language` — kolejność błędów zależy od tego, który argument jest zły (K: uwaga, nie błąd). *(S12)*
-- [ ] `session-from-file`: drugi przebieg w tym samym katalogu pada (`alreadyExists` na `journal.jsonl`) — przy pracy na korpusie każdy plik wymaga świeżego katalogu (albo później `--force`). *(check S12 #7)*
-- [ ] CLI `transcribe` ze złym katalogiem sesji → surowy `NSCocoaErrorDomain` (zamiast czytelnego błędu użycia). *(check S12 #9)*
-- [ ] CLI `probe`: `--language` bez wartości po cichu daje `nil` (ten sam problem, co `--shape`/`--run` przed S12fix; poza zakresem tamtej rundy). *(K po S12fix)*
-- [ ] CLI `transcribe`: baseURL bez schematu (`openrouter.ai/api/v1`) → każde okno pada na `unsupported URL`, a powód widać tylko w `transcript.json` (`failedChunks[].error`); rozważyć walidację adresu z czytelnym błędem. *(S13 live)*
-- [ ] CLI `transcribe`: pasek postępu stoi na `0%` do końca pierwszego okna (~25 s) — łatwo przerwać „za wcześnie"; rozważyć choćby licznik okien od razu (UX). *(S13)*
-- [ ] Oś sesji vs pliki ścieżek: czasy wypowiedzi są na osi sesji, a pliki mają własne offsety (`summarize` je pokazuje; `mic_raw` w S13: −3,647 s = plik +3,647 s względem osi). Przy ręcznych sprawdzeniach trzeba dodać offset — rozważyć notkę w CLI/dokumentacji. *(S13)*
 - [ ] `scripts/test.sh` nie pokrywa skryptów składania (`bundle.sh`/`run.sh`/`Info.plist`) — bramka podpisu była ręczna i jednorazowa; rozważyć w S16/S18. *(check S14 #3)*
+  - **Do decyzji przy S18 / faza 2** — pokrycie wymaga podpisu certyfikatem z pęku kluczy i składania paczki — poza `swift test`; decyzja, czy i jak (np. ad-hoc `MEETNOTES_SIGN_IDENTITY=-` + `plutil -lint`), należy do S18.
 - [ ] D3/Info.plist: process tap (dźwięk systemowy) a klucze TCC — plan D3 krok 1 oczekuje panelu „Nagrywanie ekranu i dźwięku systemowego", a w plist nie ma `NSScreenCaptureUsageDescription`; sprawdzić przy D3, ewentualna poprawka plist wróci do D1. *(check S14 #7)*
+  - **Do decyzji przy S18 / faza 2** — zależy od wyniku kroku 1 planu D3 na sprzęcie (który panel TCC się pokaże); zmiana plist bez tego pomiaru byłaby zgadywaniem.
 - [ ] `Package.swift` `.macOS(15.0)` vs `Info.plist` `LSMinimumSystemVersion 27.0` — rozjazd tolerowany, ale niezweryfikowany. *(check S14 #8)*
-- [ ] `AppModel.startRecording`: `preset.json` zapisywany przez `try?` — nieudany zapis nie pokaże żadnego błędu. *(obserwacja K po S15)*
+  - **Do decyzji przy S18 / faza 2** — wymaga decyzji produktowej (minimalna wersja systemu) i weryfikacji na starszym macOS — nie da się tego sprawdzić na tej maszynie.
 - [ ] `MeetNotesApp` nie ma targetu testowego (executable) — logika aplikacji (blokady, `preset.json`, `latestRun`, odtwarzanie) niemieszczalna w testach bez zmiany struktury (biblioteka + testTarget); rozważyć jako zadanie fazy 2 / przy S18. *(check S15 #7)*
+  - **Do decyzji przy S18 / faza 2** — zmiana struktury pakietu (biblioteka + testTarget) i bramki liczby testów — poza zakresem sesji czyszczącej.
 - [ ] `AppModel.reloadSessions()` parsuje journale/transkrypty na MainActorze (init, startRecording, koniec przebiegu) — zawieszenie UI przy pełnym archiwum; `SettingsView.onChange` zapisuje wszystkie pliki przy każdym znaku. *(check S15 #10)*
+  - **Do decyzji przy S18 / faza 2** — przeniesienie parsowania poza MainActor i debounce zapisu ustawień to zmiana zachowania aplikacji, nie kosmetyka; przy obecnej liczbie sesji niewidoczne.
 
 ## Zapisane (dla kroniki)
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
 - 2026-10-12 — test przesłuchu: zakres z sekund + `#expect(mic.count >= …)` → `0dd84ef`.
+- 2026-10-13 — S16: `scripts/test.sh` — usunięte zbędne `rm -f "$OUT"` (sprząta `trap`); wzorzec zacieśniony do prefiksów z `Tests/` (`mn-((fit|session|tr)-)?<UUID>`), komentarz opisuje, że `mn-corpus-<UUID>` nie pasuje.
+- 2026-10-13 — S16: CLI `transcribe` — błędy użycia (zły katalog sesji, `--language`, `--shape`/`--run`) przed budową klienta; brak `journal.jsonl` → „to nie katalog sesji", kod 64.
+- 2026-10-13 — S16: CLI `client()` (models/probe/transcribe) — baseURL bez `http://`/`https://` albo bez hosta → „zły adres … podaj pełny adres", kod 64.
+- 2026-10-13 — S16: CLI `transcribe` — postęp `NN% (okna d/N)` od startu pętli (licznik widoczny przed pierwszym oknem), `fflush`.
+- 2026-10-13 — S16: CLI `probe` — `--language` bez wartości → kod 64 (wspólny helper `CLI.value`, używany też przez `transcribe`).
+- 2026-10-13 — S16: CLI `session-from-file` — istniejący `journal.jsonl` sprawdzany przed czytaniem audio; komunikat z podpowiedzią „świeży katalog na każdy plik korpusu" (nadal odmowa, kod 1).
+- 2026-10-13 — S16: oś sesji vs offsety plików — notka w pomocy CLI („czas w pliku ścieżki = czas na osi − przesunięcie z summarize").
+- 2026-10-13 — S16: `AppModel.startRecording` — zapis `preset.json` przez do-catch → `lastError` (nagranie trwa dalej).

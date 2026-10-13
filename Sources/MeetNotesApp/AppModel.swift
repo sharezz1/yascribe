@@ -210,7 +210,10 @@ final class AppModel {
                     self?.transcribe(sessionURL: dir, preset: preset)
                 }
             }
-            try? JSONFile.save(preset, to: dir.appendingPathComponent("preset.json"))
+            // Nagranie trwa mimo błędu zapisu — ten przebieg i tak dostaje `preset` z domknięcia.
+            do { try JSONFile.save(preset, to: dir.appendingPathComponent("preset.json")) } catch {
+                lastError = "Recording, but couldn't save its preset: \(error). After a restart it will use the active preset."
+            }
             recording.showPanel(model: self)
             reloadSessions()
         } catch {
