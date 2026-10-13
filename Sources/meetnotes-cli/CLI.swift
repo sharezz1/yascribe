@@ -20,6 +20,7 @@ struct CLI {
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID]
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
+    Czasy z transcribe są na osi sesji; czas w pliku ścieżki = czas na osi − przesunięcie z summarize.
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
@@ -64,6 +65,15 @@ struct CLI {
         guard let v = option(args, name).flatMap(Double.init), v.isFinite, v > 0 else {
             FileHandle.standardError.write(Data("\(name) wymaga liczby dodatniej\n".utf8))
             print(usage); exit(64)
+        }
+        return v
+    }
+
+    /// Opcja tekstowa: brak = `nil`, a podana bez wartości to błąd użycia (S3-3, check S12 #4).
+    static func value(_ args: [String], _ name: String) -> String? {
+        guard args.contains(name) else { return nil }
+        guard let v = option(args, name), !v.hasPrefix("--") else {
+            FileHandle.standardError.write(Data("\(name) wymaga wartości\n".utf8)); exit(64)
         }
         return v
     }
@@ -137,7 +147,10 @@ struct CLI {
     }
 
     static func client(_ base: String) throws -> OpenAICompatibleClient {
-        guard let url = URL(string: base) else { throw ProviderError.badResponse("zły adres \(base)") }
+        // Bez schematu każde żądanie pada na `unsupported URL`, a w transcribe widać to tylko w transcript.json (S13).
+        guard let url = URL(string: base), ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host() != nil else {
+            FileHandle.standardError.write(Data("zły adres \(base): podaj pełny adres z http:// albo https://\n".utf8)); exit(64)
+        }
         return OpenAICompatibleClient(provider: Provider(name: "cli", baseURL: url),
                                       key: ProcessInfo.processInfo.environment["MEETNOTES_API_KEY"])
     }
@@ -150,31 +163,33 @@ struct CLI {
 
     static func probe(_ args: [String]) async throws {
         guard let role = Role(rawValue: try positional(args, 2)) else { print(usage); exit(64) }
-        let lang = try option(args, "--language").map { try LanguageCode($0) }
+        let lang = try value(args, "--language").map { try LanguageCode($0) }
         let r = await ProbeRunner(client: try client(try positional(args, 0))).probe(model: try positional(args, 1), role: role, language: lang)
         print(r.works ? "DZIAŁA" : "NIE DZIAŁA", r.shape?.rawValue ?? "", r.languageHandling?.rawValue ?? "",
               r.embeddingDimension.map { "wymiar \($0)" } ?? "", r.failure ?? "")
     }
 
     static func transcribe(_ args: [String]) async throws {
+        // Wszystkie błędy użycia przed budową klienta — kolejność komunikatów nie zależy od tego, który argument jest zły.
         let dir = URL(fileURLWithPath: try positional(args, 0))
-        let c = try client(try positional(args, 1))
-        guard let langRaw = option(args, "--language") else {
+        guard FileManager.default.fileExists(atPath: SessionDirectory(url: dir).journalURL.path) else {
+            FileHandle.standardError.write(Data("\(dir.path): to nie katalog sesji (brak journal.jsonl)\n".utf8)); exit(64)
+        }
+        guard let langRaw = value(args, "--language") else {
             FileHandle.standardError.write(Data("--language jest obowiązkowe (nigdy auto)\n".utf8)); exit(64)
         }
-        let preset = Preset(name: "cli", language: try LanguageCode(langRaw),
-                            asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)))
-        // Opcja bez wartości to błąd użycia, nie cicha wartość domyślna (S3-3, check S12 #4).
-        if let bad = ["--shape", "--run"].first(where: { args.contains($0) && (option(args, $0)?.hasPrefix("--") ?? true) }) {
-            FileHandle.standardError.write(Data("\(bad) wymaga wartości\n".utf8)); exit(64)
-        }
-        if let s = option(args, "--shape"), s != ASRShape.audioTranscriptions.rawValue {
+        let language = try LanguageCode(langRaw)
+        let runOption = value(args, "--run")
+        if let s = value(args, "--shape"), s != ASRShape.audioTranscriptions.rawValue {
             FileHandle.standardError.write(Data("--shape \(s): w transcribe dozwolone tylko audioTranscriptions\n".utf8)); exit(64)
         }
+        let c = try client(try positional(args, 1))
+        let preset = Preset(name: "cli", language: language,
+                            asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)))
         let shape = ASRShape.audioTranscriptions
         let probe = ProbeResult(providerID: c.provider.id, model: try positional(args, 2), role: .asr, works: true,
                                 shape: shape, languageHandling: .unknown)
-        let runID = option(args, "--run") ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") // E3: runID bez ':'
+        let runID = runOption ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") // E3: runID bez ':'
         print("runID: \(runID)")
         var snapshot = try RunSnapshot(preset: preset, provider: c.provider, probe: probe)
         // Wznowienie (check S11 #2): CLI tworzy preset i dostawcę z nowymi UUID przy każdym uruchomieniu,
@@ -186,7 +201,11 @@ struct CLI {
                == (snapshot.model, snapshot.language, snapshot.providerBaseURL, snapshot.shape) {
             snapshot = saved.snapshot
         }
-        let t = try await TranscriptionRunner(session: dir, runID: runID, snapshot: snapshot, client: c).run { p in print(String(format: "\r%3.0f%%", p.fraction * 100), terminator: "") }
+        let t = try await TranscriptionRunner(session: dir, runID: runID, snapshot: snapshot, client: c).run { p in
+            // Licznik okien od razu: pierwsze okno trwa ~25 s, a samo „0%" wygląda na zawieszenie (S13).
+            print(String(format: "\r%3.0f%% (okna %d/%d)", p.fraction * 100, p.done, p.total), terminator: "")
+            fflush(stdout)
+        }
         print()
         for u in t.utterances {
             let flag = u.languageMismatch.map { " [JĘZYK: \($0)]" } ?? ""
@@ -198,8 +217,14 @@ struct CLI {
     /// Tylko do testów (spec fazy 1, §1.0): sesja z istniejącego pliku, np. z korpusu
     /// z rozdz. 13, 14 i 17. Import plików nie jest funkcją produktu.
     static func sessionFromFile(_ args: [String]) async throws {
-        let src = try readAnyAudio(URL(fileURLWithPath: try positional(args, 0)))
+        let audio = URL(fileURLWithPath: try positional(args, 0))
         let dir = URL(fileURLWithPath: try positional(args, 1))
+        if FileManager.default.fileExists(atPath: SessionDirectory(url: dir).journalURL.path) { // jak dotąd: odmowa, kod 1
+            FileHandle.standardError.write(Data(("błąd: \(dir.path) już zawiera sesję (journal.jsonl) — "
+                                                 + "session-from-file wymaga świeżego katalogu, np. osobnego dla każdego pliku korpusu\n").utf8))
+            exit(1)
+        }
+        let src = try readAnyAudio(audio)
         let tb = Timebase.current
         let source = FileSource(trackID: "system", samples: src.samples, sampleRate: src.rate, channels: src.channels,
                                 startHostTime: mach_absolute_time(), timebase: tb, chunkFrames: 4_800)
