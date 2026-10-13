@@ -1,0 +1,2 @@
+#!/bin/sh
+scripts/check-hashes.sh || echo "post-commit: hash z raportu wypadł z gałęzi (amend?) — popraw przed następnym commitem." >&2
