@@ -18,6 +18,36 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] **Usprawnienie (użytkownik, 2026-10-13): odzyskiwanie odmówionej zgody TCC.** Po kliknięciu „Nie pozwalaj" macOS nie pyta drugi raz o mikrofon / dźwięk systemowy. Potrzebne: (a) instrukcja ręczna w aplikacji (Ustawienia → Prywatność i ochrona → Mikrofon / Nagrywanie ekranu i dźwięku systemowego; albo `tccutil reset Microphone io.github.sharezz1.meetnotes` i `… AudioCapture …`), (b) opcjonalnie przycisk w setupie „Reset permission", który uruchamia `tccutil reset` dla własnego bundle ID i prosi o restart aplikacji.
   - **Faza 2 / po D3** — funkcja produktowa, nie poprawka; wynik D3 pokaże, które panele TCC naprawdę się pojawiają.
 
+- [ ] **D3/odbiór (2026-10-13): wiersz sesji w toku na liście ze statusem „Recovered".** Podczas
+  nagrania lista pokazuje nagrywaną sesję jako osobny wiersz z etykietą „Recovered" (4× w D3: 10:54,
+  11:04, 12:24, 12:27). Dwie warstwy: (a) etykieta — `SessionSummary.rebuild` startuje z
+  `crashed: true` i zdejmuje je dopiero zdarzenie `session.ended`, a `MeetingsView` sprawdza
+  `crashed` jako pierwszy warunek; (b) filtr `s.url != model.recording.directory` nie odsiewa sesji
+  w toku — nierówność URL-i **wykluczona doświadczalnie** (test w Swifcie), kandydat pierwszy do
+  sprawdzenia: porównywanie po `lastPathComponent`.
+  - **Do decyzji przy S18 / faza 1.5** — dotyczy wyświetlania listy (dane sesji są poprawne:
+  `journal.jsonl` i `session.json` bez zarzutu); etykieta „Recovered" opisuje „aplikacja padła
+  w trakcie", a dostaje ją każde trwające nagranie.
+- [ ] **D3/odbiór: preset nieczytelny w oknie głównym.** Toolbar pokazuje samą ikonę bez nazwy (więc
+  kryterium kroku 4 — „chip przy Record pokazuje język" — nie jest widoczne bez rozwijania menu),
+  a etykieta dostępności tego elementu to „Edit" (VoiceOver nie powie, jaki preset jest wybrany).
+  Nazwa jest widoczna tylko w menu, w pływającym oknie i w trakcie nagrania (wiersz listy + panel).
+  - **Faza 1.5** — razem z przeprojektowaniem ekranu i uwagami 1–7 z `reports/S17-uwagi-uzytkownika.md`.
+- [ ] **D3/odbiór: „0 min" dla nagrań bez dźwięku systemowego.** Tor `system` prawie pusty
+  (12:17 → 0,00 s; 12:27 → 3,72 s przy 60,80 s mikrofonu), a czas trwania wiersza liczony wyłącznie
+  z toru `system` (oś sesji, spec rdzenia §6) — przy 10–60 s mowy widać „0 min", a `offsetSeconds`
+  mikrofonu sięga −57,08 s. Transkrypcja mowy działa poprawnie.
+  - **Do decyzji przy S18 / faza 2** — pytanie o oś/czas trwania dla nagrań bez dźwięku systemowego.
+- [ ] **D3/odbiór: surowy `OSStatus error 2003334207`** w komunikacie o nieotwartym pliku ścieżki —
+  sam komunikat jest czytelny (nazywa `mic_raw`), ale kod systemowy nic nie mówi; rozważyć
+  tłumaczenie na „plik nie istnieje / jest uszkodzony".
+  - **Faza 1.5 / kosmetyka.**
+- [ ] **D3/odbiór: dwie identyczne nazwy dostawców dozwolone.** Dostawca jest identyfikowany UUID-em,
+  więc funkcjonalnie nieszkodliwe, ale komunikat „No API key for <nazwa>. Remove the provider…" staje
+  się niejednoznaczny (nie wiadomo, którego dostawcę usunąć). Propozycja: blokada duplikatu nazwy
+  w formularzu.
+  - **Faza 1.5** — razem z przeprojektowaniem Settings (uwagi 4–5 użytkownika).
+
 ## Zapisane (dla kroniki)
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
 - 2026-10-12 — test przesłuchu: zakres z sekund + `#expect(mic.count >= …)` → `0dd84ef`.

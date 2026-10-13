@@ -1178,28 +1178,30 @@ git commit -m "Aplikacja: nawigacja, os nagran, presety, ustawienia, setup, plyw
 
 ### Zadanie D3: Odbiór ręczny
 
-Status: nigdy niewykonane. **Wymaga użytkownika** — monity TCC, prawdziwe spotkanie, klucz API.
+Status: ✅ zweryfikowane na sprzęcie 2026-10-13 (S17) — 10/10 kroków; wyniki, dowody i odkrycia:
+`docs/superpowers/spikes/2026-09-24-d3-odbior-aplikacji.md`. Wymagało użytkownika — monity TCC,
+prawdziwe spotkanie, klucz API (tryb: użytkownik wykonuje, orkiestrator prowadzi i weryfikuje).
 
 **Pliki:**
 - Utwórz: `docs/superpowers/spikes/2026-09-24-d3-odbior-aplikacji.md` — lista kroków z wynikiem ✅/❌ i uwagami.
 
-- [ ] **Krok 1: Pierwsze uruchomienie.** `rm -rf .devdata && scripts/run.sh`. Oczekiwane: okno setupu. „Allow" przy mikrofonie → monit systemowy z tekstem z `NSMicrophoneUsageDescription`. „Test" przy dźwięku systemowym → słychać krótki ton, stan „Working — the test tone was captured." Monitu o nagrywanie ekranu **nie ma**. O6: odmów uprawnienia dźwięku systemowego i kliknij Test — stan „The test tone wasn't captured…" i przycisk „Open System Audio Settings", który ma otworzyć panel *Nagrywanie ekranu i dźwięku systemowego*. Jeśli otwiera coś innego, zanotuj (kotwica `Privacy_AudioCapture` jest z pamięci) i zamień w `SetupView` na ogólne `x-apple.systempreferences:com.apple.preference.security?Privacy`. Włącz uprawnienie z powrotem.
+- [x] **Krok 1: Pierwsze uruchomienie.** `rm -rf .devdata && scripts/run.sh`. Oczekiwane: okno setupu. „Allow" przy mikrofonie → monit systemowy z tekstem z `NSMicrophoneUsageDescription`. „Test" przy dźwięku systemowym → słychać krótki ton, stan „Working — the test tone was captured." Monitu o nagrywanie ekranu **nie ma**. O6: odmów uprawnienia dźwięku systemowego i kliknij Test — stan „The test tone wasn't captured…" i przycisk „Open System Audio Settings", który ma otworzyć panel *Nagrywanie ekranu i dźwięku systemowego*. Jeśli otwiera coś innego, zanotuj (kotwica `Privacy_AudioCapture` jest z pamięci) i zamień w `SetupView` na ogólne `x-apple.systempreferences:com.apple.preference.security?Privacy`. Włącz uprawnienie z powrotem.
 
-- [ ] **Krok 2: Odmowa mikrofonu.** W Ustawieniach systemowych wyłącz mikrofon dla MeetNotes, nagraj 15 s z grającym dźwiękiem. W `.devdata/sessions/<sesja>/session.json`: `mic_raw` i `mic_aec` z `permissionDenied: microphone`, `system` z ramkami. Włącz mikrofon z powrotem.
+- [x] **Krok 2: Odmowa mikrofonu.** W Ustawieniach systemowych wyłącz mikrofon dla MeetNotes, nagraj 15 s z grającym dźwiękiem. W `.devdata/sessions/<sesja>/session.json`: `mic_raw` i `mic_aec` z `permissionDenied: microphone`, `system` z ramkami. Włącz mikrofon z powrotem.
 
-- [ ] **Krok 3: Dostawca i klucz (P8).** Settings → Add Provider… → OpenRouter z kluczem. Wiersz pokazuje `••••` i cztery ostatnie znaki. `grep -c "sk-or" .devdata/providers.json` → `0`. Zamknij i otwórz aplikację: klucz nadal zamaskowany (pęk kluczy). Refresh Models → lista się pojawia.
+- [x] **Krok 3: Dostawca i klucz (P8).** Settings → Add Provider… → OpenRouter z kluczem. Wiersz pokazuje `••••` i cztery ostatnie znaki. `grep -c "sk-or" .devdata/providers.json` → `0`. Zamknij i otwórz aplikację: klucz nadal zamaskowany (pęk kluczy). Refresh Models → lista się pojawia.
 
-- [ ] **Krok 4: Preset (P7, P2, P10).** Presets → +. Save bez języka → „Choose a language. Presets never detect it automatically." i preset nie pojawia się na liście. Język Polish, dostawca OpenRouter, model wpisany z ręki `microsoft/mai-transcribe-2`, Test → „Verified" i „Language enforced". Save. Chip przy Record pokazuje „Polish · PL".
+- [x] **Krok 4: Preset (P7, P2, P10).** Presets → +. Save bez języka → „Choose a language. Presets never detect it automatically." i preset nie pojawia się na liście. Język Polish, dostawca OpenRouter, model wpisany z ręki `microsoft/mai-transcribe-2`, Test → „Verified" i „Language enforced". Save. Chip przy Record pokazuje „Polish · PL".
 
-- [ ] **Krok 5: Nagranie z Teamsem na pierwszym planie.** Record → pływające okno „Recording 00:00:0x". Przełącz się na Teams albo przeglądarkę: okno zostaje. Kliknij Stop w oknie: fokus zostaje na Teamsie (odstępstwa 1 i 2). Cmd-. w pływającym oknie też zatrzymuje.
+- [x] **Krok 5: Nagranie z Teamsem na pierwszym planie.** Record → pływające okno „Recording 00:00:0x". Przełącz się na Teams albo przeglądarkę: okno zostaje. Kliknij Stop w oknie: fokus zostaje na Teamsie (odstępstwa 1 i 2). Cmd-. w pływającym oknie też zatrzymuje.
 
-- [ ] **Krok 6: Transkrypcja i skok w nagraniu.** Po Stop wiersz sesji pokazuje „Transcribing N%", potem „Transcript ready". Otwórz sesję: wypowiedzi Me/Them; klik w czas odtwarza od tego miejsca; spacja pauzuje.
+- [x] **Krok 6: Transkrypcja i skok w nagraniu.** Po Stop wiersz sesji pokazuje „Transcribing N%", potem „Transcript ready". Otwórz sesję: wypowiedzi Me/Them; klik w czas odtwarza od tego miejsca; spacja pauzuje.
 
-- [ ] **Krok 7: Cmd-, i klawiatura.** Cmd-, przełącza na Settings. Tab/Shift-Tab przechodzi po kontrolkach ustawień i presetów (Full Keyboard Access włączony w systemie).
+- [x] **Krok 7: Cmd-, i klawiatura.** Cmd-, przełącza na Settings. Tab/Shift-Tab przechodzi po kontrolkach ustawień i presetów (Full Keyboard Access włączony w systemie).
 
-- [ ] **Krok 8: Wygląd.** Tryb ciemny i jasny — teksty czytelne. Reduce Motion włączone → ikona w pływającym oknie nie pulsuje. VoiceOver na liście sesji czyta godzinę i stan.
+- [x] **Krok 8: Wygląd.** Tryb ciemny i jasny — teksty czytelne. Reduce Motion włączone → ikona w pływającym oknie nie pulsuje. VoiceOver na liście sesji czyta godzinę i stan.
 
-- [ ] **Krok 8b: Poprawki z E4.**
+- [x] **Krok 8b: Poprawki z E4.**
   - Pływające okno bez nagrania (Recording → Show Recording Window, ⌥⌘R): wybór presetu i Record. Nagrywanie bez ważnego presetu → komunikat i przejście do Presets.
   - W trakcie nagrania zmień chip presetu w oknie głównym: pływające okno dalej pokazuje preset ze startu, a transkrypcja po Stop idzie w **jego** języku (`<sesja>/runs/<id>/run.json`).
   - **Prawdziwe spotkanie w Teamsie** (Hermes 3.3): 2 minuty rozmowy, potem odsłuch `system.caf` — słychać rozmówcę.
@@ -1207,9 +1209,9 @@ Status: nigdy niewykonane. **Wymaga użytkownika** — monity TCC, prawdziwe spo
   - Zakończ aplikację w trakcie transkrypcji (Cmd-Q), uruchom ponownie: wiersz „Interrupted", w widoku spotkania „Resume Transcription"; po wznowieniu `requestCount` w `run.json` = liczba brakujących okien.
   - Otwórz widok spotkania przed końcem transkrypcji: po zakończeniu transkrypt pojawia się bez ponownej nawigacji (ChatGPT 🟡). Jeśli nie — zanotuj.
 
-- [ ] **Krok 9: Przebudowa a TCC.** `scripts/run.sh` jeszcze raz (z certyfikatem z D1): **brak** ponownych monitów o mikrofon. Dla porównania `MEETNOTES_SIGN_IDENTITY=- scripts/run.sh` — monit wraca (potwierdza spec rdzenia §8). Po teście wróć do podpisu certyfikatem.
+- [x] **Krok 9: Przebudowa a TCC.** `scripts/run.sh` jeszcze raz (z certyfikatem z D1): **brak** ponownych monitów o mikrofon. Dla porównania `MEETNOTES_SIGN_IDENTITY=- scripts/run.sh` — monit wraca (potwierdza spec rdzenia §8). Po teście wróć do podpisu certyfikatem.
 
-- [ ] **Krok 10: Zapisz wyniki i commit.**
+- [x] **Krok 10: Zapisz wyniki i commit.**
 
 ```bash
 git add docs/superpowers/spikes
