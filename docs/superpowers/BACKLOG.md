@@ -66,6 +66,10 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 **Zweryfikowane przez orkiestratora (2026-10-13):** BLOKUJĄCE #1 (brak testu „model i język żądań = migawka") — mutacja `TranscriptionRunner.swift:122-123` → `model: "MUTANT-NOT-THE-SNAPSHOT", language: nil` **powtórzona przez orkiestratora**: suita nadal `109/109` (mutacja cofnięta, drzewo czyste). Kod na HEAD jest poprawny — runda to wyłącznie dodanie testu.
 
+**Odpowiedzi orkiestratora na pytania raportu (§6):**
+- **Q1 (wiersz „Recovered")** — **TAK**: na zrzucie z 12:27 oba wiersze („Recording 00:00:11 · Polski · PL" i „12:27 · 0 min · Recovered") były w **jednej liście**, w tej samej instancji aplikacji — hipoteza drugiej instancji (`open -n`/`swift run`) nie tłumaczy obserwacji; rozjazd między replikacją a obserwacją zostaje do rozstrzygnięcia w fazie 1.5 (pozycja D3/odbiór nr 1).
+- **Q2 (klasyfikacja `load()`/`save()`)** i **Q3 (zakres rundy: test także po stronie `resume`)** — decyzja użytkownika (do dopisania po jego odpowiedzi).
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
