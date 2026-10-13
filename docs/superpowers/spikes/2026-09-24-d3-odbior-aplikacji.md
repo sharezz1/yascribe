@@ -126,6 +126,12 @@ do `docs/superpowers/BACKLOG.md`.
 
 ## Ograniczenia tej rundy
 
+- Stan `.devdata` po odbiorze: 12 sesji testowych (szum po nagraniach próbnych — kroki 1–2 planu
+  zakładały czysty katalog, więc przed kolejną bramką można go wyczyścić). W sesji 11:10 nowszy
+  przebieg `…09-15-10Z-cbca` (powstał przez kliknięcie „Transcribe with English" zamiast „Resume
+  Transcription") przeniesiono do `~/.hermes/cache/scratch/mn-s17/cbca-hidden`, żeby przywrócić stan
+  „Interrupted" dla testu wznowienia; kopia przerwanego przebiegu (`ce4c-backup`) leży obok.
+  Żadnych plików nie usunięto.
 - Pływający panel (`NSPanel`, `nonactivatingPanel`) **nie jest widoczny** w liście okien systemu ani
   w drzewie AX — wszystko, co o nim wiemy, opiera się na zrzutach użytkownika.
 - Pomocniczy model wizji użyty do odczytu ekranu **bywa konfabuluje** opisy (raz opisał nieistniejące
