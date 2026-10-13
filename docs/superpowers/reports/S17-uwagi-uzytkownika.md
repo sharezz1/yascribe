@@ -23,3 +23,7 @@ Zbiera autor planu. Poprawki: jedno zadanie po odbiorze i wątku designu (wyglą
 
 - Odzyskiwanie odmówionej zgody TCC → `docs/superpowers/BACKLOG.md`.
 - ElevenLabs Scribe v2 dostępny przez OpenRouter (`elevenlabs/scribe-v2`) — osobny klient niepotrzebny.
+
+## Decyzja użytkownika (2026-10-13): faza 1.5 „Notatka i wygląd"
+
+Użytkownik oczekiwał podsumowania i designu B — spec fazy 1 ich nie obejmował (notatka „osobny podsystem", bez fazy). Kolejność: domknąć D3 w obecnym zakresie → faza 1 zamknięta → **faza 1.5**: wątek designu (widok spotkania z notatką, strona główna wg B bez kalendarza, Presets/Settings) → plan → wykonanie. Zakres 1.5: podsumowanie i korekta modelami z presetu, wyświetlane w widoku spotkania; wdrożenie designu; punkty 1–6 powyżej. Kalendarz, chat, zadania — faza 3.
