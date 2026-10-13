@@ -75,15 +75,29 @@ final class AppModel {
 
     func provider(_ id: UUID?) -> Provider? { providers.providers.first { $0.id == id } }
 
+    /// Każdy plik osobno (przegląd S18 §2.1): `save()` pisze wszystkie cztery, więc nieodczytany plik
+    /// odkładamy na bok jako `<nazwa>.corrupt-<data>`, zanim domyślna wartość go nadpisze.
     func load() {
-        do {
-            providers = try JSONFile.load(ProvidersFile.self, from: paths.providers, default: ProvidersFile())
-            presets = try JSONFile.load(PresetsFile.self, from: paths.presets, default: PresetsFile())
-            settings = try JSONFile.load(GlobalSettings.self, from: paths.settings, default: GlobalSettings())
-            probeCache = try JSONFile.load(ProbeCache.self, from: paths.probeCache, default: ProbeCache())
-        } catch {
-            lastError = "Couldn't read your settings: \(error)"
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd-HHmmss"
+        let stamp = f.string(from: Date())
+        var errors: [String] = []
+        func read<T: Decodable>(_ url: URL, _ fallback: T) -> T {
+            do { return try JSONFile.load(T.self, from: url, default: fallback) } catch {
+                let name = url.lastPathComponent
+                let aside = url.deletingLastPathComponent().appendingPathComponent("\(name).corrupt-\(stamp)")
+                // ponytail: gdy przeniesienie się nie uda, najbliższy save() nadpisze plik — blokada zapisu per plik, jeśli to się zdarzy
+                let moved = (try? FileManager.default.moveItem(at: url, to: aside)) != nil
+                errors.append("Couldn't read \(name) (\(moved ? "moved to \(aside.lastPathComponent)" : "couldn't move it aside")): \(error)")
+                return fallback
+            }
         }
+        providers = read(paths.providers, ProvidersFile())
+        presets = read(paths.presets, PresetsFile())
+        settings = read(paths.settings, GlobalSettings())
+        probeCache = read(paths.probeCache, ProbeCache())
+        if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
     }
 

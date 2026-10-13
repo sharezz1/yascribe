@@ -107,6 +107,56 @@ import MeetNotesSessionFormat
     #expect(u.approximateTiming) // brak słów z czasem → czas całego okna
 }
 
+@Test func requestsCarryTheSnapshotModelAndLanguage() async throws {
+    // Przegląd S18 BLOKUJĄCE #1: żądanie ASR idzie modelem i językiem migawki, nie z innego pola.
+    let (samples, _) = burstTrack(seconds: 300, rate: 16_000)
+    let dir = try makeSession(system: samples)
+    let snap = try snapshot()
+    let asr = SnapshotRecordingASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: snap, client: client(asr)).run()
+    #expect(!asr.sent.isEmpty)
+    #expect(asr.sent.allSatisfy { $0 == Sent(model: snap.model, language: snap.language.rawValue) })
+}
+
+@Test func resumeSendsTheSnapshotFromInputJSON() async throws {
+    // Przegląd S18 Q3: drugi przebieg tego samego runID wysyła migawkę z `input.json`, nigdy bieżący preset.
+    let (samples, _) = burstTrack(seconds: 600, rate: 16_000)
+    let dir = try makeSession(system: samples)
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
+                                      client: client(ListeningASR(failWhen: { $0 >= 2 }))).run()
+    let saved = try #require(try JSONFile.load(RunInput?.self, from: RunDirectory(session: dir, runID: "r1").input, default: nil)).snapshot
+    let expected = Sent(model: saved.model, language: saved.language.rawValue)
+    // bieżący preset z innym modelem i językiem: odmowa albo migawka z pliku — nic innego nie wychodzi
+    var current = try snapshot(language: .english)
+    current.model = "other/model"
+    let refused = SnapshotRecordingASR()
+    _ = try? await TranscriptionRunner(session: dir, runID: "r1", snapshot: current, client: client(refused)).run()
+    #expect(refused.sent.allSatisfy { $0 == expected })
+    // wznowienie jak `AppModel.resume`: migawka z pliku, brakujące okna idą nią
+    let resumed = SnapshotRecordingASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: saved, client: client(resumed)).run()
+    #expect(!resumed.sent.isEmpty)
+    #expect(resumed.sent.allSatisfy { $0 == expected })
+}
+
+struct Sent: Equatable {
+    var model: String?
+    var language: String?
+}
+
+/// Nagrywa `model` i `language` z ciała każdego żądania; odpowiada jak `ListeningASR`.
+final class SnapshotRecordingASR: HTTPClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen: [Sent] = []
+    private let inner = ListeningASR()
+    var sent: [Sent] { lock.withLock { seen } }
+    func send(_ r: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let body = try JSONSerialization.jsonObject(with: r.httpBody!) as! [String: Any]
+        lock.withLock { seen.append(Sent(model: body["model"] as? String, language: body["language"] as? String)) }
+        return try await inner.send(r)
+    }
+}
+
 final class Recorder: @unchecked Sendable {
     private let lock = NSLock()
     private var v: [Double] = []
