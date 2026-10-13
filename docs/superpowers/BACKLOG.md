@@ -48,7 +48,26 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
   w formularzu.
   - **Faza 1.5** — razem z przeprojektowaniem Settings (uwagi 4–5 użytkownika).
 
+## Aneks S18 (2026-10-13) — przegląd całej gałęzi (pełny raport: `reports/S18-przeglad.md`)
+
+**Rekomendacje dla pozycji strukturalnych (§3 raportu; do zatwierdzenia przez użytkownika):**
+- pokrycie skryptów składania (`bundle.sh`/`run.sh`/`Info.plist`) w `test.sh` → **faza 1.5** (tanie: ad-hoc `MEETNOTES_SIGN_IDENTITY=-`, `plutil -lint`, grep kluczy `*UsageDescription`; bramka D1/TCC nie ma dziś żadnego zabezpieczenia przed cichą regresją);
+- brak testTargetu aplikacji (`MeetNotesApp`) → **faza 2** (dotyka grafu zależności i bramki liczby testów; blokady i `preset.json` mają pokrycie ręczne z D3);
+- `reloadSessions()` na MainActorze + `SettingsView.onChange` → **faza 2** (wydajnościowe, przy obecnej liczbie sesji niewidoczne);
+- `.macOS(15.0)` vs `LSMinimumSystemVersion 27.0` → **faza 2** (wymaga decyzji produktowej i weryfikacji na starszym macOS);
+- `Info.plist`/TCC (mapowanie process tap) → **faza 2**; „TCC — odzyskiwanie odmówionej zgody" → **faza 2** (zgodnie z decyzją użytkownika).
+- 5 pozycji „D3/odbiór" → **faza 1.5** (decyzja użytkownika; Claude wciąga je do planu).
+
+**Nowe pozycje z S18 (raport §2 — lista do planu 1.5):**
+1. `AppModel.swift:78-88` + `:90-99` — **jeden uszkodzony plik ustawień kasuje pozostałe**: `load()` ma jeden `do/catch` na cztery pliki, a `save()` pisze wszystkie cztery, więc najbliższy zapis podmienia nieodczytane pliki pustymi domyślnymi (presety, dostawcy, ustawienia, cache sondy).
+2. `SystemAudioCheck.swift:24-35` — gdy `tap.start()` rzuci, funkcja wraca przed `defer { tap.stop() }`; tap procesu i urządzenie zbiorcze z `prepare()` zostają w systemie do końca życia procesu (każde nieudane „Test" w setupie).
+3. `plans/2026-09-24-faza1-00-przeglad.md:106` + `-04-powloka-aplikacji.md:1190` (D3 krok 2) — nadal zakładają `mic_aec.caf` w każdej sesji, a build nagrywa tylko `system`+`mic_raw` (decyzja S5); kryterium kroku 2 było nie do spełnienia.
+4. `SettingsView.swift:25` — `try? model.secrets.get(p.id)` zamienia błąd pęku kluczy w etykietę „No key" (użytkownik może dodać dostawcę ponownie); rozróżnić „brak" od „nie odczytano".
+
+**Zweryfikowane przez orkiestratora (2026-10-13):** BLOKUJĄCE #1 (brak testu „model i język żądań = migawka") — mutacja `TranscriptionRunner.swift:122-123` → `model: "MUTANT-NOT-THE-SNAPSHOT", language: nil` **powtórzona przez orkiestratora**: suita nadal `109/109` (mutacja cofnięta, drzewo czyste). Kod na HEAD jest poprawny — runda to wyłącznie dodanie testu.
+
 ## Zapisane (dla kroniki)
+
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
 - 2026-10-12 — test przesłuchu: zakres z sekund + `#expect(mic.count >= …)` → `0dd84ef`.
 - 2026-10-13 — S16: `scripts/test.sh` — usunięte zbędne `rm -f "$OUT"` (sprząta `trap`); wzorzec zacieśniony do prefiksów z `Tests/` (`mn-((fit|session|tr)-)?<UUID>`), komentarz opisuje, że `mn-corpus-<UUID>` nie pasuje.
