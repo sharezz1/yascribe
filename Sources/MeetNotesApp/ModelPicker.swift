@@ -1,0 +1,79 @@
+import MeetNotesProviders
+import SwiftUI
+
+final class ModelPickerState: ObservableObject {
+    @Published var showing = false
+    @Published var query = ""
+}
+
+/// Przycisk z nazwą modelu → popover z wyszukiwarką i listą dla roli (spec 1.5 §5.4).
+/// Licznik pokazuje to, co widać; model spoza listy (np. wpisany z ręki) wybiera się wierszem „Use …".
+struct ModelPicker: View {
+    @Environment(AppModel.self) private var model
+    @StateObject private var state = ModelPickerState()
+    let providerID: UUID
+    let role: Role
+    @Binding var selection: String
+
+    private var all: [ModelInfo] { model.models(provider: providerID, role: role) }
+    private var visible: [ModelInfo] { ModelCatalog.visible(all, role: role, query: state.query) }
+    private var kindName: String {
+        switch role {
+        case .asr: "transcription"
+        case .embedding: "embedding"
+        case .correction, .summary: "text"
+        }
+    }
+    /// Wpisany identyfikator, którego nie ma na liście.
+    private var typed: String? {
+        let q = state.query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty || all.contains { $0.id == q } ? nil : q
+    }
+
+    var body: some View {
+        Button {
+            state.query = ""
+            state.showing = true
+            Task { await model.loadModels(provider: providerID, role: role) }
+        } label: {
+            HStack(spacing: 6) {
+                Text(selection.isEmpty ? "Choose model" : selection).lineLimit(1).truncationMode(.middle)
+                Image(systemName: "chevron.up.chevron.down").font(.caption)
+            }
+        }
+        .popover(isPresented: $state.showing, arrowEdge: .bottom) { content }
+        .help("Search and choose a model")
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField("Search models", text: $state.query)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { if let typed { pick(typed) } }
+            if model.isLoadingModels(provider: providerID, role: role) && all.isEmpty {
+                ProgressView("Loading models…")
+            } else {
+                Text("\(visible.count) of \(all.count) \(kindName) models").font(.caption).foregroundStyle(.secondary)
+            }
+            List(visible, id: \.id) { m in
+                Button { pick(m.id) } label: {
+                    HStack {
+                        Text(m.id)
+                        Spacer()
+                        if m.id == selection { Image(systemName: "checkmark") }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(minHeight: 200)
+            if let typed { Button("Use “\(typed)”") { pick(typed) } }
+        }
+        .padding(12)
+        .frame(width: 380, height: 380)
+    }
+
+    private func pick(_ id: String) {
+        selection = id
+        state.showing = false
+    }
+}

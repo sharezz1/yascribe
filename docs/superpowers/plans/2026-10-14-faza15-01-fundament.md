@@ -473,7 +473,7 @@ git add Package.swift Sources Tests scripts Resources docs .gitignore
 git commit -m "T1: język Auto w presecie i potoku (languageAuto opcjonalne, RunSnapshot.language?)" -m "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Krok 12 `[opus]`: przegląd T1.** Sprawdź: (a) żadne miejsce z tabeli nie zostało pominięte (`rg -n "\.language\b" Sources`), (b) stary `input.json` bez `languageAuto` wczytuje się (test), (c) nic nie normalizuje presetu przy wczytywaniu (`summary.prompt` zostaje), (d) `LanguageCode("auto")` nadal rzuca (`autoLanguageCannotBeConstructed`), (e) `nonLatinScript` działa tylko przy Auto (przy jawnym języku `Merger` wywołuje wyłącznie `mismatch`) i liczy litery, nie znaki specjalne. Uwagi → raport; blokujące → poprawka przed T2.
+- [x] **Krok 12 `[opus]`: przegląd T1.** Sprawdź: (a) żadne miejsce z tabeli nie zostało pominięte (`rg -n "\.language\b" Sources`), (b) stary `input.json` bez `languageAuto` wczytuje się (test), (c) nic nie normalizuje presetu przy wczytywaniu (`summary.prompt` zostaje), (d) `LanguageCode("auto")` nadal rzuca (`autoLanguageCannotBeConstructed`), (e) `nonLatinScript` działa tylko przy Auto (przy jawnym języku `Merger` wywołuje wyłącznie `mismatch`) i liczy litery, nie znaki specjalne. Uwagi → raport; blokujące → poprawka przed T2.
 
 ---
 

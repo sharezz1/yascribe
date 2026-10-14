@@ -25,7 +25,7 @@ Status: ⚠️ nieskompilowane. Logika w bibliotece (`ModelCatalog`, 3 testy); w
 - Konsumuje: `OpenAICompatibleClient.listModels(output:)` (T2), `Preset.languageChoice`, `LanguageChoice`, `Preset.languageLabel` (T1).
 - Dostarcza: `ModelCatalog.outputFilter(for: Role) -> String?`, `ModelCatalog.visible(_:role:query:) -> [ModelInfo]`; `AppModel.models(provider:role:) -> [ModelInfo]`, `AppModel.isLoadingModels(provider:role:) -> Bool`, `AppModel.loadModels(provider:role:force:) async`, `AppModel.refreshModels(_:) async` (wszystkie listy); `ModelPicker(providerID:role:selection:)`; `RoleEditor(title:role:assignment:language:promptTitle:promptHint:)`; `PresetEditorState(draft:original:)`, `PresetsView(state:)`.
 
-- [ ] **Krok 1 `[sonnet]`: testy `ModelCatalog` (najpierw).** Utwórz `Tests/MeetNotesProvidersTests/ModelCatalogTests.swift`:
+- [x] **Krok 1 `[sonnet]`: testy `ModelCatalog` (najpierw).** Utwórz `Tests/MeetNotesProvidersTests/ModelCatalogTests.swift`:
 
 ```swift
 import Foundation
@@ -63,9 +63,9 @@ private let bare = ModelInfo(id: "llama3") // Ollama: lista bez modalności
 }
 ```
 
-- [ ] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh` — oczekiwane: błąd kompilacji (`ModelCatalog` nie istnieje).
+- [x] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh` — oczekiwane: błąd kompilacji (`ModelCatalog` nie istnieje).
 
-- [ ] **Krok 3 `[sonnet]`: `ModelCatalog`.** Utwórz `Sources/MeetNotesProviders/ModelCatalog.swift`:
+- [x] **Krok 3 `[sonnet]`: `ModelCatalog`.** Utwórz `Sources/MeetNotesProviders/ModelCatalog.swift`:
 
 ```swift
 import Foundation
@@ -95,11 +95,11 @@ public enum ModelCatalog {
 }
 ```
 
-- [ ] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `127/127` (124 + 3 nowe `@Test`: `eachRoleSeesOnlyItsOwnKindOfModel`, `searchMatchesAnyPartOfTheIdIgnoringCase`, `modelsWithoutModalitiesAreKeptForEveryRole`).
+- [x] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `127/127` (124 + 3 nowe `@Test`: `eachRoleSeesOnlyItsOwnKindOfModel`, `searchMatchesAnyPartOfTheIdIgnoringCase`, `modelsWithoutModalitiesAreKeptForEveryRole`).
 
-- [ ] **Krok 5 `[haiku]`: mutacja (rozdział list).** W `ModelCatalog.visible` zamień `(m.outputModalities.map { $0.contains(wanted) } ?? true)` na `true`. Przepis §0.5: `scripts/test.sh --filter eachRoleSeesOnlyItsOwnKindOfModel` — **pada**; `git checkout Sources/MeetNotesProviders/ModelCatalog.swift` (po zastage'owaniu zadania); pełne — `127/127`.
+- [x] **Krok 5 `[haiku]`: mutacja (rozdział list).** W `ModelCatalog.visible` zamień `(m.outputModalities.map { $0.contains(wanted) } ?? true)` na `true`. Przepis §0.5: `scripts/test.sh --filter eachRoleSeesOnlyItsOwnKindOfModel` — **pada**; `git checkout Sources/MeetNotesProviders/ModelCatalog.swift` (po zastage'owaniu zadania); pełne — `127/127`.
 
-- [ ] **Krok 6 `[sonnet]`: listy modeli w `AppModel`.** W `Sources/MeetNotesApp/AppModel.swift` usuń `var models: [UUID: [ModelInfo]] = [:]` i dotychczasowe `refreshModels`; przed `@MainActor @Observable final class AppModel` dodaj `struct ModelListKey: Hashable { var provider: UUID; var filter: String }` (`filter == ""` = lista domyślna), a w klasie:
+- [x] **Krok 6 `[sonnet]`: listy modeli w `AppModel`.** W `Sources/MeetNotesApp/AppModel.swift` usuń `var models: [UUID: [ModelInfo]] = [:]` i dotychczasowe `refreshModels`; przed `@MainActor @Observable final class AppModel` dodaj `struct ModelListKey: Hashable { var provider: UUID; var filter: String }` (`filter == ""` = lista domyślna), a w klasie:
 
 ```swift
     var modelLists: [ModelListKey: [ModelInfo]] = [:]
@@ -129,7 +129,7 @@ public enum ModelCatalog {
     }
 ```
 
-- [ ] **Krok 7 `[sonnet]`: `ModelPicker`.** Utwórz `Sources/MeetNotesApp/ModelPicker.swift`:
+- [x] **Krok 7 `[sonnet]`: `ModelPicker`.** Utwórz `Sources/MeetNotesApp/ModelPicker.swift`:
 
 ```swift
 import MeetNotesProviders
@@ -213,7 +213,7 @@ struct ModelPicker: View {
 }
 ```
 
-- [ ] **Krok 8 `[sonnet]`: ekran Presets.** Zastąp całą zawartość `Sources/MeetNotesApp/PresetsView.swift`:
+- [x] **Krok 8 `[sonnet]`: ekran Presets.** Zastąp całą zawartość `Sources/MeetNotesApp/PresetsView.swift`:
 
 ```swift
 import MeetNotesProviders
@@ -433,9 +433,9 @@ struct ProbeBadges: View {
 
 W `SettingsView.swift` zmiany wywołania `RoleEditor(... hasPrompt …)` i `model.models[...]` robi T4 — **w T3 dopasuj tylko tyle, żeby się kompilowało:** w `SettingsView` wywołanie `RoleEditor(title: "Embeddings (whole archive)", role: .embedding, assignment: $model.settings.embedding, language: nil)` działa bez zmian (nowe parametry mają wartości domyślne).
 
-- [ ] **Krok 9 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `127/127`. (Ten krok kompiluje też cel `MeetNotesApp`; błąd kompilacji widoków → napraw minimalnie, opisz w raporcie.)
+- [x] **Krok 9 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `127/127`. (Ten krok kompiluje też cel `MeetNotesApp`; błąd kompilacji widoków → napraw minimalnie, opisz w raporcie.)
 
-- [ ] **Krok 10 `[sonnet]`: migawki i jedna partia poprawek.** Dopisz w `Snapshots.runAll` po istniejących ekranach:
+- [x] **Krok 10 `[sonnet]`: migawki i jedna partia poprawek.** Dopisz w `Snapshots.runAll` po istniejących ekranach:
 
 ```swift
             let editing = PresetEditorState()
@@ -446,7 +446,7 @@ W `SettingsView.swift` zmiany wywołania `RoleEditor(... hasPrompt …)` i `mode
 ```
 Uruchom `scripts/snapshot.sh`, obejrzyj `presets-light.png`, `presets-dark.png`, `presets-editing-*.png`. Sprawdź: (a) lista z jednym presetem nie jest białym blokiem w połowie wysokości, (b) formularz ma etykiety pól, pole „Extra instructions" ma podpis i podpowiedź, (c) Save/Cancel na dole, (d) kontrast w ciemnym. Popraw jedną partią; druga runda tylko potwierdza.
 
-- [ ] **Krok 11 `[sonnet]`: commit.**
+- [x] **Krok 11 `[sonnet]`: commit.**
 
 ```bash
 git add Package.swift Sources Tests scripts Resources docs .gitignore
