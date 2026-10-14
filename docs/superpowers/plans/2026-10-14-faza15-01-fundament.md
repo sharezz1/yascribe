@@ -23,7 +23,7 @@ Status: ⚠️ **spike** — model **Opus** wykonuje całe zadanie. Kod poniżej
 **Interfejsy:**
 - Dostarcza: `Snapshots.directory: URL?`, `Snapshots.render(_ name:, size:, dark:, model:, content:) throws`, `Snapshots.runAll(model:)` (lista ekranów — kolejne zadania dopisują swoje), `scripts/snapshot.sh [nazwa]` → PNG w `.design/review/`.
 
-- [ ] **Krok 1 `[sonnet]`: ignoruj katalog wyników.** Dopisz do `.gitignore` linię `.design/`.
+- [ ] **Krok 1 `[opus]`: ignoruj katalog wyników.** Dopisz do `.gitignore` linię `.design/`.
 
 - [ ] **Krok 2 `[opus]`: szkielet.** Utwórz `Sources/MeetNotesApp/Snapshots.swift`:
 
@@ -54,6 +54,8 @@ enum Snapshots {
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { throw SnapshotError.noBitmap }
         host.cacheDisplay(in: host.bounds, to: rep)
         guard let png = rep.representation(using: .png, properties: [:]) else { throw SnapshotError.noPNG }
+        // `directory!` jest bezpieczne: `render` woła tylko `runAll`, a `runAll` startuje z `init()` dopiero po sprawdzeniu
+        // `directory != nil`. Wywołanie `render` z innego miejsca wymaga guarda.
         try FileManager.default.createDirectory(at: directory!, withIntermediateDirectories: true)
         try png.write(to: directory!.appendingPathComponent("\(name)-\(dark ? "dark" : "light").png"))
     }
@@ -118,14 +120,14 @@ Uruchom `scripts/snapshot.sh`, potem `Read` na `.design/review/presets-light.png
 **Kryterium:** na PNG widać wiersz presetu „Polish" na liście, pola formularza po wybraniu presetu **albo** (gdy nic nie wybrano) panel „Choose a preset", a na `meetings` — pusty stan „Record your first meeting". Nie biała plansza.
 **Jeśli lista (`List`) lub pola tekstowe nie renderują się poza ekranem → STOP** (przegląd §0): raport z opisem, co się nie renderuje i co spróbowano (np. `window.orderBack`, krótki `RunLoop.run` przed `cacheDisplay`); decyzja użytkownika: odbiór ręczny po T3, T4, T7, T8, T9, T10 zamiast migawek. Wynik tego kroku wpisz do raportu `F15-T0`.
 
-- [ ] **Krok 4 `[sonnet]`: commit.**
+- [ ] **Krok 4 `[opus]`: commit.**
 
 ```bash
 git add .gitignore Sources/MeetNotesApp/Snapshots.swift Sources/MeetNotesApp/MeetNotesApp.swift scripts/snapshot.sh docs/superpowers/plans
 git commit -m "T0: tryb migawek ekranów (MEETNOTES_SNAPSHOT_DIR, scripts/snapshot.sh)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Krok 5 `[haiku]`: bramka.** `scripts/test.sh` — oczekiwane: `111/111` (zadanie nie dodaje testów).
+- [ ] **Krok 5 `[opus]`: bramka.** `scripts/test.sh` — oczekiwane: `111/111` (zadanie nie dodaje testów).
 
 ---
 
@@ -280,6 +282,71 @@ Dopisz na końcu `Tests/MeetNotesTranscriptionTests/LanguageGuardTests.swift`:
 }
 ```
 
+- [ ] **Krok 1b `[sonnet]`: fixtury z prawdziwych plików fazy 1 i dwa testy zgodności wstecznej (Review Luna #3).** Skopiuj do repo **prawdziwe** pliki z `.devdata` (nazwy, adres i UUID — bez sekretów) i sprawdź grepem, że nie ma w nich sekretów:
+
+```bash
+mkdir -p Tests/MeetNotesProvidersTests/Fixtures Tests/MeetNotesTranscriptionTests/Fixtures
+cp .devdata/providers.json Tests/MeetNotesProvidersTests/Fixtures/phase1-providers.json
+cp .devdata/presets.json Tests/MeetNotesProvidersTests/Fixtures/phase1-presets.json
+INPUT="$(ls -t .devdata/sessions/*/runs/*/input.json | head -1)"
+cp "$INPUT" Tests/MeetNotesTranscriptionTests/Fixtures/phase1-input.json
+! grep -il 'sk-\|bearer\|api[_-]key\|secret' Tests/*/Fixtures/* && echo "fixtures: bez sekretów"
+```
+Oczekiwane: „fixtures: bez sekretów" (inaczej **STOP**: usuń skopiowane pliki i zgłoś). W `Package.swift` dodaj `exclude: ["Fixtures"]` do celów testowych `MeetNotesProvidersTests` i `MeetNotesTranscriptionTests` (SwiftPM nie traktuje ich wtedy jako nieobsłużonych zasobów), np. `.testTarget(name: "MeetNotesProvidersTests", dependencies: ["MeetNotesProviders"], exclude: ["Fixtures"])`.
+
+Dopisz na końcu `Tests/MeetNotesProvidersTests/PresetTests.swift`:
+
+```swift
+private func fixture(_ name: String) throws -> Data {
+    try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/\(name)"))
+}
+
+@Test func realPhaseOnePresetsAndProvidersStillDecode() throws {
+    // Prawdziwe pliki z fazy 1 (E6): wczytują się, a ponowne zakodowanie nie dodaje ani nie gubi kluczy.
+    let rawPresets = try fixture("phase1-presets.json")
+    let presets = try JSONDecoder().decode(PresetsFile.self, from: rawPresets)
+    #expect(presets.presets.count == 2)
+    for p in presets.presets {
+        try p.validate()
+        #expect(p.languageAuto == nil) // stary plik nie ma nowego klucza i nie dostaje go z nil
+    }
+    #expect(presets.presets.first { $0.name == "Polski" }?.summary?.model == "deepseek/deepseek-v4.1-flash")
+    let rawProviders = try fixture("phase1-providers.json")
+    let providers = try JSONDecoder().decode(ProvidersFile.self, from: rawProviders)
+    #expect(providers.providers.map(\.name) == ["OpenRouter"])
+    for (raw, again) in [(rawPresets, try JSONEncoder().encode(presets)), (rawProviders, try JSONEncoder().encode(providers))] {
+        let a = try JSONSerialization.jsonObject(with: raw) as? NSDictionary
+        let b = try JSONSerialization.jsonObject(with: again) as? NSDictionary
+        #expect(a == b)
+    }
+}
+```
+
+Dopisz na końcu `Tests/MeetNotesTranscriptionTests/RunnerTests.swift`:
+
+```swift
+private func fixture(_ name: String) throws -> Data {
+    try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/\(name)"))
+}
+
+@Test func realPhaseOneInputJSONDecodesRoundTripsAndResumes() async throws {
+    // Prawdziwy input.json z sesji fazy 1: stara migawka wczytuje się, nic się nie zmienia po ponownym zakodowaniu
+    // i wznowienie z niej nie daje inputMismatch ani nie płaci drugi raz.
+    let raw = try fixture("phase1-input.json")
+    let input = try JSONDecoder().decode(RunInput.self, from: raw)
+    #expect(input.snapshot.language == .polish)
+    #expect(input.snapshot.preset.summary?.model == "deepseek/deepseek-v4.1-flash")
+    let a = try JSONSerialization.jsonObject(with: raw) as? NSDictionary
+    let b = try JSONSerialization.jsonObject(with: JSONEncoder().encode(input)) as? NSDictionary
+    #expect(a == b) // ani dodanych, ani zgubionych kluczy
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: input.snapshot, client: client(ListeningASR())).run()
+    let second = ListeningASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: input.snapshot, client: client(second)).run()
+    #expect(second.requests == 0)
+}
+```
+
 - [ ] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh`. Oczekiwane: **błąd kompilacji** (`languageAuto`, `isAutoLanguage`, `languageLabel`, `languageChoice`, `autoSnapshot` bez `languageAuto`). Inny wynik (np. zielone) = STOP.
 
 - [ ] **Krok 3 `[sonnet]`: `LanguageCode.englishName`.** W `Sources/MeetNotesProviders/LanguageCode.swift` dopisz po `description`:
@@ -393,16 +460,16 @@ oraz `Preset(name: "cli", language: language, asr: RoleAssignment(...), language
 
 - [ ] **Krok 7 `[sonnet]`: aplikacja.** W `Sources/MeetNotesApp/AppModel.swift`: `static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }`; w `savePreset` komunikat `missingLanguage` → `"Choose a language, or Auto for meetings that mix languages."`. W `Sources/MeetNotesApp/MeetingsView.swift` (`PresetMenu`): w obu miejscach `(p.language?.rawValue.uppercased() ?? "?")` / `($0.language?.rawValue.uppercased() ?? "?")` → `p.languageLabel` / `$0.languageLabel`.
 
-- [ ] **Krok 8 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `118/118` (111 + 7: `autoLanguagePresetValidatesButStillNeedsAnExplicitChoice`, `phaseOnePresetJSONStillDecodes`, `autoLanguageOmitsTheLanguageField`, `autoLanguageSkipsTheLanguageGuard`, `phaseOneInputJSONKeepsItsShapeAndResumes`, `autoLanguageFlagsGibberishInAnotherScript`, `nonLatinScriptIsDetectedByMajority`).
+- [ ] **Krok 8 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `120/120` (111 + 9 nowych `@Test`: `autoLanguagePresetValidatesButStillNeedsAnExplicitChoice`, `phaseOnePresetJSONStillDecodes`, `autoLanguageOmitsTheLanguageField`, `autoLanguageSkipsTheLanguageGuard`, `phaseOneInputJSONKeepsItsShapeAndResumes`, `autoLanguageFlagsGibberishInAnotherScript`, `nonLatinScriptIsDetectedByMajority`, `realPhaseOnePresetsAndProvidersStillDecode`, `realPhaseOneInputJSONDecodesRoundTripsAndResumes`).
 
-- [ ] **Krok 9 `[haiku]`: mutacja 1 (Auto wysyła język).** Przepis (przegląd §0.5). W `Sources/MeetNotesProviders/OpenAICompatibleClient.swift` w gałęzi `.audioTranscriptions` zamień `if let language { body["language"] = language.rawValue }` na `body["language"] = language?.rawValue ?? "pl"`. `scripts/test.sh --filter autoLanguageOmitsTheLanguageField` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne `scripts/test.sh` — `118/118`.
+- [ ] **Krok 9 `[haiku]`: mutacja 1 (Auto wysyła język).** Przepis (przegląd §0.5). W `Sources/MeetNotesProviders/OpenAICompatibleClient.swift` w gałęzi `.audioTranscriptions` zamień `if let language { body["language"] = language.rawValue }` na `body["language"] = language?.rawValue ?? "pl"`. `scripts/test.sh --filter autoLanguageOmitsTheLanguageField` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne `scripts/test.sh` — `120/120`.
 
-- [ ] **Krok 10 `[haiku]`: mutacje 2 i 3.** (a) W `Merger.swift` zamień `if let language {` na `if let language = language ?? .polish {` (Auto dostaje strażnika PL/EN). Przepis §0.5: `scripts/test.sh --filter autoLanguageSkipsTheLanguageGuard` — oczekiwane: **pada**; `git checkout Sources/MeetNotesTranscription/Merger.swift`. (b) W `LanguageGuard.nonLatinScript` zamień `guard foreign.count * 2 > letters.count else { return nil }` na `guard foreign.count > 0 else { return nil }` (każdy cudzy znak = bełkot). `scripts/test.sh --filter nonLatinScriptIsDetectedByMajority` — oczekiwane: **pada**; `git checkout Sources/MeetNotesTranscription/LanguageGuard.swift`. Pełne `scripts/test.sh` — `118/118`.
+- [ ] **Krok 10 `[haiku]`: mutacje 2 i 3.** (a) W `Merger.swift`, w gałęzi `else`, zamień `LanguageGuard.nonLatinScript(text)` na `LanguageGuard.mismatch(text, expected: .polish)` (Auto dostaje strażnika PL/EN; kod się kompiluje). Przepis §0.5: `scripts/test.sh --filter autoLanguageSkipsTheLanguageGuard` — oczekiwane: **test pada** (nie błąd budowania — to byłby STOP); `git checkout Sources/MeetNotesTranscription/Merger.swift`. (b) W `LanguageGuard.nonLatinScript` zamień `guard foreign.count * 2 > letters.count else { return nil }` na `guard foreign.count > 0 else { return nil }` (każdy cudzy znak = bełkot). `scripts/test.sh --filter nonLatinScriptIsDetectedByMajority` — oczekiwane: **pada**; `git checkout Sources/MeetNotesTranscription/LanguageGuard.swift`. Pełne `scripts/test.sh` — `120/120`.
 
 - [ ] **Krok 11 `[sonnet]`: commit.**
 
 ```bash
-git add -A
+git add Package.swift Sources Tests scripts Resources docs .gitignore
 git commit -m "T1: język Auto w presecie i potoku (languageAuto opcjonalne, RunSnapshot.language?)" -m "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```
 
@@ -519,13 +586,13 @@ i zastąp `listModels()` tym:
 ```
 (usuń stary `listModels()`; pozostałe wywołania `request("chat/completions", body: …)` i `request("embeddings", body:…, timeout:…)` używają argumentów po nazwie i kompilują się bez zmian).
 
-- [ ] **Krok 5 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `122/122` (118 + 4).
+- [ ] **Krok 5 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `124/124` (120 + 4 nowe `@Test`: `listModelsCanAskForAnOutputModality`, `providerRejectingTheModalityParameterIsAskedAgainWithoutIt`, `providerIgnoringTheModalityFilterIsFilteredLocally`, `modalityRetryHappensOnlyOnce`).
 
-- [ ] **Krok 6 `[haiku]`: mutacja (lokalny filtr).** W `listModels` zamień końcówkę `return all.filter { … }` na `return all`. `scripts/test.sh --filter providerIgnoringTheModalityFilterIsFilteredLocally` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne — `122/122`.
+- [ ] **Krok 6 `[haiku]`: mutacje (ponowienie i filtr lokalny).** (a) W `listModels` usuń klauzulę `catch ProviderError.http(let status, _) where output != nil && (status == 400 || status == 422) { … }` razem z jej ciałem (nie ma ponowienia). `scripts/test.sh --filter providerRejectingTheModalityParameterIsAskedAgainWithoutIt` — oczekiwane: **pada**; `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`. (b) W `listModels` zamień końcówkę `return all.filter { … }` na `return all`. `scripts/test.sh --filter providerIgnoringTheModalityFilterIsFilteredLocally` — oczekiwane: **pada**; `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`. Pełne — `124/124`.
 
 - [ ] **Krok 7 `[sonnet]`: commit.**
 
 ```bash
-git add -A
+git add Package.swift Sources Tests scripts Resources docs .gitignore
 git commit -m "T2: listModels(output:) — filtr po modalności z ponowieniem i filtrem lokalnym" -m "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```

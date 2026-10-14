@@ -14,3 +14,5 @@
 # i transkrypty. Prywatne i ciezkie - nigdy do repo (spec rdzenia §8).
 .devdata/
 .superpowers/
+.claude/proven-config*
+.claude/.proven-config-version
