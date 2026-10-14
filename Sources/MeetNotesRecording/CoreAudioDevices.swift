@@ -67,4 +67,19 @@ public enum CoreAudioDevices {
         guard let layout = AVAudioChannelLayout(layoutTag: kAudioChannelLayoutTag_DiscreteInOrder | d.mChannelsPerFrame) else { return nil }
         return AVAudioFormat(streamDescription: &d, channelLayout: layout)
     }
+
+    public static func name(of device: AudioObjectID) throws -> String {
+        var addr = address(kAudioObjectPropertyName)
+        var name: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        let st = AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &name)
+        guard st == noErr, let v = name?.takeRetainedValue() else { throw AudioSourceError.coreAudio("DeviceName", st) }
+        return v as String
+    }
+
+    /// Nazwa mikrofonu, który nagrywa `RawMicrophoneSource` (domyślne wejście systemu; wybór urządzenia: faza 2).
+    public static func defaultInputName() -> String? {
+        guard let d = try? defaultInputDevice() else { return nil }
+        return try? name(of: d)
+    }
 }

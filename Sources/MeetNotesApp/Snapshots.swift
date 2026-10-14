@@ -122,6 +122,18 @@ enum Snapshots {
                 try render("templates-builtin", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: builtin) }
                 let custom = TemplateEditorState(); custom.startNew()
                 try render("templates-new", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: custom) }
+                // T10: pigułka przed startem; stanu nagrywania nie da się wymusić w migawce (→ odbiór ręczny T13),
+                // więc osobno wiersze poziomów torów z rozwiniętej pigułki.
+                try render("pill-idle", size: CGSize(width: 360, height: 64), dark: dark, model: model) { RecordingPanelView(model: model, pill: PillState()) }
+                try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Preset: Polish · PL").font(.caption).foregroundStyle(.secondary)
+                        LevelRow(title: "System audio", db: -22)
+                        LevelRow(title: "Microphone: MacBook Air Microphone", db: -41, emphasized: true)
+                        LevelRow(title: "Microphone: silent", db: -160, emphasized: true)
+                    }
+                    .padding(12)
+                }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —
