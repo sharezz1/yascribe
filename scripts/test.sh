@@ -47,4 +47,5 @@ if [ "${RAN:-0}" -ne "$EXPECTED" ]; then
     echo "test.sh: uruchomiono $RAN testów, a w Tests/ jest $EXPECTED deklaracji @Test. Wynik NIEWAŻNY." >&2
     exit 4
 fi
+scripts/check-bundle.sh || { echo "test.sh: check-bundle nie przeszło (skrypty składania)" >&2; exit 5; }
 echo "test.sh: $RAN/$EXPECTED testów uruchomionych i zaliczonych."

@@ -21,9 +21,10 @@ public enum SystemAudioCheck {
     }
 
     /// Ton 880 Hz, 300 ms, -20 dBFS. Słyszalny — interfejs uprzedza o nim.
-    public static func run(timeout: Double = 1.5) async -> SystemAudioCheckResult {
-        let tap = SystemTapSource()
+    public static func run(timeout: Double = 1.5, tap: any AudioSource = SystemTapSource()) async -> SystemAudioCheckResult {
         let levels = LevelCollector()
+        // `defer` PRZED startem: przy błędzie `prepare`/`start` tap i urządzenie zbiorcze też są sprzątane (S18 §2.2).
+        defer { tap.stop() }
         do {
             _ = try tap.prepare()
             try tap.start { event in
@@ -32,7 +33,6 @@ public enum SystemAudioCheck {
         } catch {
             return .failed("\(error)")
         }
-        defer { tap.stop() }
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
         engine.attach(player)
