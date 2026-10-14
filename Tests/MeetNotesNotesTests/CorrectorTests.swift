@@ -63,13 +63,15 @@ private func capitalizing(_ user: String) -> String {
 
 @Test func correctedTranscriptKeepsLanguageFlagsAndNeverSendsFlaggedLines() async {
     // Review Focus #4: flaga zostaje, wypowiedź zaflagowana nie idzie do modelu.
-    let t = transcript([utt("no to jest test"), utt("GIBBERISH-FROM-A-WRONG-LANGUAGE", at: 5, flagged: true)])
+    // Flaga w ŚRODKU: numer linii musi trafić we właściwą wypowiedź także wtedy, gdy zaflagowaną pominięto.
+    let t = transcript([utt("no to jest test"), utt("GIBBERISH-FROM-A-WRONG-LANGUAGE", at: 5, flagged: true), utt("tak dokładnie tak", at: 9)])
     let stub = ChatStub { capitalizing($0.user) }
     let r = await corrector(stub).correct(t, language: .polish)
     #expect(stub.calls.allSatisfy { !$0.user.contains("GIBBERISH") })
     #expect(r.transcript.utterances[1].languageMismatch == .english)
     #expect(r.transcript.utterances[1].text == "GIBBERISH-FROM-A-WRONG-LANGUAGE")
     #expect(r.transcript.utterances[1].excludedFromNotes)
+    #expect(r.transcript.utterances[0].text == "No to jest test." && r.transcript.utterances[2].text == "Tak dokładnie tak.")
 }
 
 @Test func emptyOrFullyFlaggedTranscriptSendsNothingToTheCorrector() async {

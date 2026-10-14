@@ -61,3 +61,19 @@ import MeetNotesProviders
     let short = try #require(AutoTitle.prompt(transcript: transcript([utt("alfa", at: 1), utt("beta", at: 9)]), notesLanguage: .polish))
     #expect(short.user.contains("alfa") && short.user.contains("beta") && !short.user.contains("[…]"))
 }
+
+@Test func autoTitleDoesNotOverwriteATitleTypedWhileTheModelIsAnswering() async throws {
+    // Okno wyścigu: `shouldRun` przepuszcza, użytkownik wpisuje tytuł W TRAKCIE wywołania modelu.
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let store = NotesStore(session: session)
+    let stub = ChatStub { _ in
+        try store.updateMeta { $0.manualTitle = "Mine" }
+        return "Auto"
+    }
+    let r = await AutoTitle.generate(client: chatClient(stub), model: "m", transcript: transcript([utt("Prognoza na sobotę.")]),
+                                     notesLanguage: .polish, store: store)
+    #expect(stub.calls.count == 1)
+    #expect(r == nil)
+    #expect(store.readMeta().manualTitle == "Mine" && store.readMeta().autoTitle == nil)
+}
