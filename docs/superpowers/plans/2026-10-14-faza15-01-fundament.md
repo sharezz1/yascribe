@@ -23,9 +23,9 @@ Status: ⚠️ **spike** — model **Opus** wykonuje całe zadanie. Kod poniżej
 **Interfejsy:**
 - Dostarcza: `Snapshots.directory: URL?`, `Snapshots.render(_ name:, size:, dark:, model:, content:) throws`, `Snapshots.runAll(model:)` (lista ekranów — kolejne zadania dopisują swoje), `scripts/snapshot.sh [nazwa]` → PNG w `.design/review/`.
 
-- [ ] **Krok 1 `[opus]`: ignoruj katalog wyników.** Dopisz do `.gitignore` linię `.design/`.
+- [x] **Krok 1 `[opus]`: ignoruj katalog wyników.** Dopisz do `.gitignore` linię `.design/`.
 
-- [ ] **Krok 2 `[opus]`: szkielet.** Utwórz `Sources/MeetNotesApp/Snapshots.swift`:
+- [x] **Krok 2 `[opus]`: szkielet.** Utwórz `Sources/MeetNotesApp/Snapshots.swift`:
 
 ```swift
 import AppKit
@@ -100,7 +100,7 @@ W `MeetNotesApp` (struct `MeetNotesApp: App`) dodaj inicjalizator (model jest `p
     }
 ```
 
-- [ ] **Krok 3 `[opus]`: spike — czy renderuje.** Utwórz `scripts/snapshot.sh` (`chmod +x`):
+- [x] **Krok 3 `[opus]`: spike — czy renderuje.** Utwórz `scripts/snapshot.sh` (`chmod +x`):
 
 ```bash
 #!/bin/bash
@@ -120,14 +120,14 @@ Uruchom `scripts/snapshot.sh`, potem `Read` na `.design/review/presets-light.png
 **Kryterium:** na PNG widać wiersz presetu „Polish" na liście, pola formularza po wybraniu presetu **albo** (gdy nic nie wybrano) panel „Choose a preset", a na `meetings` — pusty stan „Record your first meeting". Nie biała plansza.
 **Jeśli lista (`List`) lub pola tekstowe nie renderują się poza ekranem → STOP** (przegląd §0): raport z opisem, co się nie renderuje i co spróbowano (np. `window.orderBack`, krótki `RunLoop.run` przed `cacheDisplay`); decyzja użytkownika: odbiór ręczny po T3, T4, T7, T8, T9, T10 zamiast migawek. Wynik tego kroku wpisz do raportu `F15-T0`.
 
-- [ ] **Krok 4 `[opus]`: commit.**
+- [x] **Krok 4 `[opus]`: commit.**
 
 ```bash
 git add .gitignore Sources/MeetNotesApp/Snapshots.swift Sources/MeetNotesApp/MeetNotesApp.swift scripts/snapshot.sh docs/superpowers/plans
 git commit -m "T0: tryb migawek ekranów (MEETNOTES_SNAPSHOT_DIR, scripts/snapshot.sh)" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Krok 5 `[opus]`: bramka.** `scripts/test.sh` — oczekiwane: `111/111` (zadanie nie dodaje testów).
+- [x] **Krok 5 `[opus]`: bramka.** `scripts/test.sh` — oczekiwane: `111/111` (zadanie nie dodaje testów).
 
 ---
 
