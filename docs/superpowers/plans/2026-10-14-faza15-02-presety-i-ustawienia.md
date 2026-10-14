@@ -95,9 +95,9 @@ public enum ModelCatalog {
 }
 ```
 
-- [ ] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `123/123` (120 + 3).
+- [ ] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `125/125` (122 + 3).
 
-- [ ] **Krok 5 `[haiku]`: mutacja (rozdział list).** W `ModelCatalog.visible` zamień `(m.outputModalities.map { $0.contains(wanted) } ?? true)` na `true`. Przepis §0.5: `scripts/test.sh --filter eachRoleSeesOnlyItsOwnKindOfModel` — **pada**; `git checkout Sources/MeetNotesProviders/ModelCatalog.swift` (po `git add -A`); pełne — `123/123`.
+- [ ] **Krok 5 `[haiku]`: mutacja (rozdział list).** W `ModelCatalog.visible` zamień `(m.outputModalities.map { $0.contains(wanted) } ?? true)` na `true`. Przepis §0.5: `scripts/test.sh --filter eachRoleSeesOnlyItsOwnKindOfModel` — **pada**; `git checkout Sources/MeetNotesProviders/ModelCatalog.swift` (po `git add -A`); pełne — `125/125`.
 
 - [ ] **Krok 6 `[sonnet]`: listy modeli w `AppModel`.** W `Sources/MeetNotesApp/AppModel.swift` usuń `var models: [UUID: [ModelInfo]] = [:]` i dotychczasowe `refreshModels`; przed `@MainActor @Observable final class AppModel` dodaj `struct ModelListKey: Hashable { var provider: UUID; var filter: String }` (`filter == ""` = lista domyślna), a w klasie:
 
@@ -433,7 +433,7 @@ struct ProbeBadges: View {
 
 W `SettingsView.swift` zmiany wywołania `RoleEditor(... hasPrompt …)` i `model.models[...]` robi T4 — **w T3 dopasuj tylko tyle, żeby się kompilowało:** w `SettingsView` wywołanie `RoleEditor(title: "Embeddings (whole archive)", role: .embedding, assignment: $model.settings.embedding, language: nil)` działa bez zmian (nowe parametry mają wartości domyślne).
 
-- [ ] **Krok 9 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `123/123`. (Ten krok kompiluje też cel `MeetNotesApp`; błąd kompilacji widoków → napraw minimalnie, opisz w raporcie.)
+- [ ] **Krok 9 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `125/125`. (Ten krok kompiluje też cel `MeetNotesApp`; błąd kompilacji widoków → napraw minimalnie, opisz w raporcie.)
 
 - [ ] **Krok 10 `[sonnet]`: migawki i jedna partia poprawek.** Dopisz w `Snapshots.runAll` po istniejących ekranach:
 
@@ -540,9 +540,9 @@ public enum KeyStatus: Equatable, Sendable {
 }
 ```
 
-- [ ] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `126/126` (123 + 3).
+- [ ] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `128/128` (125 + 3).
 
-- [ ] **Krok 5 `[haiku]`: mutacja (duplikat nazwy).** W `nameError` zamień `caseInsensitiveCompare(n) == .orderedSame` na `== n` (rozróżnia wielkość liter). Przepis §0.5: `scripts/test.sh --filter duplicateProviderNamesAreRejected` — **pada**; `git checkout Sources/MeetNotesProviders/Stores.swift`; pełne — `126/126`.
+- [ ] **Krok 5 `[haiku]`: mutacja (duplikat nazwy).** W `nameError` zamień `caseInsensitiveCompare(n) == .orderedSame` na `== n` (rozróżnia wielkość liter). Przepis §0.5: `scripts/test.sh --filter duplicateProviderNamesAreRejected` — **pada**; `git checkout Sources/MeetNotesProviders/Stores.swift`; pełne — `128/128`.
 
 - [ ] **Krok 6 `[sonnet]`: `addProvider` w `AppModel`.** Zastąp istniejące `addProvider`:
 
@@ -708,7 +708,7 @@ struct SettingsView: View {
 ```
 (`model.save()` zostaje wywoływane przez `commit()` i przez operacje na dostawcach; usunięty jest autozapis przy każdej zmianie `onChange`.)
 
-- [ ] **Krok 8 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `126/126`.
+- [ ] **Krok 8 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `128/128`.
 
 - [ ] **Krok 9 `[sonnet]`: migawki i jedna partia poprawek.** Dopisz w `Snapshots.runAll` ekran `settings` (jasny/ciemny): `try render("settings", size: CGSize(width: 900, height: 640), dark: dark, model: model) { SettingsView() }`. Obejrzyj; sprawdź: tekst o modelach w presecie z przyciskiem „Open Presets", brak „Save" w sekcji Providers, Save/Cancel pod „Archive", brak przewijanego natywnego menu modeli (zastąpione pickerem).
 

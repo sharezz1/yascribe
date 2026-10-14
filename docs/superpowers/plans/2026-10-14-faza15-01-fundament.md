@@ -133,11 +133,11 @@ git commit -m "T0: tryb migawek ekranów (MEETNOTES_SNAPSHOT_DIR, scripts/snapsh
 
 Status: ⚠️ nieskompilowane. **Przegląd Opusa po zadaniu (krok 12).**
 
-**Spec:** §3 decyzje 8 i 13, §4.2. **Zasada:** `LanguageCode` nadal nie przyjmuje `auto`; Auto = `language == nil && languageAuto == true`. Presetów **nie normalizujemy** przy wczytywaniu.
+**Spec:** §3 decyzje 8 i 13, §4.2. **Zasada:** `LanguageCode` nadal nie przyjmuje `auto`; Auto = `language == nil && languageAuto == true`. Presetów **nie normalizujemy** przy wczytywaniu. **Przy Auto strażnik języka PL/EN jest pomijany, ale `LanguageGuard.nonLatinScript` oznacza wypowiedź, w której większość liter nie jest łacińska** (decyzja użytkownika 2026-10-14; Granola „Multi" zamieniła polski w rosyjski bełkot) — flaga `languageMismatch` i wyłączenie z notatek, jak przy złym języku.
 
 **Pliki:**
-- Zmień: `Sources/MeetNotesProviders/Preset.swift`, `Sources/MeetNotesProviders/LanguageCode.swift`, `Sources/MeetNotesTranscription/Transcript.swift` (`RunSnapshot`), `Sources/MeetNotesTranscription/Merger.swift`, `Sources/meetnotes-cli/CLI.swift`, `Sources/MeetNotesApp/AppModel.swift`, `Sources/MeetNotesApp/MeetingsView.swift`
-- Test: `Tests/MeetNotesProvidersTests/PresetTests.swift`, `Tests/MeetNotesProvidersTests/ClientTests.swift`, `Tests/MeetNotesTranscriptionTests/RunnerTests.swift`, `Tests/MeetNotesTranscriptionTests/SessionFixtures.swift`
+- Zmień: `Sources/MeetNotesProviders/Preset.swift`, `Sources/MeetNotesProviders/LanguageCode.swift`, `Sources/MeetNotesTranscription/Transcript.swift` (`RunSnapshot`), `Sources/MeetNotesTranscription/Merger.swift`, `Sources/MeetNotesTranscription/LanguageGuard.swift`, `Sources/meetnotes-cli/CLI.swift`, `Sources/MeetNotesApp/AppModel.swift`, `Sources/MeetNotesApp/MeetingsView.swift`
+- Test: `Tests/MeetNotesProvidersTests/PresetTests.swift`, `Tests/MeetNotesProvidersTests/ClientTests.swift`, `Tests/MeetNotesTranscriptionTests/RunnerTests.swift`, `Tests/MeetNotesTranscriptionTests/SessionFixtures.swift`, `Tests/MeetNotesTranscriptionTests/LanguageGuardTests.swift`
 
 **Wszystkie miejsca, w których język ma znaczenie** (wynik `rg -n "snapshot.language|\.language\b|merge\(|mismatch\(|validate\(\)|missingLanguage|Automatic|automatically" Sources` z 2026-10-14):
 
@@ -146,7 +146,8 @@ Status: ⚠️ nieskompilowane. **Przegląd Opusa po zadaniu (krok 12).**
 | `Preset.swift:49-53` `validate()` | `guard language != nil` | przepuszcza też Auto |
 | `Transcript.swift:73` `RunSnapshot.init` | `guard let language = preset.language` | `language` opcjonalny |
 | `Transcript.swift:~65` `RunSnapshot.language` | `LanguageCode` | `LanguageCode?` |
-| `Merger.swift:34,70` `merge`/`mismatch` | język wymagany | `LanguageCode?`; nil = bez strażnika |
+| `Merger.swift:34,70` `merge`/`mismatch` | język wymagany | `LanguageCode?`; nil = Auto: bez strażnika PL/EN, ale z `nonLatinScript` |
+| `LanguageGuard.swift` | tylko `mismatch(_:expected:)` dla PL/EN | + `nonLatinScript(_:)` (tylko przy Auto) |
 | `TranscriptionRunner.swift:123,142` | podaje `snapshot.language` | **bez zmian** (opcjonalny przechodzi) |
 | `OpenAICompatibleClient.swift` `transcribe` | `if let language` dodaje pole | **bez zmian** (kontrakt już dopuszcza nil) |
 | `AppModel.swift:188,254` | klucz cache `p.language` | **bez zmian** (nil → klucz `-`) |
@@ -158,7 +159,7 @@ Status: ⚠️ nieskompilowane. **Przegląd Opusa po zadaniu (krok 12).**
 | `Probe.swift:60-64` | `language ?? .english` | **bez zmian** (Auto nie klasyfikuje obsługi języka) |
 
 **Interfejsy:**
-- Dostarcza: `Preset.languageAuto: Bool?`, `Preset.isAutoLanguage: Bool`, `Preset.languageLabel: String` (`"PL"`, `"Auto ⚠"`, `"?"`), `Preset.languageChoice: LanguageChoice` (get/set), `enum LanguageChoice: Hashable, Sendable { case unset, auto, code(LanguageCode) }`, `LanguageCode.englishName: String`, `RunSnapshot.language: LanguageCode?`, `Merger.merge(..., language: LanguageCode?, ...)`.
+- Dostarcza: `Preset.languageAuto: Bool?`, `Preset.isAutoLanguage: Bool`, `Preset.languageLabel: String` (`"PL"`, `"Auto ⚠"`, `"?"`), `Preset.languageChoice: LanguageChoice` (get/set), `enum LanguageChoice: Hashable, Sendable { case unset, auto, code(LanguageCode) }`, `LanguageCode.englishName: String`, `RunSnapshot.language: LanguageCode?`, `Merger.merge(..., language: LanguageCode?, ...)`, `LanguageGuard.nonLatinScript(_:) -> LanguageCode?`.
 
 - [ ] **Krok 1 `[sonnet]`: testy (najpierw).** Dopisz na końcu `Tests/MeetNotesProvidersTests/PresetTests.swift`:
 
@@ -249,6 +250,34 @@ Dopisz na końcu `Tests/MeetNotesTranscriptionTests/RunnerTests.swift`:
     _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(again)).run()
     #expect(again.requests == 0) // opłacone okna z dysku, bez inputMismatch
 }
+
+@Test func autoLanguageFlagsGibberishInAnotherScript() async throws {
+    // Granola „Multi" zamieniła polską wypowiedź w rosyjski bełkot. Przy Auto taki tekst jest oznaczony i poza notatkami.
+    struct CyrillicASR: HTTPClient {
+        func send(_ r: URLRequest) async throws -> (Data, HTTPURLResponse) {
+            let d = try JSONSerialization.data(withJSONObject: ["text": "Привет это проверка связи с вами сегодня"])
+            return (d, HTTPURLResponse(url: r.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+    }
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try autoSnapshot(), client: client(CyrillicASR())).run()
+    let u = try #require(t.utterances.first)
+    #expect(u.languageMismatch == (try LanguageCode("ru")))
+    #expect(u.excludedFromNotes)
+}
+```
+
+Dopisz na końcu `Tests/MeetNotesTranscriptionTests/LanguageGuardTests.swift`:
+
+```swift
+@Test func nonLatinScriptIsDetectedByMajority() throws {
+    #expect(LanguageGuard.nonLatinScript("Привет, это проверка связи") == (try LanguageCode("ru")))
+    #expect(LanguageGuard.nonLatinScript("これは日本語のテストです") == (try LanguageCode("ja")))
+    #expect(LanguageGuard.nonLatinScript("To jest zwykłe polskie zdanie z ąę") == nil)
+    #expect(LanguageGuard.nonLatinScript("Spotkanie o Москва i Київ jutro rano") == nil) // większość łacińska — jeden cudzy wyraz to nie bełkot
+    #expect(LanguageGuard.nonLatinScript("Да") == nil) // za mało liter, żeby orzekać
+    #expect(LanguageGuard.nonLatinScript("Prognoza na sobotę, 9 000 kontaktów") == nil)
+}
 ```
 
 - [ ] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh`. Oczekiwane: **błąd kompilacji** (`languageAuto`, `isAutoLanguage`, `languageLabel`, `languageChoice`, `autoSnapshot` bez `languageAuto`). Inny wynik (np. zielone) = STOP.
@@ -312,9 +341,44 @@ public enum LanguageChoice: Hashable, Sendable {
 
 ```swift
         for i in utterances.indices {
-            // Auto: nie ma oczekiwanego języka, więc nie ma czego pilnować (spec 1.5 §4.2).
-            utterances[i].languageMismatch = language.flatMap { LanguageGuard.mismatch(utterances[i].text, expected: $0) }
+            let text = utterances[i].text
+            if let language {
+                utterances[i].languageMismatch = LanguageGuard.mismatch(text, expected: language)
+            } else {
+                // Auto: nie ma oczekiwanego języka, więc strażnik PL/EN milczy; tekst w większości w obcym alfabecie
+                // to bełkot (spec 1.5, decyzja użytkownika 2026-10-14) — flaga i poza notatkami.
+                utterances[i].languageMismatch = LanguageGuard.nonLatinScript(text)
+            }
         }
+```
+W `Sources/MeetNotesTranscription/LanguageGuard.swift` dopisz w `enum LanguageGuard` (po `mismatch`):
+
+```swift
+    /// Auto: wypowiedź, w której większość liter nie jest łacińska, to bełkot (Granola „Multi" na polskim → cyrylica).
+    /// Zwraca język dominującego obcego alfabetu (`ru`, `el`, `ja`…, a dla nieznanego `zz`); za mało liter albo większość
+    /// łacińska → `nil` (jeden cudzy wyraz w polskim zdaniu nie jest bełkotem).
+    public static func nonLatinScript(_ text: String) -> LanguageCode? {
+        let letters = text.unicodeScalars.filter { $0.properties.isAlphabetic }
+        guard letters.count >= 4 else { return nil }
+        let foreign = letters.filter { !isLatin($0) }
+        guard foreign.count * 2 > letters.count else { return nil }
+        let code: String
+        switch foreign[foreign.startIndex].value {
+        case 0x0400...0x052F: code = "ru"
+        case 0x0370...0x03FF: code = "el"
+        case 0x0590...0x05FF: code = "he"
+        case 0x0600...0x06FF: code = "ar"
+        case 0x0900...0x097F: code = "hi"
+        case 0x0E00...0x0E7F: code = "th"
+        case 0x3040...0x30FF: code = "ja"
+        case 0xAC00...0xD7AF: code = "ko"
+        case 0x4E00...0x9FFF: code = "zh"
+        default: code = "zz"
+        }
+        return try? LanguageCode(code)
+    }
+
+    static func isLatin(_ s: Unicode.Scalar) -> Bool { s.value <= 0x024F || (0x1E00...0x1EFF).contains(s.value) }
 ```
 
 - [ ] **Krok 6 `[sonnet]`: CLI.** W `Sources/meetnotes-cli/CLI.swift` (`transcribe`): zamień komunikat i parsowanie na
@@ -329,11 +393,11 @@ oraz `Preset(name: "cli", language: language, asr: RoleAssignment(...), language
 
 - [ ] **Krok 7 `[sonnet]`: aplikacja.** W `Sources/MeetNotesApp/AppModel.swift`: `static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }`; w `savePreset` komunikat `missingLanguage` → `"Choose a language, or Auto for meetings that mix languages."`. W `Sources/MeetNotesApp/MeetingsView.swift` (`PresetMenu`): w obu miejscach `(p.language?.rawValue.uppercased() ?? "?")` / `($0.language?.rawValue.uppercased() ?? "?")` → `p.languageLabel` / `$0.languageLabel`.
 
-- [ ] **Krok 8 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `116/116` (111 + 5: `autoLanguagePresetValidatesButStillNeedsAnExplicitChoice`, `phaseOnePresetJSONStillDecodes`, `autoLanguageOmitsTheLanguageField`, `autoLanguageSkipsTheLanguageGuard`, `phaseOneInputJSONKeepsItsShapeAndResumes`).
+- [ ] **Krok 8 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `118/118` (111 + 7: `autoLanguagePresetValidatesButStillNeedsAnExplicitChoice`, `phaseOnePresetJSONStillDecodes`, `autoLanguageOmitsTheLanguageField`, `autoLanguageSkipsTheLanguageGuard`, `phaseOneInputJSONKeepsItsShapeAndResumes`, `autoLanguageFlagsGibberishInAnotherScript`, `nonLatinScriptIsDetectedByMajority`).
 
-- [ ] **Krok 9 `[haiku]`: mutacja 1 (Auto wysyła język).** Przepis (przegląd §0.5). W `Sources/MeetNotesProviders/OpenAICompatibleClient.swift` w gałęzi `.audioTranscriptions` zamień `if let language { body["language"] = language.rawValue }` na `body["language"] = language?.rawValue ?? "pl"`. `scripts/test.sh --filter autoLanguageOmitsTheLanguageField` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne `scripts/test.sh` — `116/116`.
+- [ ] **Krok 9 `[haiku]`: mutacja 1 (Auto wysyła język).** Przepis (przegląd §0.5). W `Sources/MeetNotesProviders/OpenAICompatibleClient.swift` w gałęzi `.audioTranscriptions` zamień `if let language { body["language"] = language.rawValue }` na `body["language"] = language?.rawValue ?? "pl"`. `scripts/test.sh --filter autoLanguageOmitsTheLanguageField` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne `scripts/test.sh` — `118/118`.
 
-- [ ] **Krok 10 `[haiku]`: mutacja 2 (Auto nie omija strażnika).** W `Merger.swift` zamień `language.flatMap { LanguageGuard.mismatch(utterances[i].text, expected: $0) }` na `LanguageGuard.mismatch(utterances[i].text, expected: language ?? .polish)`. `scripts/test.sh --filter autoLanguageSkipsTheLanguageGuard` — oczekiwane: **pada**. `git checkout Sources/MeetNotesTranscription/Merger.swift`; pełne — `116/116`.
+- [ ] **Krok 10 `[haiku]`: mutacje 2 i 3.** (a) W `Merger.swift` zamień `if let language {` na `if let language = language ?? .polish {` (Auto dostaje strażnika PL/EN). Przepis §0.5: `scripts/test.sh --filter autoLanguageSkipsTheLanguageGuard` — oczekiwane: **pada**; `git checkout Sources/MeetNotesTranscription/Merger.swift`. (b) W `LanguageGuard.nonLatinScript` zamień `guard foreign.count * 2 > letters.count else { return nil }` na `guard foreign.count > 0 else { return nil }` (każdy cudzy znak = bełkot). `scripts/test.sh --filter nonLatinScriptIsDetectedByMajority` — oczekiwane: **pada**; `git checkout Sources/MeetNotesTranscription/LanguageGuard.swift`. Pełne `scripts/test.sh` — `118/118`.
 
 - [ ] **Krok 11 `[sonnet]`: commit.**
 
@@ -342,7 +406,7 @@ git add -A
 git commit -m "T1: język Auto w presecie i potoku (languageAuto opcjonalne, RunSnapshot.language?)" -m "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Krok 12 `[opus]`: przegląd T1.** Sprawdź: (a) żadne miejsce z tabeli nie zostało pominięte (`rg -n "\.language\b" Sources`), (b) stary `input.json` bez `languageAuto` wczytuje się (test), (c) nic nie normalizuje presetu przy wczytywaniu (`summary.prompt` zostaje), (d) `LanguageCode("auto")` nadal rzuca (`autoLanguageCannotBeConstructed`). Uwagi → raport; blokujące → poprawka przed T2.
+- [ ] **Krok 12 `[opus]`: przegląd T1.** Sprawdź: (a) żadne miejsce z tabeli nie zostało pominięte (`rg -n "\.language\b" Sources`), (b) stary `input.json` bez `languageAuto` wczytuje się (test), (c) nic nie normalizuje presetu przy wczytywaniu (`summary.prompt` zostaje), (d) `LanguageCode("auto")` nadal rzuca (`autoLanguageCannotBeConstructed`), (e) `nonLatinScript` działa tylko przy Auto (przy jawnym języku `Merger` wywołuje wyłącznie `mismatch`) i liczy litery, nie znaki specjalne. Uwagi → raport; blokujące → poprawka przed T2.
 
 ---
 
@@ -455,9 +519,9 @@ i zastąp `listModels()` tym:
 ```
 (usuń stary `listModels()`; pozostałe wywołania `request("chat/completions", body: …)` i `request("embeddings", body:…, timeout:…)` używają argumentów po nazwie i kompilują się bez zmian).
 
-- [ ] **Krok 5 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `120/120` (116 + 4).
+- [ ] **Krok 5 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `122/122` (118 + 4).
 
-- [ ] **Krok 6 `[haiku]`: mutacja (lokalny filtr).** W `listModels` zamień końcówkę `return all.filter { … }` na `return all`. `scripts/test.sh --filter providerIgnoringTheModalityFilterIsFilteredLocally` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne — `120/120`.
+- [ ] **Krok 6 `[haiku]`: mutacja (lokalny filtr).** W `listModels` zamień końcówkę `return all.filter { … }` na `return all`. `scripts/test.sh --filter providerIgnoringTheModalityFilterIsFilteredLocally` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne — `122/122`.
 
 - [ ] **Krok 7 `[sonnet]`: commit.**
 
