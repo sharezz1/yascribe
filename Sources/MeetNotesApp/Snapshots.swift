@@ -117,6 +117,11 @@ enum Snapshots {
                     let myNotes = MeetingViewState(); myNotes.tab = .myNotes
                     try render("meeting-my-notes", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: empty, state: myNotes) }
                 }
+                // T9: wbudowany szablon (tylko do odczytu) i nowy własny (niezapisany).
+                let builtin = TemplateEditorState(); builtin.select(Template.standard)
+                try render("templates-builtin", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: builtin) }
+                let custom = TemplateEditorState(); custom.startNew()
+                try render("templates-new", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: custom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —

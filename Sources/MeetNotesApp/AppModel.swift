@@ -304,6 +304,11 @@ final class AppModel {
         selectedSessionID = id
     }
 
+    /// Zapis własnych szablonów; `nil` = zapisano, tekst = powód.
+    func saveTemplates() -> String? {
+        do { try JSONFile.save(notes.templates, to: paths.templates); return nil } catch { return "Couldn't save templates: \(error)" }
+    }
+
     func isTranscribing(_ item: SessionItem) -> Bool { transcribing.contains(item.id) }
 
     static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }

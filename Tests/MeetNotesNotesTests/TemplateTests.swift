@@ -25,3 +25,15 @@ import MeetNotesProviders
     #expect(back == file)
     #expect(back.all().last?.name == "Board update")
 }
+
+@Test func renamingToExistingTemplateNameIsRejected() throws {
+    var file = TemplatesFile()
+    var a = Template(name: "Board update", instructions: "x")
+    try file.upsert(a)
+    try file.upsert(Template(name: "Sales sync", instructions: "y"))
+    a.name = "sales SYNC"
+    #expect(throws: TemplateError.nameTaken("sales SYNC")) { try file.upsert(a) }
+    a.name = "Standard" // nazwa wbudowanego też jest zajęta
+    #expect(throws: TemplateError.nameTaken("Standard")) { try file.upsert(a) }
+    #expect(file.templates.map(\.name) == ["Board update", "Sales sync"]) // nic się nie zmieniło
+}
