@@ -40,6 +40,9 @@ struct SessionItem: Identifiable, Equatable {
     }
 }
 
+/// Klucz listy modeli: dostawca + modalność wyjścia (`filter == ""` = lista domyślna).
+struct ModelListKey: Hashable { var provider: UUID; var filter: String }
+
 @MainActor
 @Observable
 final class AppModel {
@@ -51,7 +54,6 @@ final class AppModel {
     var presets = PresetsFile()
     var settings = GlobalSettings()
     var probeCache = ProbeCache()
-    var models: [UUID: [ModelInfo]] = [:]
     var sessions: [SessionItem] = []
     var selectedSessionID: String?
     var activePresetID: UUID?
@@ -169,9 +171,30 @@ final class AppModel {
         save()
     }
 
+    var modelLists: [ModelListKey: [ModelInfo]] = [:]
+    private(set) var loadingModels: Set<ModelListKey> = []
+
+    private func key(_ provider: UUID, _ role: Role) -> ModelListKey {
+        ModelListKey(provider: provider, filter: ModelCatalog.outputFilter(for: role) ?? "")
+    }
+
+    func models(provider: UUID, role: Role) -> [ModelInfo] { modelLists[key(provider, role)] ?? [] }
+    func isLoadingModels(provider: UUID, role: Role) -> Bool { loadingModels.contains(key(provider, role)) }
+
+    /// Lista modeli dla roli: pobierana raz na dostawcę i rolę (`force` = odśwież).
+    func loadModels(provider: UUID, role: Role, force: Bool = false) async {
+        let k = key(provider, role)
+        guard force || modelLists[k] == nil, !loadingModels.contains(k), let c = client(for: provider) else { return }
+        loadingModels.insert(k)
+        defer { loadingModels.remove(k) }
+        do { modelLists[k] = try await c.listModels(output: ModelCatalog.outputFilter(for: role)) } catch {
+            lastError = "Couldn't load models: \(error)"
+        }
+    }
+
+    /// Przycisk „Refresh Models" w Settings: transkrypcja, embeddingi i lista tekstowa.
     func refreshModels(_ id: UUID) async {
-        guard let c = client(for: id) else { return }
-        do { models[id] = try await c.listModels() } catch { lastError = "Couldn't refresh models: \(error)" }
+        for role in [Role.asr, .embedding, .summary] { await loadModels(provider: id, role: role, force: true) }
     }
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {

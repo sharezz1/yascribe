@@ -55,6 +55,19 @@ enum Snapshots {
                 let form = PresetEditorState()
                 form.draft = model.presets.presets.first
                 try render("preset-form", size: CGSize(width: 700, height: 600), dark: dark, model: model) { PresetForm(state: form) }
+                // T3: preset wybrany (lista + edytor obok siebie) oraz całe okno z sidebarem — bliższe temu, co widać na żywo.
+                let editing = PresetEditorState()
+                editing.select(model.presets.presets.first)
+                try render("presets-editing", size: CGSize(width: 900, height: 640), dark: dark, model: model) { PresetsView(state: editing) }
+                // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
+                // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —
+                // nie używamy go w migawkach.
+                if let pid = model.providers.providers.first?.id {
+                    let a = RoleAssignment(providerID: pid, model: "deepseek/deepseek-v4.1-flash", prompt: "Keep product names unchanged.")
+                    let auto = PresetEditorState(draft: Preset(name: "Mixed meetings", language: nil, asr: RoleAssignment(providerID: pid, model: "microsoft/mai-transcribe-2"),
+                                                                correction: a, languageAuto: true), original: nil)
+                    try render("presets-auto", size: CGSize(width: 900, height: 780), dark: dark, model: model) { PresetsView(state: auto) }
+                }
             }
             print("snapshots: \(directory!.path)")
             exit(0)
