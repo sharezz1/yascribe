@@ -46,8 +46,13 @@ struct ContentView: View {
         @Bindable var model = model
         NavigationSplitView {
             List(selection: $model.section) {
-                ForEach(Section.allCases) { s in
-                    Label(s.rawValue, systemImage: s.symbol).tag(s)
+                SwiftUI.Section {
+                    Label(Section.meetings.rawValue, systemImage: Section.meetings.symbol).tag(Section.meetings)
+                }
+                SwiftUI.Section("Setup") {
+                    ForEach([Section.presets, .templates, .settings]) { s in
+                        Label(s.rawValue, systemImage: s.symbol).tag(s)
+                    }
                 }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180)

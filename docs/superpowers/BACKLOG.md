@@ -20,7 +20,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] **Faza 2 (użytkownik, 2026-10-13, design 1.5): wybór mikrofonu przed startem.** `RawMicrophoneSource` bierze tylko domyślne wejście systemu (`CoreAudioDevices.defaultInputDevice()`); wybór urządzenia to zmiana rdzenia (źródło + dziennik + obserwator urządzeń). W 1.5 pigułka tylko **pokazuje** nazwę mikrofonu, wyraźnie, żeby było widać nagrywanie „nie tego".
 - [ ] **Faza 2 (decyzja 2026-10-13): transkrypt na żywo i „Resume"** (wznowienie nagrywania do tej samej notatki). Resume = drugi segment sesji (zmiana formatu: wiele `session.started/ended`, luka na osi, offsety ścieżek). Zakładki i pigułka 1.5 mają miejsce na oba.
 
-- [ ] **D3/odbiór (2026-10-13): wiersz sesji w toku na liście ze statusem „Recovered".** Podczas
+- [x] **D3/odbiór (2026-10-13): wiersz sesji w toku *(zrobione w T8: `SessionStatus`, porównanie po nazwie katalogu; nagrywana sesja to wiersz Recording)* na liście ze statusem „Recovered".** Podczas
   nagrania lista pokazuje nagrywaną sesję jako osobny wiersz z etykietą „Recovered" (4× w D3: 10:54,
   11:04, 12:24, 12:27). Dwie warstwy: (a) etykieta — `SessionSummary.rebuild` startuje z
   `crashed: true` i zdejmuje je dopiero zdarzenie `session.ended`, a `MeetingsView` sprawdza
@@ -30,7 +30,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
   - **Do decyzji przy S18 / faza 1.5** — dotyczy wyświetlania listy (dane sesji są poprawne:
   `journal.jsonl` i `session.json` bez zarzutu); etykieta „Recovered" opisuje „aplikacja padła
   w trakcie", a dostaje ją każde trwające nagranie.
-- [ ] **D3/odbiór: preset nieczytelny w oknie głównym.** Toolbar pokazuje samą ikonę bez nazwy (więc
+- [x] **D3/odbiór: preset nieczytelny w oknie głównym.** *(zrobione w T8: `RecordCard` z nazwą, językiem i modelem ASR; `PresetMenu` z etykietą tekstową)* Toolbar pokazuje samą ikonę bez nazwy (więc
   kryterium kroku 4 — „chip przy Record pokazuje język" — nie jest widoczne bez rozwijania menu),
   a etykieta dostępności tego elementu to „Edit" (VoiceOver nie powie, jaki preset jest wybrany).
   Nazwa jest widoczna tylko w menu, w pływającym oknie i w trakcie nagrania (wiersz listy + panel).

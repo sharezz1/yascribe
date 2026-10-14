@@ -16,7 +16,12 @@ struct MeetingDetailView: View {
     @Environment(AppModel.self) private var model
     let item: SessionItem
     @StateObject private var playback = PlaybackState()
-    @StateObject private var state = MeetingViewState()
+    @StateObject private var state: MeetingViewState
+
+    init(item: SessionItem, state: MeetingViewState = MeetingViewState()) {
+        self.item = item
+        _state = StateObject(wrappedValue: state)
+    }
 
     private var isRecording: Bool { SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory) }
 
@@ -42,7 +47,8 @@ struct MeetingDetailView: View {
         .navigationTitle(item.title)
         .onAppear {
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
-            state.titleDraft = item.notes.meta.manualTitle ?? item.notes.meta.autoTitle ?? ""
+            // Pole tytułu pokazuje ten sam tytuł co lista (ręczny > auto > z notatki); „Untitled meeting" zostaje placeholderem.
+            state.titleDraft = item.title == NoteTitle.untitled ? "" : item.title
         }
         .toolbar {
             Button {
