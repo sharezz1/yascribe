@@ -17,6 +17,8 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
   - **Do decyzji przy S18 / faza 2** — przeniesienie parsowania poza MainActor i debounce zapisu ustawień to zmiana zachowania aplikacji, nie kosmetyka; przy obecnej liczbie sesji niewidoczne.
 - [ ] **Usprawnienie (użytkownik, 2026-10-13): odzyskiwanie odmówionej zgody TCC.** Po kliknięciu „Nie pozwalaj" macOS nie pyta drugi raz o mikrofon / dźwięk systemowy. Potrzebne: (a) instrukcja ręczna w aplikacji (Ustawienia → Prywatność i ochrona → Mikrofon / Nagrywanie ekranu i dźwięku systemowego; albo `tccutil reset Microphone io.github.sharezz1.meetnotes` i `… AudioCapture …`), (b) opcjonalnie przycisk w setupie „Reset permission", który uruchamia `tccutil reset` dla własnego bundle ID i prosi o restart aplikacji.
   - **Faza 2 / po D3** — funkcja produktowa, nie poprawka; wynik D3 pokaże, które panele TCC naprawdę się pojawiają.
+- [ ] **Faza 2 (użytkownik, 2026-10-13, design 1.5): wybór mikrofonu przed startem.** `RawMicrophoneSource` bierze tylko domyślne wejście systemu (`CoreAudioDevices.defaultInputDevice()`); wybór urządzenia to zmiana rdzenia (źródło + dziennik + obserwator urządzeń). W 1.5 pigułka tylko **pokazuje** nazwę mikrofonu, wyraźnie, żeby było widać nagrywanie „nie tego".
+- [ ] **Faza 2 (decyzja 2026-10-13): transkrypt na żywo i „Resume"** (wznowienie nagrywania do tej samej notatki). Resume = drugi segment sesji (zmiana formatu: wiele `session.started/ended`, luka na osi, offsety ścieżek). Zakładki i pigułka 1.5 mają miejsce na oba.
 
 - [ ] **D3/odbiór (2026-10-13): wiersz sesji w toku na liście ze statusem „Recovered".** Podczas
   nagrania lista pokazuje nagrywaną sesję jako osobny wiersz z etykietą „Recovered" (4× w D3: 10:54,
