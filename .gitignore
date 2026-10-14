@@ -16,3 +16,4 @@
 .superpowers/
 .claude/proven-config*
 .claude/.proven-config-version
+.design/

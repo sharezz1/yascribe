@@ -8,6 +8,13 @@ import SwiftUI
 struct MeetNotesApp: App {
     private let model = AppModel()
 
+    init() {
+        if Snapshots.directory != nil {
+            let model = self.model
+            DispatchQueue.main.async { MainActor.assumeIsolated { Snapshots.runAll(model: model) } }
+        }
+    }
+
     var body: some Scene {
         WindowGroup("MeetNotes") {
             ContentView()
