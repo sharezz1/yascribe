@@ -36,6 +36,14 @@ public struct RunDirectory: Sendable {
         !runID.isEmpty && runID.count <= 64 && !runID.hasPrefix(".")
             && runID.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }
     }
+
+    /// Najnowszy przebieg sesji: `runID` to nazwa z datą, więc sortują się chronologicznie. Pomijamy wpisy spoza wzorca
+    /// (np. `.DS_Store`) — katalogi obok `runs/` (jak `notes/`) tu nie wchodzą w ogóle.
+    public static func latestRunID(in session: URL) -> String? {
+        let runs = session.appendingPathComponent("runs")
+        return ((try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []).filter { isValid(runID: $0) }.sorted().last
+    }
+
     public func chunk(_ track: String, _ i: Int) -> URL { url.appendingPathComponent("chunks/\(track)-\(i).json") }
 }
 
