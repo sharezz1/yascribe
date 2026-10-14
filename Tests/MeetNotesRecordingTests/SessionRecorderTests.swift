@@ -294,3 +294,30 @@ private final class Pump: AudioSource, @unchecked Sendable {
     #expect(r.endReason == .noSources)
     #expect(!FileManager.default.fileExists(atPath: dir.deletingLastPathComponent().appendingPathComponent("evil.caf").path))
 }
+
+@Test func recorderReportsTheLastLevelPerTrack() throws {
+    // Poziom to OSTATNIA porcja toru — nie pierwsza i nie maksimum (wskaźnik na pigułce ma opadać z ciszą).
+    let dir = sessionDir()
+    let loud = sine(frames: 1_600, channels: 1, rate: 16_000, amp: 0.5)
+    let quiet = [Int16](repeating: 0, count: 1_600)
+    let sys = FileSource(trackID: "system", samples: loud + quiet, sampleRate: 16_000, channels: 1, startHostTime: 0,
+                         timebase: ns, chunkFrames: 1_600)
+    let mic = FileSource(trackID: "mic_raw", samples: loud, sampleRate: 16_000, channels: 1, startHostTime: 0,
+                         timebase: ns, chunkFrames: 1_600)
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: ManualHostClock(), timebase: ns, zeroWatch: [:])
+    try r.start()
+    let levels = r.currentLevels()
+    #expect(levels["system"] == -160) // ostatnia porcja to cyfrowa cisza
+    let m = try #require(levels["mic_raw"])
+    #expect(m > -12 && m < -6) // sinus o amplitudzie 0,5 ≈ −9 dBFS RMS
+}
+
+@Test func levelsAreKeptPerTrackAndReadableAfterTheEnd() throws {
+    let dir = sessionDir()
+    let mic = FileSource(trackID: "mic_raw", samples: sine(frames: 1_600, channels: 1, rate: 16_000, amp: 0.5), sampleRate: 16_000,
+                         channels: 1, startHostTime: 0, timebase: ns, chunkFrames: 1_600)
+    let r = SessionRecorder(directory: dir, sources: [mic], conditions: [], clock: ManualHostClock(), timebase: ns, zeroWatch: [:])
+    try r.start()
+    #expect(r.endReason != nil) // sesja już zakończona (źródło plikowe)
+    #expect(Set(r.currentLevels().keys) == ["mic_raw"]) // tor, którego nie było, nie ma poziomu
+}

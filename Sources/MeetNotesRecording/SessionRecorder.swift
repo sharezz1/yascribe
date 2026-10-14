@@ -34,8 +34,15 @@ public final class SessionRecorder: @unchecked Sendable {
     /// nadpisuje swoim `stalled30s` (P2).
     private var failedTracks: Set<String> = []
     public private(set) var endReason: EndReason?
+    private var levels: [String: Double] = [:]
 
     public var onEnded: (@Sendable (EndReason) -> Void)?
+
+    /// Ostatni poziom (dBFS RMS) każdej ścieżki — dla wskaźnika na pigułce. Czyta pod tą samą blokadą co zapis.
+    public func currentLevels() -> [String: Double] {
+        lock.lock(); defer { lock.unlock() }
+        return levels
+    }
 
     public init(directory: URL, sources: [any AudioSource], conditions: [any EndCondition] = .standard,
                 clock: any HostClock = MachHostClock(), timebase: Timebase = .current,
@@ -158,7 +165,9 @@ public final class SessionRecorder: @unchecked Sendable {
                             stalledTracks.remove(trackID)
                         } catch {}
                     }
-                    if Levels.rmsDBFS(chunk.samples) > silenceThreshold { lastLoudAt = max(lastLoudAt, chunk.hostTime) }
+                    let db = Levels.rmsDBFS(chunk.samples)
+                    levels[trackID] = db
+                    if db > silenceThreshold { lastLoudAt = max(lastLoudAt, chunk.hostTime) }
                     reason = evaluateLocked(now: chunk.hostTime)
                 } catch {
                     reason = Self.isDiskFull(error) ? .diskFull : .writeError
