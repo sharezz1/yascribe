@@ -126,6 +126,7 @@ struct RecordingPanelView: View {
                     Button("Stop") { rec.stop() }.keyboardShortcut(".", modifiers: .command)
                     Button { pill.expanded.toggle() } label: { Image(systemName: pill.expanded ? "chevron.down" : "chevron.up") }
                         .buttonStyle(.borderless).help(pill.expanded ? "Collapse" : "Show details")
+                        .accessibilityLabel(pill.expanded ? "Collapse details" : "Show details")
                 } else {
                     // 🔴 Preset z językiem widoczny i wybierany przed startem (W§2, W§6).
                     PresetMenu()
@@ -174,6 +175,7 @@ struct LevelRow: View {
                 Text(title).font(emphasized ? .callout.weight(.semibold) : .callout).lineLimit(2)
                 Spacer(minLength: 8)
                 Text((db ?? -160) > -60 ? "✓" : "—").frame(width: 14)
+                    .accessibilityLabel((db ?? -160) > -60 ? "Signal present" : "No signal")
             }
             ZStack(alignment: .leading) {
                 Capsule().fill(.quaternary)
