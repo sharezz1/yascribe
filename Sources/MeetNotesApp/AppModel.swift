@@ -286,6 +286,7 @@ final class AppModel {
             }
             recording.showPanel(model: self)
             reloadSessions()
+            openSession(dir.lastPathComponent) // notatki pisze się w trakcie spotkania
         } catch {
             lastError = "Couldn't start recording: \(error)"
         }
@@ -295,6 +296,12 @@ final class AppModel {
     /// sesja bez pliku (np. z CLI) dostaje aktywny.
     func presetFor(sessionURL: URL) -> Preset? {
         (try? JSONFile.load(Preset?.self, from: sessionURL.appendingPathComponent("preset.json"), default: nil)) ?? activePreset
+    }
+
+    /// Przełącza na listę spotkań i otwiera sesję (np. notatkę trwającego nagrania). Nie aktywuje aplikacji.
+    func openSession(_ id: String) {
+        section = .meetings
+        selectedSessionID = id
     }
 
     func isTranscribing(_ item: SessionItem) -> Bool { transcribing.contains(item.id) }

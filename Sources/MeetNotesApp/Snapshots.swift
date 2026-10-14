@@ -1,5 +1,8 @@
 import AppKit
+import MeetNotesNotes
 import MeetNotesProviders
+import MeetNotesRecording
+import MeetNotesSessionFormat
 import SwiftUI
 
 /// Tryb migawek (macos.md §9): `MEETNOTES_SNAPSHOT_DIR=<katalog>` renderuje ekrany do PNG i kończy proces.
@@ -34,13 +37,54 @@ enum Snapshots {
     }
 
     /// Fixture: presety i dostawca zapisane do katalogu danych, potem `load()`. Kolejne zadania dopisują sesje i stany.
+    /// Sesja z dysku: rejestrator z próbek, potem transkrypt i notatki zapisane jak w aplikacji.
+    static func seedSession(_ model: AppModel, name: String, transcriptJSON: String?, notes: NoteSummary?, myNotes: String = "") throws {
+        let dir = model.paths.sessions.appendingPathComponent(name)
+        let tb = Timebase(numer: 1, denom: 1)
+        let src = FileSource(trackID: "system", samples: [Int16](repeating: 0, count: 16_000 * 60), sampleRate: 16_000, channels: 1,
+                             startHostTime: 1_000_000_000, timebase: tb, chunkFrames: 1_600)
+        try SessionRecorder(directory: dir, sources: [src], conditions: [], clock: ManualHostClock(), timebase: tb, zeroWatch: [:]).start()
+        if let transcriptJSON {
+            let run = dir.appendingPathComponent("runs/2026-10-14-1000")
+            try FileManager.default.createDirectory(at: run, withIntermediateDirectories: true)
+            try transcriptJSON.write(to: run.appendingPathComponent("transcript.json"), atomically: true, encoding: .utf8)
+        }
+        let store = NotesStore(session: dir)
+        if !myNotes.isEmpty { try store.writeMyNotes(myNotes) }
+        if let notes { try store.writeSummary(notes) }
+    }
+
+    static let sampleTranscript = """
+    {"utterances":[
+      {"speaker":"them","start":3,"end":9,"text":"so what we have is the forecast built without manual changes, around nine thousand on Saturday","words":[],"approximateTiming":false},
+      {"speaker":"me","start":12,"end":16,"text":"and on Sunday it is almost four thousand, why more agents scheduled?","words":[],"approximateTiming":false},
+      {"speaker":"them","start":20,"end":27,"text":"Piotr will check the staffing rules and send the corrected schedule by Friday","words":[],"approximateTiming":false}
+    ],"failedChunks":[]}
+    """
+
     static func seed(_ model: AppModel) throws {
         let provider = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
         var presets = PresetsFile()
         try presets.upsert(Preset(name: "Polish", language: .polish,
-                                  asr: RoleAssignment(providerID: provider.id, model: "microsoft/mai-transcribe-2")))
+                                  asr: RoleAssignment(providerID: provider.id, model: "microsoft/mai-transcribe-2"),
+                                  summary: RoleAssignment(providerID: provider.id, model: "deepseek/deepseek-v4.1-flash")))
         try JSONFile.save(ProvidersFile(providers: [provider]), to: model.paths.providers)
         try JSONFile.save(presets, to: model.paths.presets)
+        let notes = NoteSummary(title: "Scheduling forecast discrepancy with Piotr", markdown: """
+            The team reviewed the schedule built on the forecast and found Sunday staffed higher than Saturday despite lower volume.
+
+            ## Forecast vs. schedule
+            - Saturday: about **9 000** contacts expected, schedule built without manual changes
+            - Sunday: almost **4 000**, yet more agents scheduled than on Saturday
+              - Cause not yet known
+
+            ## Next Steps
+            - **Check the staffing rules** (Piotr) — the Sunday allocation looks inconsistent with the forecast.
+            - **Send the corrected schedule** (Piotr) — due Friday so the team can confirm shifts.
+            """, templateID: "standard", model: "deepseek/deepseek-v4.1-flash", context: "Piotr, Adrian", generatedAt: Date())
+        try seedSession(model, name: "2026-10-14T10-00-00Z-aa11", transcriptJSON: sampleTranscript, notes: notes, myNotes: "ask about Sunday staffing")
+        try seedSession(model, name: "2026-10-14T09-00-00Z-bb22", transcriptJSON: sampleTranscript, notes: nil)
+        try seedSession(model, name: "2026-10-13T16-00-00Z-cc33", transcriptJSON: nil, notes: nil)
         model.load()
         model.showSetup = false
     }
@@ -59,6 +103,20 @@ enum Snapshots {
                 let editing = PresetEditorState()
                 editing.select(model.presets.presets.first)
                 try render("presets-editing", size: CGSize(width: 900, height: 640), dark: dark, model: model) { PresetsView(state: editing) }
+                // T8: lista z kartą Record i trzy stany spotkania (notatki / karta Generate / My notes bez transkryptu).
+                try render("meetings-full", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
+                if let withNotes = model.sessions.first(where: { $0.id.hasSuffix("aa11") }),
+                   let transcriptOnly = model.sessions.first(where: { $0.id.hasSuffix("bb22") }),
+                   let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
+                    let summaryTab = MeetingViewState(); summaryTab.tab = .summary
+                    try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
+                    let transcriptTab = MeetingViewState(); transcriptTab.tab = .transcript
+                    try render("meeting-transcript", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: transcriptTab) }
+                    let generateCard = MeetingViewState(); generateCard.tab = .summary
+                    try render("meeting-generate-card", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: transcriptOnly, state: generateCard) }
+                    let myNotes = MeetingViewState(); myNotes.tab = .myNotes
+                    try render("meeting-my-notes", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: empty, state: myNotes) }
+                }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —
