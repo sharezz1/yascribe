@@ -87,6 +87,12 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] `ContextError` (D6): fałszywy pozytyw dla 400 „max_tokens exceeds maximum…" (nasz `chat()` max_tokens nie wysyła), fałszywy negatyw dla 413 z domyślnym HTML nginx; oryginalny tekst błędu nie jest dołączany; spec §4.1 mówi „400/413 lub treść", kod „status i słowo" (zachowawczo) i dodaje 422.
 - [ ] Gdy wszystkie partie korekty padną (np. 401/402), wynik = oryginał, przyczyna przepada, a T7 i tak zapisze `corrected.json` (D7); spec §7 mówi o komunikacie z Retry. Rozważyć w T7/UI.
 
+## Z przeglądu T10 (2026-10-14, `reports/F15-T10.md`) — drobne, bez rundy poprawek
+- [ ] **Nazwa mikrofonu w pigułce przestaje być aktualna (D2, sprawdzić w odbiorze T13):** `micName` czytane raz przy starcie, a `RawMicrophoneSource` podąża za zmianą domyślnego wejścia (np. AirPods podłączone w trakcie) — pigułka dalej pokazuje stary mikrofon, dokładnie ten przypadek, który miała wyłapać decyzja 4. Rozwiązanie: odświeżać `micName` razem z `levels` (co 0,25 s `defaultInputName()`) albo z `deviceChanged` z dziennika.
+- [ ] Pigułka rozwija się w dół i nic jej nie ogranicza do widocznego obszaru ekranu (D1); `NSHostingView` nadpisuje `setContentSize` wysokością treści, więc wartości 64/230 są tylko chwilowe — usunąć albo zastąpić `sizingOptions`.
+- [ ] `levels` trzyma ostatnią porcję bez końca: tor, który stanął lub padł, nadal pokazuje ✓ (D4; z założenia „ostatnia porcja"). Rozważyć wygaszanie po N sekundach bez porcji.
+- [ ] Zwinięta pigułka nie ma wskaźnika poziomu, który wymienia spec §5.3 (D5; plan to przepisał). `PillState.expanded` przeżywa koniec nagrania — następne nagranie startuje rozwinięte (D7). Test `levelsAreKeptPerTrackAndReadableAfterTheEnd` ma jedno źródło i nie odróżnia „klucz tylko dla torów z porcją" (D6; wpływ na UI zerowy).
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
