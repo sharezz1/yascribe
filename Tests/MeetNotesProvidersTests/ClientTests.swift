@@ -69,3 +69,40 @@ import Testing
         .transcribe(wav: ProbeClips.polish.wav, model: "m", language: nil, shape: .audioTranscriptions)
     #expect(http.calls[0].body["language"] == nil)
 }
+
+@Test func listModelsCanAskForAnOutputModality() async throws {
+    let http = StubHTTP { _, _ in ok(["data": [
+        ["id": "microsoft/mai-transcribe-2", "architecture": ["output_modalities": ["transcription"]]],
+    ]]) }
+    let models = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http).listModels(output: "transcription")
+    #expect(models.map(\.id) == ["microsoft/mai-transcribe-2"])
+    #expect(http.calls[0].path == "/api/v1/models?output_modalities=transcription")
+}
+
+@Test func providerRejectingTheModalityParameterIsAskedAgainWithoutIt() async throws {
+    let http = StubHTTP { path, _ in
+        path.contains("output_modalities") ? fail(400, "{\"error\":\"unknown parameter\"}")
+            : ok(["data": [["id": "llama3"], ["id": "nomic-embed"]]])
+    }
+    let models = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http).listModels(output: "embeddings")
+    #expect(models.map(\.id) == ["llama3", "nomic-embed"]) // brak modalności w odpowiedzi → nic nie odfiltrowane
+    #expect(http.calls.map(\.path) == ["/api/v1/models?output_modalities=embeddings", "/api/v1/models"])
+}
+
+@Test func providerIgnoringTheModalityFilterIsFilteredLocally() async throws {
+    // Review Focus #2: 200 z pełną listą — ponowienie się nie wyzwoli, filtr lokalny musi zadziałać.
+    let http = StubHTTP { _, _ in ok(["data": [
+        ["id": "microsoft/mai-transcribe-2", "architecture": ["output_modalities": ["transcription"]]],
+        ["id": "openai/gpt-x", "architecture": ["output_modalities": ["text"]]],
+    ]]) }
+    let models = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http).listModels(output: "transcription")
+    #expect(models.map(\.id) == ["microsoft/mai-transcribe-2"])
+}
+
+@Test func modalityRetryHappensOnlyOnce() async throws {
+    let http = StubHTTP { _, _ in fail(400, "{}") }
+    await #expect(throws: ProviderError.http(400, "{}")) {
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http).listModels(output: "transcription")
+    }
+    #expect(http.calls.count == 2)
+}

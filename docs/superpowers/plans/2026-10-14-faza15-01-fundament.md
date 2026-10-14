@@ -490,7 +490,7 @@ Status: ⚠️ nieskompilowane.
 **Interfejsy:**
 - Dostarcza: `OpenAICompatibleClient.listModels(output: String? = nil) async throws -> [ModelInfo]` (wywołania `listModels()` działają bez zmian); `request(_:method:query:body:timeout:)`.
 
-- [ ] **Krok 1 `[sonnet]`: Stub widzi zapytanie.** W `Tests/MeetNotesProvidersTests/Stub.swift` w `send` zamień linię `let path = request.url!.path` na:
+- [x] **Krok 1 `[sonnet]`: Stub widzi zapytanie.** W `Tests/MeetNotesProvidersTests/Stub.swift` w `send` zamień linię `let path = request.url!.path` na:
 
 ```swift
         let url = request.url!
@@ -498,7 +498,7 @@ Status: ⚠️ nieskompilowane.
 ```
 (istniejące testy nie używają zapytań, więc ich oczekiwania ścieżek się nie zmieniają).
 
-- [ ] **Krok 2 `[sonnet]`: testy.** Dopisz na końcu `Tests/MeetNotesProvidersTests/ClientTests.swift`:
+- [x] **Krok 2 `[sonnet]`: testy.** Dopisz na końcu `Tests/MeetNotesProvidersTests/ClientTests.swift`:
 
 ```swift
 @Test func listModelsCanAskForAnOutputModality() async throws {
@@ -539,9 +539,9 @@ Status: ⚠️ nieskompilowane.
 }
 ```
 
-- [ ] **Krok 3 `[haiku]`: czerwone.** `scripts/test.sh` — oczekiwane: błąd kompilacji (`listModels(output:)` nie istnieje). Inaczej STOP.
+- [x] **Krok 3 `[haiku]`: czerwone.** `scripts/test.sh` — oczekiwane: błąd kompilacji (`listModels(output:)` nie istnieje). Inaczej STOP.
 
-- [ ] **Krok 4 `[sonnet]`: implementacja.** W `OpenAICompatibleClient.swift` zamień `func request(...)` na wersję z zapytaniem:
+- [x] **Krok 4 `[sonnet]`: implementacja.** W `OpenAICompatibleClient.swift` zamień `func request(...)` na wersję z zapytaniem:
 
 ```swift
     func request(_ path: String, method: String = "POST", query: [URLQueryItem] = [], body: [String: Any]? = nil,
@@ -586,11 +586,11 @@ i zastąp `listModels()` tym:
 ```
 (usuń stary `listModels()`; pozostałe wywołania `request("chat/completions", body: …)` i `request("embeddings", body:…, timeout:…)` używają argumentów po nazwie i kompilują się bez zmian).
 
-- [ ] **Krok 5 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `124/124` (120 + 4 nowe `@Test`: `listModelsCanAskForAnOutputModality`, `providerRejectingTheModalityParameterIsAskedAgainWithoutIt`, `providerIgnoringTheModalityFilterIsFilteredLocally`, `modalityRetryHappensOnlyOnce`).
+- [x] **Krok 5 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `124/124` (120 + 4 nowe `@Test`: `listModelsCanAskForAnOutputModality`, `providerRejectingTheModalityParameterIsAskedAgainWithoutIt`, `providerIgnoringTheModalityFilterIsFilteredLocally`, `modalityRetryHappensOnlyOnce`).
 
-- [ ] **Krok 6 `[haiku]`: mutacje (ponowienie i filtr lokalny).** (a) W `listModels` usuń klauzulę `catch ProviderError.http(let status, _) where output != nil && (status == 400 || status == 422) { … }` razem z jej ciałem (nie ma ponowienia). `scripts/test.sh --filter providerRejectingTheModalityParameterIsAskedAgainWithoutIt` — oczekiwane: **pada**; `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`. (b) W `listModels` zamień końcówkę `return all.filter { … }` na `return all`. `scripts/test.sh --filter providerIgnoringTheModalityFilterIsFilteredLocally` — oczekiwane: **pada**; `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`. Pełne — `124/124`.
+- [x] **Krok 6 `[haiku]`: mutacje (ponowienie i filtr lokalny).** (a) W `listModels` usuń klauzulę `catch ProviderError.http(let status, _) where output != nil && (status == 400 || status == 422) { … }` razem z jej ciałem (nie ma ponowienia). `scripts/test.sh --filter providerRejectingTheModalityParameterIsAskedAgainWithoutIt` — oczekiwane: **pada**; `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`. (b) W `listModels` zamień końcówkę `return all.filter { … }` na `return all`. `scripts/test.sh --filter providerIgnoringTheModalityFilterIsFilteredLocally` — oczekiwane: **pada**; `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`. Pełne — `124/124`.
 
-- [ ] **Krok 7 `[sonnet]`: commit.**
+- [x] **Krok 7 `[sonnet]`: commit.**
 
 ```bash
 git add Package.swift Sources Tests scripts Resources docs .gitignore
