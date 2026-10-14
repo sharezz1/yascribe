@@ -17,7 +17,7 @@ let package = Package(
         .executableTarget(name: "MeetNotesApp", dependencies: ["MeetNotesRecording", "MeetNotesProviders", "MeetNotesTranscription"]),
         .testTarget(name: "MeetNotesSessionFormatTests", dependencies: ["MeetNotesSessionFormat"]),
         .testTarget(name: "MeetNotesRecordingTests", dependencies: ["MeetNotesRecording"]),
-        .testTarget(name: "MeetNotesProvidersTests", dependencies: ["MeetNotesProviders"]),
-        .testTarget(name: "MeetNotesTranscriptionTests", dependencies: ["MeetNotesTranscription", "MeetNotesRecording"]),
+        .testTarget(name: "MeetNotesProvidersTests", dependencies: ["MeetNotesProviders"], exclude: ["Fixtures"]),
+        .testTarget(name: "MeetNotesTranscriptionTests", dependencies: ["MeetNotesTranscription", "MeetNotesRecording"], exclude: ["Fixtures"]),
     ]
 )

@@ -163,7 +163,7 @@ Status: ⚠️ nieskompilowane. **Przegląd Opusa po zadaniu (krok 12).**
 **Interfejsy:**
 - Dostarcza: `Preset.languageAuto: Bool?`, `Preset.isAutoLanguage: Bool`, `Preset.languageLabel: String` (`"PL"`, `"Auto ⚠"`, `"?"`), `Preset.languageChoice: LanguageChoice` (get/set), `enum LanguageChoice: Hashable, Sendable { case unset, auto, code(LanguageCode) }`, `LanguageCode.englishName: String`, `RunSnapshot.language: LanguageCode?`, `Merger.merge(..., language: LanguageCode?, ...)`, `LanguageGuard.nonLatinScript(_:) -> LanguageCode?`.
 
-- [ ] **Krok 1 `[sonnet]`: testy (najpierw).** Dopisz na końcu `Tests/MeetNotesProvidersTests/PresetTests.swift`:
+- [x] **Krok 1 `[sonnet]`: testy (najpierw).** Dopisz na końcu `Tests/MeetNotesProvidersTests/PresetTests.swift`:
 
 ```swift
 @Test func autoLanguagePresetValidatesButStillNeedsAnExplicitChoice() throws {
@@ -282,7 +282,7 @@ Dopisz na końcu `Tests/MeetNotesTranscriptionTests/LanguageGuardTests.swift`:
 }
 ```
 
-- [ ] **Krok 1b `[sonnet]`: fixtury z prawdziwych plików fazy 1 i dwa testy zgodności wstecznej (Review Luna #3).** Skopiuj do repo **prawdziwe** pliki z `.devdata` (nazwy, adres i UUID — bez sekretów) i sprawdź grepem, że nie ma w nich sekretów:
+- [x] **Krok 1b `[sonnet]`: fixtury z prawdziwych plików fazy 1 i dwa testy zgodności wstecznej (Review Luna #3).** Skopiuj do repo **prawdziwe** pliki z `.devdata` (nazwy, adres i UUID — bez sekretów) i sprawdź grepem, że nie ma w nich sekretów:
 
 ```bash
 mkdir -p Tests/MeetNotesProvidersTests/Fixtures Tests/MeetNotesTranscriptionTests/Fixtures
@@ -347,16 +347,16 @@ private func fixture(_ name: String) throws -> Data {
 }
 ```
 
-- [ ] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh`. Oczekiwane: **błąd kompilacji** (`languageAuto`, `isAutoLanguage`, `languageLabel`, `languageChoice`, `autoSnapshot` bez `languageAuto`). Inny wynik (np. zielone) = STOP.
+- [x] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh`. Oczekiwane: **błąd kompilacji** (`languageAuto`, `isAutoLanguage`, `languageLabel`, `languageChoice`, `autoSnapshot` bez `languageAuto`). Inny wynik (np. zielone) = STOP.
 
-- [ ] **Krok 3 `[sonnet]`: `LanguageCode.englishName`.** W `Sources/MeetNotesProviders/LanguageCode.swift` dopisz po `description`:
+- [x] **Krok 3 `[sonnet]`: `LanguageCode.englishName`.** W `Sources/MeetNotesProviders/LanguageCode.swift` dopisz po `description`:
 
 ```swift
     /// Nazwa po angielsku (do promptów i interfejsu): „Polish"; nieznany kod → sam kod.
     public var englishName: String { Self.selectable.first { $0.code == self }?.name ?? rawValue }
 ```
 
-- [ ] **Krok 4 `[sonnet]`: `Preset`.** W `Sources/MeetNotesProviders/Preset.swift`:
+- [x] **Krok 4 `[sonnet]`: `Preset`.** W `Sources/MeetNotesProviders/Preset.swift`:
   (a) przed `public struct Preset` dodaj:
 
 ```swift
@@ -404,7 +404,7 @@ public enum LanguageChoice: Hashable, Sendable {
 ```
   (usuń stary `init`). (c) w `validate()` zamień `guard language != nil else { throw PresetError.missingLanguage }` na `guard language != nil || isAutoLanguage else { throw PresetError.missingLanguage }`.
 
-- [ ] **Krok 5 `[sonnet]`: `RunSnapshot` i `Merger`.** W `Sources/MeetNotesTranscription/Transcript.swift`: `public var language: LanguageCode` → `public var language: LanguageCode?`; w `init` zamień linię `guard let asr = preset.asr, let language = preset.language else { throw PresetError.missingASR }` na `guard let asr = preset.asr else { throw PresetError.missingASR }` i `self.language = language` na `self.language = preset.language` (nil = Auto; `validate()` wyżej już odrzuca preset bez języka i bez Auto). W `Sources/MeetNotesTranscription/Merger.swift`: parametr `language: LanguageCode` → `language: LanguageCode?` i pętla końcowa:
+- [x] **Krok 5 `[sonnet]`: `RunSnapshot` i `Merger`.** W `Sources/MeetNotesTranscription/Transcript.swift`: `public var language: LanguageCode` → `public var language: LanguageCode?`; w `init` zamień linię `guard let asr = preset.asr, let language = preset.language else { throw PresetError.missingASR }` na `guard let asr = preset.asr else { throw PresetError.missingASR }` i `self.language = language` na `self.language = preset.language` (nil = Auto; `validate()` wyżej już odrzuca preset bez języka i bez Auto). W `Sources/MeetNotesTranscription/Merger.swift`: parametr `language: LanguageCode` → `language: LanguageCode?` i pętla końcowa:
 
 ```swift
         for i in utterances.indices {
@@ -448,7 +448,7 @@ W `Sources/MeetNotesTranscription/LanguageGuard.swift` dopisz w `enum LanguageGu
     static func isLatin(_ s: Unicode.Scalar) -> Bool { s.value <= 0x024F || (0x1E00...0x1EFF).contains(s.value) }
 ```
 
-- [ ] **Krok 6 `[sonnet]`: CLI.** W `Sources/meetnotes-cli/CLI.swift` (`transcribe`): zamień komunikat i parsowanie na
+- [x] **Krok 6 `[sonnet]`: CLI.** W `Sources/meetnotes-cli/CLI.swift` (`transcribe`): zamień komunikat i parsowanie na
 
 ```swift
         guard let langRaw = value(args, "--language") else {
@@ -458,15 +458,15 @@ W `Sources/MeetNotesTranscription/LanguageGuard.swift` dopisz w `enum LanguageGu
 ```
 oraz `Preset(name: "cli", language: language, asr: RoleAssignment(...), languageAuto: language == nil ? true : nil)` (dopisz argument `languageAuto:` na końcu wywołania). Porównanie krotek wznowienia (`saved.snapshot.language` vs `snapshot.language`) kompiluje się bez zmian (opcjonalne są `Equatable`).
 
-- [ ] **Krok 7 `[sonnet]`: aplikacja.** W `Sources/MeetNotesApp/AppModel.swift`: `static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }`; w `savePreset` komunikat `missingLanguage` → `"Choose a language, or Auto for meetings that mix languages."`. W `Sources/MeetNotesApp/MeetingsView.swift` (`PresetMenu`): w obu miejscach `(p.language?.rawValue.uppercased() ?? "?")` / `($0.language?.rawValue.uppercased() ?? "?")` → `p.languageLabel` / `$0.languageLabel`.
+- [x] **Krok 7 `[sonnet]`: aplikacja.** W `Sources/MeetNotesApp/AppModel.swift`: `static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }`; w `savePreset` komunikat `missingLanguage` → `"Choose a language, or Auto for meetings that mix languages."`. W `Sources/MeetNotesApp/MeetingsView.swift` (`PresetMenu`): w obu miejscach `(p.language?.rawValue.uppercased() ?? "?")` / `($0.language?.rawValue.uppercased() ?? "?")` → `p.languageLabel` / `$0.languageLabel`.
 
-- [ ] **Krok 8 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `120/120` (111 + 9 nowych `@Test`: `autoLanguagePresetValidatesButStillNeedsAnExplicitChoice`, `phaseOnePresetJSONStillDecodes`, `autoLanguageOmitsTheLanguageField`, `autoLanguageSkipsTheLanguageGuard`, `phaseOneInputJSONKeepsItsShapeAndResumes`, `autoLanguageFlagsGibberishInAnotherScript`, `nonLatinScriptIsDetectedByMajority`, `realPhaseOnePresetsAndProvidersStillDecode`, `realPhaseOneInputJSONDecodesRoundTripsAndResumes`).
+- [x] **Krok 8 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `120/120` (111 + 9 nowych `@Test`: `autoLanguagePresetValidatesButStillNeedsAnExplicitChoice`, `phaseOnePresetJSONStillDecodes`, `autoLanguageOmitsTheLanguageField`, `autoLanguageSkipsTheLanguageGuard`, `phaseOneInputJSONKeepsItsShapeAndResumes`, `autoLanguageFlagsGibberishInAnotherScript`, `nonLatinScriptIsDetectedByMajority`, `realPhaseOnePresetsAndProvidersStillDecode`, `realPhaseOneInputJSONDecodesRoundTripsAndResumes`).
 
-- [ ] **Krok 9 `[haiku]`: mutacja 1 (Auto wysyła język).** Przepis (przegląd §0.5). W `Sources/MeetNotesProviders/OpenAICompatibleClient.swift` w gałęzi `.audioTranscriptions` zamień `if let language { body["language"] = language.rawValue }` na `body["language"] = language?.rawValue ?? "pl"`. `scripts/test.sh --filter autoLanguageOmitsTheLanguageField` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne `scripts/test.sh` — `120/120`.
+- [x] **Krok 9 `[haiku]`: mutacja 1 (Auto wysyła język).** Przepis (przegląd §0.5). W `Sources/MeetNotesProviders/OpenAICompatibleClient.swift` w gałęzi `.audioTranscriptions` zamień `if let language { body["language"] = language.rawValue }` na `body["language"] = language?.rawValue ?? "pl"`. `scripts/test.sh --filter autoLanguageOmitsTheLanguageField` — oczekiwane: **pada**. `git checkout Sources/MeetNotesProviders/OpenAICompatibleClient.swift`; pełne `scripts/test.sh` — `120/120`.
 
-- [ ] **Krok 10 `[haiku]`: mutacje 2 i 3.** (a) W `Merger.swift`, w gałęzi `else`, zamień `LanguageGuard.nonLatinScript(text)` na `LanguageGuard.mismatch(text, expected: .polish)` (Auto dostaje strażnika PL/EN; kod się kompiluje). Przepis §0.5: `scripts/test.sh --filter autoLanguageSkipsTheLanguageGuard` — oczekiwane: **test pada** (nie błąd budowania — to byłby STOP); `git checkout Sources/MeetNotesTranscription/Merger.swift`. (b) W `LanguageGuard.nonLatinScript` zamień `guard foreign.count * 2 > letters.count else { return nil }` na `guard foreign.count > 0 else { return nil }` (każdy cudzy znak = bełkot). `scripts/test.sh --filter nonLatinScriptIsDetectedByMajority` — oczekiwane: **pada**; `git checkout Sources/MeetNotesTranscription/LanguageGuard.swift`. Pełne `scripts/test.sh` — `120/120`.
+- [x] **Krok 10 `[haiku]`: mutacje 2 i 3.** (a) W `Merger.swift`, w gałęzi `else`, zamień `LanguageGuard.nonLatinScript(text)` na `LanguageGuard.mismatch(text, expected: .polish)` (Auto dostaje strażnika PL/EN; kod się kompiluje). Przepis §0.5: `scripts/test.sh --filter autoLanguageSkipsTheLanguageGuard` — oczekiwane: **test pada** (nie błąd budowania — to byłby STOP); `git checkout Sources/MeetNotesTranscription/Merger.swift`. (b) W `LanguageGuard.nonLatinScript` zamień `guard foreign.count * 2 > letters.count else { return nil }` na `guard foreign.count > 0 else { return nil }` (każdy cudzy znak = bełkot). `scripts/test.sh --filter nonLatinScriptIsDetectedByMajority` — oczekiwane: **pada**; `git checkout Sources/MeetNotesTranscription/LanguageGuard.swift`. Pełne `scripts/test.sh` — `120/120`.
 
-- [ ] **Krok 11 `[sonnet]`: commit.**
+- [x] **Krok 11 `[sonnet]`: commit.**
 
 ```bash
 git add Package.swift Sources Tests scripts Resources docs .gitignore

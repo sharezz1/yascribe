@@ -73,3 +73,58 @@ private let asr = RoleAssignment(providerID: UUID(), model: "microsoft/mai-trans
         try file.upsert(Preset(name: "Polish", language: .polish, asr: RoleAssignment(providerID: UUID(), model: " ")))
     }
 }
+
+@Test func autoLanguagePresetValidatesButStillNeedsAnExplicitChoice() throws {
+    var p = Preset(name: "Mixed", language: nil, asr: asr, languageAuto: true)
+    try p.validate()
+    #expect(p.isAutoLanguage)
+    #expect(p.languageLabel == "Auto ⚠")
+    #expect(p.languageChoice == .auto)
+    p.languageChoice = .code(.polish)
+    #expect(p.language == .polish && p.languageAuto == nil && !p.isAutoLanguage)
+    #expect(p.languageLabel == "PL")
+    p.languageChoice = .unset
+    #expect(throws: PresetError.missingLanguage) { try p.validate() }
+    p.languageAuto = false
+    #expect(throws: PresetError.missingLanguage) { try p.validate() }
+}
+
+@Test func phaseOnePresetJSONStillDecodes() throws {
+    // Preset zapisany w fazie 1: bez `languageAuto`, ze `summary.prompt`. Nie wolno go ani odrzucić, ani po cichu zmienić.
+    let json = """
+    {"id":"00000000-0000-0000-0000-0000000000AA","name":"Polish","language":"pl",
+     "asr":{"providerID":"00000000-0000-0000-0000-000000000001","model":"microsoft/mai-transcribe-2"},
+     "summary":{"providerID":"00000000-0000-0000-0000-000000000001","model":"s","prompt":"Be brief"}}
+    """
+    let p = try JSONDecoder().decode(Preset.self, from: Data(json.utf8))
+    #expect(p.languageAuto == nil)
+    #expect(p.language == .polish)
+    #expect(p.summary?.prompt == "Be brief")
+    try p.validate()
+    let again = try JSONDecoder().decode(Preset.self, from: JSONEncoder().encode(p))
+    #expect(again == p)
+}
+
+private func fixture(_ name: String) throws -> Data {
+    try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/\(name)"))
+}
+
+@Test func realPhaseOnePresetsAndProvidersStillDecode() throws {
+    // Prawdziwe pliki z fazy 1 (E6): wczytują się, a ponowne zakodowanie nie dodaje ani nie gubi kluczy.
+    let rawPresets = try fixture("phase1-presets.json")
+    let presets = try JSONDecoder().decode(PresetsFile.self, from: rawPresets)
+    #expect(presets.presets.count == 2)
+    for p in presets.presets {
+        try p.validate()
+        #expect(p.languageAuto == nil) // stary plik nie ma nowego klucza i nie dostaje go z nil
+    }
+    #expect(presets.presets.first { $0.name == "Polski" }?.summary?.model == "deepseek/deepseek-v4.1-flash")
+    let rawProviders = try fixture("phase1-providers.json")
+    let providers = try JSONDecoder().decode(ProvidersFile.self, from: rawProviders)
+    #expect(providers.providers.map(\.name) == ["OpenRouter"])
+    for (raw, again) in [(rawPresets, try JSONEncoder().encode(presets)), (rawProviders, try JSONEncoder().encode(providers))] {
+        let a = try JSONSerialization.jsonObject(with: raw) as? NSDictionary
+        let b = try JSONSerialization.jsonObject(with: again) as? NSDictionary
+        #expect(a == b)
+    }
+}
