@@ -5,7 +5,7 @@ trafiają tutaj i czekają; rundy poprawek dotyczą wyłącznie błędów funkcj
 testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 ## Otwarte
-- [ ] `scripts/test.sh` nie pokrywa skryptów składania (`bundle.sh`/`run.sh`/`Info.plist`) — bramka podpisu była ręczna i jednorazowa; rozważyć w S16/S18. *(check S14 #3)*
+- [x] `scripts/test.sh` nie pokrywa skryptów składania *(zrobione w T12: `scripts/check-bundle.sh` w `test.sh`, osobna ścieżka .build/check)* (`bundle.sh`/`run.sh`/`Info.plist`) — bramka podpisu była ręczna i jednorazowa; rozważyć w S16/S18. *(check S14 #3)*
   - **Do decyzji przy S18 / faza 2** — pokrycie wymaga podpisu certyfikatem z pęku kluczy i składania paczki — poza `swift test`; decyzja, czy i jak (np. ad-hoc `MEETNOTES_SIGN_IDENTITY=-` + `plutil -lint`), należy do S18.
 - [ ] D3/Info.plist: process tap (dźwięk systemowy) a klucze TCC — plan D3 krok 1 oczekuje panelu „Nagrywanie ekranu i dźwięku systemowego", a w plist nie ma `NSScreenCaptureUsageDescription`; sprawdzić przy D3, ewentualna poprawka plist wróci do D1. *(check S14 #7)*
   - **Do decyzji przy S18 / faza 2** — zależy od wyniku kroku 1 planu D3 na sprzęcie (który panel TCC się pokaże); zmiana plist bez tego pomiaru byłaby zgadywaniem.
@@ -40,7 +40,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
   z toru `system` (oś sesji, spec rdzenia §6) — przy 10–60 s mowy widać „0 min", a `offsetSeconds`
   mikrofonu sięga −57,08 s. Transkrypcja mowy działa poprawnie.
   - **Do decyzji przy S18 / faza 2** — pytanie o oś/czas trwania dla nagrań bez dźwięku systemowego.
-- [ ] **D3/odbiór: surowy `OSStatus error 2003334207`** w komunikacie o nieotwartym pliku ścieżki —
+- [x] **D3/odbiór: surowy `OSStatus error 2003334207`** *(zrobione w T12: `OSStatusText`)* w komunikacie o nieotwartym pliku ścieżki —
   sam komunikat jest czytelny (nazywa `mic_raw`), ale kod systemowy nic nie mówi; rozważyć
   tłumaczenie na „plik nie istnieje / jest uszkodzony".
   - **Faza 1.5 / kosmetyka.**
@@ -62,9 +62,9 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 **Nowe pozycje z S18 (raport §2 — lista do planu 1.5):**
 1. `AppModel.swift:78-88` + `:90-99` — **jeden uszkodzony plik ustawień kasuje pozostałe**: `load()` ma jeden `do/catch` na cztery pliki, a `save()` pisze wszystkie cztery, więc najbliższy zapis podmienia nieodczytane pliki pustymi domyślnymi (presety, dostawcy, ustawienia, cache sondy). → **NAPRAWIONE w rundzie S18** (commit `404fbb4`: osobny `do/catch` na plik + `<nazwa>.corrupt-<yyyyMMdd-HHmmss>` przed jakimkolwiek `save()` + `lastError` z nazwą pliku; **sprawdzenie ręczne w `.devdata` ✅** — trzy starty z zepsutym `probe-cache.json`, zapis po nich nie ruszył `presets.json`/`providers.json`; szczegóły: `reports/S18-runda.md`). Znany sufit: gdy samo przeniesienie się nie uda, najbliższy `save()` nadpisze ten plik (`ponytail:` w kodzie — wymaga zmiany `save()`, poza zakresem rundy).
-2. `SystemAudioCheck.swift:24-35` — gdy `tap.start()` rzuci, funkcja wraca przed `defer { tap.stop() }`; tap procesu i urządzenie zbiorcze z `prepare()` zostają w systemie do końca życia procesu (każde nieudane „Test" w setupie).
-3. `plans/2026-09-24-faza1-00-przeglad.md:106` + `-04-powloka-aplikacji.md:1190` (D3 krok 2) — nadal zakładają `mic_aec.caf` w każdej sesji, a build nagrywa tylko `system`+`mic_raw` (decyzja S5); kryterium kroku 2 było nie do spełnienia.
-4. `SettingsView.swift:25` — `try? model.secrets.get(p.id)` zamienia błąd pęku kluczy w etykietę „No key" (użytkownik może dodać dostawcę ponownie); rozróżnić „brak" od „nie odczytano".
+2. `SystemAudioCheck.swift:24-35` — gdy `tap.start()` rzuci, funkcja wraca przed `defer { tap.stop() }`; tap procesu i urządzenie zbiorcze z `prepare()` zostają w systemie do końca życia procesu (każde nieudane „Test" w setupie). **→ NAPRAWIONE w T12** (`defer` przed startem, test `systemAudioCheckStopsTheTapWhenStartThrows`).
+3. `plans/2026-09-24-faza1-00-przeglad.md:106` + `-04-powloka-aplikacji.md:1190` (D3 krok 2) — nadal zakładają `mic_aec.caf` w każdej sesji, a build nagrywa tylko `system`+`mic_raw` (decyzja S5); kryterium kroku 2 było nie do spełnienia. **→ NAPRAWIONE w T12** (poprawki planów D3 i przeglądu).
+4. `SettingsView.swift:25` — `try? model.secrets.get(p.id)` zamienia błąd pęku kluczy w etykietę „No key" (użytkownik może dodać dostawcę ponownie); rozróżnić „brak" od „nie odczytano". **→ NAPRAWIONE w T4** (`KeyStatus`).
 
 **Zweryfikowane przez orkiestratora (2026-10-13):** BLOKUJĄCE #1 (brak testu „model i język żądań = migawka") — mutacja `TranscriptionRunner.swift:122-123` → `model: "MUTANT-NOT-THE-SNAPSHOT", language: nil` **powtórzona przez orkiestratora**: suita nadal `109/109` (mutacja cofnięta, drzewo czyste). Kod na HEAD jest poprawny — runda to wyłącznie dodanie testu.
 

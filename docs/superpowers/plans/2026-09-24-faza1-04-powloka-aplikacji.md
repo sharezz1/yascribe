@@ -1187,7 +1187,7 @@ prawdziwe spotkanie, klucz API (tryb: użytkownik wykonuje, orkiestrator prowadz
 
 - [x] **Krok 1: Pierwsze uruchomienie.** `rm -rf .devdata && scripts/run.sh`. Oczekiwane: okno setupu. „Allow" przy mikrofonie → monit systemowy z tekstem z `NSMicrophoneUsageDescription`. „Test" przy dźwięku systemowym → słychać krótki ton, stan „Working — the test tone was captured." Monitu o nagrywanie ekranu **nie ma**. O6: odmów uprawnienia dźwięku systemowego i kliknij Test — stan „The test tone wasn't captured…" i przycisk „Open System Audio Settings", który ma otworzyć panel *Nagrywanie ekranu i dźwięku systemowego*. Jeśli otwiera coś innego, zanotuj (kotwica `Privacy_AudioCapture` jest z pamięci) i zamień w `SetupView` na ogólne `x-apple.systempreferences:com.apple.preference.security?Privacy`. Włącz uprawnienie z powrotem.
 
-- [x] **Krok 2: Odmowa mikrofonu.** W Ustawieniach systemowych wyłącz mikrofon dla MeetNotes, nagraj 15 s z grającym dźwiękiem. W `.devdata/sessions/<sesja>/session.json`: `mic_raw` i `mic_aec` z `permissionDenied: microphone`, `system` z ramkami. Włącz mikrofon z powrotem.
+- [x] **Krok 2: Odmowa mikrofonu.** W Ustawieniach systemowych wyłącz mikrofon dla MeetNotes, nagraj 15 s z grającym dźwiękiem. W `.devdata/sessions/<sesja>/session.json`: `mic_raw` z `permissionDenied: microphone` (build aplikacji nagrywa tylko `system` i `mic_raw`; decyzja S5), `system` z ramkami. Włącz mikrofon z powrotem.
 
 - [x] **Krok 3: Dostawca i klucz (P8).** Settings → Add Provider… → OpenRouter z kluczem. Wiersz pokazuje `••••` i cztery ostatnie znaki. `grep -c "sk-or" .devdata/providers.json` → `0`. Zamknij i otwórz aplikację: klucz nadal zamaskowany (pęk kluczy). Refresh Models → lista się pojawia.
 

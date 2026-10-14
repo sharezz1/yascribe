@@ -1,6 +1,7 @@
 import AVFoundation
 import MeetNotesNotes
 import MeetNotesProviders
+import MeetNotesRecording
 import MeetNotesTranscription
 import SwiftUI
 
@@ -110,7 +111,9 @@ struct MeetingDetailView: View {
         } catch {
             playback.player = nil
             playback.track = nil
-            model.lastError = "Couldn't open the \(track) recording: \(error.localizedDescription)"
+            let ns = error as NSError
+            let why = ns.domain == NSOSStatusErrorDomain ? OSStatusText.describe(ns.code) : error.localizedDescription
+            model.lastError = "Couldn't open the \(track) recording: \(why)"
             return false
         }
     }
