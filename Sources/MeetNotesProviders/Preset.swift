@@ -19,6 +19,13 @@ public enum PresetError: Error, Equatable {
     case missingASR
 }
 
+/// Wybór języka w edytorze presetu. `auto` to opcja awaryjna (spotkania mieszane), nigdy domyślna.
+public enum LanguageChoice: Hashable, Sendable {
+    case unset
+    case auto
+    case code(LanguageCode)
+}
+
 /// Nazwany zestaw: język + ASR + korekta + podsumowanie (spec fazy 1, §1.5).
 /// 🔴 Bez embeddingu — ten jest globalny (`GlobalSettings`), bo wektory
 /// z różnych modeli nie są porównywalne.
@@ -33,8 +40,12 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
     /// `nil` = jak język presetu (kopia jawnego wyboru, nie wykrywanie — §1.4).
     public var notesLanguage: LanguageCode?
 
+    /// `true` = język „Auto" (spec 1.5 §3.8): tylko razem z `language == nil`. Opcjonalne — stare pliki go nie mają.
+    public var languageAuto: Bool?
+
     public init(id: UUID = UUID(), name: String, language: LanguageCode?, asr: RoleAssignment?,
-                correction: RoleAssignment? = nil, summary: RoleAssignment? = nil, notesLanguage: LanguageCode? = nil) {
+                correction: RoleAssignment? = nil, summary: RoleAssignment? = nil, notesLanguage: LanguageCode? = nil,
+                languageAuto: Bool? = nil) {
         self.id = id
         self.name = name
         self.language = language
@@ -42,13 +53,30 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
         self.correction = correction
         self.summary = summary
         self.notesLanguage = notesLanguage
+        self.languageAuto = languageAuto
+    }
+
+    public var isAutoLanguage: Bool { language == nil && languageAuto == true }
+
+    /// Krótka etykieta do list i chipów: „PL", „Auto ⚠", „?".
+    public var languageLabel: String { isAutoLanguage ? "Auto ⚠" : (language?.rawValue.uppercased() ?? "?") }
+
+    public var languageChoice: LanguageChoice {
+        get { isAutoLanguage ? .auto : (language.map { .code($0) } ?? .unset) }
+        set {
+            switch newValue {
+            case .unset: language = nil; languageAuto = nil
+            case .auto: language = nil; languageAuto = true
+            case .code(let c): language = c; languageAuto = nil
+            }
+        }
     }
 
     public var effectiveNotesLanguage: LanguageCode? { notesLanguage ?? language }
 
     public func validate() throws {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingName }
-        guard language != nil else { throw PresetError.missingLanguage }
+        guard language != nil || isAutoLanguage else { throw PresetError.missingLanguage }
         guard let asr, !asr.model.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingASR }
     }
 }

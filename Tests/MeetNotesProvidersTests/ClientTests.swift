@@ -62,3 +62,10 @@ import Testing
         #expect(!"\(error)".contains("SECRET123"))
     }
 }
+
+@Test func autoLanguageOmitsTheLanguageField() async throws {
+    let http = StubHTTP { _, _ in ok(["text": "x"]) }
+    _ = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+        .transcribe(wav: ProbeClips.polish.wav, model: "m", language: nil, shape: .audioTranscriptions)
+    #expect(http.calls[0].body["language"] == nil)
+}

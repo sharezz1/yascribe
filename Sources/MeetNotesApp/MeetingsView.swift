@@ -73,12 +73,12 @@ struct PresetMenu: View {
     var body: some View {
         Menu {
             ForEach(model.presets.presets) { p in
-                Button(p.name + " · " + (p.language?.rawValue.uppercased() ?? "?")) { model.activePresetID = p.id }
+                Button(p.name + " · " + p.languageLabel) { model.activePresetID = p.id }
             }
             Divider()
             Button("Edit Presets…") { model.section = .presets }
         } label: {
-            Label(model.activePreset.map { "\($0.name) · \($0.language?.rawValue.uppercased() ?? "?")" } ?? "No preset",
+            Label(model.activePreset.map { "\($0.name) · \($0.languageLabel)" } ?? "No preset",
                   systemImage: "slider.horizontal.3")
         }
         .help("Preset used for the next recording: language and models")

@@ -193,7 +193,7 @@ final class AppModel {
             save()
             return nil
         } catch PresetError.missingLanguage {
-            return "Choose a language. Presets never detect it automatically."
+            return "Choose a language, or Auto for meetings that mix languages."
         } catch PresetError.missingASR {
             return "Choose a speech-to-text model."
         } catch PresetError.missingName {
@@ -243,7 +243,7 @@ final class AppModel {
 
     func isTranscribing(_ item: SessionItem) -> Bool { transcribing.contains(item.id) }
 
-    static func label(_ p: Preset) -> String { "\(p.name) · \(p.language?.rawValue.uppercased() ?? "?")" }
+    static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }
 
     func transcribe(sessionURL: URL, preset: Preset) {
         guard let asr = preset.asr, let provider = provider(asr.providerID) else {

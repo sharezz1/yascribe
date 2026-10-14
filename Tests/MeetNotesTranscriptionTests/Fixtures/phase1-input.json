@@ -1,0 +1,47 @@
+{
+  "crosstalk" : {
+    "correlationThreshold" : 0.8,
+    "maxLagSeconds" : 0.3
+  },
+  "gate" : {
+    "attackSeconds" : 0.1,
+    "paddingSeconds" : 0.2,
+    "releaseSeconds" : 0.5,
+    "thresholdDBFS" : -45
+  },
+  "maxChunkSeconds" : 59,
+  "snapshot" : {
+    "dictionaryVersion" : "none",
+    "language" : "pl",
+    "languageHandling" : "enforced",
+    "model" : "microsoft/mai-transcribe-2",
+    "preset" : {
+      "asr" : {
+        "model" : "microsoft/mai-transcribe-2",
+        "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98"
+      },
+      "correction" : {
+        "model" : "deepseek/deepseek-v4.1-flash",
+        "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98"
+      },
+      "id" : "99F7A85A-5CAF-436A-AF27-E732A587751A",
+      "language" : "pl",
+      "name" : "Polski",
+      "notesLanguage" : "pl",
+      "summary" : {
+        "model" : "deepseek/deepseek-v4.1-flash",
+        "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98"
+      }
+    },
+    "presetID" : "99F7A85A-5CAF-436A-AF27-E732A587751A",
+    "presetName" : "Polski",
+    "providerBaseURL" : "https://openrouter.ai/api/v1",
+    "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98",
+    "providerName" : "OpenRouter",
+    "shape" : "audioTranscriptions"
+  },
+  "trackFrames" : {
+    "mic_raw" : 972800,
+    "system" : 178688
+  }
+}

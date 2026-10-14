@@ -60,7 +60,7 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
     public var providerBaseURL: URL
     public var model: String
     public var shape: ASRShape
-    public var language: LanguageCode
+    public var language: LanguageCode?
     public var languageHandling: LanguageHandling
     public var dictionaryVersion: String
 
@@ -70,7 +70,7 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
         // a klikalna linia czasu kłamie (ChatGPT #7). Kształt czatowy — tylko dyktowanie.
         if probe?.shape == .chatAudio { throw RunSnapshotError.chatShapeNotForMeetings }
         self.preset = preset
-        guard let asr = preset.asr, let language = preset.language else { throw PresetError.missingASR }
+        guard let asr = preset.asr else { throw PresetError.missingASR }
         presetID = preset.id
         presetName = preset.name
         providerID = provider.id
@@ -78,7 +78,7 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
         providerBaseURL = provider.baseURL
         model = asr.model
         shape = probe?.shape ?? .audioTranscriptions
-        self.language = language
+        self.language = preset.language
         languageHandling = probe?.languageHandling ?? .unknown
         self.dictionaryVersion = dictionaryVersion
     }
