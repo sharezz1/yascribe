@@ -1,67 +1,86 @@
 import AVFoundation
+import MeetNotesNotes
 import MeetNotesProviders
 import MeetNotesTranscription
 import SwiftUI
 
-/// Zalążek widoku spotkania w fazie 1: transkrypt i skok w nagraniu (W§1).
-/// Odsłuch = ścieżka systemowa bit w bit (spec rdzenia §5); mikrofon osobno.
+/// Odtwarzanie: odsłuch = ścieżka systemowa bit w bit (spec rdzenia §5); mikrofon osobno.
 final class PlaybackState: ObservableObject {
     var player: AVAudioPlayer?
     var track: String?
 }
 
+/// Widok spotkania (spec 1.5 §5.2): tytuł, chipy i zakładki My notes / Transcript / Summary.
+/// Podczas nagrania tylko My notes — reszta powstaje po spotkaniu.
 struct MeetingDetailView: View {
     @Environment(AppModel.self) private var model
     let item: SessionItem
     @StateObject private var playback = PlaybackState()
-    private var player: AVAudioPlayer? { playback.player }
-    private var busy: Bool { model.isTranscribing(item) }
+    @StateObject private var state = MeetingViewState()
+
+    private var isRecording: Bool { SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory) }
 
     var body: some View {
-        Group {
-            if let t = item.transcript {
-                List {
-                    if !t.failedChunks.isEmpty {
-                        Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item) }
-                            .disabled(busy)
-                            .help("Sends only the parts that failed; finished parts aren't paid for again")
-                    }
-                    ForEach(Array(t.utterances.enumerated()), id: \.offset) { _, u in
-                        UtteranceRow(utterance: u) { play(u) }
-                    }
-                    if !t.failedChunks.isEmpty {
-                        SwiftUI.Section("Gaps") {
-                            ForEach(Array(t.failedChunks.enumerated()), id: \.offset) { _, f in
-                                Label("Couldn't transcribe \(Self.time(f.start))–\(Self.time(f.end))", systemImage: "exclamationmark.circle")
-                            }
-                        }
-                    }
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            if isRecording {
+                MyNotesTab(state: state, item: item)
+                Text("Transcript and notes arrive after the meeting.").font(.caption).foregroundStyle(.secondary)
             } else {
-                ContentUnavailableView {
-                    Label("No transcript yet", systemImage: "text.alignleft")
-                } actions: {
-                    if busy {
-                        ProgressView("Transcribing…")
-                    } else {
-                        // Preset zamrożony przy nagraniu, nie bieżący (spec §1.5); Resume bierze migawkę z input.json przebiegu.
-                        if let p = model.presetFor(sessionURL: item.url) {
-                            Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }
-                        }
-                        if item.runID != nil { Button("Resume Transcription") { model.resume(item) } }
-                    }
+                Picker("", selection: Binding(get: { state.tab ?? defaultTab }, set: { state.tab = $0 })) {
+                    ForEach(MeetingTab.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
+                switch state.tab ?? defaultTab {
+                case .myNotes: MyNotesTab(state: state, item: item)
+                case .transcript: TranscriptTab(state: state, item: item) { play($0) }
+                case .summary: SummaryTab(state: state, item: item)
                 }
             }
         }
-        .navigationTitle(item.startedAt.formatted(date: .abbreviated, time: .shortened))
+        .padding(16)
+        .navigationTitle(item.title)
+        .onAppear {
+            if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
+            state.titleDraft = item.notes.meta.manualTitle ?? item.notes.meta.autoTitle ?? ""
+        }
         .toolbar {
             Button {
-                if player?.isPlaying == true { player?.pause() } else if player != nil || load("system") { player?.play() }
+                if playback.player?.isPlaying == true { playback.player?.pause() } else if playback.player != nil || load("system") { playback.player?.play() }
             } label: {
                 Label("Play", systemImage: "playpause")
             }
             .keyboardShortcut(.space, modifiers: [])
             .help("Play or pause")
+            .disabled(isRecording)
+        }
+    }
+
+    /// Notatki są → Summary; jest transkrypt → Transcript; inaczej My notes.
+    private var defaultTab: MeetingTab {
+        if item.notes.summary != nil { return .summary }
+        if item.transcript != nil { return .transcript }
+        return .myNotes
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField("Untitled meeting", text: $state.titleDraft)
+                .textFieldStyle(.plain)
+                .font(.title2.weight(.semibold))
+                .onSubmit { model.notes.setManualTitle(state.titleDraft, for: item) }
+            HStack(spacing: 12) {
+                Label(item.startedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
+                if let d = item.duration { Label(Duration.seconds(d).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)), systemImage: "clock") }
+                if let p = model.presetFor(sessionURL: item.url) { Label(AppModel.label(p), systemImage: "slider.horizontal.3") }
+                if model.notes.isTitling(item.id) { Label("Naming the meeting…", systemImage: "sparkles") }
+            }
+            .font(.caption).foregroundStyle(.secondary)
+            if !item.notes.problems.isEmpty {
+                Label("\(item.notes.problems.joined(separator: ", ")) in this meeting's notes couldn't be read. They're kept aside before anything new is saved.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.orange)
+            }
         }
     }
 
@@ -98,6 +117,7 @@ struct MeetingDetailView: View {
 
 struct UtteranceRow: View {
     let utterance: Utterance
+    let isAuto: Bool
     let onJump: () -> Void
 
     var body: some View {
@@ -114,7 +134,8 @@ struct UtteranceRow: View {
                 Text(utterance.text).textSelection(.enabled)
                 if let lang = utterance.languageMismatch {
                     // P11: widoczne, nie ukryte — i wyłączone z notatek.
-                    Label("Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes",
+                    Label(isAuto ? "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes"
+                                 : "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes",
                           systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)

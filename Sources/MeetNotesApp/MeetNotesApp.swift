@@ -55,6 +55,7 @@ struct ContentView: View {
             switch model.section {
             case .meetings: MeetingsView()
             case .presets: PresetsView()
+            case .templates: LaterPhaseView(title: "Templates", text: "Template editor arrives in the next step of this phase.")
             case .settings: SettingsView()
             case .tasks: LaterPhaseView(title: "Tasks", text: "Tasks with owners across meetings arrive with notes and speaker identity.")
             case .dictation: LaterPhaseView(title: "Dictation", text: "Dictation arrives in a later phase.")

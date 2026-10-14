@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import MeetNotesNotes
 import MeetNotesProviders
 import MeetNotesRecording
 import MeetNotesSessionFormat
@@ -8,7 +9,7 @@ import Observation
 
 enum Section: String, CaseIterable, Identifiable {
     case meetings = "Meetings", tasks = "Tasks", dictation = "Dictation", dictionary = "Dictionary"
-    case presets = "Presets", settings = "Settings"
+    case presets = "Presets", templates = "Templates", settings = "Settings"
     var id: String { rawValue }
     var symbol: String {
         switch self {
@@ -17,10 +18,13 @@ enum Section: String, CaseIterable, Identifiable {
         case .dictation: "keyboard"
         case .dictionary: "book"
         case .presets: "slider.horizontal.3"
+        case .templates: "doc.text"
         case .settings: "gearshape"
         }
     }
 }
+
+struct SessionNotes: Equatable { var myNotes = ""; var meta = NoteMeta(); var summary: NoteSummary?; var problems: [String] = [] }
 
 /// Jedna sesja na osi czasu strony głównej.
 struct SessionItem: Identifiable, Equatable {
@@ -32,6 +36,16 @@ struct SessionItem: Identifiable, Equatable {
     var progress: Double?
     /// Ostatni przebieg transkrypcji — do wznowienia po przerwie albo restarcie (ChatGPT #17).
     var runID: String?
+    var corrected: CorrectedTranscript?
+    var notes = SessionNotes()
+
+    /// Ręczny > auto > tytuł z notatki > „Untitled meeting".
+    var title: String { NoteTitle.display(meta: notes.meta, noteTitle: notes.summary?.title) }
+
+    /// Transkrypt do wyświetlenia i streszczenia: poprawiony, gdy jest i użytkownik go nie wyłączył.
+    func transcript(corrected useCorrected: Bool) -> Transcript? {
+        useCorrected ? (corrected?.transcript ?? transcript) : transcript
+    }
 
     var duration: Double? {
         guard let t = summary?.tracks.first(where: { $0.id == "system" }) ?? summary?.tracks.first,
@@ -63,12 +77,18 @@ final class AppModel {
     private(set) var transcribing: Set<String> = []
 
     let recording = RecordingController()
+    let notes = NotesModel()
 
     init() {
         load()
         // ChatGPT #16: setup także wtedy, gdy dźwięk systemowy nigdy nie przeszedł testu tonem.
         showSetup = AVCaptureDevice.authorizationStatus(for: .audio) != .authorized
             || !UserDefaults.standard.bool(forKey: "systemAudioVerified")
+        notes.clientFor = { [weak self] in self?.client(for: $0) }
+        notes.presetFor = { [weak self] in self?.presetFor(sessionURL: $0) }
+        notes.report = { [weak self] in self?.lastError = $0 }
+        notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
+        notes.onChange = { [weak self] in self?.reloadSessions() }
     }
 
     var activePreset: Preset? {
@@ -99,6 +119,7 @@ final class AppModel {
         presets = read(paths.presets, PresetsFile())
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())
+        notes.templates = read(paths.templates, TemplatesFile())
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
     }
@@ -122,15 +143,24 @@ final class AppModel {
             guard fm.fileExists(atPath: sd.journalURL.path) else { return nil }
             let summary = try? sd.summarize()
             let run = latestRun(in: url)
-            return SessionItem(url: url, summary: summary, startedAt: summary?.wallClock ?? .distantPast,
-                               transcript: run?.transcript, runID: run?.id)
+            let store = NotesStore(session: url)
+            var item = SessionItem(url: url, summary: summary, startedAt: summary?.wallClock ?? .distantPast,
+                                   transcript: run?.transcript, runID: run?.id)
+            item.corrected = Self.loadCorrected(url, run?.id)
+            item.notes = SessionNotes(myNotes: store.readMyNotes(), meta: store.readMeta(),
+                                      summary: (try? store.readSummary()) ?? nil, problems: store.problems())
+            return item
         }.sorted { $0.startedAt > $1.startedAt }
     }
 
     func latestRun(in session: URL) -> (id: String, transcript: Transcript?)? {
-        let runs = session.appendingPathComponent("runs")
-        guard let id = ((try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []).sorted().last else { return nil }
+        guard let id = RunDirectory.latestRunID(in: session) else { return nil }
         return (id, try? JSONFile.load(Transcript?.self, from: RunDirectory(session: session, runID: id).transcript, default: nil))
+    }
+
+    static func loadCorrected(_ session: URL, _ runID: String?) -> CorrectedTranscript? {
+        guard let runID, RunDirectory.isValid(runID: runID) else { return nil }
+        return (try? JSONFile.load(CorrectedTranscript?.self, from: RunDirectory(session: session, runID: runID).corrected, default: nil)) ?? nil
     }
 
     // MARK: Dostawcy
@@ -308,8 +338,9 @@ final class AppModel {
         }
         transcribing.insert(id)
         Task {
+            var finished: Transcript?
             do {
-                _ = try await TranscriptionRunner(session: sessionURL, runID: runID, snapshot: snapshot, client: c).run { p in
+                finished = try await TranscriptionRunner(session: sessionURL, runID: runID, snapshot: snapshot, client: c).run { p in
                     Task { @MainActor in
                         if let i = self.sessions.firstIndex(where: { $0.id == id }) { self.sessions[i].progress = p.fraction }
                     }
@@ -318,6 +349,10 @@ final class AppModel {
                 self.lastError = "Transcription failed: \(error)"
             }
             self.transcribing.remove(id)
+            self.reloadSessions()
+            if let finished {
+                await self.notes.afterTranscription(sessionURL: sessionURL, runID: runID, snapshot: snapshot, transcript: finished)
+            }
             self.reloadSessions()
         }
     }
