@@ -67,3 +67,15 @@ public final class InMemorySecretStore: SecretStore, @unchecked Sendable {
 public func maskedKey(_ key: String) -> String {
     key.count <= 4 ? "••••" : "••••" + key.suffix(4)
 }
+
+/// Stan klucza dostawcy dla interfejsu. Błąd pęku kluczy to NIE „brak klucza" — inaczej użytkownik
+/// dodałby dostawcę ponownie albo wpisał klucz nad działającym (S18 §2.4).
+public enum KeyStatus: Equatable, Sendable {
+    case set(String)        // zamaskowany klucz
+    case missing
+    case unreadable(String) // opis błędu
+
+    public static func of(_ read: () throws -> String?) -> KeyStatus {
+        do { return try read().map { .set(maskedKey($0)) } ?? .missing } catch { return .unreadable("\(error)") }
+    }
+}

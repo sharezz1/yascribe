@@ -154,14 +154,17 @@ final class AppModel {
         return OpenAICompatibleClient(provider: p, key: key)
     }
 
-    func addProvider(name: String, baseURL: URL, key: String) {
-        let p = Provider(name: name, baseURL: baseURL)
+    /// `nil` = dodano; tekst = powód odmowy (duplikat nazwy albo błąd pęku kluczy).
+    func addProvider(name: String, baseURL: URL, key: String) -> String? {
+        if let e = providers.nameError(name) { return e }
+        let p = Provider(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL)
         do {
             if !key.isEmpty { try secrets.set(p.id, key) }
             providers.providers.append(p)
             save()
+            return nil
         } catch {
-            lastError = "Couldn't store the key in Keychain: \(error)"
+            return "Couldn't store the key in Keychain: \(error)"
         }
     }
 
