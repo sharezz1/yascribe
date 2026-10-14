@@ -41,8 +41,11 @@ public struct OpenAICompatibleClient: Sendable {
         self.http = http
     }
 
-    func request(_ path: String, method: String = "POST", body: [String: Any]? = nil, timeout: Double = 120) throws -> URLRequest {
-        var r = URLRequest(url: provider.baseURL.appendingPathComponent(path))
+    func request(_ path: String, method: String = "POST", query: [URLQueryItem] = [], body: [String: Any]? = nil,
+                 timeout: Double = 120) throws -> URLRequest {
+        var comps = URLComponents(url: provider.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { comps.queryItems = query }
+        var r = URLRequest(url: comps.url!)
         r.httpMethod = method
         r.timeoutInterval = timeout
         if let key { r.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
@@ -68,15 +71,26 @@ public struct OpenAICompatibleClient: Sendable {
         return obj
     }
 
-    public func listModels() async throws -> [ModelInfo] {
-        let obj = try await json(try request("models", method: "GET", timeout: 30))
+    /// `output` = modalność wyjścia (`"transcription"`, `"embeddings"`). OpenRouter filtruje po stronie serwera;
+    /// dostawca, który parametru nie zna, odrzuci go (400/422 → ponawiamy RAZ bez niego) albo zignoruje (200 z pełną
+    /// listą). Dlatego lokalny filtr działa zawsze, gdy odpowiedź niesie modalności; model bez modalności zostaje.
+    public func listModels(output: String? = nil) async throws -> [ModelInfo] {
+        let items = output.map { [URLQueryItem(name: "output_modalities", value: $0)] } ?? []
+        let obj: [String: Any]
+        do {
+            obj = try await json(try request("models", method: "GET", query: items, timeout: 30))
+        } catch ProviderError.http(let status, _) where output != nil && (status == 400 || status == 422) {
+            obj = try await json(try request("models", method: "GET", timeout: 30))
+        }
         guard let data = obj["data"] as? [[String: Any]] else { throw ProviderError.badResponse("no data[]") }
-        return data.compactMap { m in
+        let all: [ModelInfo] = data.compactMap { m in
             guard let id = m["id"] as? String else { return nil }
             let arch = m["architecture"] as? [String: Any]
             return ModelInfo(id: id, inputModalities: arch?["input_modalities"] as? [String],
                              outputModalities: arch?["output_modalities"] as? [String])
         }
+        guard let output else { return all }
+        return all.filter { $0.outputModalities.map { $0.contains(output) } ?? true }
     }
 
     /// `language == nil` tylko w sondzie honorowania języka. Profil nagrania zawsze
