@@ -80,6 +80,13 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] `NotesStore.updateMeta` czyta, zmienia i zapisuje bez serializacji: `AutoTitle.generate` (poza MainActor) i `setManualTitle` (UI) mogą się przeplecieć i autotytuł zgubi ręczny tytuł (okno < 1 ms). Sprawdzić przy T6/T7 (serializacja przez jeden aktor/kolejkę).
 - [ ] `NotesStore`: brak testu ścieżki „nieudane przeniesienie `.corrupt-…` rzuca i nic nie zapisuje"; okno TOCTOU między `problems()` a odłożeniem (nie gubi danych, wg przeglądu).
 
+## Z przeglądu T6 (2026-10-14, `reports/F15-T6.md`) — drobne, bez rundy poprawek
+- [ ] **Korekta gubi ogon wypowiedzi z `\n` (D1, najpoważniejsza z drobnych).** `CorrectionBatches.render` wysyła `[n] pierwsza linia\nogon`; `parse` pomija linię `ogon` (nie zaczyna się od `[`), więc `fixed[n]` to sam początek i — jeśli ≥60% długości — przechodzi pasmo, a ogon znika z `corrected.json`, z którego korzysta notatka. Realne: `/audio/transcriptions` bez znaczników słów (Merger wstawia surowy `result.text`) albo model zawija linię. Oryginał zostaje, więc to nie utrata danych źródłowych. Poprawka: w `render` zamieniać `\n` na spację (+ test).
+- [ ] `Corrector.correct` po `Task.isCancelled` → `break` zwraca `batches = batches.count`, a pominięte partie nie liczą się do `failedBatches`: częściowo poprawiony transkrypt wygląda na sukces (D2; dziś martwa ścieżka — nic nie przerywa `Task`).
+- [ ] `AutoTitle.clean` (D4): brak polskiego `„` (U+201E), `‘’`, `«»`; „untitled meeting" małymi literami zapisze się jako tytuł; pierwsza linia „```" albo „<think>" (model rozumujący) zapisze się jako `autoTitle` i `shouldRun` zablokuje kolejne próby na stałe.
+- [ ] `ContextError` (D6): fałszywy pozytyw dla 400 „max_tokens exceeds maximum…" (nasz `chat()` max_tokens nie wysyła), fałszywy negatyw dla 413 z domyślnym HTML nginx; oryginalny tekst błędu nie jest dołączany; spec §4.1 mówi „400/413 lub treść", kod „status i słowo" (zachowawczo) i dodaje 422.
+- [ ] Gdy wszystkie partie korekty padną (np. 401/402), wynik = oryginał, przyczyna przepada, a T7 i tak zapisze `corrected.json` (D7); spec §7 mówi o komunikacie z Retry. Rozważyć w T7/UI.
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
