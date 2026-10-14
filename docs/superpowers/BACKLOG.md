@@ -72,6 +72,14 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - **Q1 (wiersz „Recovered")** — **TAK**: na zrzucie z 12:27 oba wiersze („Recording 00:00:11 · Polski · PL" i „12:27 · 0 min · Recovered") były w **jednej liście**, w tej samej instancji aplikacji — hipoteza drugiej instancji (`open -n`/`swift run`) nie tłumaczy obserwacji; rozjazd między replikacją a obserwacją zostaje do rozstrzygnięcia w fazie 1.5 (pozycja D3/odbiór nr 1).
 - **Q2 (klasyfikacja `load()`/`save()`)** i **Q3 (zakres rundy: test także po stronie `resume`)** — decyzja użytkownika (do dopisania po jego odpowiedzi).
 
+## Z przeglądu T5 (2026-10-14, `reports/F15-T5.md`) — drobne, bez rundy poprawek
+- [ ] `NoteTitle.parse`/`clean`/`display` dzielą tylko po `"\n"` i obcinają `.whitespaces`: `"# Title\r\n"` daje tytuł z `\r`, a `"# \r"` — tytuł `"\r"` zamiast „Untitled meeting". Obcinać `.whitespacesAndNewlines`. Do tego `clean` obcina cudzysłowy asymetrycznie (`Review of "Plan B"` → `Review of "Plan B`).
+- [ ] `NoteTitle.parse`: tekst przed tytułem (np. ostrzeżenie o niespójnym transkrypcie) znika z treści; prompt zabrania tekstu przed `# `, więc rzadkie. Ogrodzenie bloku kodu z tekstem po nim nie jest zdejmowane.
+- [ ] `MarkdownBlocks`: tabele rozpadają się na akapit na komórkę, blok kodu i cytat spadają do akapitu, akapit kontynuacji w punkcie dostaje zbędny znacznik. Nic nie ginie; tylko wygląd — prompt „Standard" nie prosi o tabele.
+- [ ] `RunDirectory.latestRunID` filtruje dopuszczalne znaki, nie wzorzec daty: zabłąkany `runs/notes.txt` albo `--run debug` z CLI wygrywa jako „najnowszy". Zaostrzyć do katalogów i wzorca `…Z`.
+- [ ] `NotesStore.updateMeta` czyta, zmienia i zapisuje bez serializacji: `AutoTitle.generate` (poza MainActor) i `setManualTitle` (UI) mogą się przeplecieć i autotytuł zgubi ręczny tytuł (okno < 1 ms). Sprawdzić przy T6/T7 (serializacja przez jeden aktor/kolejkę).
+- [ ] `NotesStore`: brak testu ścieżki „nieudane przeniesienie `.corrupt-…` rzuca i nic nie zapisuje"; okno TOCTOU między `problems()` a odłożeniem (nie gubi danych, wg przeglądu).
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
