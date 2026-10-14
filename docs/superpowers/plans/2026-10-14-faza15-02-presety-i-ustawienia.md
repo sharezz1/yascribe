@@ -468,7 +468,7 @@ Status: ⚠️ nieskompilowane. Logika w bibliotece (3 testy).
 **Interfejsy:**
 - Dostarcza: `GlobalSettings.embeddingChangeNeedsConfirmation(old:new:) -> Bool`, `ProvidersFile.nameError(_:) -> String?`, `KeyStatus` (`.set(String)`, `.missing`, `.unreadable(String)`; `KeyStatus.of(_ read: () throws -> String?)`), `AppModel.addProvider(name:baseURL:key:) -> String?` (nil = dodano).
 
-- [ ] **Krok 1 `[sonnet]`: testy.** Utwórz `Tests/MeetNotesProvidersTests/SettingsLogicTests.swift`:
+- [x] **Krok 1 `[sonnet]`: testy.** Utwórz `Tests/MeetNotesProvidersTests/SettingsLogicTests.swift`:
 
 ```swift
 import Foundation
@@ -499,9 +499,9 @@ import Testing
 }
 ```
 
-- [ ] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh` — oczekiwane: błąd kompilacji (brak `embeddingChangeNeedsConfirmation`, `nameError`, `KeyStatus`).
+- [x] **Krok 2 `[haiku]`: czerwone.** `scripts/test.sh` — oczekiwane: błąd kompilacji (brak `embeddingChangeNeedsConfirmation`, `nameError`, `KeyStatus`).
 
-- [ ] **Krok 3 `[sonnet]`: logika.** W `Preset.swift` w `GlobalSettings` dodaj:
+- [x] **Krok 3 `[sonnet]`: logika.** W `Preset.swift` w `GlobalSettings` dodaj:
 
 ```swift
     /// Zmiana modelu embeddingu przeindeksuje całe archiwum (P13) — pytamy tylko, gdy jakiś model już był.
@@ -540,11 +540,11 @@ public enum KeyStatus: Equatable, Sendable {
 }
 ```
 
-- [ ] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `130/130` (127 + 3 nowe `@Test`: `embeddingChangeAsksOnlyWhenOneWasAlreadySet`, `duplicateProviderNamesAreRejected`, `keychainFailureIsNotShownAsNoKey`).
+- [x] **Krok 4 `[haiku]`: zielone.** `scripts/test.sh` — oczekiwane: `130/130` (127 + 3 nowe `@Test`: `embeddingChangeAsksOnlyWhenOneWasAlreadySet`, `duplicateProviderNamesAreRejected`, `keychainFailureIsNotShownAsNoKey`).
 
-- [ ] **Krok 5 `[haiku]`: mutacje (duplikat nazwy i predykat embeddingu).** (a) W `nameError` zamień `caseInsensitiveCompare(n) == .orderedSame` na `== n` (rozróżnia wielkość liter). Przepis §0.5: `scripts/test.sh --filter duplicateProviderNamesAreRejected` — **pada**; `git checkout Sources/MeetNotesProviders/Stores.swift`. (b) W `embeddingChangeNeedsConfirmation` zamień `guard let old else { return false }` na `guard let old else { return true }`. `scripts/test.sh --filter embeddingChangeAsksOnlyWhenOneWasAlreadySet` — **pada**; `git checkout Sources/MeetNotesProviders/Preset.swift`. Pełne — `130/130`.
+- [x] **Krok 5 `[haiku]`: mutacje (duplikat nazwy i predykat embeddingu).** (a) W `nameError` zamień `caseInsensitiveCompare(n) == .orderedSame` na `== n` (rozróżnia wielkość liter). Przepis §0.5: `scripts/test.sh --filter duplicateProviderNamesAreRejected` — **pada**; `git checkout Sources/MeetNotesProviders/Stores.swift`. (b) W `embeddingChangeNeedsConfirmation` zamień `guard let old else { return false }` na `guard let old else { return true }`. `scripts/test.sh --filter embeddingChangeAsksOnlyWhenOneWasAlreadySet` — **pada**; `git checkout Sources/MeetNotesProviders/Preset.swift`. Pełne — `130/130`.
 
-- [ ] **Krok 6 `[sonnet]`: `addProvider` w `AppModel`.** Zastąp istniejące `addProvider`:
+- [x] **Krok 6 `[sonnet]`: `addProvider` w `AppModel`.** Zastąp istniejące `addProvider`:
 
 ```swift
     /// `nil` = dodano; tekst = powód odmowy (duplikat nazwy albo błąd pęku kluczy).
@@ -562,7 +562,7 @@ public enum KeyStatus: Equatable, Sendable {
     }
 ```
 
-- [ ] **Krok 7 `[sonnet]`: ekran Settings.** Zastąp całą zawartość `Sources/MeetNotesApp/SettingsView.swift`:
+- [x] **Krok 7 `[sonnet]`: ekran Settings.** Zastąp całą zawartość `Sources/MeetNotesApp/SettingsView.swift`:
 
 ```swift
 import MeetNotesProviders
@@ -708,13 +708,13 @@ struct SettingsView: View {
 ```
 (`model.save()` zostaje wywoływane przez `commit()` i przez operacje na dostawcach; usunięty jest autozapis przy każdej zmianie `onChange`.)
 
-- [ ] **Krok 8 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `130/130`.
+- [x] **Krok 8 `[haiku]`: kompilacja i testy.** `scripts/test.sh` — oczekiwane: `130/130`.
 
-- [ ] **Krok 9 `[sonnet]`: migawki i jedna partia poprawek.** Dopisz w `Snapshots.runAll` ekran `settings` (jasny/ciemny): `try render("settings", size: CGSize(width: 900, height: 640), dark: dark, model: model) { SettingsView() }`. Obejrzyj; sprawdź: tekst o modelach w presecie z przyciskiem „Open Presets", brak „Save" w sekcji Providers, Save/Cancel pod „Archive", brak przewijanego natywnego menu modeli (zastąpione pickerem).
+- [x] **Krok 9 `[sonnet]`: migawki i jedna partia poprawek.** Dopisz w `Snapshots.runAll` ekran `settings` (jasny/ciemny): `try render("settings", size: CGSize(width: 900, height: 640), dark: dark, model: model) { SettingsView() }`. Obejrzyj; sprawdź: tekst o modelach w presecie z przyciskiem „Open Presets", brak „Save" w sekcji Providers, Save/Cancel pod „Archive", brak przewijanego natywnego menu modeli (zastąpione pickerem).
 
-- [ ] **Krok 10 `[haiku]`: BACKLOG.** W `docs/superpowers/BACKLOG.md` oznacz `- [x]` pozycję „D3/odbiór: dwie identyczne nazwy dostawców dozwolone" z adnotacją „zrobione w T4 (`nameError`)". Nie zmieniaj innych pozycji.
+- [x] **Krok 10 `[haiku]`: BACKLOG.** W `docs/superpowers/BACKLOG.md` oznacz `- [x]` pozycję „D3/odbiór: dwie identyczne nazwy dostawców dozwolone" z adnotacją „zrobione w T4 (`nameError`)". Nie zmieniaj innych pozycji.
 
-- [ ] **Krok 11 `[sonnet]`: commit.**
+- [x] **Krok 11 `[sonnet]`: commit.**
 
 ```bash
 git add Package.swift Sources Tests scripts Resources docs .gitignore

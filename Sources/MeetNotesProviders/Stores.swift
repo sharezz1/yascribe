@@ -60,4 +60,15 @@ public struct PresetsFile: Codable, Equatable, Sendable {
 public struct ProvidersFile: Codable, Equatable, Sendable {
     public var providers: [Provider] = []
     public init(providers: [Provider] = []) { self.providers = providers }
+
+    /// Powód odmowy dla nazwy nowego dostawcy; `nil` = można dodać. Nazwy muszą się różnić, żeby komunikaty
+    /// („No API key for <nazwa>…") wskazywały jednego dostawcę.
+    public func nameError(_ name: String) -> String? {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        if n.isEmpty { return "Give the provider a name." }
+        if providers.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(n) == .orderedSame }) {
+            return "A provider named “\(n)” already exists."
+        }
+        return nil
+    }
 }

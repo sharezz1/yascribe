@@ -44,7 +44,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
   sam komunikat jest czytelny (nazywa `mic_raw`), ale kod systemowy nic nie mówi; rozważyć
   tłumaczenie na „plik nie istnieje / jest uszkodzony".
   - **Faza 1.5 / kosmetyka.**
-- [ ] **D3/odbiór: dwie identyczne nazwy dostawców dozwolone.** Dostawca jest identyfikowany UUID-em,
+- [x] **D3/odbiór: dwie identyczne nazwy dostawców dozwolone.** *(zrobione w T4: `ProvidersFile.nameError`, blokada w arkuszu Add Provider)* Dostawca jest identyfikowany UUID-em,
   więc funkcjonalnie nieszkodliwe, ale komunikat „No API key for <nazwa>. Remove the provider…" staje
   się niejednoznaczny (nie wiadomo, którego dostawcę usunąć). Propozycja: blokada duplikatu nazwy
   w formularzu.

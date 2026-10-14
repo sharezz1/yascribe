@@ -90,6 +90,12 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
         self.embedding = embedding
         self.defaultPresetID = defaultPresetID
     }
+
+    /// Zmiana modelu embeddingu przeindeksuje całe archiwum (P13) — pytamy tylko, gdy jakiś model już był.
+    public static func embeddingChangeNeedsConfirmation(old: RoleAssignment?, new: RoleAssignment?) -> Bool {
+        guard let old else { return false }
+        return old.providerID != new?.providerID || old.model != new?.model
+    }
 }
 
 public struct ProbeCache: Codable, Equatable, Sendable {
