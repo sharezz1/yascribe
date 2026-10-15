@@ -134,6 +134,14 @@ enum Snapshots {
                     }
                     .padding(12)
                 }
+                // Odbiór T13 #7: kafelki dostawców i wynik weryfikacji (Verified / powód).
+                if let pid = model.providers.providers.first?.id {
+                    model.providerChecks[pid] = .verified(models: 26)
+                    try render("settings-verified", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                    model.providerChecks[pid] = .failed("Invalid API key.")
+                    try render("settings-failed", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                    model.providerChecks[pid] = nil
+                }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —

@@ -3,12 +3,14 @@ import SwiftUI
 
 final class AddProviderState: ObservableObject {
     @Published var showing = false
-    @Published var name = "OpenRouter"
-    @Published var url = "https://openrouter.ai/api/v1"
+    @Published var preset = ProviderPreset.openRouter
+    @Published var name = ProviderPreset.openRouter.name
+    @Published var url = ProviderPreset.openRouter.baseURL
     @Published var key = ""
     @Published var error: String?
 
-    func reset() { name = "OpenRouter"; url = "https://openrouter.ai/api/v1"; key = ""; error = nil }
+    /// Kafelek podstawia gotowy adres i nazwę; użytkownik wkleja tylko klucz (Ollama — bez klucza).
+    func reset(_ p: ProviderPreset = .openRouter) { preset = p; name = p.name; url = p.baseURL; key = ""; error = nil }
 }
 
 /// Szkic sekcji „Archive": Save / Cancel obejmuje tylko ją; dostawcy zapisują się od razu (plan 1.5-B, T4).
@@ -40,13 +42,20 @@ struct SettingsView: View {
                             keyLabel(p)
                         }
                         Spacer()
+                        checkLabel(p)
                         Button { Task { await model.refreshModels(p.id) } } label: { Label("Refresh Models", systemImage: "arrow.clockwise") }
                             .help("Refresh the model lists")
                         Button(role: .destructive) { model.removeProvider(p.id) } label: { Label("Remove", systemImage: "trash") }
                             .help("Remove this provider and its key")
                     }
                 }
-                Button("Add Provider…") { add.reset(); add.showing = true }
+                HStack {
+                    Text("Add provider").foregroundStyle(.secondary)
+                    ForEach(ProviderPreset.all) { preset in
+                        Button(preset.name) { add.reset(preset); add.showing = true }
+                            .help(preset.note ?? preset.baseURL)
+                    }
+                }
             } header: {
                 Text("Providers")
             } footer: {
@@ -110,11 +119,31 @@ struct SettingsView: View {
         }
     }
 
+    /// Verified · N models / powód / Verifying / Not verified + ponowna próba.
+    @ViewBuilder private func checkLabel(_ p: Provider) -> some View {
+        if model.providerVerifying.contains(p.id) {
+            ProgressView().controlSize(.small)
+        } else {
+            switch model.providerChecks[p.id] {
+            case .verified(let n)?:
+                Label("Verified · \(n) models", systemImage: "checkmark.circle").font(.caption).foregroundStyle(.green)
+            case .failed(let why)?:
+                Label(why, systemImage: "xmark.circle").font(.caption).foregroundStyle(.red).lineLimit(2).help(why)
+            case nil:
+                Text("Not verified").font(.caption).foregroundStyle(.secondary)
+            }
+            Button("Verify") { Task { await model.verifyProvider(p.id) } }
+                .help("Test the connection (lists the provider's models)")
+        }
+    }
+
     private var addSheet: some View {
         Form {
+            Text("Add \(add.preset.name)").font(.headline)
+            if let note = add.preset.note { Text(note).font(.caption).foregroundStyle(.secondary) }
             TextField("Name", text: $add.name)
             TextField("Base URL", text: $add.url)
-            SecureField("API key", text: $add.key)
+            if add.preset.needsKey { SecureField("API key", text: $add.key) }
             if let e = add.error { Text(e).foregroundStyle(.red).font(.caption) }
             HStack {
                 Button("Cancel") { add.showing = false }
@@ -127,7 +156,7 @@ struct SettingsView: View {
                     if let e = model.addProvider(name: add.name, baseURL: u, key: add.key) {
                         add.error = e
                     } else {
-                        add.reset()
+                        add.reset(add.preset)
                         add.showing = false
                     }
                 }
