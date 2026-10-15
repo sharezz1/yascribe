@@ -40,6 +40,22 @@ struct MeetNotesApp: App {
                 Button("Show Recording Window") { model.recording.showPanel(model: model) }
                     .keyboardShortcut("r", modifiers: [.command, .option])
             }
+            // D5 (macos.md §3): każda akcja z paska widoku spotkania jest też tutaj; aktywne tylko przy otwartym spotkaniu.
+            CommandMenu("Meeting") {
+                Button("Back to Meetings") { model.selectedSessionID = nil }
+                    .keyboardShortcut("[", modifiers: .command)
+                    .disabled(model.openItem == nil)
+                Button("Copy Notes") { if let i = model.openItem { model.copyNotes(i) } }
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    .disabled(model.openItem?.notes.summary == nil)
+                // Bez skrótu: Cmd-Shift-R i Cmd-Opt-R zajmuje nagrywanie.
+                Button("Show in Finder") { if let i = model.openItem { model.showInFinder(i) } }
+                    .disabled(model.openItem == nil)
+                Divider()
+                Button("Delete Meeting…") { model.pendingDelete = model.openItem?.id }
+                    .keyboardShortcut(.delete, modifiers: .command)
+                    .disabled(model.openItem.map { !model.canDelete($0) } ?? true)
+            }
         }
     }
 }
