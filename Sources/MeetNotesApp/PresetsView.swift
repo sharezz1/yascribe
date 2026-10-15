@@ -199,13 +199,15 @@ struct PresetForm: View {
                 // 🔴 Bez wartości domyślnej (P7). „Auto" to opcja awaryjna na końcu listy, z ostrzeżeniem.
                 FormRow(label: "Language") {
                     VStack(alignment: .leading, spacing: 6) {
-                        Picker("Language", selection: draft.languageChoice) {
-                            Text("Choose…").tag(LanguageChoice.unset)
-                            ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(LanguageChoice.code(l.code)) }
-                            Divider()
-                            Text("Auto (mixed languages)").tag(LanguageChoice.auto)
+                        FieldMenu(label: "Language", value: languageName(draft.languageChoice.wrappedValue), width: 180) {
+                            Picker("Language", selection: draft.languageChoice) {
+                                Text("Choose…").tag(LanguageChoice.unset)
+                                ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(LanguageChoice.code(l.code)) }
+                                Divider()
+                                Text("Auto (mixed languages)").tag(LanguageChoice.auto)
+                            }
+                            .pickerStyle(.inline).labelsHidden()
                         }
-                        .labelsHidden().fixedSize()
                         if draft.wrappedValue.isAutoLanguage {
                             WarnLabel("Lower quality, risk of invented text. Use Auto only for meetings that mix languages.")
                         }
@@ -219,11 +221,14 @@ struct PresetForm: View {
                 FormRow(label: "Notes language",
                         caption: draft.wrappedValue.isAutoLanguage && draft.wrappedValue.notesLanguage == nil
                             ? "With Auto, notes are written in the language that predominates in the transcript." : nil) {
-                    Picker("Notes language", selection: draft.notesLanguage) {
-                        Text("Same as preset").tag(LanguageCode?.none)
-                        ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(Optional(l.code)) }
+                    FieldMenu(label: "Notes language",
+                              value: draft.notesLanguage.wrappedValue.map { languageName(.code($0)) } ?? "Same as preset", width: 180) {
+                        Picker("Notes language", selection: draft.notesLanguage) {
+                            Text("Same as preset").tag(LanguageCode?.none)
+                            ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(Optional(l.code)) }
+                        }
+                        .pickerStyle(.inline).labelsHidden()
                     }
-                    .labelsHidden().fixedSize()
                 }
             }
             Text("Embeddings are set once for the whole archive in Settings.")
@@ -289,13 +294,15 @@ struct RoleSection<Extra: View>: View {
         let showProvider = providers.count > 1 || assignment == nil
         if showProvider {
             FormRow(label: "Provider") {
-                Picker("Provider", selection: Binding(get: { assignment?.providerID }, set: { id in
-                    assignment = id.map { RoleAssignment(providerID: $0, model: assignment?.model ?? "", prompt: assignment?.prompt) }
-                })) {
-                    Text("None").tag(UUID?.none)
-                    ForEach(providers) { p in Text(p.name).tag(Optional(p.id)) }
+                FieldMenu(label: "Provider", value: providers.first { $0.id == assignment?.providerID }?.name ?? "None", width: 180) {
+                    Picker("Provider", selection: Binding(get: { assignment?.providerID }, set: { id in
+                        assignment = id.map { RoleAssignment(providerID: $0, model: assignment?.model ?? "", prompt: assignment?.prompt) }
+                    })) {
+                        Text("None").tag(UUID?.none)
+                        ForEach(providers) { p in Text(p.name).tag(Optional(p.id)) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
                 }
-                .labelsHidden().fixedSize()
             }
         }
         if let a = assignment {
@@ -366,5 +373,14 @@ struct ProbeBadges: View {
                 StateLabel(.neutral, "Not tested")
             }
         }
+    }
+}
+
+/// Nazwa wyboru języka do pola `FieldMenu`.
+func languageName(_ c: LanguageChoice) -> String {
+    switch c {
+    case .unset: "Choose…"
+    case .auto: "Auto (mixed languages)"
+    case .code(let code): LanguageCode.selectable.first { $0.code == code }?.name ?? "\(code)"
     }
 }

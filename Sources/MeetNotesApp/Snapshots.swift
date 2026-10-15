@@ -95,6 +95,10 @@ enum Snapshots {
             for dark in [false, true] {
                 // Galeria komponentów §11.4 (DesignSystem.swift) — jeden rzut oka na tokeny i stany przed widokami.
                 try render("components", size: CGSize(width: 640, height: 520), dark: dark, model: model) { ComponentGallery() }
+                // D7: sidebar osobno (całe okno z NavigationSplitView renderuje się offscreen jako pusta plansza, T3).
+                try render("sidebar", size: CGSize(width: 210, height: 500), dark: dark, model: model) {
+                    SidebarList(selection: .constant(.settings)).listStyle(.sidebar)
+                }
                 try render("presets", size: CGSize(width: 900, height: 600), dark: dark, model: model) { PresetsView() }
                 try render("meetings", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
                 // Pola tekstowe: PresetsView bez wyboru pokazuje tylko „Choose a preset" (wybór jest lokalny w widoku).

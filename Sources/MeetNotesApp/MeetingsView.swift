@@ -156,18 +156,16 @@ struct RecordCard: View {
 /// Preset z nazwą widoczną w etykiecie (nie samą ikoną). Język i model są obok, w opisie karty.
 struct PresetMenu: View {
     @Environment(AppModel.self) private var model
+    var width: CGFloat? = 140
 
     var body: some View {
-        Menu {
+        FieldMenu(label: "Preset", value: model.activePreset?.name ?? "No preset", width: width) {
             ForEach(model.presets.presets) { p in
                 Button(AppModel.label(p)) { model.activePresetID = p.id }
             }
             Divider()
             Button("Edit Presets…") { model.section = .presets }
-        } label: {
-            Text(model.activePreset?.name ?? "No preset")
         }
-        .frame(width: 140)
         .help("Preset used for the next recording: language and models")
     }
 }

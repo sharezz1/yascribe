@@ -45,17 +45,8 @@ struct ContentView: View {
     var body: some View {
         @Bindable var model = model
         NavigationSplitView {
-            List(selection: $model.section) {
-                SwiftUI.Section {
-                    Label(Section.meetings.rawValue, systemImage: Section.meetings.symbol).tag(Section.meetings)
-                }
-                SwiftUI.Section("Setup") {
-                    ForEach([Section.presets, .templates, .settings]) { s in
-                        Label(s.rawValue, systemImage: s.symbol).tag(s)
-                    }
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180)
+            SidebarList(selection: $model.section)
+                .navigationSplitViewColumnWidth(min: 160, ideal: 180)
         } detail: {
             switch model.section {
             case .meetings: MeetingsView()
@@ -73,6 +64,27 @@ struct ContentView: View {
             Button("OK") { model.lastError = nil }
         } message: {
             Text(model.lastError ?? "")
+        }
+    }
+}
+
+/// Sidebar (D7, macos.md §11.5): Meetings na górze; Presets / Templates / Settings na dole, bez nagłówka sekcji.
+/// Dolna grupa to druga lista z tym samym wyborem, przypięta `safeAreaInset` (lista nie umie dosunąć wierszy do dołu).
+struct SidebarList: View {
+    @Binding var selection: Section
+
+    var body: some View {
+        List(selection: $selection) {
+            Label(Section.meetings.rawValue, systemImage: Section.meetings.symbol).tag(Section.meetings)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            List(selection: $selection) {
+                ForEach([Section.presets, .templates, .settings]) { s in
+                    Label(s.rawValue, systemImage: s.symbol).tag(s)
+                }
+            }
+            .scrollDisabled(true)
+            .frame(height: 3 * 28 + 16)
         }
     }
 }
