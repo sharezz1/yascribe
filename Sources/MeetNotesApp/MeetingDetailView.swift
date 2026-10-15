@@ -27,16 +27,14 @@ struct MeetingDetailView: View {
     private var isRecording: Bool { SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
             header
             if isRecording {
-                MyNotesTab(state: state, item: item)
-                Text("Transcript and notes arrive after the meeting.").font(.caption).foregroundStyle(.secondary)
+                MyNotesTab(state: state, item: item).padding(.top, 16)
+                Text("Transcript and notes arrive after the meeting.").font(.callout).foregroundStyle(.mnText2).padding(.top, 8)
             } else {
-                Picker("", selection: Binding(get: { state.tab ?? defaultTab }, set: { state.tab = $0 })) {
-                    ForEach(MeetingTab.allCases) { Text($0.rawValue).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 360)
+                MeetingTabBar(selection: Binding(get: { state.tab ?? defaultTab }, set: { state.tab = $0 }))
+                    .padding(.top, 18).padding(.bottom, 16)
                 switch state.tab ?? defaultTab {
                 case .myNotes: MyNotesTab(state: state, item: item)
                 case .transcript: TranscriptTab(state: state, item: item) { play($0) }
@@ -44,7 +42,8 @@ struct MeetingDetailView: View {
                 }
             }
         }
-        .padding(16)
+        .contentColumn(640)
+        .contentBackground()
         .navigationTitle(item.title)
         .onAppear {
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
@@ -71,22 +70,23 @@ struct MeetingDetailView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             TextField("Untitled meeting", text: $state.titleDraft)
                 .textFieldStyle(.plain)
-                .font(.title2.weight(.semibold))
+                .documentTitle()
                 .onSubmit { model.notes.setManualTitle(state.titleDraft, for: item) }
             HStack(spacing: 12) {
-                Label(item.startedAt.formatted(date: .abbreviated, time: .shortened), systemImage: "calendar")
-                if let d = item.duration { Label(Duration.seconds(d).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)), systemImage: "clock") }
-                if let p = model.presetFor(sessionURL: item.url) { Label(AppModel.label(p), systemImage: "slider.horizontal.3") }
-                if model.notes.isTitling(item.id) { Label("Naming the meeting…", systemImage: "sparkles") }
+                MetaLine([
+                    item.startedAt.formatted(date: .abbreviated, time: .shortened),
+                    item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) } ?? "",
+                    model.presetFor(sessionURL: item.url).map { "Preset \($0.name)" } ?? "",
+                ])
+                if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
             }
-            .font(.caption).foregroundStyle(.secondary)
             if !item.notes.problems.isEmpty {
                 Label("\(item.notes.problems.joined(separator: ", ")) in this meeting's notes couldn't be read. They're kept aside before anything new is saved.",
                       systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.orange)
+                    .font(.callout).foregroundStyle(.mnWarn)
             }
         }
     }
@@ -132,30 +132,30 @@ struct UtteranceRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Button(MeetingDetailView.time(utterance.start), action: onJump)
-                .buttonStyle(.link)
-                .monospacedDigit()
+                .buttonStyle(.plain)
+                .font(.callout).monospacedDigit().foregroundStyle(.mnText2)
                 .help("Play from here")
             Text(utterance.speaker == .me ? "Me" : "Them")
-                .font(.caption.weight(.semibold))
+                .font(.callout.weight(.semibold))
                 .frame(width: 40, alignment: .leading)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.mnText2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(utterance.text).textSelection(.enabled)
+                Text(utterance.text).font(.system(size: 13)).foregroundStyle(.mnText).textSelection(.enabled)
                 if let lang = utterance.languageMismatch {
                     // P11: widoczne, nie ukryte — i wyłączone z notatek.
                     Label(isAuto ? "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes"
                                  : "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes",
                           systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                        .font(.callout)
+                        .foregroundStyle(.mnWarn)
                 }
                 if utterance.echoOfThem == true {
                     Label("Echo of the other side — excluded from notes", systemImage: "speaker.wave.2")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.callout)
+                        .foregroundStyle(.mnText2)
                 }
                 if utterance.approximateTiming {
-                    Text("Approximate timing").font(.caption).foregroundStyle(.secondary)
+                    Text("Approximate timing").font(.subheadline).foregroundStyle(.mnText2)
                 }
             }
         }
