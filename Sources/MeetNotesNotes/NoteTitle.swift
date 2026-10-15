@@ -13,6 +13,30 @@ public struct NoteMeta: Codable, Equatable, Sendable {
 public enum NoteTitle {
     public static let untitled = "Untitled meeting"
 
+    /// Reguła tytułu wspólna dla promptu notatki i promptu autotytułu (odbiór T13, uwaga 5: tytuł z przedrostkiem
+    /// „Notatki z rozmowy: …" i na 15 słów).
+    public static let rule = "The title is short (at most 8 words) and names the topic directly. It never starts with a "
+        + "label such as \"Meeting notes\", \"Notes from the conversation\", \"Summary of the meeting\", "
+        + "\"Notatki z rozmowy\" or \"Podsumowanie\"."
+
+    /// Etykiety, które modele lubią dokleić przed tytułem (porównanie bez względu na wielkość liter).
+    static let labels = ["notatki z rozmowy", "notatki ze spotkania", "podsumowanie rozmowy", "podsumowanie spotkania",
+                         "meeting notes", "notes from the conversation", "notes from the meeting", "summary of the meeting",
+                         "podsumowanie", "notatki", "notes", "summary"].sorted { $0.count > $1.count }
+
+    /// „Notatki z rozmowy: presja na wygląd" → „Presja na wygląd". Etykieta musi być po niej oddzielona `:` albo myślnikiem;
+    /// sama etykieta albo zwykłe słowo na początku tytułu zostają.
+    public static func stripLabel(_ title: String) -> String {
+        let lower = title.lowercased()
+        for label in labels where lower.hasPrefix(label) {
+            let rest = title.dropFirst(label.count).drop(while: { $0 == " " })
+            guard let sep = rest.first, ":–—-".contains(sep) else { continue }
+            let after = rest.dropFirst().trimmingCharacters(in: .whitespaces)
+            if !after.isEmpty { return after.prefix(1).uppercased() + after.dropFirst() }
+        }
+        return title
+    }
+
     /// Tytuł = pierwszy nagłówek `# ` w pierwszych trzech niepustych liniach odpowiedzi (wstęp i ogrodzenie
     /// bloku kodu są tolerowane). Brak nagłówka → `title == nil`, `body` = cała odpowiedź.
     public static func parse(_ response: String) -> (title: String?, body: String) {
@@ -28,7 +52,7 @@ public enum NoteTitle {
             if t.isEmpty { continue }
             seen += 1
             if t.hasPrefix("# ") {
-                let title = clean(String(t.dropFirst(2)))
+                let title = stripLabel(clean(String(t.dropFirst(2))))
                 let body = lines[(i + 1)...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
                 return (title.isEmpty ? nil : title, body)
             }

@@ -19,7 +19,7 @@ public enum AutoTitle {
         let text = sample(lines)
         let language = notesLanguage.map { "in \($0.englishName)" } ?? "in the language that predominates in the transcript"
         let system = "You name meetings. Reply with ONE line: a short descriptive title \(language), at most 8 words, no quotes, "
-            + "no trailing period. If the transcript is too fragmented to name, reply with exactly: \(NoteTitle.untitled)"
+            + "no trailing period. \(NoteTitle.rule) If the transcript is too fragmented to name, reply with exactly: \(NoteTitle.untitled)"
         return NotePrompt(system: system, user: text)
     }
 
@@ -45,6 +45,7 @@ public enum AutoTitle {
         var t = first
         while t.hasPrefix("#") { t.removeFirst() }
         t = t.trimmingCharacters(in: CharacterSet(charactersIn: "*\"“”'. ").union(.whitespaces))
+        t = NoteTitle.stripLabel(t)
         if t.isEmpty || t == NoteTitle.untitled { return nil }
         return String(t.prefix(maxLength))
     }
