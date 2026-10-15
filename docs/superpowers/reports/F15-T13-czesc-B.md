@@ -88,3 +88,27 @@ makiety `docs/design/makiety/b-*.png`.
   okno dopasowane do treści (komentarz `ponytail:` w `RecordingController.swift`).
 - Format czasu „1 h 05 min” i stany Recording / Correcting / Transcribing % / Correction failed na liście są sprawdzone tylko lekturą kodu i galerią, bo seed migawek ich nie ma.
 - Data w `MetaLine` jest w locale systemu („15 paź 2026”), nie „Oct 15” jak w interfejsie po angielsku.
+
+## Wykonanie decyzji D1–D8 (2026-10-15, wieczór)
+
+Decyzje użytkownika zapisane w `docs/design/macos.md` §11 (commit `6dbca58` na `faza15`, scalony tutaj).
+Opus: D1/D4/D7/D8 i scalanie; D5 i D2+D3 — Sonnet; D6 — Opus; każdy agent we własnym worktree.
+
+| D | Wykonanie | Commit |
+|---|---|---|
+| D1 | `text2` jasny `#666259` (kontrast z §11.1: na zaznaczeniu 4,88, tło 5,62, karta 6,08, sunk 5,28) | `6efcbb3` |
+| D2 | Pigułka rozwinięta: czerwona kropka + „Recording” w `text` Semibold; lista spotkań dalej `StateLabel(.live)` na czerwono | `bb997b4` |
+| D3 | Bez przycisku zamknięcia; menu Window → „Hide Recording Window” (aktywne tylko przed startem, przy widocznej pigułce); okno pigułki dopasowane do treści (`fittingSize`, górna krawędź stoi), bez stałego 336×60 i marginesu | `bb997b4` |
+| D4 | `.pillSmallPrimary` (24 pt) dla „Save & verify” i Done; Cancel jako `.pillSmall` | `6efcbb3` |
+| D5 | Kapsuła wstecz (‹ Meetings) i „⋯” (Copy notes, Show in Finder, Delete meeting…); menu aplikacji „Meeting”: Back to Meetings ⌘[, Copy Notes ⌘⇧C, Show in Finder, Delete Meeting…. Usuwanie z potwierdzeniem („Move to Trash”), do Kosza (`trashItem`), nieaktywne dla sesji nagrywanej lub transkrybowanej. Delete bez skrótu ⌘⌫ — kolidowałby z edycją w My notes | `148e6eb`, `263a387` |
+| D6 | Notatka = jeden `NSTextView` tylko do odczytu; `MarkdownBlocks.attributed(_:style:)` w `MeetNotesNotes` (interlinia 22, akapit 16, punkt 18 / zagnieżdżony 36, odstęp punktów 3, nagłówek 15 semibold 20/6, „— uzasadnienie” w `text2`); `flatten` usunięte (jedyny użytkownik). Pomiar migawki: interlinia 22, punkt→punkt 25, wcięcie 18/36, odstępy wokół nagłówków ±1 pt od makiety | `f682735` |
+| D7 | Sidebar: Meetings na górze, Presets / Templates / Settings na dole bez nagłówka (druga lista w `safeAreaInset` z tym samym wyborem); nowa migawka `sidebar-*` | `6efcbb3` |
+| D8 | `FieldMenu` (DesignSystem): pole `field`, obwódka, promień 7, ⌄; pod spodem standardowe `Menu`, wybór przez `Picker(.inline)`. Użyte dla presetu (karta Record i pigułka), Language, Notes language, Provider, szablonu | `6efcbb3` |
+
+**Testy:** `scripts/test.sh` → `200/200` (test `flatten` zastąpiony testem `noteIsOneAttributedTextWithParagraphStyles`).
+Mutacja D6: wcięcie punktu `headIndent = 0` → test pada (`MarkdownTests.swift:55–56`), przywrócone `git checkout`.
+D5 bez nowej logiki w bibliotece (jednolinijkowe `canDelete` w `AppModel`), więc bez testu.
+
+**Do odbioru na żywo (migawka tego nie pokaże):** pasek z wstecz i „⋯” (okno migawki nie ma paska narzędzi), menu
+Meeting i Window, dialog usuwania, zaznaczanie notatki przeciąganiem przez akapity i Cmd-A/Cmd-C (uwaga T13 #4),
+przewijanie kółkiem nad notatką, pigułka zwinięta↔rozwinięta i klik obok kapsuły, sidebar w prawdziwym oknie.
