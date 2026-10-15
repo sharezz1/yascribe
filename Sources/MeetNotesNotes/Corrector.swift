@@ -51,7 +51,10 @@ public enum CorrectionBatches {
     }
 
     public static func render(_ batch: [(n: Int, text: String)]) -> String {
-        batch.map { "[\($0.n)] \($0.text)" }.joined(separator: "\n")
+        // Wypowiedź z `\n` musi iść jako JEDNA linia: `parse` pomija linie niezaczynające się od `[`, więc ogon
+        // po `\n` zniknąłby po cichu z poprawionego transkryptu (przegląd T6, D1).
+        batch.map { "[\($0.n)] " + $0.text.replacingOccurrences(of: "\r\n", with: " ").replacingOccurrences(of: "\n", with: " ") }
+            .joined(separator: "\n")
     }
 
     /// Odpowiedź modelu → `numer → tekst`. `nil`, gdy numery nie są DOKŁADNIE oczekiwanymi (liczba, kolejność, brak/nadmiar).

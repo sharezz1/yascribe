@@ -50,6 +50,8 @@ final class RecordingController {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             Task { @MainActor in
                 self.elapsed = Date().timeIntervalSince(self.started)
+                // Źródło mikrofonu podąża za domyślnym wejściem systemu (np. AirPods podłączone w trakcie) — nazwa też.
+                self.micName = CoreAudioDevices.defaultInputName() ?? self.micName
                 self.recorder?.tick()
             }
         }

@@ -81,3 +81,13 @@ private func capitalizing(_ user: String) -> String {
     #expect(stub.calls.isEmpty)
     #expect(r1.batches == 0 && r2.batches == 0)
 }
+
+@Test func multiLineUtteranceIsSentAsOneLineSoItsTailIsNotLost() async {
+    // Przegląd T6, D1: ogon po `\n` nie może znikać z poprawionego transkryptu.
+    let t = transcript([utt("Akapit pierwszy długi.\nkoniec wypowiedzi")])
+    let stub = ChatStub { capitalizing($0.user) }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(stub.calls.allSatisfy { !$0.user.dropFirst(4).contains("\n") }) // jedna wypowiedź = jedna linia
+    #expect(r.transcript.utterances[0].text.contains("koniec wypowiedzi"))
+    #expect(CorrectionBatches.render([(n: 1, text: "a\r\nb\nc")]) == "[1] a b c")
+}
