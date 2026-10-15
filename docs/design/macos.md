@@ -323,7 +323,7 @@ wybiera `appearance.bestMatch(from: [.aqua, .darkAqua])`.
 | `line` | obwódka karty i pola (0,5 pt) | `#3C3214` 14% | `#FFFFFF` 11% |
 | `line2` | separator wierszy | `#3C3214` 8% | `#FFFFFF` 6% |
 | `text` | tekst główny | `#22211E` | `#ECEBE6` |
-| `text2` | etykiety, metadane, stany neutralne | `#6F6B62` | `#9A978F` |
+| `text2` | etykiety, metadane, stany neutralne | `#666259` (D1; było `#6F6B62`) | `#9A978F` |
 | `text3` | tylko kontrolki nieaktywne (zwolnione z wymogu kontrastu WCAG) | `#A8A49A` | `#6B6963` |
 | `primary` / `onPrimary` | jedyny główny przycisk na ekranie | `#22211E` / `#FFFFFF` | `#ECEBE6` / `#1C1C1B` |
 | `accent` | stan „gotowe/zweryfikowane”, `Toggle`, `tint` | `#2F6B4F` | `#7CC39C` |
@@ -331,9 +331,9 @@ wybiera `appearance.bestMatch(from: [.aqua, .darkAqua])`.
 | `warn` | ostrzeżenie (np. język Auto) | `#8A5A00` | `#E0B050` |
 | kropka nagrywania | stała, poza paletą | `#FF3B30` (systemRed) | `#FF3B30` |
 
-Zmierzony kontrast (WCAG): `text`/`background` 14,9 i 14,3; `text2`/`background` 4,91
-i 5,85; `text2`/`card` 5,31 i 5,20; `accent` 5,36 (na `#E6EFE8`) i 7,32 (na `card`); `rec` 4,90 (na
-`#FBE9E6`) i 5,43; `warn` 5,28 i 7,58; `text2`/`sunk` 4,62 i 4,66 (na granicy, ciemniej nie schodzić). Tło `rec`/`accent` nie
+Zmierzony kontrast (WCAG): `text`/`background` 14,9 i 14,3; `text2`/`background` 5,62
+i 5,85; `text2`/`card` 6,08 i 5,20; `text2`/`selection` 4,88 (jasny; przy `#6F6B62` było 4,26 — D1); `accent` 5,36 (na `#E6EFE8`) i 7,32 (na `card`); `rec` 4,90 (na
+`#FBE9E6`) i 5,43; `warn` 5,28 i 7,58; `text2`/`sunk` 5,28 i 4,66. Tło `rec`/`accent` nie
 występuje w UI, ale pomiar na nim jest najgorszym przypadkiem. Każdą nową parę mierz przed użyciem.
 
 **Placeholdery** (pole szukania, „Paste your key”) mają systemowy kolor podpowiedzi, który
@@ -358,7 +358,7 @@ dla stanu nieaktywnego. Na makietach placeholdery są w `text3` tylko poglądowo
 | Tekst UI, etykiety pól | SF | 13 / 16 | Regular | `.body` |
 | Metadane w linii, stany | SF | 12 / 15 | Regular | `.callout` |
 | Podpis pod polem, data w wierszu | SF | 11 / 14 | Regular | `.subheadline` |
-| Treść notatki | SF | 14 / 22 | Regular | `.system(size: 14)` + `lineSpacing(5)` ⚠️ (SF 14 ma ~17 pt interlinii; dobić do 22 w migawkach T0) |
+| Treść notatki | SF | 14 / 22 | Regular | `NSTextView` tylko do odczytu (D6): `NSParagraphStyle` z interlinią 22 pt, wcięciem punktów 18 pt i odstępem 16 pt między akapitami |
 | Nagłówek w notatce | SF | 15 / 20 | Semibold | `.system(size: 15, weight: .semibold)` |
 
 - Szeryf **tylko** w dwóch tytułach. Nagłówki sekcji, przyciski, statusy i dane zawsze SF.
@@ -392,11 +392,14 @@ Wdrażane raz i używane we wszystkich widokach (por. F15-T13 część B pkt 3).
 | `Card` | `card` + obwódka 0,5 pt + promień 12; zawartość to wiersze z separatorami | — |
 | `FormRow` | etykieta (130 pt, `text2`) + kontrolka; pod kontrolką opcjonalny podpis 11 pt | błąd: podpis w `rec` |
 | `PillButtonStyle` | kapsuła; `.primary` (wypełniona `primary`), `.secondary` (`card` + obwódka), `.small` (24 pt) | hover: tło `sunk`; wciśnięty: krycie 0,7; nieaktywny: tekst `text3`; fokus: systemowy pierścień ⚠️ sprawdzić w migawkach, czy własny `ButtonStyle` go zachowuje |
-| `StateLabel` | ikona SF Symbol + słowo, 12 pt; rodzaje: `ok` (`accent`, ✓), `bad` (`rec`, ✗), `live` (`rec`, kropka, Semibold, licznik), `neutral` (`text2`), `progress` (mały `ProgressView` lub pasek 38×4 + %) | — |
+| `StateLabel` | ikona SF Symbol + słowo, 12 pt; rodzaje: `ok` (`accent`, ✓), `bad` (`rec`, ✗), `live` (`rec`, kropka, Semibold, licznik; **w pigułce słowo w `text`, czerwona tylko kropka** — D2), `neutral` (`text2`), `progress` (mały `ProgressView` lub pasek 38×4 + %) | — |
 | `ModelField` | popup „Dostawca · id ⌄” (dostawca w `text2`), otwiera `ModelPicker` | — |
+| `FieldMenuStyle` | **wszystkie popupy** (preset na karcie Record i w pigułce, Language, Notes language, Provider, szablon) wyglądają jak pole: `card`/`sunk`, obwódka, promień 7, mały ⌄. Pod spodem standardowe `Menu`/`Picker` (D8) | — |
 | `MetaLine` | jedna linia `text2`: „Oct 15, 11:29 · 42 min · Preset Polish” | — |
 
-**Na ekranie jest najwyżej jeden przycisk `.primary`:** Record, Save, Save & verify.
+**Na ekranie jest najwyżej jeden przycisk `.primary`:** Record, Save, Save & verify. Wyjątek (D4):
+w rozwiniętym formularzu dodawania dostawcy „Save & verify” to mały primary (24 pt) obok Save
+w dolnym pasku, jak na `b-add.png`.
 
 ### 11.5 Ekrany (stan zatwierdzony)
 
@@ -407,7 +410,9 @@ Wdrażane raz i używane we wszystkich widokach (por. F15-T13 część B pkt 3).
 - **Widok spotkania, Summary** (`b-meeting.png`): przycisk wstecz (kapsuła) i „⋯” w pasku,
   tytuł New York, `MetaLine`, zakładki tekstowe z podkreśleniem 2 pt. Pasek generowania we
   wnęce `sunk`: popup szablonu, kontekst (jedna linia, obcięta), model w 11 pt, Regenerate
-  (ikona `arrow.clockwise`, nie iskierki) i Copy. Niżej notatka (§11.2).
+  (ikona `arrow.clockwise`, nie iskierki) i Copy. Niżej notatka (§11.2), cała jako jeden
+  zaznaczalny `NSTextView` (D6). **Wstecz i „⋯” są (D5)**; „⋯” zawiera Copy notes, Show in
+  Finder i Delete meeting…, a każda z tych akcji jest też w menu aplikacji (§3).
 - **Presets** (`b-presets.png`): lista presetów (zaznaczenie `selection`, „default” w
   metadanych zamiast znaczka) i edytor: nazwa w polu, sekcje Speech to text / Correction
   (`Toggle`) / Summary jako karty z `FormRow`. Wynik sondy to linia `StateLabel` pod wyborem
@@ -425,7 +430,15 @@ Wdrażane raz i używane we wszystkich widokach (por. F15-T13 część B pkt 3).
   regular). Przed startem: preset ⌄ + Record. Zwinięta: kropka, poziom, licznik, Stop
   (kapsuła z czerwonym kwadratem i słowem), ⌃. Rozwinięta (tylko odczyt): stan i licznik,
   preset, dwa mierniki (System audio, Microphone) z ✓, **nazwa mikrofonu pogrubiona**,
-  Open note / Stop. Reduce Motion: poziom bez animacji (§7).
+  Open note / Stop. Reduce Motion: poziom bez animacji (§7). **Bez przycisku zamknięcia
+  podczas nagrywania (D3**, odstępstwo 1, W§1). Przed startem pigułkę chowa pozycja w menu
+  Window („Hide Recording Window”). Okno pigułki dopasowane do treści, bez przezroczystego
+  marginesu łapiącego kliknięcia.
+- **Sidebar (D7):** Meetings na górze; Presets / Templates / Settings na dole, **bez nagłówka
+  sekcji** („Setup” znika).
+
+Decyzje D1–D8 podjął użytkownik 2026-10-15 po wdrożeniu na `faza15-design-b`
+(raport `docs/superpowers/reports/F15-T13-czesc-B.md`).
 
 ### 11.6 Czego nie robimy (wynik testu „product slop”)
 
