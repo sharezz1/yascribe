@@ -77,6 +77,6 @@ public enum Merger {
             }
         }
         utterances.sort { $0.start < $1.start }
-        return Transcript(utterances: utterances, failedChunks: failures)
+        return Transcript(utterances: EchoFilter.mark(utterances), failedChunks: failures)
     }
 }

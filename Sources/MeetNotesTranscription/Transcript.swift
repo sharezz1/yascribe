@@ -25,8 +25,11 @@ public struct Utterance: Codable, Equatable, Sendable {
     /// Wynik strażnika języka (P11).
     public var languageMismatch: LanguageCode?
 
-    /// Oznaczona wypowiedź nie trafia do notatki jako fakt.
-    public var excludedFromNotes: Bool { languageMismatch != nil }
+    /// Echo z głośników: ta sama wypowiedź jest też w ścieżce „Them" (`EchoFilter`). Opcjonalne — stare pliki go nie mają.
+    public var echoOfThem: Bool?
+
+    /// Oznaczona wypowiedź (zły język albo echo) nie trafia do notatki jako fakt.
+    public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true }
 }
 
 public struct ChunkFailure: Codable, Equatable, Sendable {
@@ -42,7 +45,8 @@ public struct Transcript: Codable, Equatable, Sendable {
     /// Jawne luki: okna, których nie udało się przetranskrybować (§6.4).
     public var failedChunks: [ChunkFailure]
 
-    public var languageFlagCount: Int { utterances.filter(\.excludedFromNotes).count }
+    public var languageFlagCount: Int { utterances.filter { $0.languageMismatch != nil }.count }
+    public var echoCount: Int { utterances.filter { $0.echoOfThem == true }.count }
 }
 
 /// Migawka presetu w chwili przebiegu — nie odwołanie (spec fazy 1, §8, P12).
