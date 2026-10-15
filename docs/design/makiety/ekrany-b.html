@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MeetNotes — ekrany, kierunek B</title>
+<!-- Makieta wysokiej wierności, kierunek B (ciepły, Granola), po teście „AI slop" (impeccable operate.md, craft-floor.md).
+     1 px = 1 pt; render 2×. ?s=home|meeting|presets|settings|add|pill — jasny i ciemny obok siebie.
+     Tokeny = docs/design/macos.md §11. -->
+<style>
+@font-face { font-family: "NY"; src: url("file:///System/Library/Fonts/NewYork.ttf"); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font: 13px/16px system-ui; background: #8a8f98; padding: 28px; display: flex; gap: 28px; -webkit-font-smoothing: antialiased; }
+
+/* ---------- tokeny §11 ---------- */
+.light { --bg:#f7f6f2; --side:rgba(238,236,229,.92); --sideEdge:rgba(60,50,20,.08); --sel:rgba(60,50,20,.08);
+  --card:#ffffff; --sunk:#f1efe9; --line:rgba(60,50,20,.14); --line2:rgba(60,50,20,.08);
+  --text:#22211e; --text2:#6f6b62; --text3:#a8a49a; --primary:#22211e; --onPrimary:#ffffff;
+  --accent:#2f6b4f; --rec:#c4271c; --warn:#8a5a00; --glass:rgba(250,249,246,.74); --glassEdge:rgba(60,50,20,.16); }
+.dark { --bg:#1c1c1b; --side:rgba(38,38,36,.92); --sideEdge:rgba(255,255,255,.07); --sel:rgba(255,255,255,.08);
+  --card:#262624; --sunk:#2e2e2c; --line:rgba(255,255,255,.11); --line2:rgba(255,255,255,.06);
+  --text:#ecebe6; --text2:#9a978f; --text3:#6b6963; --primary:#ecebe6; --onPrimary:#1c1c1b;
+  --accent:#7cc39c; --rec:#ff6b5e; --warn:#e0b050; --glass:rgba(36,36,34,.72); --glassEdge:rgba(255,255,255,.12); }
+
+/* ---------- okno i sidebar (systemowe) ---------- */
+.win { width: 960px; height: 700px; border-radius: 16px; overflow: hidden; position: relative; flex: none;
+       background: var(--bg); color: var(--text); box-shadow: 0 0 0 .5px rgba(0,0,0,.35), 0 18px 50px rgba(0,0,0,.35); }
+.lights { position: absolute; top: 18px; left: 20px; display: flex; gap: 8px; z-index: 3; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.lights i:nth-child(1){background:#ff5f57} .lights i:nth-child(2){background:#febc2e} .lights i:nth-child(3){background:#28c840}
+.side { position: absolute; top: 8px; left: 8px; bottom: 8px; width: 196px; border-radius: 12px; background: var(--side);
+        box-shadow: inset 0 0 0 .5px var(--sideEdge); padding: 44px 10px 10px; display: flex; flex-direction: column; }
+.nav { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 7px; }
+.nav.sel { background: var(--sel); font-weight: 500; }
+.side .spacer { flex: 1; }
+svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.nav svg { width: 15px; height: 15px; color: var(--text2); }
+.nav.sel svg { color: var(--text); }
+.main { position: absolute; top: 0; left: 212px; right: 0; bottom: 0; overflow: hidden; }
+.col { margin: 0 auto; padding-top: 54px; }
+
+/* ---------- typografia: szeryf tylko w tytułach stron i dokumentów ---------- */
+.t-large { font: 400 30px/36px "NY"; letter-spacing: -.3px; }
+.t-doc   { font: 400 28px/34px "NY"; letter-spacing: -.3px; }
+.t-head  { font: 600 13px/16px system-ui; }
+.t-cap   { font-size: 11px; line-height: 14px; color: var(--text2); }
+.dim { color: var(--text2); } .faint { color: var(--text3); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- komponenty ---------- */
+.card { background: var(--card); border-radius: 12px; box-shadow: 0 0 0 .5px var(--line); }
+.pill { height: 28px; padding: 0 13px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+        background: var(--card); box-shadow: inset 0 0 0 .5px var(--line); font-weight: 500; }
+.pill.primary { background: var(--primary); color: var(--onPrimary); box-shadow: none; font-weight: 600; }
+.pill.lg { height: 32px; padding: 0 16px; }
+.pill.sm { height: 24px; padding: 0 10px; font-size: 12px; }
+.pill.off { color: var(--text3); }
+.pill svg { width: 13px; height: 13px; }
+.state { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; color: var(--text2); }
+.state svg { width: 12px; height: 12px; stroke-width: 1.8; }
+.state.ok { color: var(--accent); } .state.bad { color: var(--rec); } .state.live { color: var(--rec); font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; display: inline-block; flex: none; }
+.field { height: 28px; border-radius: 7px; background: var(--card); box-shadow: inset 0 0 0 .5px var(--line);
+         display: flex; align-items: center; gap: 6px; padding: 0 10px; min-width: 0; }
+.dark .field { background: var(--sunk); }
+.field .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field svg { width: 10px; height: 10px; color: var(--text2); }
+.field.focus { box-shadow: inset 0 0 0 1px var(--text2), 0 0 0 3px var(--line2); }
+.search { border-radius: 999px; color: var(--text3); }
+.search svg { width: 13px; height: 13px; color: var(--text3); }
+.form-row { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 12px; padding: 10px 16px; position: relative; }
+.form-row + .form-row::before, .lrow + .lrow::before { content:""; position:absolute; top:0; left:16px; right:16px; height:.5px; background: var(--line2); }
+.form-row label { color: var(--text2); }
+.switch { width: 32px; height: 19px; border-radius: 999px; background: var(--accent); position: relative; flex: none; }
+.switch::after { content:""; position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+.footer { position: absolute; left: 212px; right: 0; bottom: 0; height: 56px; display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+          padding: 0 28px; border-top: .5px solid var(--line2); background: var(--bg); }
+.footer .note { margin-right: auto; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+.icon-btn { width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; color: var(--text2); }
+.icon-btn svg { width: 15px; height: 15px; }
+.toolbar { position: absolute; top: 12px; left: 16px; right: 16px; height: 30px; display: flex; align-items: center; gap: 6px; z-index: 2; }
+.toolbar .sp { flex: 1; }
+.sec-h { display: flex; align-items: center; gap: 8px; margin: 22px 0 8px 2px; }
+.sec-h .t-head { flex: 1; }
+.link { color: var(--text); font-weight: 500; text-decoration: underline; text-decoration-color: var(--text3); text-underline-offset: 2px; }
+
+/* lista spotkań */
+.day { font: 500 12px/15px system-ui; color: var(--text2); margin: 0 0 2px 4px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; position: relative; }
+.row + .row::before { content:""; position:absolute; top:0; left:4px; right:4px; height:.5px; background: var(--line2); }
+.row .t { flex: 1; min-width: 0; }
+.row .t b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .t span { display: block; color: var(--text2); font-size: 11px; line-height: 14px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.bar { width: 38px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar u { display: block; height: 100%; width: 41%; background: var(--text2); }
+.spin { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid var(--line); border-top-color: var(--text2); }
+
+/* widok spotkania */
+.tabs { display: flex; gap: 22px; border-bottom: .5px solid var(--line); margin: 18px 0 16px; }
+.tab { padding: 0 0 9px; color: var(--text2); font-weight: 500; position: relative; }
+.tab.sel { color: var(--text); }
+.tab.sel::after { content:""; position:absolute; left:0; right:0; bottom:-.5px; height:2px; border-radius:1px; background: var(--text); }
+.genbar { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 10px; background: var(--sunk); margin-bottom: 20px; }
+.genbar .ctx { flex: 1; min-width: 0; color: var(--text2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.note { font-size: 14px; line-height: 22px; }
+.note p { margin-bottom: 16px; }
+.note h4 { font: 600 15px/20px system-ui; margin: 20px 0 6px; }
+.note ul { padding-left: 18px; margin: 0; }
+.note li { margin-bottom: 3px; }
+.note li::marker { color: var(--text3); }
+.note .why { color: var(--text2); }
+
+/* presets */
+.plist { width: 196px; flex: none; display: flex; flex-direction: column; gap: 2px; }
+.prow { padding: 8px 10px; border-radius: 8px; }
+.prow b { display: block; font-weight: 500; }
+.prow > span { display: block; font-size: 11px; line-height: 14px; color: var(--text2); margin-top: 2px; }
+.prow.sel { background: var(--sel); }
+.prompt { border-radius: 7px; box-shadow: inset 0 0 0 .5px var(--line); background: var(--card); padding: 8px 10px; line-height: 18px; min-height: 58px; }
+.dark .prompt { background: var(--sunk); }
+
+/* settings */
+.lrow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; position: relative; }
+.lrow .t { flex: 1; min-width: 0; }
+.lrow .t b { font-weight: 500; display: block; }
+.lrow .t span { font-size: 11px; color: var(--text2); display: block; margin-top: 2px; }
+.addrow { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-top: .5px solid var(--line2); }
+.adding { padding: 12px 16px 14px; background: var(--sunk); border-top: .5px solid var(--line2); }
+.dark .adding { background: rgba(255,255,255,.03); }
+.adding .form-row { padding: 6px 0; grid-template-columns: 70px 1fr; }
+.adding .form-row::before { display: none; }
+
+/* pigułka */
+.desk { width: 960px; height: 700px; border-radius: 16px; overflow: hidden; position: relative; flex: none; color: var(--text);
+        background: radial-gradient(1200px 600px at 20% 10%, #6d8fb3, transparent), radial-gradient(900px 600px at 90% 90%, #c08a5a, transparent), #4a5a6a; }
+.desk.dark { background: radial-gradient(1200px 600px at 20% 10%, #24364a, transparent), radial-gradient(900px 600px at 90% 90%, #4a3424, transparent), #15191e; }
+.teams { position: absolute; left: 60px; top: 40px; width: 840px; height: 290px; border-radius: 14px; background: rgba(40,40,60,.85);
+         box-shadow: 0 16px 40px rgba(0,0,0,.35); color: #ddd; padding: 18px 22px; font-size: 12px; }
+.teams .tiles2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; height: 220px; }
+.teams .tiles2 div { border-radius: 10px; background: rgba(255,255,255,.07); display: grid; place-items: center; color: #aaa; }
+.glass { background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+         box-shadow: inset 0 0 0 .5px var(--glassEdge), 0 10px 30px rgba(0,0,0,.25); }
+.pil { position: absolute; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 6px; height: 44px; }
+.lvl { display: flex; align-items: center; gap: 2px; height: 16px; }
+.lvl i { width: 3px; border-radius: 2px; background: var(--text); display: block; }
+.stop { height: 32px; padding: 0 12px 0 10px; border-radius: 999px; background: var(--card); box-shadow: inset 0 0 0 .5px var(--line); color: var(--rec);
+        display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.stop i { width: 10px; height: 10px; border-radius: 2px; background: var(--rec); display: block; }
+.panel { position: absolute; width: 320px; border-radius: 20px; padding: 14px; }
+.meter { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter u { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.ann { position: absolute; font: 500 11px/14px system-ui; color: rgba(255,255,255,.8); }  /* adnotacja makiety, nie UI */
+</style>
+</head>
+<body>
+<script>
+const I = {
+  list:'<svg viewBox="0 0 16 16"><path d="M5 4h9M5 8h9M5 12h9M2 4h.01M2 8h.01M2 12h.01" stroke-width="1.6"/></svg>',
+  sliders:'<svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="1.6" fill="var(--side)"/><circle cx="10" cy="8" r="1.6" fill="var(--side)"/><circle cx="6" cy="12" r="1.6" fill="var(--side)"/></svg>',
+  tmpl:'<svg viewBox="0 0 16 16"><rect x="2.5" y="2" width="11" height="12" rx="2"/><path d="M5 5.5h6M5 8h6M5 10.5h3.5"/></svg>',
+  gear:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>',
+  search:'<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>',
+  check:'<svg viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5"/></svg>',
+  x:'<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+  chev:'<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>',
+  up:'<svg viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg>',
+  back:'<svg viewBox="0 0 16 16"><path d="M10 3 5 8l5 5"/></svg>',
+  copy:'<svg viewBox="0 0 16 16"><rect x="5" y="5" width="8.5" height="8.5" rx="2"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>',
+  more:'<svg viewBox="0 0 16 16"><path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2.4"/></svg>',
+  redo:'<svg viewBox="0 0 16 16"><path d="M13 3v3.5H9.5"/><path d="M12.6 6.4A5 5 0 1 0 13 10"/></svg>',
+  plus:'<svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>',
+  speaker:'<svg viewBox="0 0 16 16"><path d="M2.5 6h2.5L8.5 3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></svg>',
+  mic:'<svg viewBox="0 0 16 16"><rect x="5.5" y="1.8" width="5" height="8" rx="2.5"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5v2"/></svg>',
+};
+const sz = (svg, n) => svg.replace('<svg', `<svg style="width:${n}px;height:${n}px"`);
+const side = sel => `<div class="side">
+  <div class="nav ${sel=='m'?'sel':''}">${I.list}Meetings</div><div class="spacer"></div>
+  <div class="nav ${sel=='p'?'sel':''}">${I.sliders}Presets</div>
+  <div class="nav ${sel=='t'?'sel':''}">${I.tmpl}Templates</div>
+  <div class="nav ${sel=='s'?'sel':''}">${I.gear}Settings</div></div>`;
+const win = (th, sel, inner) => `<div class="win ${th}"><div class="lights"><i></i><i></i><i></i></div>${side(sel)}${inner}</div>`;
+const popup = (txt, w) => `<div class="field" style="${w?`width:${w}px`:''}"><span class="grow">${txt}</span>${I.chev}</div>`;
+const model = (prov, id) => `<div class="field"><span class="dim">${prov}</span><span class="faint">·</span><span class="grow">${id}</span>${I.chev}</div>`;
+
+/* ---------------- strona główna ---------------- */
+const row = (title, meta, state) => `<div class="row"><div class="t"><b>${title}</b><span>${meta}</span></div>${state}</div>`;
+const home = th => win(th,'m', `<div class="main"><div class="col" style="width:580px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Meetings</div><div class="field search" style="width:210px">${I.search}Search meetings</div></div>
+  <div class="card" style="padding:14px 14px 14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:26px">
+    <div style="flex:1"><div class="t-head" style="margin-bottom:6px">Record a meeting</div>
+      <div style="display:flex;align-items:center;gap:8px">${popup('Polish',140)}<span class="t-cap">PL · microsoft/mai-transcribe-2</span></div></div>
+    <div class="pill primary lg"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</div></div>
+  <div class="day">Today</div>
+  ${row('Untitled meeting','14:02 · Polish',`<span class="state live num"><span class="dot" style="width:7px;height:7px"></span>Recording 12:04</span>`)}
+  ${row('Scheduling forecast discrepancy with Piotr','11:29 · 42 min · Polish',`<span class="state ok">${I.check}Notes ready</span>`)}
+  ${row('WFM rollout weekly sync','09:02 · 28 min · English',`<span class="state">Transcript ready</span>`)}
+  <div class="day" style="margin-top:20px">Yesterday</div>
+  ${row('Untitled meeting','16:10 · 51 min · Polish',`<span class="state"><span class="spin"></span>Correcting…</span>`)}
+  ${row('Untitled meeting','14:30 · 1 h 05 min · Polish',`<span class="state num"><span class="bar"><u></u></span>Transcribing 41%</span>`)}
+  ${row('Untitled meeting','10:15 · 33 min · Polish',`<span class="state bad">${I.x}Correction failed</span><span class="pill sm">Retry</span>`)}
+</div></div>`);
+
+/* ---------------- widok spotkania, Summary ---------------- */
+const meeting = th => win(th,'m', `<div class="toolbar" style="left:224px">
+    <div class="pill" style="width:30px;padding:0;justify-content:center">${I.back}</div><div class="sp"></div>
+    <div class="icon-btn">${I.more}</div></div>
+  <div class="main"><div class="col" style="width:640px">
+  <div class="t-doc">Scheduling forecast discrepancy with Piotr</div>
+  <div class="dim num" style="margin-top:8px">Oct 15, 11:29 · 42 min · Preset Polish</div>
+  <div class="tabs"><span class="tab">My notes</span><span class="tab">Transcript</span><span class="tab sel">Summary</span></div>
+  <div class="genbar">
+    <div class="field" style="width:130px;height:28px"><span class="grow">Standard</span>${I.chev}</div>
+    <span class="ctx">Context: Piotr, Wojciech — weekend schedule review</span>
+    <span class="t-cap">claude-sonnet-4.5</span>
+    <span class="pill" style="height:28px">${I.redo}Regenerate</span>
+    <span class="pill" style="height:28px;width:28px;padding:0;justify-content:center">${I.copy}</span></div>
+  <div class="note">
+    <p>Przegląd rozbieżności między prognozą a grafikiem na weekend: w sobotę prognoza ~9&nbsp;000 interakcji, w niedzielę ~4&nbsp;000, a grafik daje w niedzielę o ~30% więcej agentów. Osobno: błąd zapisu w Genesys (ID 24) do zgłoszenia.</p>
+    <h4>Prognoza a grafik</h4>
+    <ul><li>Sobota: ~9&nbsp;000 interakcji, 180–240 agentów.</li><li>Niedziela: ~4&nbsp;000 interakcji, 200–300 agentów.</li>
+        <li>Oczekiwane: w sobotę około dwa razy więcej agentów niż w niedzielę.</li></ul>
+    <h4>Błąd zapisu w Genesys (osobny wątek)</h4>
+    <ul><li>Zapis zmian kończy się błędem o ID 24; poprawka po stronie Genesys.</li><li>ID agentów zebrane dla zespołu wsparcia.</li></ul>
+    <h4>Następne kroki</h4>
+    <ul><li><b>Zbadać logikę przydziału sobota/niedziela</b> (Piotr) <span class="why">— grafik przeczy prognozie, przyczyna nieznana.</span></li>
+        <li><b>Zgłosić błąd zapisu ID 24 do wsparcia</b> (Michał) <span class="why">— ID agentów już zebrane.</span></li></ul>
+  </div></div></div>`);
+
+/* ---------------- presets ---------------- */
+const presets = th => win(th,'p', `<div class="main"><div class="col" style="width:700px;padding-bottom:70px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Presets</div><div class="pill">${I.plus}New preset</div></div>
+  <div style="display:flex;gap:18px">
+    <div class="plist">
+      <div class="prow sel"><b>Polish</b><span>PL · mai-transcribe-2 · default</span></div>
+      <div class="prow"><b>English</b><span>EN · mai-transcribe-2</span></div>
+      <div class="prow"><b>Mixed PL + EN</b><span>Auto · scribe-v2</span></div>
+      <div class="prow"><b class="dim">New preset</b><span style="font-style:italic">unsaved</span></div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="form-row" style="padding:0 2px;grid-template-columns:1fr auto"><div class="field" style="height:32px;font-size:15px;font-weight:500"><span class="grow">Polish</span></div>
+        <span class="dim" style="font-size:12px">Default preset</span></div>
+      <div class="sec-h"><span class="t-head">Speech to text</span></div>
+      <div class="card">
+        <div class="form-row"><label>Model</label>${model('OpenRouter','microsoft/mai-transcribe-2')}</div>
+        <div class="form-row"><label>Language</label>${popup('Polish',160)}</div>
+        <div style="display:flex;gap:14px;padding:0 16px 12px 158px;margin-top:-4px"><span class="state ok">${I.check}Verified</span><span class="state ok">${I.check}Language enforced</span></div>
+      </div>
+      <div class="sec-h"><span class="t-head">Correction <span class="dim" style="font-weight:400">— optional</span></span><span class="switch"></span></div>
+      <div class="card">
+        <div class="form-row"><label>Model</label>${model('OpenRouter','deepseek/deepseek-v4.1-flash')}</div>
+        <div class="form-row" style="align-items:start"><label style="padding-top:8px">Instructions</label>
+          <div><div class="prompt">Keep product names unchanged: Genesys, WFM, InPost.</div>
+          <div class="t-cap" style="margin-top:6px">Added to the correction prompt.</div></div></div>
+      </div>
+      <div class="sec-h"><span class="t-head">Summary</span></div>
+      <div class="card">
+        <div class="form-row"><label>Model</label>${model('OpenRouter','anthropic/claude-sonnet-4.5')}</div>
+        <div class="form-row"><label>Notes language</label>${popup('Polish',160)}</div>
+      </div>
+    </div></div></div></div>
+  <div class="footer"><span class="note">Unsaved changes</span>
+    <span class="pill">Cancel</span><span class="pill primary">Save</span></div>`);
+
+/* ---------------- settings ---------------- */
+const settingsBody = (th, adding) => `<div class="main"><div class="col" style="width:640px">
+  <div class="t-large" style="margin-bottom:4px">Settings</div>
+  <div class="sec-h"><span class="t-head">Providers</span></div>
+  <div class="card" style="overflow:hidden">
+    ${adding ? '' : `<div class="lrow"><div class="t"><b>OpenRouter</b><span>openrouter.ai/api/v1</span></div>
+      <span class="state ok">${I.check}Verified · 312 models</span><div class="icon-btn">${I.more}</div></div>`}
+    <div class="lrow"><div class="t"><b>Ollama</b><span>localhost:11434 · correction and summary only, no transcription</span></div>
+      <span class="state bad">${I.x}Not reachable</span><span class="pill sm">Retry</span><div class="icon-btn">${I.more}</div></div>
+    ${adding ? `<div class="adding">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><b>OpenRouter</b><span class="t-cap">transcription, correction and summary</span></div>
+      <div class="form-row"><label class="dim">Address</label><div class="field" style="box-shadow:none;background:transparent;padding:0"><span class="grow dim">https://openrouter.ai/api/v1</span></div></div>
+      <div class="form-row"><label class="dim">API key</label><div class="field focus"><span class="grow faint">Paste your key</span></div></div>
+      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 0 82px">${th=='light'
+        ? `<span class="state ok">${I.check}Verified · 312 models available</span>`
+        : `<span class="state bad">${I.x}Key rejected (401). Check the key and try again.</span>`}
+        <span style="flex:1"></span><span class="pill sm">Cancel</span><span class="pill sm primary">Save &amp; verify</span></div>
+    </div>` : `<div class="addrow"><span class="dim" style="margin-right:4px">Add</span>
+      <span class="pill sm off">OpenRouter</span><span class="pill sm">Ollama</span><span class="pill sm">Custom…</span></div>`}
+  </div>
+  <div class="sec-h"><span class="t-head">Archive search</span></div>
+  <div class="card"><div class="form-row"><label>Embedding model</label>${model('OpenRouter','openai/text-embedding-3-small')}</div></div>
+  <p class="dim" style="margin:14px 2px 0;font-size:12px;line-height:16px">Speech-to-text, correction and summary models are chosen in each preset. <span class="link">Open Presets</span></p>
+  </div></div>
+  <div class="footer"><span class="pill">Cancel</span><span class="pill primary">Save</span></div>`;
+const settings = th => win(th,'s', settingsBody(th, false));
+const add = th => win(th,'s', settingsBody(th, true));
+
+/* ---------------- pigułka ---------------- */
+const lv = h => `<span class="lvl">${h.map(x=>`<i style="height:${x}px"></i>`).join('')}</span>`;
+const pill = th => `<div class="desk ${th}">
+  <div class="teams"><b>Weekly sync — Microsoft Teams</b><div class="tiles2"><div>Piotr</div><div>Wojciech</div><div>Adrian</div><div>You</div></div></div>
+  <div class="ann" style="left:60px;top:548px">Before start</div>
+  <div class="pil glass" style="left:60px;top:568px;padding-left:14px">
+    <span style="font-weight:500">Polish</span><span class="dim">· PL</span>${sz(I.chev,10)}
+    <span class="pill primary" style="height:32px;margin-left:6px"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</span></div>
+  <div class="ann" style="left:60px;top:628px">Recording, collapsed</div>
+  <div class="pil glass" style="left:60px;top:646px;padding-left:14px">
+    <span class="dot"></span>${lv([6,11,15,9,13,5,8])}<span class="num" style="font-weight:600;min-width:38px">12:04</span>
+    <span class="stop"><i></i>Stop</span><span class="icon-btn" style="width:32px;height:32px">${I.up}</span></div>
+  <div class="ann" style="left:580px;top:356px">Recording, expanded (read-only)</div>
+  <div class="panel glass" style="left:580px;top:376px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span class="dot"></span><b>Recording</b><span class="num dim">12:04</span>
+      <span style="flex:1"></span><span class="icon-btn" style="width:24px;height:24px">${I.chev}</span></div>
+    <div class="dim" style="margin:0 0 14px 16px">Polish · PL · mai-transcribe-2</div>
+    <div style="display:flex;align-items:center;gap:8px">${sz(I.speaker,14)}<span style="flex:none;width:92px">System audio</span>
+      <span class="meter"><u style="width:62%"></u></span><span class="state ok">${I.check}</span></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">${sz(I.mic,14)}<span style="flex:none;width:92px">Microphone</span>
+      <span class="meter"><u style="width:38%"></u></span><span class="state ok">${I.check}</span></div>
+    <div style="margin:2px 0 14px 22px;font-weight:600">MacBook Pro Microphone</div>
+    <div style="display:flex;gap:8px"><span class="pill" style="flex:1;justify-content:center">Open note</span><span class="stop" style="flex:1;justify-content:center"><i></i>Stop</span></div>
+  </div></div>`;
+
+const S = {home, meeting, presets, settings, add, pill};
+const s = new URLSearchParams(location.search).get('s') || 'home';
+document.body.innerHTML = S[s]('light') + S[s]('dark');
+</script>
+</body>
+</html>

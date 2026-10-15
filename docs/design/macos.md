@@ -16,6 +16,11 @@
 > - **Ustawienia są zakładką w oknie głównym**, a nie osobnym oknem. To świadome odstępstwo
 >   od HIG, zapisane w §10 jako odstępstwo 3.
 > - **Słownik (Dictionary) jest osobną zakładką**, a nie sekcją ustawień.
+>
+> ✏️ **Uzgodnienie z 2026-10-15 (język wizualny):** obszar treści dostaje własny system
+> wizualny, opisany w §11 (kierunek B, „ciepły”, wzorowany na Granoli). Łamie on trzy reguły
+> z §5 i §6.1, a odstępstwa 4–7 w §10 je uzasadniają. Ramka okna, sidebar, menu i kontrolki
+> systemowe zostają bez zmian.
 
 **Oznaczenia:** ✅ potwierdzone w Apple HIG (pobrane 2026-09-24, strona podana w nawiasie) ·
 ⚠️ z pamięci albo z dokumentacji API, niesprawdzone w tej sesji · 📐 wymaga pomiaru albo
@@ -158,7 +163,8 @@ użytkownik by podziękował, i zapisz ten powód w §10.
   | Caption 2 | 10 / 13 | Medium | Semibold |
 
 - **Jedna rodzina kroju pisma.** Aplikacja-narzędzie nie potrzebuje pary krój nagłówkowy +
-  krój treści (impeccable, tryb Operate).
+  krój treści (impeccable, tryb Operate). 🔀 Wyjątek: New York w dwóch rolach tytułowych
+  (§11.2, odstępstwo 6).
 - **Znaczniki czasu cyframi o stałej szerokości** (`.monospacedDigit()` ⚠️ API), żeby
   kolumna czasu się nie przesuwała. To nie jest „monospace dla ozdoby”, tylko pomiar.
 - **Transkrypt to tekst do czytania, nie etykieta.** Długość wiersza warto ograniczyć do
@@ -174,10 +180,13 @@ użytkownik by podziękował, i zapisz ten powód w §10.
 - **Dynamiczne kolory systemowe**, nigdy surowy hex dla tła, tekstu i separatorów, np.
   `controlBackgroundColor`, `controlTextColor`, `alternatingContentBackgroundColors` dla list
   i tabel (✅ color). Mają warianty dla trybu ciemnego i zwiększonego kontrastu (✅ accessibility).
+  🔀 Obszar treści ma własną paletę z §11.1 (odstępstwo 4). Sidebar, ramka okna i kontrolki
+  systemowe dalej korzystają z kolorów dynamicznych.
 - **Kolor akcentu aplikacji działa tylko wtedy**, gdy użytkownik ma w ustawieniach akcent
   „wielokolorowy”. W każdym innym przypadku system podmienia go na kolor użytkownika (✅ color).
   **Wniosek: akcent nigdy nie niesie znaczenia.** Nie może oznaczać np. stanu nagrywania ani
-  kanału „Me”.
+  kanału „Me”. 🔀 W treści używamy stałego akcentu z §11.1 (odstępstwo 5). Zasada zostaje:
+  kolor zawsze idzie w parze z ikoną i słowem.
 - **Stały kolor ikony w sidebarze** nie jest nadpisywany przez akcent użytkownika, więc
   nadaje się do ikon, których kolor coś znaczy (✅ color, sidebars).
 - **Kontrast co najmniej 4,5:1**, sprawdzany w trybie jasnym **i** ciemnym (✅ accessibility).
@@ -273,7 +282,162 @@ słowach. Od tego zależy wygląd podświetlenia, zaznaczania i menu kontekstowe
 | 2 | 🔀 Klik w panel zwykle go aktywuje | **Klik w okno nagrywania nie odbiera fokusu** aplikacji ze spotkaniem ⚠️ (AppKit: `NSPanel` z `.nonactivatingPanel`; sam SwiftUI `.windowLevel(.floating)` tego nie daje, do sprawdzenia) | Użytkownik w trakcie rozmowy nie może przez przypadek przełączyć okna Teams |
 | 3 | 🔀 Ustawienia w osobnym oknie, otwieranym z menu aplikacji i skrótem Cmd-, (✅ settings) | **Ustawienia są zakładką w oknie głównym.** Pozycja **Settings…** w menu i **Cmd-,** prowadzą do tej zakładki | Decyzja użytkownika z 2026-09-24 (spec fazy 1, §1.2). Na zrzutach z tego dnia pięciu konkurentów (Narada, Wispr Flow, FluidVoice, MacParakeet, Granola) trzyma Ustawienia w nawigacji bocznej. Zachowujemy to, czego HIG pilnuje ze względu na odkrywalność: pozycję w menu i standardowy skrót |
 
+| 4 | 🔀 Dynamiczne kolory systemowe, bez surowego hex (§6.1, ✅ color) | **Własna ciepła paleta w obszarze treści** (§11.1), jasna i ciemna, zdefiniowana w kodzie jako kolory dynamiczne | Odbiór F15-T13 (2026-10-15): domyślne szare `Form`/`GroupBox` wyglądały „jak Windows 98 z zaokrąglonymi rogami”. Użytkownik wybrał kierunek B. Zostają warianty jasny i ciemny oraz kontrast ≥ 4,5:1, zmierzony dla każdej pary w §11.1. Sidebar i kontrolki systemowe nie są przemalowywane |
+| 5 | 🔀 Akcent aplikacji ustępuje akcentowi użytkownika (✅ color) | **Stały akcent: stonowana zieleń** (`tint` w treści) | Akcent użytkownika (np. niebieski) gryzie się z ciepłym tłem. Kolor nadal niczego nie znaczy sam: każdy stan to ikona i słowo (§11.4) |
+| 6 | 🔀 Jedna rodzina kroju (§5, impeccable) | **New York w dwóch rolach**: tytuł strony i tytuł spotkania (§11.2). Wszystkie etykiety, nagłówki sekcji, przyciski i dane zostają w SF | Wzór: Granola i Wispr Flow. Szeryf w etykietach UI odpadł w teście „product slop” (impeccable, `operate.md`), dlatego jest ograniczony do tytułów. New York jest krojem systemowym (`design: .serif`), więc nie trzeba niczego dołączać |
+| 7 | 🔀 Standardowe style przycisków; bez własnego przycisku o białym tle i czarnym tekście (§4, ✅ buttons) | **Przyciski-pigułki** (`Capsule`, własny `ButtonStyle`). Przycisk drugorzędny w trybie jasnym jest biały z ciemnym tekstem | Część kierunku B. HIG rezerwuje ten wygląd dla stanu „włączony”, dlatego **pigułka nigdy nie jest przełącznikiem**. Przełączniki to systemowy `Toggle(.switch)`, a wybory to `Picker`/`Menu`. Wymiary, fokus z klawiatury i pozycje menu bez zmian |
+
 Każde nowe odstępstwo dopisuj tutaj, z uzasadnieniem opartym na pomiarze albo wymaganiu.
+
+---
+
+## 11. Język wizualny (kierunek B, ciepły)
+
+> Status: **zatwierdzone przez użytkownika 2026-10-15** (sesja designu po odbiorze F15-T13).
+> Kierunek B został wybrany spośród trzech (A Native+, B Ciepły, C Redakcyjny), a potem
+> przeszedł test „product slop” z impeccable (`skill/reference/operate.md`,
+> `craft-floor.md`). Makiety jasne i ciemne: `docs/design/makiety/ekrany-b.html`
+> (`?s=home|meeting|presets|settings|add|pill`), wyrenderowane do `b-*.png` w skali 2×,
+> gdzie 1 px = 1 pt. Kierunki odrzucone: `kierunek-a.png`, `kierunek-c.png`.
+
+**Zasada:** system wizualny daje aplikacji paletę, typografię, gęstość i jeden charakterystyczny
+ruch: ciepłe tło z białymi kartami i tytuły w New York. Nie zmienia nawigacji ani kontrolek.
+Ramka okna, `NavigationSplitView` z systemowym sidebarem, menu, `Toggle`, `Picker`, pola
+tekstowe i popovery zostają systemowe. Przemalowujemy wyłącznie obszar treści.
+
+### 11.1 Kolory
+
+Każdy token to jeden kolor dynamiczny w kodzie:
+`NSColor(name:dynamicProvider:)` → `Color(nsColor:)` ⚠️ API z pamięci. Katalog zasobów
+(`Assets.xcassets`) odpada, bo kompiluje go `actool` z Xcode, którego nie mamy. Wariant
+wybiera `appearance.bestMatch(from: [.aqua, .darkAqua])`.
+
+| Token | Rola | Jasny | Ciemny |
+|---|---|---|---|
+| `background` | tło obszaru treści | `#F7F6F2` | `#1C1C1B` |
+| `card` | karta, pole tekstowe, przycisk drugorzędny | `#FFFFFF` | `#262624` (pole: `#2E2E2C`) |
+| `sunk` | wnęka: pasek generowania, wiersz dodawania | `#F1EFE9` | `#2E2E2C` |
+| `selection` | zaznaczony wiersz listy presetów | `#3C3214` 8% | `#FFFFFF` 8% |
+| `line` | obwódka karty i pola (0,5 pt) | `#3C3214` 14% | `#FFFFFF` 11% |
+| `line2` | separator wierszy | `#3C3214` 8% | `#FFFFFF` 6% |
+| `text` | tekst główny | `#22211E` | `#ECEBE6` |
+| `text2` | etykiety, metadane, stany neutralne | `#6F6B62` | `#9A978F` |
+| `text3` | placeholder, nieaktywne | `#A8A49A` | `#6B6963` |
+| `primary` / `onPrimary` | jedyny główny przycisk na ekranie | `#22211E` / `#FFFFFF` | `#ECEBE6` / `#1C1C1B` |
+| `accent` | stan „gotowe/zweryfikowane”, `Toggle`, `tint` | `#2F6B4F` | `#7CC39C` |
+| `rec` | nagrywanie, błąd | `#C4271C` | `#FF6B5E` |
+| `warn` | ostrzeżenie (np. język Auto) | `#8A5A00` | `#E0B050` |
+| kropka nagrywania | stała, poza paletą | `#FF3B30` (systemRed) | `#FF3B30` |
+
+Zmierzony kontrast (WCAG): `text`/`background` 14,9 i 14,3; `text2`/`background` 4,91
+i 5,85; `text2`/`card` 5,31 i 5,20; `accent` 5,36 (na `#E6EFE8`) i 7,32 (na `card`); `rec` 4,90 (na
+`#FBE9E6`) i 5,43; `warn` 5,28 i 7,58. Tło `rec`/`accent` nie występuje w UI, ale pomiar
+na nim jest najgorszym przypadkiem. Każdą nową parę mierz przed użyciem.
+
+- Sidebar **nie dostaje** koloru `background`, tylko systemowy materiał. Na makiecie jest
+  ciepły, bo materiał przepuszcza tło okna.
+- 📐 **Increase Contrast**: provider powinien zwracać ciemniejsze `text2` i `line` przy
+  `.accessibilityHighContrastAqua`. Do sprawdzenia w migawkach T0.
+- Czerwień nagrywania i błędu różni się od akcentu (zieleń), więc nie ma kolizji znaczeń.
+
+### 11.2 Typografia
+
+| Rola | Krój | Rozmiar / interlinia | Waga | SwiftUI |
+|---|---|---|---|---|
+| Tytuł strony (Meetings, Presets, Settings) | New York | 30 / 36, tracking −0,3 | Regular | `.system(size: 30, design: .serif)` |
+| Tytuł spotkania (edytowalny) | New York | 28 / 34, tracking −0,3 | Regular | `.system(size: 28, design: .serif)` |
+| Nagłówek sekcji / karty | SF | 13 / 16 | Semibold | `.headline` ⚠️ (13 pt Bold na macOS, zamiennie `.system(size: 13, weight: .semibold)`) |
+| Tekst UI, etykiety pól | SF | 13 / 16 | Regular | `.body` |
+| Metadane w linii, stany | SF | 12 / 15 | Regular | `.callout` |
+| Podpis pod polem, data w wierszu | SF | 11 / 14 | Regular | `.subheadline` |
+| Treść notatki | SF | 14 / 22 | Regular | `.system(size: 14)` + `lineSpacing(8)` ⚠️ |
+| Nagłówek w notatce | SF | 15 / 20 | Semibold | `.system(size: 15, weight: .semibold)` |
+
+- Szeryf **tylko** w dwóch tytułach. Nagłówki sekcji, przyciski, statusy i dane zawsze SF.
+- Czasy i liczniki: `.monospacedDigit()` (§5).
+- Szerokość kolumny treści ogranicza długość wiersza notatki do ~75 znaków (640 pt przy 14 pt).
+
+### 11.3 Odstępy, promienie, głębia
+
+- **Siatka 4 pt.** Kroki: 4, 8, 12, 16, 22, 28. Między grupami więcej (22–26), w grupie
+  mniej (8–12). Nad nagłówkiem sekcji więcej miejsca niż pod nim (22 / 8).
+- **Kolumna treści**, wyśrodkowana w obszarze szczegółów: lista spotkań 580 pt, spotkanie
+  i Settings 640 pt, Presets 700 pt (lista 196 + edytor). Górny margines 54 pt, bo pod
+  paskiem tytułu.
+- **Promienie:** karta 12, pole tekstowe i popup 7, zaznaczenie w liście 8, panel
+  pigułki 20. Przyciski i pigułka nagrywania to pełna kapsuła.
+- **Głębia:** w treści tylko obwódka 0,5 pt (`line`), **bez cieni**. Cień i materiał ma tylko
+  pływająca pigułka (Liquid Glass, §6.2). Zakaz łączenia obwódki z szerokim cieniem.
+- **Wiersze:** wiersz listy spotkań ma 9 pt w pionie i separator `line2`, wiersz formularza
+  10 / 16 pt z etykietą w kolumnie 130 pt.
+
+### 11.4 Komponenty wspólne
+
+Wdrażane raz i używane we wszystkich widokach (por. F15-T13 część B pkt 3). Bez makr:
+`ButtonStyle`/`ViewModifier` jako zwykłe struktury, stan przez `ObservableObject`.
+
+| Komponent | Opis | Stany |
+|---|---|---|
+| `PageTitle`, `DocumentTitle` | tytuły New York z §11.2 | — |
+| `SectionHeader` | SF 13 Semibold, opcjonalny dopisek `text2` („— optional”) i kontrolka po prawej (`Toggle`) | — |
+| `Card` | `card` + obwódka 0,5 pt + promień 12; zawartość to wiersze z separatorami | — |
+| `FormRow` | etykieta (130 pt, `text2`) + kontrolka; pod kontrolką opcjonalny podpis 11 pt | błąd: podpis w `rec` |
+| `PillButtonStyle` | kapsuła; `.primary` (wypełniona `primary`), `.secondary` (`card` + obwódka), `.small` (24 pt) | hover: tło `sunk`; wciśnięty: krycie 0,7; nieaktywny: tekst `text3`; fokus: systemowy pierścień ⚠️ sprawdzić w migawkach, czy własny `ButtonStyle` go zachowuje |
+| `StateLabel` | ikona SF Symbol + słowo, 12 pt; rodzaje: `ok` (`accent`, ✓), `bad` (`rec`, ✗), `live` (`rec`, kropka, Semibold, licznik), `neutral` (`text2`), `progress` (mały `ProgressView` lub pasek 38×4 + %) | — |
+| `ModelField` | popup „Dostawca · id ⌄” (dostawca w `text2`), otwiera `ModelPicker` | — |
+| `MetaLine` | jedna linia `text2`: „Oct 15, 11:29 · 42 min · Preset Polish” | — |
+
+**Na ekranie jest najwyżej jeden przycisk `.primary`:** Record, Save, Save & verify.
+
+### 11.5 Ekrany (stan zatwierdzony)
+
+- **Strona główna** (`b-home.png`): tytuł i wyszukiwarka-kapsuła, karta „Record a meeting”
+  (popup presetu + „PL · model” w `text2` + Record jako `.primary` z czerwoną kropką), pod
+  nią lista po dniach, bez ikon w wierszach, ze stanem po prawej. „Correction failed” ma obok
+  małą pigułkę Retry.
+- **Widok spotkania, Summary** (`b-meeting.png`): przycisk wstecz (kapsuła) i „⋯” w pasku,
+  tytuł New York, `MetaLine`, zakładki tekstowe z podkreśleniem 2 pt. Pasek generowania we
+  wnęce `sunk`: popup szablonu, kontekst (jedna linia, obcięta), model w 11 pt, Regenerate
+  (ikona `arrow.clockwise`, nie iskierki) i Copy. Niżej notatka (§11.2).
+- **Presets** (`b-presets.png`): lista presetów (zaznaczenie `selection`, „default” w
+  metadanych zamiast znaczka) i edytor: nazwa w polu, sekcje Speech to text / Correction
+  (`Toggle`) / Summary jako karty z `FormRow`. Wynik sondy to linia `StateLabel` pod wyborem
+  języka. Na dole pasek: „Unsaved changes” oraz Cancel / Save.
+- **Settings** (`b-settings.png`, `b-add.png`): karta Providers z wierszami „nazwa, adres,
+  stan, ⋯”. Ograniczenie dostawcy jest w adresie („correction and summary only, no
+  transcription”). Ostatni wiersz karty to **„Add: OpenRouter · Ollama · Custom…”** (małe
+  pigułki; dodany już dostawca jest nieaktywny). Klik **rozwija formularz w miejscu**, w
+  karcie: gotowy adres, pole klucza, wynik weryfikacji w tej samej linii („✓ Verified · 312
+  models available” albo „✗ Key rejected (401). Check the key and try again.”), Cancel /
+  Save & verify. **Decyzja użytkownika z 2026-10-15:** kafelki z uwagi 7 i arkusz z
+  spec §5.4 zostają zastąpione, a funkcja się nie zmienia. Pod spodem karta Archive search
+  i zdanie z odnośnikiem „Open Presets”.
+- **Pigułka** (`b-pill.png`): `NSPanel` z Liquid Glass (`.glassEffect()` ⚠️, macOS 26+, wariant
+  regular). Przed startem: preset ⌄ + Record. Zwinięta: kropka, poziom, licznik, Stop
+  (kapsuła z czerwonym kwadratem i słowem), ⌃. Rozwinięta (tylko odczyt): stan i licznik,
+  preset, dwa mierniki (System audio, Microphone) z ✓, **nazwa mikrofonu pogrubiona**,
+  Open note / Stop. Reduce Motion: poziom bez animacji (§7).
+
+### 11.6 Czego nie robimy (wynik testu „product slop”)
+
+Te elementy były w pierwszej wersji makiet i zostały usunięte:
+
+- ikony w kwadracikach przy każdym wierszu, jeśli nie niosą informacji;
+- pastelowe tła pod statusami (stan = ikona + słowo w kolorze, bez tła);
+- szeryf w etykietach, nagłówkach sekcji i przyciskach;
+- siatki jednakowych kart „ikona + nagłówek + opis” oraz wymyślone logotypy dostawców;
+- etykiety wersalikami nad nagłówkami („ADD A PROVIDER”);
+- modal tam, gdzie wystarcza rozwinięcie w miejscu;
+- monospace jako ozdoba (adresy URL to zwykły tekst; monospace tylko dla kodu i pomiarów);
+- iskierki ✨ jako ikona „AI”;
+- rzędy chipów z ikonami na metadane (zamiast tego jedna linia tekstu);
+- obwódka połączona z cieniem na kartach.
+
+### 11.7 Weryfikacja wdrożenia
+
+Migawki T0 (§9) przed i po, w obu motywach, porównane z `b-*.png`. Kontrast nowych par
+mierzony liczbowo, nie na oko. Pełna obsługa klawiaturą (Tab przez pigułki, fokus widoczny).
+Odbiór na żywo u użytkownika.
 
 ---
 
