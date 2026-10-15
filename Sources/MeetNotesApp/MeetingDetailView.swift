@@ -149,6 +149,11 @@ struct UtteranceRow: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+                if utterance.echoOfThem == true {
+                    Label("Echo of the other side — excluded from notes", systemImage: "speaker.wave.2")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 if utterance.approximateTiming {
                     Text("Approximate timing").font(.caption).foregroundStyle(.secondary)
                 }

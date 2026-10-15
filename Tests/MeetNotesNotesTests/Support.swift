@@ -3,9 +3,9 @@ import MeetNotesProviders
 import MeetNotesSessionFormat
 @testable import MeetNotesTranscription
 
-func utt(_ text: String, _ speaker: Speaker = .them, at start: Double = 0, flagged: Bool = false) -> Utterance {
+func utt(_ text: String, _ speaker: Speaker = .them, at start: Double = 0, flagged: Bool = false, echo: Bool = false) -> Utterance {
     Utterance(speaker: speaker, start: start, end: start + 2, text: text, words: [], approximateTiming: false,
-              languageMismatch: flagged ? .english : nil)
+              languageMismatch: flagged ? .english : nil, echoOfThem: echo ? true : nil)
 }
 
 func transcript(_ u: [Utterance]) -> Transcript { Transcript(utterances: u, failedChunks: []) }

@@ -155,12 +155,16 @@ final class AppModel {
 
     func latestRun(in session: URL) -> (id: String, transcript: Transcript?)? {
         guard let id = RunDirectory.latestRunID(in: session) else { return nil }
-        return (id, try? JSONFile.load(Transcript?.self, from: RunDirectory(session: session, runID: id).transcript, default: nil))
+        // Echo oznaczamy też na starszych transkryptach (idempotentne, bez zapisu pliku).
+        let t = (try? JSONFile.load(Transcript?.self, from: RunDirectory(session: session, runID: id).transcript, default: nil)) ?? nil
+        return (id, t?.echoMarked())
     }
 
     static func loadCorrected(_ session: URL, _ runID: String?) -> CorrectedTranscript? {
         guard let runID, RunDirectory.isValid(runID: runID) else { return nil }
-        return (try? JSONFile.load(CorrectedTranscript?.self, from: RunDirectory(session: session, runID: runID).corrected, default: nil)) ?? nil
+        guard var c = (try? JSONFile.load(CorrectedTranscript?.self, from: RunDirectory(session: session, runID: runID).corrected, default: nil)) ?? nil else { return nil }
+        c.transcript = c.transcript.echoMarked() // korekta sprzed filtra echa nie niesie znacznika
+        return c
     }
 
     // MARK: Dostawcy

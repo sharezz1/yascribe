@@ -45,3 +45,12 @@ private func build(_ t: Transcript, myNotes: String = "", context: String = "", 
     #expect(build(transcript([utt("   ")])) == nil)
     #expect(build(transcript([utt("tylko zaflagowane", flagged: true)])) == nil)
 }
+
+@Test func promptExcludesEchoOfTheOtherSide() throws {
+    // Odbiór T13: echo z głośników („Me" powtarzające „Them") nie może trafić do modelu jako słowa użytkownika.
+    let t = transcript([utt("Prognoza na sobotę jest wyższa niż na niedzielę.", .them, at: 1),
+                        utt("Prognoza na sobotę jest wyższa niż na niedzielę.", .me, at: 1, echo: true)])
+    let p = try #require(build(t))
+    #expect(p.user.components(separatedBy: "Prognoza na sobotę").count == 2) // raz, nie dwa razy
+    #expect(!p.user.contains("Me:"))
+}
