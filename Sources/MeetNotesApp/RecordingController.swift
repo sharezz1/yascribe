@@ -23,6 +23,8 @@ final class RecordingController {
     private var started = Date()
     private var panel: NSPanel?
     private var levelTimer: Timer?
+    /// Czy pływające okno jest na ekranie — steruje pozycją „Hide Recording Window” w menu Window (D3).
+    private(set) var isPanelVisible = false
 
     /// Drugi start przy żywym rejestratorze wyciekłby pierwszy (check S15 #1).
     enum StartError: Error { case alreadyRecording }
@@ -75,19 +77,56 @@ final class RecordingController {
     }
 
     func showPanel(model: AppModel) {
-        if let panel {
-            panel.orderFrontRegardless()
-            return
-        }
-        panel = makePanel(model: model)
+        if panel == nil { panel = makePanel(model: model) }
         panel?.orderFrontRegardless()
+        isPanelVisible = true
+    }
+
+    /// D3: chowanie tylko przed startem (menu Window); podczas nagrywania okno nie ma jak zniknąć.
+    func hidePanel() {
+        guard !isRecording else { return }
+        panel?.orderOut(nil)
+        isPanelVisible = false
     }
 }
 
-/// Stan rozwinięcia pigułki; zmiana zmienia rozmiar panelu.
+/// Stan rozwinięcia pigułki; rozmiar okna podąża za treścią (`PillHostingView`).
 final class PillState: ObservableObject {
-    @Published var expanded = false { didSet { onExpandedChange?(expanded) } }
-    var onExpandedChange: ((Bool) -> Void)?
+    @Published var expanded = false
+}
+
+/// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia). Gdy treść
+/// zmienia rozmiar (zwinięta↔rozwinięta, szerszy licznik), okno dopasowuje się, a górna krawędź zostaje w miejscu.
+private final class PillHostingView<Content: View>: NSHostingView<Content> {
+    private var fitScheduled = false
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        scheduleFit()
+    }
+    override func layout() {
+        super.layout()
+        scheduleFit()
+    }
+
+    private func scheduleFit() {
+        guard !fitScheduled else { return }
+        fitScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            self?.fitScheduled = false
+            self?.fitWindow()
+        }
+    }
+
+    private func fitWindow() {
+        guard let w = window else { return }
+        let size = fittingSize
+        guard size.width > 0, size.height > 0, size != w.contentRect(forFrameRect: w.frame).size else { return }
+        var f = w.frameRect(forContentRect: NSRect(origin: .zero, size: size))
+        f.origin = NSPoint(x: w.frame.minX, y: w.frame.maxY - f.height)
+        w.setFrame(f, display: true)
+        w.invalidateShadow()
+    }
 }
 
 /// Panel bez ramki i tytułu, żeby szkło (§6.2) było jedynym tłem. Bez `canBecomeKey` panel `.borderless`
@@ -100,10 +139,8 @@ extension RecordingController {
     /// 🔀 Odstępstwa 1 i 2 (`docs/design/macos.md` §10): okno zostaje na wierzchu, gdy aktywny
     /// jest Teams, i klik w nie nie odbiera fokusu spotkaniu.
     func makePanel(model: AppModel) -> NSPanel {
-        let pill = PillState()
-        // ponytail: okno ma stałą szerokość i dwie wysokości; przezroczysty margines wokół kapsuły przechwytuje klik.
-        // Dopasowanie do treści (sizingOptions) dopiero, jeśli to będzie przeszkadzać.
-        let p = PillPanel(contentRect: NSRect(origin: .zero, size: RecordingPanelView.windowSize(expanded: false)),
+        let host = PillHostingView(rootView: RecordingPanelView(model: model, pill: PillState()))
+        let p = PillPanel(contentRect: NSRect(origin: .zero, size: host.fittingSize),
                           styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.title = "Recording" // nie widać, ale czyta go VoiceOver i menu Window
         p.level = .floating
@@ -115,16 +152,7 @@ extension RecordingController {
         p.hasShadow = true // cień kształtu szkła rysuje system; w treści cieni nie ma
         p.isMovableByWindowBackground = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        pill.onExpandedChange = { [weak p] e in
-            guard let p else { return }
-            // Górna krawędź zostaje w miejscu — pigułka rośnie w dół, nie skacze.
-            var f = p.frame
-            let size = RecordingPanelView.windowSize(expanded: e)
-            f.origin.y += f.height - size.height
-            f.size = size
-            p.setFrame(f, display: true)
-        }
-        p.contentView = NSHostingView(rootView: RecordingPanelView(model: model, pill: pill))
+        p.contentView = host
         p.center()
         return p
     }
@@ -181,9 +209,6 @@ struct RecordingPanelView: View {
     @ObservedObject var pill: PillState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Stała szerokość okna (320 pt panelu + 8 pt na szkło z każdej strony); wysokość zależy od rozwinięcia.
-    static func windowSize(expanded: Bool) -> NSSize { NSSize(width: 336, height: expanded ? 224 : 60) }
-
     var body: some View {
         let rec = model.recording
         Group {
@@ -196,8 +221,6 @@ struct RecordingPanelView: View {
                 .padding(6).padding(.leading, 8).frame(height: 44).pillGlass(Capsule())
             }
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .environment(model)
     }
 
@@ -228,7 +251,12 @@ struct RecordingPanelView: View {
     private func expandedBody(_ rec: RecordingController) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                StateLabel(.live, "Recording")
+                // D2: w pigułce czerwona tylko kropka, słowo ciemne (na liście spotkań `StateLabel(.live)` zostaje czerwony).
+                HStack(spacing: 4) {
+                    Circle().fill(.mnRecDot).frame(width: 8, height: 8).accessibilityHidden(true)
+                    Text("Recording").font(.callout).fontWeight(.semibold).foregroundStyle(.mnText)
+                }
+                .accessibilityElement(children: .combine)
                 Text(Self.shortClock(rec.elapsed)).font(.callout).monospacedDigit().foregroundStyle(.mnText2)
                 Spacer(minLength: 0)
                 PillIconButton(systemImage: "chevron.down", label: "Hide details", size: 24) { pill.expanded = false }

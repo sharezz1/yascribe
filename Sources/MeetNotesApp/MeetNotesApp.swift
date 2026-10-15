@@ -27,6 +27,11 @@ struct MeetNotesApp: App {
                 Button("Settings…") { model.section = .settings }
                     .keyboardShortcut(",", modifiers: .command)
             }
+            // D3: bez przycisku zamknięcia na pigułce; chowanie przed startem to pozycja menu Window.
+            CommandGroup(after: .windowArrangement) {
+                Button("Hide Recording Window") { model.recording.hidePanel() }
+                    .disabled(model.recording.isRecording || !model.recording.isPanelVisible)
+            }
             CommandMenu("Recording") {
                 Button(model.recording.isRecording ? "Stop Recording" : "Record Meeting") {
                     model.recording.isRecording ? model.recording.stop() : model.startRecording()
