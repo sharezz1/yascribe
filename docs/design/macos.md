@@ -299,6 +299,8 @@ Każde nowe odstępstwo dopisuj tutaj, z uzasadnieniem opartym na pomiarze albo 
 > `craft-floor.md`). Makiety jasne i ciemne: `docs/design/makiety/ekrany-b.html`
 > (`?s=home|meeting|presets|settings|add|pill`), wyrenderowane do `b-*.png` w skali 2×,
 > gdzie 1 px = 1 pt. Kierunki odrzucone: `kierunek-a.png`, `kierunek-c.png`.
+> Makiety B pokazują okno z **macOS 27 „Golden Gate”** (sidebar przy krawędzi okna,
+> bardziej kwadratowe rogi). Makiety kierunków mają jeszcze pływający sidebar z macOS 26.
 
 **Zasada:** system wizualny daje aplikacji paletę, typografię, gęstość i jeden charakterystyczny
 ruch: ciepłe tło z białymi kartami i tytuły w New York. Nie zmienia nawigacji ani kontrolek.
@@ -338,8 +340,10 @@ występuje w UI, ale pomiar na nim jest najgorszym przypadkiem. Każdą nową pa
 dają natywne `TextField` i `.searchable`, a nie `text3`. `text3` ma tylko 2,3–3,1:1, więc nadaje się wyłącznie
 dla stanu nieaktywnego. Na makietach placeholdery są w `text3` tylko poglądowo.
 
-- Sidebar **nie dostaje** koloru `background`, tylko systemowy materiał. Na makiecie jest
-  ciepły, bo materiał przepuszcza tło okna.
+- Sidebar **nie dostaje** koloru `background`, tylko systemowy materiał. W macOS 27 sidebar
+  sięga krawędzi okna, ma tło ciemniejsze niż treść i kolorowe ikony. Na makiecie
+  (`#EBE8E0` / `#151514`, ikony w `accent`) to przybliżenie: ⚠️ odcień i kolor ikon wybiera
+  system (`tint` aplikacji albo akcent użytkownika), sprawdzić w migawkach T0.
 - 📐 **Increase Contrast**: provider powinien zwracać ciemniejsze `text2` i `line` przy
   `.accessibilityHighContrastAqua`. Do sprawdzenia w migawkach T0.
 - Czerwień nagrywania i błędu różni się od akcentu (zieleń), więc nie ma kolizji znaczeń.
@@ -369,7 +373,8 @@ dla stanu nieaktywnego. Na makietach placeholdery są w `text3` tylko poglądowo
   i Settings 640 pt, Presets 700 pt (lista 196 + edytor). Górny margines 54 pt, bo pod
   paskiem tytułu.
 - **Promienie:** karta 12, pole tekstowe i popup 7, zaznaczenie w liście 8, panel
-  pigułki 20. Przyciski i pigułka nagrywania to pełna kapsuła.
+  pigułki 20. Przyciski i pigułka nagrywania to pełna kapsuła. Rogi okna rysuje system
+  (w macOS 27 jednakowe dla wszystkich aplikacji); karta 12 ma ich nie przekraczać.
 - **Głębia:** w treści tylko obwódka 0,5 pt (`line`), **bez cieni**. Cień i materiał ma tylko
   pływająca pigułka (Liquid Glass, §6.2). Zakaz łączenia obwódki z szerokim cieniem.
 - **Wiersze:** wiersz listy spotkań ma 9 pt w pionie i separator `line2`, wiersz formularza
@@ -442,6 +447,82 @@ Te elementy były w pierwszej wersji makiet i zostały usunięte:
 Migawki T0 (§9) przed i po, w obu motywach, porównane z `b-*.png`. Kontrast nowych par
 mierzony liczbowo, nie na oko. Pełna obsługa klawiaturą (Tab przez pigułki, fokus widoczny).
 Odbiór na żywo u użytkownika.
+
+### 11.8 Kontekst: trendy UX na macOS i Windows (research 2026-10-15)
+
+Po co: sprawdzić, czy kierunek B nie zestarzeje się zaraz po wdrożeniu. Źródła są na końcu.
+Pewność oznaczona: **mocne** (ogłoszenie producenta, recenzja wydanej wersji), **średnie**
+(relacja z drugiej ręki, analizy systemów designu), **słabe** (listy trendów agencji).
+
+**Teraz (2026)**
+
+- **macOS 27 „Golden Gate” (wydany 09.2026) koryguje Tahoe — mocne.**
+  - Liquid Glass ma bardziej jednolitą refrakcję i lepszy kontrast. W Ustawieniach → Wygląd
+    jest suwak przezroczystości („ultra-clear” → „fully tinted”).
+  - Sidebar wraca do krawędzi okna, z ciemniejszym tłem i kolorowymi ikonami.
+  - Paski narzędzi znów są paskami, a nie pływającymi przyciskami.
+  - Rogi okien są jednakowe we wszystkich aplikacjach.
+  - Z pozycji menu zniknęła większość ikon.
+  - Kierunek Apple: szkło zostaje, ale spokojniejsze i regulowane przez użytkownika.
+- **Liquid Glass jest na stałe — średnie.** Według relacji z rozmów w Apple Xcode 27 nie
+  będzie respektował flagi odraczającej szkło, a od I kw. 2027 ma być włączone wszędzie.
+  My budujemy na CLT, więc dostajemy wygląd tego SDK, którym kompilujemy.
+- **Windows trzyma się Fluent 2 i WinUI 3 — mocne.** Na Build 2026 Microsoft ogłosił, że
+  nie będzie nowego frameworka ani języka wizualnego. Starsze dialogi w powłoce są wymieniane na
+  WinUI (Mica, Acrylic, zaokrąglone rogi, tryb ciemny), a rozwój toczy się publicznie na
+  GitHubie. Tło: krytyka aplikacji na WebView2/Electron za zużycie pamięci.
+- **Natywne aplikacje Maca nadal przeważają — średnie.** W próbce 2440 aplikacji (III 2026)
+  70,8% jest natywnych, a 19,3% to Electron. Głośna jest krytyka Electronu za pamięć i baterię.
+- **Ciepły minimalizm w narzędziach do notatek — średnie.** Notion, inne narzędzie i Craft mają
+  kremowe lub ciepłe tło, szeryfowe tytuły i tekst w sansie, zamiast zimnych szarości. To dokładnie
+  kierunek B.
+- **Spokojniejsze interfejsy narzędzi — mocne (Linear).** Refresh Lineara z 2026 przygasza
+  sidebar, żeby wyróżnić treść, ogranicza ikony, zmiękcza separatory i ujednolica nagłówki,
+  zachowując gęstość informacji. To ta sama linia co test „slop” w §11.6.
+- **AI w miejscu pracy zamiast czatu z boku — słabe/średnie.** Wynik AI pojawia się tam, gdzie
+  się pracuje. Ważne są: widoczne źródło (który model, z czego powstało), kontrola człowieka,
+  wznowienie przy błędzie i jawne stany oczekiwania.
+
+**Za rok (2027) — niska pewność**
+
+- Apple dalej łagodzi szkło i oddaje kontrolę użytkownikowi. Szkło nie znika.
+- Windows wymienia kolejne dialogi na WinUI. Wielkie aplikacje webowe (Teams, Outlook) mogą
+  zostać przy WebView jeszcze długo.
+- O „generatywnym UI” i nawigacji rozmową piszą głównie agencje, twardych danych nie ma.
+- Ciepła typografia redakcyjna raczej zostanie, ale to opinia, nie pomiar.
+
+**Wnioski dla MeetNotes**
+
+1. Kierunek B jest zgodny z tym, co w 2026 robią najlepsze narzędzia do notatek. Test
+   „slop” idzie w tę samą stronę co Linear. Nic do zmiany w palecie ani typografii.
+2. **Sidebar, pasek narzędzi i rogi zostawiamy systemowi** (tak już mówi zasada §11), bo
+   zmieniają się co wersję macOS. Makiety B pokazują już macOS 27.
+3. **Pozycje menu bez ikon** (macOS 27). Dotyczy menu aplikacji i menu kontekstowych.
+4. **Szkło tylko w pigułce i tylko systemowe** (`.glassEffect()`), żeby suwak przezroczystości
+   użytkownika działał też u nas. Żadnego własnego rozmycia.
+5. Notatka już pokazuje źródło (model, szablon, kontekst w pasku generowania). Pomysł do fazy 2:
+   punkty notatki z odnośnikiem do miejsca w transkrypcie, czyli widoczne źródło.
+
+**Źródła**
+
+- MacRumors, „Apple Announces macOS 27 Golden Gate…”, 2026-06-08 —
+  https://www.macrumors.com/2026/06/08/apple-announces-macos-golden-gate/
+- Six Colors, „macOS 27 Golden Gate review”, 2026-09 —
+  https://sixcolors.com/post/2026/09/macos-27-golden-gate-review-bridging-the-tahoe-gap/
+- 9to5Mac, zmiany dla krytyków Tahoe, 2026-06-09 —
+  https://9to5mac.com/2026/06/09/macos-27-golden-gate-includes-these-changes-that-tahoe-critics-will-appreciate/
+- Michael Tsai, „Liquid Glass Is Permanent”, 2026-03-23 —
+  https://mjtsai.com/blog/2026/03/23/liquid-glass-is-permanent
+- Windows Latest, powrót natywnych aplikacji, 2026-08-29 —
+  https://www.windowslatest.com/2026/08/29/windows-11s-native-app-era-is-coming-back-after-years-of-web-app-slop-and-microsoft-is-finally-building-it-in-public/
+- Fluent 2, Windows — https://fluent2.microsoft.design/components/windows
+- Linear, „Behind the latest design refresh” — https://linear.app/now/behind-the-latest-design-refresh
+- Desktop Insights, „State of desktop app development 2026” —
+  https://desktopinsights.com/blog/state-of-desktop-app-development-2026
+- Analizy ciepłego minimalizmu (Notion, Craft): https://getdesign.md/notion/design-md,
+  https://www.webdesignhot.com/design.md/craft/
+- AI UX: https://www.lazarev.agency/articles/ai-ux-patterns,
+  https://aiindigo.com/blog/beyond-the-chatbot-5-ai-native-ux-patterns-for-modern-document-apps
 
 ---
 
