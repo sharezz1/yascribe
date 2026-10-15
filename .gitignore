@@ -17,3 +17,4 @@
 .claude/proven-config*
 .claude/.proven-config-version
 .design/
+ruvector.db
