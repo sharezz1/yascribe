@@ -322,7 +322,7 @@ wybiera `appearance.bestMatch(from: [.aqua, .darkAqua])`.
 | `line2` | separator wierszy | `#3C3214` 8% | `#FFFFFF` 6% |
 | `text` | tekst główny | `#22211E` | `#ECEBE6` |
 | `text2` | etykiety, metadane, stany neutralne | `#6F6B62` | `#9A978F` |
-| `text3` | placeholder, nieaktywne | `#A8A49A` | `#6B6963` |
+| `text3` | tylko kontrolki nieaktywne (zwolnione z wymogu kontrastu WCAG) | `#A8A49A` | `#6B6963` |
 | `primary` / `onPrimary` | jedyny główny przycisk na ekranie | `#22211E` / `#FFFFFF` | `#ECEBE6` / `#1C1C1B` |
 | `accent` | stan „gotowe/zweryfikowane”, `Toggle`, `tint` | `#2F6B4F` | `#7CC39C` |
 | `rec` | nagrywanie, błąd | `#C4271C` | `#FF6B5E` |
@@ -331,8 +331,12 @@ wybiera `appearance.bestMatch(from: [.aqua, .darkAqua])`.
 
 Zmierzony kontrast (WCAG): `text`/`background` 14,9 i 14,3; `text2`/`background` 4,91
 i 5,85; `text2`/`card` 5,31 i 5,20; `accent` 5,36 (na `#E6EFE8`) i 7,32 (na `card`); `rec` 4,90 (na
-`#FBE9E6`) i 5,43; `warn` 5,28 i 7,58. Tło `rec`/`accent` nie występuje w UI, ale pomiar
-na nim jest najgorszym przypadkiem. Każdą nową parę mierz przed użyciem.
+`#FBE9E6`) i 5,43; `warn` 5,28 i 7,58; `text2`/`sunk` 4,62 i 4,66 (na granicy, ciemniej nie schodzić). Tło `rec`/`accent` nie
+występuje w UI, ale pomiar na nim jest najgorszym przypadkiem. Każdą nową parę mierz przed użyciem.
+
+**Placeholdery** (pole szukania, „Paste your key”) mają systemowy kolor podpowiedzi, który
+dają natywne `TextField` i `.searchable`, a nie `text3`. `text3` ma tylko 2,3–3,1:1, więc nadaje się wyłącznie
+dla stanu nieaktywnego. Na makietach placeholdery są w `text3` tylko poglądowo.
 
 - Sidebar **nie dostaje** koloru `background`, tylko systemowy materiał. Na makiecie jest
   ciepły, bo materiał przepuszcza tło okna.
@@ -350,7 +354,7 @@ na nim jest najgorszym przypadkiem. Każdą nową parę mierz przed użyciem.
 | Tekst UI, etykiety pól | SF | 13 / 16 | Regular | `.body` |
 | Metadane w linii, stany | SF | 12 / 15 | Regular | `.callout` |
 | Podpis pod polem, data w wierszu | SF | 11 / 14 | Regular | `.subheadline` |
-| Treść notatki | SF | 14 / 22 | Regular | `.system(size: 14)` + `lineSpacing(8)` ⚠️ |
+| Treść notatki | SF | 14 / 22 | Regular | `.system(size: 14)` + `lineSpacing(5)` ⚠️ (SF 14 ma ~17 pt interlinii; dobić do 22 w migawkach T0) |
 | Nagłówek w notatce | SF | 15 / 20 | Semibold | `.system(size: 15, weight: .semibold)` |
 
 - Szeryf **tylko** w dwóch tytułach. Nagłówki sekcji, przyciski, statusy i dane zawsze SF.
