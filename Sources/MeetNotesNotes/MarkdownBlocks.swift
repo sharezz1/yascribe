@@ -49,4 +49,34 @@ public enum MarkdownBlocks {
     static func depth(_ comps: [PresentationIntent.IntentType]) -> Int {
         max(0, comps.filter { if case .listItem = $0.kind { return true } else { return false } }.count - 1)
     }
+
+    /// Cała notatka jako JEDEN tekst (odbiór T13, uwaga 4): osobne `Text` na blok nie pozwalały zaznaczać ponad akapitami.
+    /// Układ zachowany znakami: pusta linia przed nagłówkiem, `•` z wcięciem 4 spacji na poziom, `n.` dla numerowanych.
+    /// `styleHeading` pozwala widokowi nadać nagłówkom rozmiar (domyślnie pogrubienie).
+    public static func flatten(_ blocks: [MarkdownBlock],
+                               styleHeading: (inout AttributedString, Int) -> Void = { s, _ in s.inlinePresentationIntent = .stronglyEmphasized })
+        -> AttributedString {
+        var out = AttributedString()
+        for (i, b) in blocks.enumerated() {
+            if i > 0 {
+                var isHeading = false
+                if case .heading = b.kind { isHeading = true }
+                out += AttributedString(isHeading ? "\n\n" : "\n")
+            }
+            let indent = String(repeating: " ", count: 4 * b.depth)
+            switch b.kind {
+            case .heading(let level):
+                var h = b.text
+                styleHeading(&h, level)
+                out += h
+            case .paragraph:
+                out += b.text
+            case .bullet:
+                out += AttributedString(indent + "• ") + b.text
+            case .numbered(let n):
+                out += AttributedString(indent + "\(n). ") + b.text
+            }
+        }
+        return out
+    }
 }

@@ -34,3 +34,12 @@ Para with **bold**.
     let blocks = MarkdownBlocks.group("1. First\n2. Second\n3. Third")
     #expect(blocks.map(\.kind) == [.numbered(1), .numbered(2), .numbered(3)])
 }
+
+@Test func flattenedNoteIsOneTextThatKeepsOrderBulletsAndNumbers() {
+    // Odbiór T13: bloki jako osobne `Text` nie pozwalały zaznaczyć całej notatki; teraz to jeden tekst.
+    let flat = MarkdownBlocks.flatten(MarkdownBlocks.group(sample))
+    #expect(String(flat.characters) == "Intro line.\n\nTopic one\nPara with bold.\n• Bullet A\n    • Nested A1\n• Bullet B\n1. First\n2. Second\n\nNext Steps\n• Adrian — send forecast")
+    // Pogrubienie z treści zostaje w tym samym tekście (nie ginie przy sklejaniu).
+    #expect(flat.runs.contains { $0.inlinePresentationIntent == .stronglyEmphasized && String(flat[$0.range].characters) == "Adrian" })
+    #expect(MarkdownBlocks.flatten([]) == AttributedString())
+}
