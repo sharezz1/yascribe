@@ -30,3 +30,22 @@ import Testing
     #expect(NoteTitle.display(meta: NoteMeta(), noteTitle: "N") == "N")
     #expect(NoteTitle.display(meta: NoteMeta(manualTitle: "  "), noteTitle: nil) == "Untitled meeting")
 }
+
+@Test func titleRuleIsInBothPrompts() throws {
+    // Odbiór T13: tytuł na 15 słów z przedrostkiem „Notatki z rozmowy". Reguła jest w prompcie notatki i autotytułu.
+    let t = transcript([utt("Prognoza na sobotę jest wyższa niż na niedzielę.")])
+    let notes = try #require(NotePromptBuilder.build(template: .standard, transcript: t, myNotes: "", context: "", notesLanguage: .polish))
+    let auto = try #require(AutoTitle.prompt(transcript: t, notesLanguage: .polish))
+    for system in [notes.system, auto.system] {
+        #expect(system.contains("at most 8 words") && system.contains("Notatki z rozmowy") && system.contains("Meeting notes"))
+    }
+}
+
+@Test func labelPrefixIsStrippedFromTitles() {
+    #expect(NoteTitle.parse("# Notatki z rozmowy: presja na wygląd i sport\nbody").title == "Presja na wygląd i sport")
+    #expect(AutoTitle.clean("Meeting notes - forecast gap with Piotr") == "Forecast gap with Piotr")
+    #expect(AutoTitle.clean("\"Podsumowanie spotkania: Plan zmian\"") == "Plan zmian")
+    // Bez separatora albo bez treści po etykiecie tytuł zostaje.
+    #expect(NoteTitle.parse("# Notes on churn\nbody").title == "Notes on churn")
+    #expect(NoteTitle.parse("# Summary:\nbody").title == "Summary:")
+}

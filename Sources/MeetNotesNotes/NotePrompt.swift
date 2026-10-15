@@ -29,7 +29,7 @@ public enum NotePromptBuilder {
         - Be concrete: keep numbers, names, dates and the options that were discussed. No generic filler.
         - The user's own notes are priority: weave them into the result.
         - Output Markdown. The FIRST line must be the title, written as "# <short descriptive title>". Nothing may \
-        come before it.
+        come before it. \(NoteTitle.rule)
         \(language)
 
         Structure:
