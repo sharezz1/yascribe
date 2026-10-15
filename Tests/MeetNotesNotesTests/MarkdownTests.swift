@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import MeetNotesNotes
 
@@ -35,11 +35,33 @@ Para with **bold**.
     #expect(blocks.map(\.kind) == [.numbered(1), .numbered(2), .numbered(3)])
 }
 
-@Test func flattenedNoteIsOneTextThatKeepsOrderBulletsAndNumbers() {
-    // Odbiór T13: bloki jako osobne `Text` nie pozwalały zaznaczyć całej notatki; teraz to jeden tekst.
-    let flat = MarkdownBlocks.flatten(MarkdownBlocks.group(sample))
-    #expect(String(flat.characters) == "Intro line.\n\nTopic one\nPara with bold.\n• Bullet A\n    • Nested A1\n• Bullet B\n1. First\n2. Second\n\nNext Steps\n• Adrian — send forecast")
-    // Pogrubienie z treści zostaje w tym samym tekście (nie ginie przy sklejaniu).
-    #expect(flat.runs.contains { $0.inlinePresentationIntent == .stronglyEmphasized && String(flat[$0.range].characters) == "Adrian" })
-    #expect(MarkdownBlocks.flatten([]) == AttributedString())
+@Test func noteIsOneAttributedTextWithParagraphStyles() {
+    // D6 / odbiór T13 uwaga 4: cała notatka to jeden tekst do jednego NSTextView; układ przez style akapitu, nie spacje.
+    let blocks = MarkdownBlocks.group(sample)
+    let note = MarkdownBlocks.attributed(blocks)
+    let paragraphs = note.string.components(separatedBy: "\n")
+    #expect(paragraphs.count == blocks.count)
+    #expect(paragraphs[3] == "•\tBullet A")
+    func style(_ i: Int) -> NSParagraphStyle {
+        let at = paragraphs[..<i].reduce(0) { $0 + ($1 as NSString).length + 1 }
+        return note.attribute(.paragraphStyle, at: at, effectiveRange: nil) as! NSParagraphStyle
+    }
+    func font(_ i: Int) -> NSFont {
+        let at = paragraphs[..<i].reduce(0) { $0 + ($1 as NSString).length + 1 }
+        return note.attribute(.font, at: at, effectiveRange: nil) as! NSFont
+    }
+    #expect(style(2).paragraphSpacing == 16)                                  // akapit przed punktem
+    #expect(style(0).minimumLineHeight == 22 && style(0).maximumLineHeight == 22)
+    #expect(style(3).headIndent == 18 && style(3).paragraphSpacing == 3)      // punkt: wiszące wcięcie, odstęp między punktami
+    #expect(style(4).headIndent == 36)                                        // zagnieżdżony głębiej
+    #expect(style(1).paragraphSpacingBefore == 20 && style(1).paragraphSpacing == 6)
+    #expect(style(0).paragraphSpacing == 0)                                   // przed nagłówkiem liczy się tylko jego 20 (jak CSS)
+    let weight = (font(1).fontDescriptor.object(forKey: .traits) as? [NSFontDescriptor.TraitKey: Any])?[.weight] as? CGFloat
+    #expect(font(1).pointSize == 15 && weight == NSFont.Weight.semibold.rawValue)
+    // Pogrubienie z treści zostaje; „— uzasadnienie” w punkcie z pogrubionym początkiem idzie w kolor drugorzędny.
+    let last = (note.string as NSString).range(of: "Adrian")
+    #expect(NSFontManager.shared.traits(of: note.attribute(.font, at: last.location, effectiveRange: nil) as! NSFont).contains(.boldFontMask))
+    let dash = (note.string as NSString).range(of: " — send")
+    #expect(note.attribute(.foregroundColor, at: dash.location, effectiveRange: nil) as? NSColor == NSColor.secondaryLabelColor)
+    #expect(MarkdownBlocks.attributed([]).length == 0)
 }
