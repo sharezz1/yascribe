@@ -171,21 +171,39 @@ final class AppModel {
 
     /// nil = nie da się wysłać żądania (błąd w `lastError`): brak dostawcy, błąd Keychain albo brak klucza (check S15 #5).
     func client(for providerID: UUID) -> OpenAICompatibleClient? {
-        guard let p = provider(providerID) else {
-            lastError = "This provider no longer exists."
+        switch makeClient(for: providerID) {
+        case .success(let c): return c
+        case .failure(let problem):
+            lastError = problem.message
             return nil
         }
+    }
+
+    struct ClientProblem: Error { let message: String }
+
+    /// Klient albo powód, dlaczego go nie ma — bez alertu (weryfikacja dostawcy pokazuje powód przy dostawcy).
+    func makeClient(for providerID: UUID) -> Result<OpenAICompatibleClient, ClientProblem> {
+        guard let p = provider(providerID) else { return .failure(ClientProblem(message: "This provider no longer exists.")) }
         let key: String?
         do { key = try secrets.get(p.id) } catch {
-            lastError = "Couldn't read the API key for \(p.name) from Keychain: \(error)"
-            return nil
+            return .failure(ClientProblem(message: "Couldn't read the API key for \(p.name) from Keychain: \(error)"))
         }
         // ponytail: „lokalny = bez klucza" po nazwie hosta; jawna flaga w Provider, gdy zdalny dostawca obejdzie się bez klucza.
         guard key != nil || ["localhost", "127.0.0.1", "::1"].contains(p.baseURL.host() ?? "") else {
-            lastError = "No API key for \(p.name). Remove the provider and add it again with a key."
-            return nil
+            return .failure(ClientProblem(message: "No API key for \(p.name). Remove the provider and add it again with a key."))
         }
-        return OpenAICompatibleClient(provider: p, key: key)
+        return .success(OpenAICompatibleClient(provider: p, key: key))
+    }
+
+    /// Test połączenia (`listModels`): Verified albo powód (zły klucz, guardrail, adres, serwer wyłączony).
+    func verifyProvider(_ id: UUID) async {
+        providerChecks[id] = nil
+        providerVerifying.insert(id)
+        defer { providerVerifying.remove(id) }
+        switch makeClient(for: id) {
+        case .failure(let problem): providerChecks[id] = .failed(problem.message)
+        case .success(let c): providerChecks[id] = await c.verify()
+        }
     }
 
     /// `nil` = dodano; tekst = powód odmowy (duplikat nazwy albo błąd pęku kluczy).
@@ -196,6 +214,7 @@ final class AppModel {
             if !key.isEmpty { try secrets.set(p.id, key) }
             providers.providers.append(p)
             save()
+            Task { await verifyProvider(p.id) } // Verified albo powód przy dostawcy
             return nil
         } catch {
             return "Couldn't store the key in Keychain: \(error)"
@@ -209,6 +228,9 @@ final class AppModel {
     }
 
     var modelLists: [ModelListKey: [ModelInfo]] = [:]
+    /// Wynik ostatniego testu połączenia per dostawca (w pamięci; po restarcie Not verified, dopóki nie klikniesz Verify).
+    var providerChecks: [UUID: ProviderCheck] = [:]
+    private(set) var providerVerifying: Set<UUID> = []
     private(set) var loadingModels: Set<ModelListKey> = []
 
     private func key(_ provider: UUID, _ role: Role) -> ModelListKey {
