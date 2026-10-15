@@ -13,10 +13,35 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                                   needsKey: true, note: nil)
     /// Ollama nie robi ASR (docs/wymagania.md §2): tylko korekta i podsumowanie.
     public static let ollama = ProviderPreset(id: "ollama", name: "Ollama", baseURL: "http://localhost:11434/v1", needsKey: false,
-                                              note: "Corrections and summaries only — Ollama can't transcribe audio.")
+                                              note: "correction and summary only, no transcription")
     public static let custom = ProviderPreset(id: "custom", name: "Custom", baseURL: "", needsKey: true,
                                               note: "Any OpenAI-compatible server.")
     public static let all: [ProviderPreset] = [openRouter, ollama, custom]
+
+    /// Adres bez schematu: host[:port] + ścieżka bez końcowego „/” („openrouter.ai/api/v1"). Służy też do porównań.
+    public static func displayAddress(_ url: URL) -> String {
+        var path = url.path()
+        while path.hasSuffix("/") { path.removeLast() }
+        return (url.host() ?? "") + (url.port.map { ":\($0)" } ?? "") + path
+    }
+
+    /// Porównanie jak `displayAddress`, ale host bez rozróżniania wielkości liter (ścieżka je rozróżnia).
+    static func addressKey(_ url: URL) -> String {
+        let shown = displayAddress(url)
+        let hostLength = (url.host() ?? "").count
+        return shown.prefix(hostLength).lowercased() + shown.dropFirst(hostLength)
+    }
+
+    /// Wiersz „Add:" jest nieaktywny, gdy dostawca o tym adresie już jest. Custom — zawsze można dodać kolejny.
+    public func isAdded(in providers: [Provider]) -> Bool {
+        guard self != .custom, let mine = URL(string: baseURL) else { return false }
+        return providers.contains { Self.addressKey($0.baseURL) == Self.addressKey(mine) }
+    }
+
+    /// Gotowy dostawca pasujący do adresu (do ograniczeń w wierszu listy); Custom nigdy.
+    public static func matching(_ url: URL) -> ProviderPreset? {
+        [openRouter, ollama].first { URL(string: $0.baseURL).map(addressKey) == addressKey(url) }
+    }
 }
 
 /// Wynik próby połączenia po dodaniu dostawcy (`listModels`): „✓ Verified" albo powód po ludzku.

@@ -6,8 +6,20 @@ import Testing
     #expect(ProviderPreset.all.map(\.name) == ["OpenRouter", "Ollama", "Custom"])
     #expect(ProviderPreset.openRouter.baseURL == "https://openrouter.ai/api/v1" && ProviderPreset.openRouter.needsKey)
     #expect(ProviderPreset.ollama.baseURL == "http://localhost:11434/v1" && !ProviderPreset.ollama.needsKey)
-    #expect(ProviderPreset.ollama.note?.contains("can't transcribe") == true) // Ollama bez ASR — użytkownik ma to wiedzieć
+    #expect(ProviderPreset.ollama.note?.contains("no transcription") == true) // Ollama bez ASR — użytkownik ma to wiedzieć
     #expect(ProviderPreset.custom.baseURL.isEmpty && ProviderPreset.custom.needsKey)
+}
+
+@Test func presetCountsAsAddedByAddressNotName() {
+    func p(_ url: String, _ name: String = "x") -> Provider { Provider(name: name, baseURL: URL(string: url)!) }
+    #expect(!ProviderPreset.openRouter.isAdded(in: []))
+    #expect(ProviderPreset.openRouter.isAdded(in: [p("https://OpenRouter.ai/api/v1/", "Mine")])) // wielkość liter hosta i końcowy „/”
+    #expect(!ProviderPreset.openRouter.isAdded(in: [p("https://openrouter.ai/api/v2"), p("http://localhost:11434/v1")]))
+    #expect(ProviderPreset.ollama.isAdded(in: [p("http://localhost:11434/v1")]))
+    #expect(!ProviderPreset.ollama.isAdded(in: [p("http://localhost:8080/v1")])) // inny port
+    #expect(!ProviderPreset.custom.isAdded(in: [p("https://openrouter.ai/api/v1")])) // Custom zawsze dostępny
+    #expect(ProviderPreset.displayAddress(URL(string: "https://openrouter.ai/api/v1/")!) == "openrouter.ai/api/v1")
+    #expect(ProviderPreset.matching(URL(string: "http://localhost:11434/v1")!) == .ollama)
 }
 
 @Test func verificationReportsTheModelCountOrAReadableReason() async {
