@@ -14,6 +14,12 @@ Sesja testowa: `.devdata/sessions/2026-10-15T13-07-49Z-f184` (YouTube z głośni
 | 6a | **ModelPicker: zawijanie długich nazw** (druga linia wyrównana do prawej, np. `nvidia/nemotron-3.5-asr-streaming-multilingual-0.6b`), pole szukania z tekstem wyrównanym do prawej, wąski popover. Funkcjonalnie OK (26 modeli transkrypcji, MAI na liście). | zrzut popovera | Jedna linia, skracanie w środku, pełna nazwa w podpowiedzi; szukanie wyrównane do lewej; szerszy popover. |
 | 7 | **Dostawcy w Settings: szybkie dodawanie + weryfikacja.** Modele zostają w presetach, dostawcy w Settings. Kafelki **OpenRouter**, **Ollama**, **Custom** → okno z gotowym adresem, użytkownik wkleja tylko klucz (Ollama bez klucza; informacja „tylko korekta i podsumowanie, nie transkrypcja"). Po zapisie test połączenia (`listModels`) → **„✓ Verified"** albo „✗ <powód>" (zły klucz, guardrail). | zrzut sekcji „Models for meetings" | Jak obok. **ElevenLabs bezpośrednio → faza 2** (inne API: `xi-api-key`, multipart); Scribe v2 dostępny już teraz przez OpenRouter (`elevenlabs/scribe-v2`). |
 
+✏️ **Uwaga 7 — forma zmieniona 2026-10-15** (sesja designu, `docs/design/macos.md` §11.5): kafelki
+i okno (arkusz) zastępuje wiersz **„Add: OpenRouter · Ollama · Custom…”** na dole karty Providers,
+z formularzem rozwijanym w miejscu (gotowy adres, klucz, wynik weryfikacji w tej samej linii,
+Cancel / Save & verify). Treść uwagi (gotowy adres, tylko klucz, Ollama bez klucza i bez
+transkrypcji, „✓ Verified" / „✗ powód") obowiązuje bez zmian. Zatwierdził użytkownik.
+
 ## B. Wygląd — osobny krok przed poprawkami widoków
 
 **1. „Brzydko, szaro, w niczym nie przypomina nowoczesnych aplikacji; jak Windows 98 z zaokrąglonymi rogami."**
@@ -37,7 +43,7 @@ Potrzebne, zanim wykonawca dotknie widoków:
 
 Review Focus #9 (przełączanie sesji w trakcie nagrania), #10 (notatka dla presetu „English"
 bez summary), D2 (nazwa mikrofonu po zmianie wejścia), potwierdzenie zmiany embeddingu,
-arkusz Add Provider, punkt 11 (nieczytelny plik notatek). T11 (pomiar Auto/PL+EN) czeka na
+dodawanie dostawcy (dawniej arkusz Add Provider, teraz w miejscu — §11.5), punkt 11 (nieczytelny plik notatek). T11 (pomiar Auto/PL+EN) czeka na
 nagranie mieszane i klucz w terminalu użytkownika.
 
 ## D. Drobne poza listą

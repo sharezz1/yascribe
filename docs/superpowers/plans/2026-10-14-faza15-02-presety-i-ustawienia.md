@@ -461,6 +461,11 @@ Status: ⚠️ nieskompilowane. Logika w bibliotece (3 testy).
 
 **Reguła granicy Save/Cancel (decyzja planu):** **dostawcy są zapisywani od razu** — dodanie ma własny arkusz z Add/Cancel, usunięcie jest natychmiastowe (klucz ląduje w pęku kluczy albo jest z niego usuwany w tej samej chwili). **Save/Cancel obejmuje tylko sekcję „Archive" (embedding).** Napis w interfejsie to mówi. Dzięki temu Cancel nigdy nie zostawia klucza w pęku bez dostawcy na liście.
 
+> ✏️ **2026-10-15:** arkusz z kroków niżej (i kafelki z odbioru T13, uwaga 7, commit `36db9a6`) zastąpiło dodawanie
+> w miejscu w karcie Providers — wiersz „Add: OpenRouter · Ollama · Custom…” (`docs/design/macos.md` §11.5, spec §5.4).
+> Reguła granicy Save/Cancel bez zmian: dostawca zapisuje się od razu, przyciskiem „Save & verify” w rozwiniętym wierszu.
+> Kod w krokach poniżej to stan historyczny.
+
 **Pliki:**
 - Zmień: `Sources/MeetNotesProviders/Preset.swift` (`GlobalSettings`), `Sources/MeetNotesProviders/Stores.swift` (`ProvidersFile`), `Sources/MeetNotesProviders/SecretStore.swift` (`KeyStatus`), `Sources/MeetNotesApp/AppModel.swift` (`addProvider`), `Sources/MeetNotesApp/SettingsView.swift` (przepisz), `Sources/MeetNotesApp/Snapshots.swift`
 - Test: `Tests/MeetNotesProvidersTests/SettingsLogicTests.swift`
