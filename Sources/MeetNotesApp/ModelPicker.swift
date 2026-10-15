@@ -49,6 +49,7 @@ struct ModelPicker: View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Search models", text: $state.query)
                 .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.leading) // popover dziedziczy wyrównanie do prawej z formularza (odbiór T13, 6a)
                 .onSubmit { if let typed { pick(typed) } }
             if model.isLoadingModels(provider: providerID, role: role) && all.isEmpty {
                 ProgressView("Loading models…")
@@ -58,7 +59,8 @@ struct ModelPicker: View {
             List(visible, id: \.id) { m in
                 Button { pick(m.id) } label: {
                     HStack {
-                        Text(m.id)
+                        // Jedna linia, skracanie w środku (długie id typu `nvidia/nemotron-…-0.6b` zawijały się), pełne id w podpowiedzi.
+                        Text(m.id).lineLimit(1).truncationMode(.middle).help(m.id)
                         Spacer()
                         if m.id == selection { Image(systemName: "checkmark") }
                     }
@@ -69,7 +71,7 @@ struct ModelPicker: View {
             if let typed { Button("Use “\(typed)”") { pick(typed) } }
         }
         .padding(12)
-        .frame(width: 380, height: 380)
+        .frame(width: 520, height: 380)
     }
 
     private func pick(_ id: String) {
