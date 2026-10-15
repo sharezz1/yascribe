@@ -91,3 +91,17 @@ private func capitalizing(_ user: String) -> String {
     #expect(r.transcript.utterances[0].text.contains("koniec wypowiedzi"))
     #expect(CorrectionBatches.render([(n: 1, text: "a\r\nb\nc")]) == "[1] a b c")
 }
+
+@Test func slowBatchIsGivenUpOnAndTheOriginalIsKept() async {
+    // Odbiór T13: korekta „wisiała" kilkanaście minut — jedno wywołanie modelu bez całkowitego limitu czasu.
+    let t = transcript([utt("no to jest test")])
+    let stub = ChatStub(delay: .seconds(5)) { capitalizing($0.user) }
+    var c = corrector(stub)
+    c.batchTimeout = 0.2
+    let started = ContinuousClock.now
+    let r = await c.correct(t, language: .polish)
+    #expect(ContinuousClock.now - started < .seconds(3)) // nie czekamy na 5 s odpowiedzi
+    #expect(r.transcript.utterances[0].text == "no to jest test")
+    #expect(r.failedBatches == 1 && r.failedCompletely)
+    #expect(r.firstError?.contains("didn't answer") == true)
+}

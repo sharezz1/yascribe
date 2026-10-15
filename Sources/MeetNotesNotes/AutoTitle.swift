@@ -52,9 +52,9 @@ public enum AutoTitle {
     /// Zwraca zapisany tytuł albo `nil` (nie trzeba / nie ma czego nazywać / model zawiódł).
     public static func generate(client: OpenAICompatibleClient, model: String, transcript: Transcript,
                                 notesLanguage: LanguageCode?, store: NotesStore,
-                                onProblem: @Sendable (String) -> Void = { _ in }) async -> String? {
+                                timeout: Double = 60, onProblem: @Sendable (String) -> Void = { _ in }) async -> String? {
         guard shouldRun(meta: store.readMeta()), let p = prompt(transcript: transcript, notesLanguage: notesLanguage),
-              let reply = try? await client.chat(model: model, system: p.system, user: p.user),
+              let reply = try? await withDeadline(timeout, { try await client.chat(model: model, system: p.system, user: p.user) }),
               let title = clean(reply) else { return nil }
         var stored = false
         do {

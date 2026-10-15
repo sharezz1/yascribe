@@ -52,3 +52,18 @@ private let now = Date(timeIntervalSince1970: 5_000)
     #expect(try store.readSummary() == old) // poprzednia notatka nietknięta
     #expect(try FileManager.default.contentsOfDirectory(atPath: store.directory.path).filter { $0.hasPrefix("summary-") }.isEmpty)
 }
+
+@Test func generatorGivesUpOnASlowModelAndWritesNothing() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub(delay: .seconds(5)) { _ in "# T\nbody" }
+    let slow = NoteGenerator(client: chatClient(stub), model: "notes-model", timeout: 0.2)
+    do {
+        _ = try await slow.generate(session: session, template: .standard, transcript: transcript([utt("Prognoza na sobotę.")]),
+                                    context: "", notesLanguage: .polish, now: now)
+        Issue.record("oczekiwano błędu")
+    } catch NoteGenerationError.failed(let message) {
+        #expect(message.contains("notes-model") && message.contains("didn't answer"))
+    }
+    #expect(try NotesStore(session: session).readSummary() == nil)
+}

@@ -14,6 +14,7 @@ public enum SessionStatus: Equatable, Sendable {
     case notesReady
     case flagged(Int)
     case transcriptReady
+    case correctionFailed
     case notTranscribed
 
     /// Czy katalog sesji to ten, który właśnie nagrywamy. Porównanie po nazwie katalogu: URL z `contentsOfDirectory`
@@ -24,7 +25,7 @@ public enum SessionStatus: Equatable, Sendable {
     }
 
     public static func of(isRecording: Bool, progress: Double?, correcting: Bool, titling: Bool, crashed: Bool,
-                          transcript: Transcript?, hasRun: Bool, hasNotes: Bool) -> SessionStatus {
+                          transcript: Transcript?, hasRun: Bool, hasNotes: Bool, correctionFailed: Bool = false) -> SessionStatus {
         if isRecording { return .recording }
         if let p = progress, p < 1 { return .transcribing(p) }
         if correcting { return .correcting }
@@ -32,6 +33,7 @@ public enum SessionStatus: Equatable, Sendable {
         if crashed { return .recovered }
         if let t = transcript {
             if !t.failedChunks.isEmpty { return .partial(gaps: t.failedChunks.count) }
+            if correctionFailed { return .correctionFailed } // widoczne w wierszu, dopóki użytkownik nie ponowi korekty
             if hasNotes { return .notesReady }
             if t.languageFlagCount > 0 { return .flagged(t.languageFlagCount) }
             return .transcriptReady

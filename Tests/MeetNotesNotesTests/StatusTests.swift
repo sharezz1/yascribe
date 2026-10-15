@@ -4,9 +4,10 @@ import Testing
 @testable import MeetNotesTranscription
 
 private func status(recording: Bool = false, progress: Double? = nil, correcting: Bool = false, titling: Bool = false,
-                    crashed: Bool = false, transcript: Transcript? = nil, hasRun: Bool = false, notes: Bool = false) -> SessionStatus {
+                    crashed: Bool = false, transcript: Transcript? = nil, hasRun: Bool = false, notes: Bool = false,
+                    correctionFailed: Bool = false) -> SessionStatus {
     SessionStatus.of(isRecording: recording, progress: progress, correcting: correcting, titling: titling, crashed: crashed,
-                     transcript: transcript, hasRun: hasRun, hasNotes: notes)
+                     transcript: transcript, hasRun: hasRun, hasNotes: notes, correctionFailed: correctionFailed)
 }
 
 @Test func recordingSessionIsNeverRecovered() {
@@ -48,4 +49,12 @@ private func status(recording: Bool = false, progress: Double? = nil, correcting
     #expect(SessionStatus.isRecording(listed, recordingDirectory: built))
     #expect(!SessionStatus.isRecording(listed, recordingDirectory: nil))
     #expect(!SessionStatus.isRecording(listed, recordingDirectory: sessions.appendingPathComponent("other")))
+}
+
+@Test func correctionFailureIsVisibleInTheStatusUntilRetried() {
+    // Odbiór T13: nieudana korekta nie może znikać ani wisieć — wiersz mówi „Correction failed".
+    let t = transcript([utt("x")])
+    #expect(status(transcript: t, correctionFailed: true) == .correctionFailed)
+    #expect(status(transcript: t, notes: true, correctionFailed: true) == .correctionFailed) // także gdy notatka już jest
+    #expect(status(correcting: true, transcript: t, correctionFailed: true) == .correcting) // ponowienie w toku wygrywa
 }
