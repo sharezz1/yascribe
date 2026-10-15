@@ -45,12 +45,27 @@ struct MeetingDetailView: View {
         .contentColumn(640)
         .contentBackground()
         .navigationTitle(item.title)
+        .navigationBarBackButtonHidden(true) // własna kapsuła „Meetings” w pasku (D5)
         .onAppear {
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
             // Pole tytułu pokazuje ten sam tytuł co lista (ręczny > auto > z notatki); „Untitled meeting" zostaje placeholderem.
             state.titleDraft = item.title == NoteTitle.untitled ? "" : item.title
         }
+        .confirmationDialog("Move “\(item.title)” to the Trash?", isPresented: Binding(
+            get: { model.pendingDelete == item.id }, set: { if !$0 { model.pendingDelete = nil } }), titleVisibility: .visible) {
+            Button("Move to Trash", role: .destructive) { model.deleteSession(item.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The meeting folder, with its recordings and notes, goes to the Trash. You can put it back from there.")
+        }
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button { model.selectedSessionID = nil } label: { Label("Meetings", systemImage: "chevron.left") }
+                    .buttonStyle(.pill)
+                    .help("Back to Meetings")
+                    .accessibilityLabel("Back to Meetings")
+            }
+            ToolbarItem {
             Button {
                 if playback.player?.isPlaying == true { playback.player?.pause() } else if playback.player != nil || load("system") { playback.player?.play() }
             } label: {
@@ -59,6 +74,19 @@ struct MeetingDetailView: View {
             .keyboardShortcut(.space, modifiers: [])
             .help("Play or pause")
             .disabled(isRecording)
+            }
+            ToolbarItem {
+                Menu {
+                    Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
+                    Button("Show in Finder") { model.showInFinder(item) }
+                    Divider()
+                    Button("Delete meeting…", role: .destructive) { model.pendingDelete = item.id }.disabled(!model.canDelete(item))
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                .help("More").accessibilityLabel("More")
+            }
         }
     }
 

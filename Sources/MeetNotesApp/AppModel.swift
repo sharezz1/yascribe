@@ -1,3 +1,4 @@
+import AppKit
 import AVFoundation
 import Foundation
 import MeetNotesNotes
@@ -73,6 +74,8 @@ final class AppModel {
     var activePresetID: UUID?
     var lastError: String?
     var showSetup = false
+    /// Spotkanie czekające na potwierdzenie usunięcia (przycisk „⋯” i menu Meeting) — dialog jest w `MeetingDetailView`.
+    var pendingDelete: String?
     /// Sesje z trwającym przebiegiem — drugi przebieg tej samej sesji płaciłby za te same okna (check S15 #2).
     private(set) var transcribing: Set<String> = []
 
@@ -336,6 +339,35 @@ final class AppModel {
     func openSession(_ id: String) {
         section = .meetings
         selectedSessionID = id
+    }
+
+    /// Otwarte spotkanie (widok szczegółów) — dla menu Meeting; poza Meetings nic nie jest „otwarte”.
+    var openItem: SessionItem? { section == .meetings ? sessions.first { $0.id == selectedSessionID } : nil }
+
+    /// Sesji nagrywanej ani transkrybowanej nie usuwamy (katalog jest w użyciu).
+    func canDelete(_ item: SessionItem) -> Bool {
+        !SessionStatus.isRecording(item.url, recordingDirectory: recording.directory) && !isTranscribing(item)
+    }
+
+    func copyNotes(_ item: SessionItem) {
+        guard let md = item.notes.summary?.markdown else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(md, forType: .string)
+    }
+
+    func showInFinder(_ item: SessionItem) { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
+
+    /// Do Kosza, nie trwale. Wraca do listy i przeładowuje ją; błąd trafia do `lastError`.
+    func deleteSession(_ id: String) {
+        pendingDelete = nil
+        guard let item = sessions.first(where: { $0.id == id }), canDelete(item) else { return }
+        do {
+            try FileManager.default.trashItem(at: item.url, resultingItemURL: nil)
+            if selectedSessionID == id { selectedSessionID = nil }
+        } catch {
+            lastError = "Couldn't move the meeting to the Trash: \(error.localizedDescription)"
+        }
+        reloadSessions()
     }
 
     /// Zapis własnych szablonów; `nil` = zapisano, tekst = powód.
