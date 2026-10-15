@@ -93,6 +93,8 @@ enum Snapshots {
         do {
             try seed(model)
             for dark in [false, true] {
+                // Galeria komponentów §11.4 (DesignSystem.swift) — jeden rzut oka na tokeny i stany przed widokami.
+                try render("components", size: CGSize(width: 640, height: 520), dark: dark, model: model) { ComponentGallery() }
                 try render("presets", size: CGSize(width: 900, height: 600), dark: dark, model: model) { PresetsView() }
                 try render("meetings", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
                 // Pola tekstowe: PresetsView bez wyboru pokazuje tylko „Choose a preset" (wybór jest lokalny w widoku).
@@ -159,5 +161,44 @@ enum Snapshots {
             FileHandle.standardError.write(Data("snapshots: \(error)\n".utf8))
             exit(1)
         }
+    }
+}
+
+/// Wszystkie komponenty wspólne w jednym widoku (migawka „components").
+struct ComponentGallery: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            PageTitle("Settings")
+            SectionHeader("Correction", note: "— optional") { Toggle("", isOn: .constant(true)).toggleStyle(.switch).labelsHidden() }
+            Card {
+                FormRow(label: "Language", caption: "✓ Language enforced") { Text("Polish") }
+                RowDivider()
+                FormRow(label: "Address", caption: "Enter a full address.", isError: true) { Text("openrouter.ai") }
+            }
+            HStack(spacing: 8) {
+                Button("Record") {}.buttonStyle(.pillPrimary)
+                Button("Cancel") {}.buttonStyle(.pill)
+                Button("Retry") {}.buttonStyle(.pillSmall)
+                Button("Save") {}.buttonStyle(.pillPrimary).disabled(true)
+                Button("Ollama") {}.buttonStyle(.pillSmall).disabled(true)
+            }
+            .padding(.vertical, 16)
+            HStack(spacing: 14) {
+                StateLabel(.ok, "Notes ready")
+                StateLabel(.bad, "Correction failed")
+                StateLabel(.live, "Recording 12:04")
+            }
+            HStack(spacing: 14) {
+                StateLabel(.neutral, "Transcript ready")
+                StateLabel(.progress(0.41), "Transcribing 41%")
+                StateLabel(.progress(nil), "Correcting…")
+            }
+            .padding(.vertical, 10)
+            MetaLine(["Oct 15, 11:29", "42 min", "Preset Polish"])
+            Spacer()
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentBackground()
     }
 }

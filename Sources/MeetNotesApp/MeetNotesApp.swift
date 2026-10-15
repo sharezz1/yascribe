@@ -67,6 +67,7 @@ struct ContentView: View {
             case .dictionary: LaterPhaseView(title: "Dictionary", text: "Your vocabulary and corrections from transcripts will live here.")
             }
         }
+        .tint(.mnAccent) // 🔀 odstępstwo 5 (macos.md §10): stały akcent w treści
         .sheet(isPresented: $model.showSetup) { SetupView() }
         .alert("Something went wrong", isPresented: Binding(get: { model.lastError != nil }, set: { if !$0 { model.lastError = nil } })) {
             Button("OK") { model.lastError = nil }

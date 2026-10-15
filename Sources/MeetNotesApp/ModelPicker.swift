@@ -36,11 +36,23 @@ struct ModelPicker: View {
             state.showing = true
             Task { await model.loadModels(provider: providerID, role: role) }
         } label: {
+            // `ModelField` (macos.md §11.4): popup „Dostawca · id ⌄”, dostawca w `text2`.
             HStack(spacing: 6) {
+                if let name = model.providers.providers.first(where: { $0.id == providerID })?.name {
+                    Text("\(name)  ·").foregroundStyle(.mnText2).fixedSize()
+                }
                 Text(selection.isEmpty ? "Choose model" : selection).lineLimit(1).truncationMode(.middle)
-                Image(systemName: "chevron.up.chevron.down").font(.caption)
+                    .foregroundStyle(selection.isEmpty ? .mnText2 : .mnText)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.mnText2)
             }
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .popover(isPresented: $state.showing, arrowEdge: .bottom) { content }
         .help("Search and choose a model")
     }
