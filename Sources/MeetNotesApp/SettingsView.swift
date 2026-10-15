@@ -233,10 +233,11 @@ private struct AddProviderForm: View {
                 result.help(resultText ?? "")
                 Spacer(minLength: 8)
                 if verified {
-                    Button("Done") { add.close() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
+                    Button("Done") { add.close() }.buttonStyle(.pillSmallPrimary).keyboardShortcut(.defaultAction)
                 } else {
-                    Button("Cancel") { add.close() }.buttonStyle(.pill)
-                    Button("Save & verify") { saveAndVerify() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
+                    Button("Cancel") { add.close() }.buttonStyle(.pillSmall)
+                    // D4: mały primary (24 pt) obok Save w dolnym pasku, jak na b-add.png.
+                    Button("Save & verify") { saveAndVerify() }.buttonStyle(.pillSmallPrimary).keyboardShortcut(.defaultAction)
                 }
             }
             .padding(.top, 8).padding(.leading, 82)

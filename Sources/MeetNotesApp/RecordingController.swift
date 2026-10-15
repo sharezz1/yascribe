@@ -204,7 +204,7 @@ struct RecordingPanelView: View {
     /// Przed startem: preset z językiem widoczny i wybierany tutaj (W§2, W§6) + Record.
     private var idleBody: some View {
         HStack(spacing: 8) {
-            PresetMenu().menuStyle(.borderlessButton).menuIndicator(.visible)
+            PresetMenu(width: nil)
             Button { model.startRecording() } label: {
                 HStack(spacing: 6) { Circle().fill(.mnRecDot).frame(width: 8, height: 8).accessibilityHidden(true); Text("Record") }
             }

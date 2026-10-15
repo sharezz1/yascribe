@@ -34,7 +34,7 @@ extension ShapeStyle where Self == Color {
     static var mnLine: Color { dynamic(hex(0x3C3214, 0.14), hex(0xFFFFFF, 0.11), hcLight: hex(0x3C3214, 0.45), hcDark: hex(0xFFFFFF, 0.4)) }
     static var mnLine2: Color { dynamic(hex(0x3C3214, 0.08), hex(0xFFFFFF, 0.06), hcLight: hex(0x3C3214, 0.3), hcDark: hex(0xFFFFFF, 0.3)) }
     static var mnText: Color { dynamic(hex(0x22211E), hex(0xECEBE6)) }
-    static var mnText2: Color { dynamic(hex(0x6F6B62), hex(0x9A978F), hcLight: hex(0x4A463F), hcDark: hex(0xC4C1B9)) }
+    static var mnText2: Color { dynamic(hex(0x666259), hex(0x9A978F), hcLight: hex(0x4A463F), hcDark: hex(0xC4C1B9)) }
     /// Tylko kontrolki nieaktywne (2,3–3,1:1). Placeholdery mają kolor systemowy.
     static var mnText3: Color { dynamic(hex(0xA8A49A), hex(0x6B6963)) }
     static var mnPrimary: Color { dynamic(hex(0x22211E), hex(0xECEBE6)) }
@@ -216,6 +216,44 @@ struct WarnLabel: View {
     }
 }
 
+// MARK: - Popupy jak pole (D8, §11.4 `FieldMenuStyle`)
+
+/// Popup wyglądający jak pole: `field`, obwódka 0,5, promień 7, mały ⌄. Pod spodem standardowe `Menu`;
+/// wybór z listy to `Picker(...).pickerStyle(.inline)` w treści menu (zaznaczenie ✓ robi system).
+struct FieldMenu<Content: View>: View {
+    /// Nazwa dla VoiceOver („Language”).
+    let label: String
+    /// Bieżąca wartość widoczna w polu.
+    let value: String
+    /// Dopisek przed wartością w `text2` (jak dostawca w `ModelField`).
+    var prefix: String?
+    var width: CGFloat?
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        Menu { content } label: {
+            HStack(spacing: 6) {
+                if let prefix { Text("\(prefix)  ·").foregroundStyle(.mnText2).fixedSize() }
+                Text(value).foregroundStyle(.mnText).lineLimit(1).truncationMode(.middle)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.mnText2)
+            }
+            .font(.system(size: 13))
+            .padding(.horizontal, 10)
+            .frame(minWidth: width, maxWidth: width, minHeight: 28, maxHeight: 28)
+            .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
+    }
+}
+
 // MARK: - Przyciski-pigułki (§11.4, odstępstwo 7: pigułka nigdy nie jest przełącznikiem)
 
 final class HoverState: ObservableObject {
@@ -227,26 +265,29 @@ struct PillButtonStyle: ButtonStyle {
     var kind: Kind = .secondary
     /// Większa pigułka (32 pt) dla Record na karcie.
     var large = false
+    /// Mały primary (24 pt): tylko „Save & verify” w formularzu dostawcy (D4).
+    var compact = false
 
     func makeBody(configuration: Configuration) -> some View {
-        PillBody(configuration: configuration, kind: kind, large: large)
+        PillBody(configuration: configuration, kind: kind, large: large, small: kind == .small || compact)
     }
 
     private struct PillBody: View {
         let configuration: ButtonStyleConfiguration
         let kind: Kind
         let large: Bool
+        let small: Bool
         @StateObject private var hover = HoverState()
         @Environment(\.isEnabled) private var isEnabled
         @Environment(\.isFocused) private var isFocused
 
-        private var height: CGFloat { kind == .small ? 24 : large ? 32 : 28 }
+        private var height: CGFloat { small ? 24 : large ? 32 : 28 }
 
         var body: some View {
             configuration.label
-                .font(.system(size: kind == .small ? 12 : 13, weight: kind == .primary ? .semibold : .medium))
+                .font(.system(size: small ? 12 : 13, weight: kind == .primary ? .semibold : .medium))
                 .lineLimit(1)
-                .padding(.horizontal, kind == .small ? 10 : large ? 16 : 13)
+                .padding(.horizontal, small ? 10 : large ? 16 : 13)
                 .frame(height: height)
                 .foregroundStyle(foreground)
                 .background(background, in: Capsule())
@@ -274,4 +315,5 @@ extension ButtonStyle where Self == PillButtonStyle {
     static var pillPrimary: PillButtonStyle { PillButtonStyle(kind: .primary) }
     static var pill: PillButtonStyle { PillButtonStyle(kind: .secondary) }
     static var pillSmall: PillButtonStyle { PillButtonStyle(kind: .small) }
+    static var pillSmallPrimary: PillButtonStyle { PillButtonStyle(kind: .primary, compact: true) }
 }

@@ -344,28 +344,13 @@ struct SummaryTab: View {
 
     /// Popup szablonu: pole 130 × 28, promień 7 (makieta: `.field`). Menu zostaje systemowe.
     private var templateMenu: some View {
-        Menu {
+        FieldMenu(label: "Template", value: template.name, width: 130) {
             ForEach(model.notes.templates.all()) { t in
                 Button(t.name) { state.templateID = t.id }
             }
             Divider()
             Button("Manage templates…") { model.section = .templates }
-        } label: {
-            HStack(spacing: 6) {
-                Text(template.name).font(.system(size: 13)).foregroundStyle(.mnText).lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.mnText2)
-            }
-            .padding(.horizontal, 10)
-            .frame(width: 130, height: 28)
-            .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .accessibilityLabel("Template: \(template.name)")
     }
 
     @ViewBuilder private var errorView: some View {
