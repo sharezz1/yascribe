@@ -56,6 +56,15 @@ struct TranscriptTab: View {
                     .font(.caption).padding(8).frame(maxWidth: .infinity, alignment: .leading)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             }
+            if let why = model.notes.correctionFailureMessage(item.id) {
+                HStack {
+                    Label("Correction failed: \(why)", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange)
+                    Spacer()
+                    Button("Retry") { model.notes.retryCorrection(item) }.disabled(!model.notes.canRetryCorrection(item))
+                }
+            } else if model.notes.canRetryCorrection(item) {
+                HStack { Spacer(); Button("Improve transcript") { model.notes.retryCorrection(item) }.help("Run the preset's correction model on this transcript") }
+            }
             if item.corrected != nil {
                 HStack {
                     Picker("Version", selection: $state.useCorrected) {

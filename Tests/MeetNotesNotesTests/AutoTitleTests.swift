@@ -77,3 +77,15 @@ import MeetNotesProviders
     #expect(r == nil)
     #expect(store.readMeta().manualTitle == "Mine" && store.readMeta().autoTitle == nil)
 }
+
+@Test func autoTitleGivesUpOnASlowModel() async {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let store = NotesStore(session: session)
+    let stub = ChatStub(delay: .seconds(5)) { _ in "Title" }
+    let started = ContinuousClock.now
+    let r = await AutoTitle.generate(client: chatClient(stub), model: "m", transcript: transcript([utt("Prognoza na sobotę.")]),
+                                     notesLanguage: .polish, store: store, timeout: 0.2)
+    #expect(r == nil && ContinuousClock.now - started < .seconds(3))
+    #expect(store.readMeta().autoTitle == nil) // brak tytułu zamiast wiszącego „Naming…"
+}

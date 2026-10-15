@@ -11,10 +11,13 @@ public enum NoteGenerationError: Error, Equatable {
 public struct NoteGenerator: Sendable {
     public let client: OpenAICompatibleClient
     public let model: String
+    /// Całkowity limit czasu odpowiedzi modelu (sekundy); po nim „Generate notes" kończy się błędem z nazwą modelu.
+    public let timeout: Double
 
-    public init(client: OpenAICompatibleClient, model: String) {
+    public init(client: OpenAICompatibleClient, model: String, timeout: Double = 180) {
         self.client = client
         self.model = model
+        self.timeout = timeout
     }
 
     public func generate(session: URL, template: Template, transcript: Transcript, context: String,
@@ -27,7 +30,8 @@ public struct NoteGenerator: Sendable {
         }
         let reply: String
         do {
-            reply = try await client.chat(model: model, system: prompt.system, user: prompt.user)
+            let client = client, model = model
+            reply = try await withDeadline(timeout) { try await client.chat(model: model, system: prompt.system, user: prompt.user) }
         } catch {
             throw NoteGenerationError.failed(ContextError.describe(model: model, error))
         }

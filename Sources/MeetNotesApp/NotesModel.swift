@@ -19,6 +19,8 @@ final class NotesModel {
     var generation: [String: GenState] = [:]
     private(set) var correcting: Set<String> = []
     private(set) var titling: Set<String> = []
+    /// Powód ostatniego nieudanego przebiegu korekty (klucz: id sesji). Znika po udanym ponowieniu.
+    private(set) var correctionFailure: [String: String] = [:]
     var templates = TemplatesFile()
 
     /// Podłączane przez `AppModel` (bez cyklu własności).
@@ -41,6 +43,48 @@ final class NotesModel {
 
     func isCorrecting(_ id: String) -> Bool { correcting.contains(id) }
     func isTitling(_ id: String) -> Bool { titling.contains(id) }
+    func correctionFailureMessage(_ id: String) -> String? { correctionFailure[id] }
+
+    /// „Improve transcript"/Retry: preset nagrania ma model korekty, jest transkrypt i nic nie trwa, a korekta
+    /// albo padła, albo jej nie ma (np. aplikacja zamknięta w trakcie).
+    func canRetryCorrection(_ item: SessionItem) -> Bool {
+        guard !correcting.contains(item.id), item.transcript != nil, item.runID != nil else { return false }
+        guard let c = presetFor(item.url)?.correction, !c.model.isEmpty else { return false }
+        return correctionFailure[item.id] != nil || item.corrected == nil
+    }
+
+    func retryCorrection(_ item: SessionItem) {
+        guard canRetryCorrection(item), let preset = presetFor(item.url), let c = preset.correction,
+              let runID = item.runID, let t = item.transcript else { return }
+        let url = item.url
+        Task { _ = await runCorrection(sessionURL: url, runID: runID, assignment: c, language: preset.language, transcript: t) }
+    }
+
+    /// Jedna korekta; stan ZAWSZE się kończy: sukces (corrected.json), albo `correctionFailure` z powodem.
+    private func runCorrection(sessionURL: URL, runID: String, assignment: RoleAssignment, language: LanguageCode?,
+                               transcript: Transcript) async -> Transcript {
+        let id = sessionURL.lastPathComponent
+        guard !assignment.model.isEmpty, let client = clientFor(assignment.providerID) else {
+            correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
+            onChange()
+            return transcript
+        }
+        correctionFailure[id] = nil
+        correcting.insert(id)
+        onChange()
+        let result = await Corrector(client: client, assignment: assignment).correct(transcript, language: language)
+        correcting.remove(id)
+        defer { onChange() }
+        if result.failedCompletely {
+            correctionFailure[id] = result.firstError ?? "The correction didn't go through."
+            return transcript
+        }
+        if result.batches > 0 {
+            try? JSONFile.save(result, to: RunDirectory(session: sessionURL, runID: runID).corrected)
+            return result.transcript
+        }
+        return transcript
+    }
 
     // MARK: Notatka na żądanie
 
@@ -85,16 +129,9 @@ final class NotesModel {
     func afterTranscription(sessionURL: URL, runID: String, snapshot: RunSnapshot, transcript: Transcript) async {
         let id = sessionURL.lastPathComponent
         var working = transcript
-        if let corr = snapshot.preset.correction, !corr.model.isEmpty, let client = clientFor(corr.providerID) {
-            correcting.insert(id)
-            onChange()
-            let result = await Corrector(client: client, assignment: corr).correct(transcript, language: snapshot.language)
-            correcting.remove(id)
-            if result.batches > 0 {
-                try? JSONFile.save(result, to: RunDirectory(session: sessionURL, runID: runID).corrected)
-                working = result.transcript
-            }
-            onChange()
+        if let corr = snapshot.preset.correction, !corr.model.isEmpty {
+            working = await runCorrection(sessionURL: sessionURL, runID: runID, assignment: corr,
+                                          language: snapshot.language, transcript: transcript)
         }
         // Ten sam wybór modelu co przy „Generate notes": preset nagrania → domyślny → dowolny z `summary` (`SummaryModel`).
         let info = presetsInfo()

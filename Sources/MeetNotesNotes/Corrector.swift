@@ -9,8 +9,14 @@ public struct CorrectedTranscript: Codable, Equatable, Sendable {
     public var batches: Int
     public var failedBatches: Int
     public var rejectedLines: Int
+    /// Pierwszy powód niepowodzenia partii (limit czasu, błąd HTTP, zła numeracja) — do komunikatu „Correction failed".
+    public var firstError: String?
 
-    public init(transcript: Transcript, model: String, batches: Int, failedBatches: Int, rejectedLines: Int) {
+    /// Żadna partia nie przeszła: nic nie zostało poprawione (to jest „Correction failed", a nie „parts kept as heard").
+    public var failedCompletely: Bool { batches > 0 && failedBatches == batches }
+
+    public init(transcript: Transcript, model: String, batches: Int, failedBatches: Int, rejectedLines: Int, firstError: String? = nil) {
+        self.firstError = firstError
         self.transcript = transcript
         self.model = model
         self.batches = batches
@@ -77,11 +83,14 @@ public struct Corrector: Sendable {
     public let client: OpenAICompatibleClient
     public let assignment: RoleAssignment
     public var maxBatchChars: Int
+    /// Całkowity limit czasu na jedną partię (sekundy). Po nim partia zostaje oryginalna i liczy się jako nieudana.
+    public var batchTimeout: Double
 
-    public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000) {
+    public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120) {
         self.client = client
         self.assignment = assignment
         self.maxBatchChars = maxBatchChars
+        self.batchTimeout = batchTimeout
     }
 
     public func system(language: LanguageCode?) -> String {
@@ -108,20 +117,29 @@ public struct Corrector: Sendable {
         let system = system(language: language)
         var failed = 0
         var rejected = 0
+        var firstError: String?
         for batch in batches {
             if Task.isCancelled { break }
             do {
-                let reply = try await client.chat(model: assignment.model, system: system, user: CorrectionBatches.render(batch))
-                guard let fixed = CorrectionBatches.parse(reply, expected: batch.map(\.n)) else { failed += 1; continue }
+                let model = assignment.model
+                let user = CorrectionBatches.render(batch)
+                let client = client
+                let reply = try await withDeadline(batchTimeout) { try await client.chat(model: model, system: system, user: user) }
+                guard let fixed = CorrectionBatches.parse(reply, expected: batch.map(\.n)) else {
+                    failed += 1
+                    if firstError == nil { firstError = "The model's answer didn't match the numbered lines." }
+                    continue
+                }
                 for l in batch {
                     guard let new = fixed[l.n], CorrectionRules.accepts(original: l.text, corrected: new) else { rejected += 1; continue }
                     out.utterances[l.n - 1].text = new
                 }
             } catch {
                 failed += 1
+                if firstError == nil { firstError = "\(error)" }
             }
         }
         return CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
-                                   failedBatches: failed, rejectedLines: rejected)
+                                   failedBatches: failed, rejectedLines: rejected, firstError: firstError)
     }
 }

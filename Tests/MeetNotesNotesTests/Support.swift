@@ -24,15 +24,21 @@ final class ChatStub: HTTPClient, @unchecked Sendable {
     private let lock = NSLock()
     private var _calls: [Call] = []
     let handler: @Sendable (Call) throws -> String
+    /// Sztuczne opóźnienie odpowiedzi (anulowalne) — do testów limitu czasu.
+    let delay: Duration?
     var calls: [Call] { lock.withLock { _calls } }
 
-    init(_ handler: @escaping @Sendable (Call) throws -> String) { self.handler = handler }
+    init(delay: Duration? = nil, _ handler: @escaping @Sendable (Call) throws -> String) {
+        self.delay = delay
+        self.handler = handler
+    }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let body = (try? JSONSerialization.jsonObject(with: request.httpBody ?? Data())) as? [String: Any] ?? [:]
         let msgs = body["messages"] as? [[String: Any]] ?? []
         let call = Call(system: msgs.first?["content"] as? String ?? "", user: msgs.last?["content"] as? String ?? "")
         lock.withLock { _calls.append(call) }
+        if let delay { try await Task.sleep(for: delay) }
         let url = request.url!
         do {
             let text = try handler(call)

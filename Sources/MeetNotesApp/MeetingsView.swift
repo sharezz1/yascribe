@@ -118,7 +118,7 @@ struct SessionRow: View {
         SessionStatus.of(isRecording: SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory),
                          progress: item.progress, correcting: model.notes.isCorrecting(item.id), titling: model.notes.isTitling(item.id),
                          crashed: item.summary?.crashed == true, transcript: item.transcript, hasRun: item.runID != nil,
-                         hasNotes: item.notes.summary != nil)
+                         hasNotes: item.notes.summary != nil, correctionFailed: model.notes.correctionFailureMessage(item.id) != nil)
     }
 
     var body: some View {
@@ -154,6 +154,9 @@ struct SessionRow: View {
             ProgressView(value: p) { Text("Transcribing \(Int(p * 100))%") }.frame(width: 140)
         case .correcting:
             Label("Improving transcript…", systemImage: "wand.and.stars").foregroundStyle(.secondary)
+        case .correctionFailed:
+            Label("Correction failed", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                .help(model.notes.correctionFailureMessage(item.id) ?? "")
         case .titling:
             Label("Naming…", systemImage: "sparkles").foregroundStyle(.secondary)
         case .recovered:
