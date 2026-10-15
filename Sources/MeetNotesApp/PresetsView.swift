@@ -233,20 +233,6 @@ struct PresetForm: View {
 }
 
 /// Ostrzeżenie: ikona + słowa w `warn` (nigdy sam kolor).
-struct WarnLabel: View {
-    let text: String
-    init(_ text: String) { self.text = text }
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 10, weight: .bold))
-            Text(text).fixedSize(horizontal: false, vertical: true)
-        }
-        .font(.callout)
-        .foregroundStyle(.mnWarn)
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// Dostawca + model z wyszukiwarką + wynik sondy (+ własne instrukcje tylko tam, gdzie mają sens).
 /// Sekcja z nagłówkiem i kartą; używana też w Settings (embedding). Sygnatura bez zmian względem wersji sprzed Designu B.
 struct RoleEditor: View {

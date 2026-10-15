@@ -50,10 +50,8 @@ struct SettingsView: View {
                         }
                         if add.preset != nil { AddProviderForm(add: add) } else { addRow }
                     }
-                    SectionHeader("Archive search")
-                    Card {
-                        RoleEditor(title: "Embedding model", role: .embedding, assignment: $draft.embedding, language: nil)
-                    }
+                    // RoleEditor rysuje własny SectionHeader i Card.
+                    RoleEditor(title: "Archive search", role: .embedding, assignment: $draft.embedding, language: nil)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Speech-to-text, correction and summary models are chosen in each preset.")
                         link("Open Presets") { model.section = .presets }

@@ -173,18 +173,6 @@ struct PresetMenu: View {
 }
 
 /// Stan z ostrzeżeniem (`warn` + ikona + słowo); `StateLabel` nie ma wariantu „warn".
-private struct WarnLabel: View {
-    let text: String
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "exclamationmark.triangle").font(.system(size: 10, weight: .bold))
-            Text(text)
-        }
-        .font(.callout).foregroundStyle(.mnWarn).lineLimit(1)
-        .accessibilityElement(children: .combine)
-    }
-}
-
 struct SessionRow: View {
     @Environment(AppModel.self) private var model
     @StateObject private var hover = HoverState()
@@ -257,15 +245,15 @@ struct SessionRow: View {
         case .titling:
             StateLabel(.progress(nil), "Naming…")
         case .recovered:
-            WarnLabel(text: "Recovered").help("The app stopped during this recording; the audio was kept")
+            WarnLabel("Recovered").help("The app stopped during this recording; the audio was kept")
         case .partial(let gaps):
-            WarnLabel(text: "Partial — \(gaps) gaps")
+            WarnLabel("Partial — \(gaps) gaps")
         case .interrupted:
-            WarnLabel(text: "Interrupted")
+            WarnLabel("Interrupted")
         case .notesReady:
             StateLabel(.ok, "Notes ready")
         case .flagged(let n):
-            WarnLabel(text: "\(n) language flags")
+            WarnLabel("\(n) language flags")
         case .transcriptReady:
             StateLabel(.neutral, "Transcript ready")
         case .notTranscribed:
