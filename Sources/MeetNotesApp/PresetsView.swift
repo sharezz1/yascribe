@@ -170,7 +170,7 @@ struct EditorPromptField: View {
     var minHeight: CGFloat = 58
     var body: some View {
         TextEditor(text: $text)
-            .font(.system(size: 13))
+            .font(.system(size: 13)).foregroundStyle(.mnText)
             .scrollContentBackground(.hidden)
             .padding(.horizontal, 5).padding(.vertical, 4)
             .frame(minHeight: minHeight)

@@ -112,7 +112,7 @@ struct MyNotesTab: View {
             .scrollContentBackground(.hidden)
             .overlay(alignment: .topLeading) {
                 if state.myNotes.isEmpty {
-                    Text("Write notes…").font(.system(size: 14)).foregroundStyle(.secondary).padding(.top, 8).padding(.leading, 5).allowsHitTesting(false)
+                    Text("Write notes…").font(.system(size: 14)).foregroundStyle(.mnText2).padding(.top, 8).padding(.leading, 5).allowsHitTesting(false)
                 }
             }
     }
@@ -323,6 +323,7 @@ struct SummaryTab: View {
                 .help("Add or change the context for the model")
                 if let c = choice {
                     Text(c.assignment.model).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1)
+                        .layoutPriority(1) // id modelu wygrywa z kontekstem (przegląd migawek: „deepseek/…-fla…”)
                         .help(c.label ?? "Summary model")
                 }
                 Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }

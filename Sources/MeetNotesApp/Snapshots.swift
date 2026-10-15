@@ -100,7 +100,7 @@ enum Snapshots {
                 // Pola tekstowe: PresetsView bez wyboru pokazuje tylko „Choose a preset" (wybór jest lokalny w widoku).
                 let form = PresetEditorState()
                 form.draft = model.presets.presets.first
-                try render("preset-form", size: CGSize(width: 700, height: 600), dark: dark, model: model) { PresetForm(state: form) }
+                try render("preset-form", size: CGSize(width: 700, height: 600), dark: dark, model: model) { PresetForm(state: form).contentBackground() }
                 // T3: preset wybrany (lista + edytor obok siebie) oraz całe okno z sidebarem — bliższe temu, co widać na żywo.
                 let editing = PresetEditorState()
                 editing.select(model.presets.presets.first)
