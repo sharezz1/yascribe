@@ -52,8 +52,8 @@ struct MeetNotesApp: App {
                 Button("Show in Finder") { if let i = model.openItem { model.showInFinder(i) } }
                     .disabled(model.openItem == nil)
                 Divider()
+                // Bez skrótu: ⌘⌫ w edytorze My notes kasuje do początku linii, menu by go przechwyciło.
                 Button("Delete Meeting…") { model.pendingDelete = model.openItem?.id }
-                    .keyboardShortcut(.delete, modifiers: .command)
                     .disabled(model.openItem.map { !model.canDelete($0) } ?? true)
             }
         }
