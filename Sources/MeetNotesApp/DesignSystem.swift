@@ -201,6 +201,21 @@ struct StateLabel: View {
     }
 }
 
+/// Ostrzeżenie (np. język Auto, „Recovered”): trójkąt + słowa w `warn`; zawija długie zdania.
+struct WarnLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: "exclamationmark.triangle").font(.system(size: 10, weight: .bold))
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.callout)
+        .foregroundStyle(.mnWarn)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - Przyciski-pigułki (§11.4, odstępstwo 7: pigułka nigdy nie jest przełącznikiem)
 
 final class HoverState: ObservableObject {
