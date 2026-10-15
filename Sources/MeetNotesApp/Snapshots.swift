@@ -136,12 +136,21 @@ enum Snapshots {
                     }
                     .padding(12)
                 }
-                // Odbiór T13 #7: kafelki dostawców i wynik weryfikacji (Verified / powód).
+                // Settings (§11.5): wiersze dostawców w stanach Verified / błąd oraz rozwinięty formularz „Add:" z wynikiem.
                 if let pid = model.providers.providers.first?.id {
                     model.providerChecks[pid] = .verified(models: 26)
                     try render("settings-verified", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                     model.providerChecks[pid] = .failed("Invalid API key.")
                     try render("settings-failed", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                    // Formularz po „Save & verify": dostawca już zapisany (id w stanie), wynik weryfikacji pod polami.
+                    let ok = AddProviderState(); ok.open(.openRouter); ok.savedID = pid
+                    model.providerChecks[pid] = .verified(models: 312)
+                    try render("settings-add-verified", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView(add: ok) }
+                    let bad = AddProviderState(); bad.open(.openRouter); bad.savedID = pid
+                    model.providerChecks[pid] = .failed("Invalid API key.")
+                    try render("settings-add-failed", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView(add: bad) }
+                    let fresh = AddProviderState(); fresh.open(.custom); fresh.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
+                    try render("settings-add-custom", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView(add: fresh) }
                     model.providerChecks[pid] = nil
                 }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }

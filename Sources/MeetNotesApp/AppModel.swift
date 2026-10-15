@@ -221,6 +221,14 @@ final class AppModel {
         }
     }
 
+    /// Poprawka klucza już zapisanego dostawcy (formularz „Save & verify" po błędzie): zapis i ponowna weryfikacja.
+    /// `nil` = zapisano; tekst = błąd pęku kluczy. Pusty klucz (Ollama) tylko weryfikuje ponownie.
+    func replaceKey(_ id: UUID, key: String) -> String? {
+        do { if !key.isEmpty { try secrets.set(id, key) } } catch { return "Couldn't store the key in Keychain: \(error)" }
+        Task { await verifyProvider(id) }
+        return nil
+    }
+
     func removeProvider(_ id: UUID) {
         try? secrets.delete(id)
         providers.providers.removeAll { $0.id == id }
