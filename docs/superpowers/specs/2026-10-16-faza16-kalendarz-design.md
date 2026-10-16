@@ -155,6 +155,10 @@ trwająca w tym momencie rozmowa i jej wydarzenie są wyciszone tak jak po „No
 ani oferta, ani **auto-start** nie wracają do końca tej sesji mikrofonu. Bez tego Teams trzymający
 dalej mikrofon po Twoim Stop uruchomiłby auto-start od nowa — nagranie, którego nie chcesz.
 Nowa rozmowa (po przerwie ≥ T_release) oferuje jak zwykle. **(Moja decyzja.)**
+**Konsekwencja przy spotkaniach jedno po drugim (decyzja użytkownika 2026-10-16):** Stop wycisza
+wszystkie wydarzenia, których okno oferty właśnie trwa. Jeśli zatrzymasz nagranie A po
+`start_B − 60 s`, oferta dla B jest wyciszona; B zaczynasz ręcznie albo po nowej rozmowie po
+przerwie. Zostawione świadomie — pigułka nie wyskakuje tuż po Twoim Stop.
 
 ### 4.3 Filtr wydarzeń
 
