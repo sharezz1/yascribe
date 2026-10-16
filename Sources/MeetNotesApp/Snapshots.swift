@@ -146,23 +146,24 @@ enum Snapshots {
                     }
                     .padding(12)
                 }
-                // Settings (§11.5): wiersze dostawców w stanach Verified / błąd oraz rozwinięty formularz „Add:" z wynikiem.
+                // Settings (§11.5): lista wszystkich dostawców (OpenRouter skonfigurowany, Ollama w błędzie), arkusz konfiguracji osobno.
                 if let pid = model.providers.providers.first?.id {
-                    model.providerChecks[pid] = .verified(models: 26)
-                    try render("settings-verified", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
-                    model.providerChecks[pid] = .failed("Invalid API key.")
-                    try render("settings-failed", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
-                    // Formularz po „Save & verify": dostawca już zapisany (id w stanie), wynik weryfikacji pod polami.
-                    let ok = AddProviderState(); ok.open(.openRouter); ok.savedID = pid
                     model.providerChecks[pid] = .verified(models: 312)
-                    try render("settings-add-verified", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView(add: ok) }
-                    let bad = AddProviderState(); bad.open(.openRouter); bad.savedID = pid
-                    model.providerChecks[pid] = .failed("Invalid API key.")
-                    try render("settings-add-failed", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView(add: bad) }
-                    let fresh = AddProviderState(); fresh.open(.custom); fresh.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
-                    try render("settings-add-custom", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView(add: fresh) }
+                    try render("settings-verified", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                    let ollama = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+                    model.providers.providers.append(ollama)
+                    model.providerChecks[ollama.id] = .failed("Can't connect. Is the server running and the address correct?")
+                    try render("settings-failed", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                    model.providers.providers.removeAll { $0.id == ollama.id }
                     model.providerChecks[pid] = nil
                 }
+                // Arkusz osobną migawką (b-add.png): ElevenLabs z wynikiem, błąd klucza, Custom z błędem adresu.
+                let sheetOK = ProviderSheetState(); sheetOK.setUp(.elevenLabs); sheetOK.result = .verified(models: 4)
+                try render("settings-sheet-verified", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetOK) }
+                let sheetBad = ProviderSheetState(); sheetBad.setUp(.elevenLabs); sheetBad.result = .failed("Key rejected (401). Check the key and try again.")
+                try render("settings-sheet-failed", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetBad) }
+                let sheetCustom = ProviderSheetState(); sheetCustom.setUp(.custom); sheetCustom.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
+                try render("settings-sheet-custom", size: CGSize(width: 520, height: 400), dark: dark, model: model) { ProviderSetupSheet(state: sheetCustom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —
