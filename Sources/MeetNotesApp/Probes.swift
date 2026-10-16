@@ -61,6 +61,13 @@ enum Probes {
         return String(t[r].dropFirst("teams.microsoft.com/".count))
     }
 
+    /// Ścieżka linku Teams do pierwszej cyfry (max 14 znaków) — struktura adresu bez identyfikatorów spotkania.
+    private static func teamsPathShape(in text: String?) -> String {
+        guard let t = text?.lowercased(),
+              let r = t.range(of: #"teams\.microsoft\.com/[^0-9\s<>"')]{0,14}"#, options: .regularExpression) else { return "-" }
+        return String(t[r].dropFirst("teams.microsoft.com/".count)).replacingOccurrences(of: "\n", with: " ")
+    }
+
     private static func yn(_ b: Bool) -> String { b ? "Y" : "N" }
 
     private static func calendar() async {
@@ -94,7 +101,7 @@ enum Probes {
                 "avail=\(e.availability.rawValue)", "status=\(e.status.rawValue)", "cal=\(e.calendar?.type.rawValue ?? -1)",
                 "me=\(myStatus)", "org=\(yn(e.organizer?.isCurrentUser ?? false))", "att=\(e.attendees?.count ?? 0)",
                 "hasURL=\(yn(e.url != nil))", "url=\(kinds(in: e.url?.absoluteString))",
-                "loc=\(kinds(in: e.location))", "notes=\(kinds(in: e.notes))", "nlen=\(e.notes?.count ?? 0)", "tpath=\(teamsPath(in: e.notes))",
+                "loc=\(kinds(in: e.location))", "notes=\(kinds(in: e.notes))", "nlen=\(e.notes?.count ?? 0)", "tpath=\(teamsPath(in: e.notes))", "tshape=[\(teamsPathShape(in: e.notes))]",
                 "extId=\(yn(!(e.calendarItemExternalIdentifier ?? "").isEmpty))",
                 "rec=\(yn(e.hasRecurrenceRules))", "detached=\(yn(e.isDetached))",
             ].joined(separator: " | "))

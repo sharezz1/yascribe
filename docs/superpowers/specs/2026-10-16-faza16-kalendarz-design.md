@@ -171,7 +171,10 @@ Wydarzenie kwalifikuje się do **oferty pigułki** wyłącznie, gdy spełnia **w
    wydarzenia, w formacie `teams.microsoft.com/meet/…`, nie `/l/meetup-join`). Rozpoznawane
    wzorce: Teams (ogólnie `teams.microsoft.com`, `teams.live.com`), Google Meet, Zoom
    (`zoom.us/j`); `webex.com` **nie** jest wzorcem spotkania — w zaproszeniach Teams występuje
-   jako dopisek o łączeniu z urządzeń wideo (29 z 49 wydarzeń Teams w pomiarze); lista nastawna. Wizyta u lekarza, wydarzenie
+   jako dopisek o łączeniu z urządzeń wideo (29 z 49 wydarzeń Teams w pomiarze); lista nastawna.
+   Pomiar kształtu linków (okno −14…+50 dni): każdy adres `teams.microsoft.com/…` ma postać
+   `/meet/…` (brak linków do kanałów, wiadomości, plików); 18 wydarzeń Teams ma host bez ścieżki
+   i lokalizację „Microsoft Teams Meeting" — dlatego wzorzec zostaje szeroki (`teams.microsoft.com`). Wizyta u lekarza, wydarzenie
    „dojazd", urodziny, przypomnienia, bloki „focus time" nie mają linku → **brak oferty**;
 2. nie jest całodniowe (`isAllDay == false`) — urodziny, święta, OOO całodniowe;
 3. nie jest wielodniowe ani dłuższe niż próg (domyślnie 8 h; nastawny) — OOO bywa blokiem
