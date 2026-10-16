@@ -53,9 +53,8 @@ struct TemplatesView: View {
                                              edited: model.notes.templates.isEdited(id: d.id),
                                              onDuplicate: { duplicate(d) }, onReset: { reset(d) })
                             } else {
-                                ContentUnavailableView("Choose a template", systemImage: "doc.text",
-                                                       description: Text("A template is a list of sections: the structure of the notes and what to focus on."))
-                                    .padding(.top, 40)
+                                EmptyEditorHint(title: "Choose a template",
+                                                text: "A template is a list of sections: the structure of the notes and what to focus on.")
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
