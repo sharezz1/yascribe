@@ -51,6 +51,8 @@ struct MeetNotesApp: App {
                 // Bez skrótu: Cmd-Shift-R i Cmd-Opt-R zajmuje nagrywanie.
                 Button("Show in Finder") { if let i = model.openItem { model.showInFinder(i) } }
                     .disabled(model.openItem == nil)
+                // Uwaga 7 pkt 5: odtwarzanie przeniesione z paska; bez skrótu Spacja (koliduje z pisaniem w My notes).
+                PlayRecordingButton()
                 Divider()
                 // Bez skrótu: ⌘⌫ w edytorze My notes kasuje do początku linii, menu by go przechwyciło.
                 Button("Delete Meeting…") { model.pendingDelete = model.openItem?.id }

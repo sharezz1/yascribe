@@ -82,16 +82,18 @@ struct ErrorLine: View {
     }
 }
 
-/// Pole wielolinijkowe na kontekst: `field` + obwódka 0,5 pt + promień 7.
+/// Kontekst dla modelu, rozwinięty w miejscu we wnęce paska: pole `field` + obwódka 0,5 pt + promień 7,
+/// rośnie z treścią (uwaga 7 — bez własnego przewijania).
 private struct ContextEditor: View {
     @Binding var text: String
-    var minHeight: CGFloat
     var body: some View {
-        TextEditor(text: $text)
-            .font(.system(size: 13)).foregroundStyle(.mnText)
-            .scrollContentBackground(.hidden)
-            .padding(.horizontal, 6).padding(.vertical, 4)
-            .frame(minHeight: minHeight)
+        GrowingTextView(text: $text, minHeight: 36, accessibilityLabel: "Context for the model")
+            .overlay(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text("Who's there, what it's about — for the model").font(.system(size: 13)).foregroundStyle(.mnText2).allowsHitTesting(false)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
     }
@@ -99,20 +101,18 @@ private struct ContextEditor: View {
 
 // MARK: My notes
 
+/// Edytor rosnący z treścią (uwaga 7): bez własnego przewijania, autozapis przy każdej zmianie.
 struct MyNotesTab: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: MeetingViewState
     let item: SessionItem
 
     var body: some View {
-        TextEditor(text: Binding(get: { state.myNotes }, set: { state.myNotes = $0; model.notes.saveMyNotes($0, for: item) }))
-            .font(.system(size: 14))
-            .lineSpacing(5)
-            .foregroundStyle(.mnText)
-            .scrollContentBackground(.hidden)
+        GrowingTextView(text: Binding(get: { state.myNotes }, set: { state.myNotes = $0; model.notes.saveMyNotes($0, for: item) }),
+                        fontSize: 14, lineSpacing: 8, minHeight: 240, accessibilityLabel: "My notes")
             .overlay(alignment: .topLeading) {
                 if state.myNotes.isEmpty {
-                    Text("Write notes…").font(.system(size: 14)).foregroundStyle(.mnText2).padding(.top, 8).padding(.leading, 5).allowsHitTesting(false)
+                    Text("Write notes…").font(.system(size: 14)).foregroundStyle(.mnText2).allowsHitTesting(false)
                 }
             }
     }
@@ -134,33 +134,40 @@ struct TranscriptTab: View {
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
                 ErrorLine(message: "Correction failed: \(why)", retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
-            } else if model.notes.canRetryCorrection(item) {
-                HStack { Spacer(); Button("Improve transcript") { model.notes.retryCorrection(item) }.buttonStyle(.pillSmall).help("Run the preset's correction model on this transcript") }
             }
-            if item.corrected != nil {
-                HStack {
-                    Picker("Version", selection: $state.useCorrected) {
-                        Text("Corrected").tag(true)
-                        Text("Original").tag(false)
+            // Uwaga 7: jedna linia nad listą — wersja (pole-popup) po lewej, Improve transcript i Copy po prawej.
+            if item.transcript != nil {
+                HStack(spacing: 8) {
+                    if item.corrected != nil {
+                        FieldMenu(label: "Version", value: state.useCorrected ? "Corrected" : "Original", width: 120) {
+                            Picker("Version", selection: $state.useCorrected) {
+                                Text("Corrected").tag(true)
+                                Text("Original").tag(false)
+                            }
+                            .pickerStyle(.inline).labelsHidden()
+                        }
+                        if let c = item.corrected, c.failedBatches > 0 || c.rejectedLines > 0 {
+                            Label("\(c.failedBatches + c.rejectedLines) parts kept as heard", systemImage: "info.circle")
+                                .font(.callout).foregroundStyle(.mnText2).lineLimit(1)
+                                .help("Corrections that failed a check were left as the model heard them")
+                        }
                     }
-                    .pickerStyle(.segmented).frame(width: 220)
-                    if let c = item.corrected, c.failedBatches > 0 || c.rejectedLines > 0 {
-                        Label("\(c.failedBatches + c.rejectedLines) parts kept as heard", systemImage: "info.circle")
-                            .font(.callout).foregroundStyle(.mnText2)
-                            .help("Corrections that failed a check were left as the model heard them")
+                    Spacer(minLength: 0)
+                    if model.notes.correctionFailureMessage(item.id) == nil, model.notes.canRetryCorrection(item) {
+                        Button("Improve transcript") { model.notes.retryCorrection(item) }
+                            .buttonStyle(.pill)
+                            .help("Run the preset's correction model on this transcript")
                     }
-                    Spacer()
                     copyButton
                 }
-            } else if item.transcript != nil {
-                HStack { Spacer(); copyButton }
+                .padding(.bottom, 4)
             }
             content
         }
     }
 
     private var copyButton: some View {
-        Button { copy() } label: { Label("Copy", systemImage: "doc.on.doc") }.buttonStyle(.pillSmall).help("Copy the transcript")
+        Button { copy() } label: { Label("Copy", systemImage: "doc.on.doc") }.buttonStyle(.pill).help("Copy the transcript")
     }
 
     private var modelName: String? { model.presetFor(sessionURL: item.url)?.correction?.model }
@@ -170,32 +177,31 @@ struct TranscriptTab: View {
 
     @ViewBuilder private var content: some View {
         if let t = shown {
-            List {
+            // Uwaga 7: lista rośnie z treścią (przewija strona), separator `line2` między wierszami.
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if !t.failedChunks.isEmpty {
                     Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item) }
                         .buttonStyle(.pillSmall)
                         .disabled(busy)
                         .help("Sends only the parts that failed; finished parts aren't paid for again")
-                        .listRowBackground(Color.clear)
+                        .padding(.bottom, 8)
                 }
-                ForEach(Array(t.utterances.enumerated()), id: \.offset) { _, u in
+                Rectangle().fill(.mnLine2).frame(height: 0.5)
+                ForEach(Array(t.utterances.enumerated()), id: \.offset) { i, u in
+                    if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     UtteranceRow(utterance: u, isAuto: isAuto) { onJump(u) }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 7, leading: 0, bottom: 7, trailing: 0))
-                        .listRowSeparatorTint(.mnLine2)
                 }
                 if !t.failedChunks.isEmpty {
-                    SwiftUI.Section("Gaps") {
-                        ForEach(Array(t.failedChunks.enumerated()), id: \.offset) { _, f in
-                            Label("Couldn't transcribe \(MeetingDetailView.time(f.start))–\(MeetingDetailView.time(f.end))", systemImage: "exclamationmark.circle")
-                                .font(.callout).foregroundStyle(.mnWarn)
-                                .listRowBackground(Color.clear)
-                        }
+                    Text("Gaps").font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
+                        .padding(.top, 22).padding(.bottom, 8)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(Array(t.failedChunks.enumerated()), id: \.offset) { _, f in
+                        Label("Couldn't transcribe \(MeetingDetailView.time(f.start))–\(MeetingDetailView.time(f.end))", systemImage: "exclamationmark.circle")
+                            .font(.callout).foregroundStyle(.mnWarn)
+                            .padding(.vertical, 4)
                     }
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
         } else {
             ContentUnavailableView {
                 Label("No transcript yet", systemImage: "text.alignleft")
@@ -250,20 +256,22 @@ struct SummaryTab: View {
         item.transcript == nil ? "Transcript isn't ready yet." : "Nothing to summarize: the transcript has no usable text."
     }
 
+    /// Uwaga 7 (b-summary0.png, b-meeting.png): bez karty — ten sam pasek we wnęce przed i po generowaniu, pod nim
+    /// linie stanu i notatka albo jedna linia stanu pustego. Przewija strona widoku spotkania.
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if let s = item.notes.summary {
-                    bar(s)
-                    if gen == .generating { StateLabel(.progress(nil), "Generating notes…") }
-                    errorView
-                    MarkdownView(blocks: MarkdownBlocks.group(s.markdown))
-                } else {
-                    card
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            bar(item.notes.summary)
+            if choice?.isFallback == true || choice == nil { modelLine }
+            if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
+            if item.notes.summary != nil, gen == .generating { StateLabel(.progress(nil), "Generating notes…") }
+            errorView
+            if let s = item.notes.summary {
+                MarkdownView(blocks: MarkdownBlocks.group(s.markdown)).padding(.top, 8)
+            } else if gen != .generating, hasText {
+                emptyState
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { prefillContext() }
     }
 
@@ -276,23 +284,55 @@ struct SummaryTab: View {
         if let s = item.notes.summary { state.templateID = s.templateID; if state.context.isEmpty { state.context = s.context } }
     }
 
-    // Przed pierwszym generowaniem: karta (spec 1.5, decyzja 3) z jedynym przyciskiem głównym.
-    private var card: some View {
-        Card {
-            FormRow(label: "Template") { templateMenu }
-            RowDivider()
-            FormRow(label: "Context", caption: "For the model (optional)") {
-                ContextEditor(text: $state.context, minHeight: 70)
-            }
-            RowDivider()
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    modelLine
-                    if !hasText { Text(disabledReason).font(.subheadline).foregroundStyle(.mnText2) }
+    /// Stan pusty: co zrobić i z jakiego transkryptu powstanie notatka.
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("No notes yet. Pick a template, add context if you like, and generate.")
+                .font(.system(size: 13)).foregroundStyle(.mnText2)
+            Text(sourceLine).font(.subheadline).foregroundStyle(.mnText2)
+        }
+        .padding(.top, 34).padding(.leading, 4)
+    }
+
+    private var sourceLine: String {
+        let kind = state.useCorrected && item.corrected != nil ? "corrected" : "original"
+        let details = [
+            item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) },
+            model.presetFor(sessionURL: item.url)?.language?.englishName,
+        ].compactMap { $0 }
+        return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
+    }
+
+    /// Pasek we wnęce `sunk` (makieta: `.genbar`): szablon ⌄ · kontekst · model · przycisk. „Add context” rozwija pole
+    /// w tej samej wnęce. Przed notatką jedyny primary „Generate notes”, po — „Regenerate” + Copy.
+    private func bar(_ s: NoteSummary?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                templateMenu
+                Button { state.showContext.toggle() } label: {
+                    Text(state.context.isEmpty || state.showContext ? "Add context" : "Context: \(state.context.replacingOccurrences(of: "\n", with: " "))")
+                        .font(.system(size: 13)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
-                Spacer(minLength: 0)
-                if gen == .generating {
-                    StateLabel(.progress(nil), "Generating notes…")
+                .buttonStyle(.plain)
+                .help(state.showContext ? "Hide the context field" : "Add or change the context for the model")
+                .accessibilityValue(state.showContext ? "Expanded" : "Collapsed")
+                if let c = choice {
+                    Text(c.assignment.model).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1)
+                        .layoutPriority(1) // id modelu wygrywa z kontekstem (przegląd migawek: „deepseek/…-fla…”)
+                        .help(c.label ?? "Summary model")
+                }
+                if let s {
+                    Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
+                        .buttonStyle(.pill)
+                        .disabled(gen == .generating || !hasText || choice == nil)
+                    Button { copy(s.markdown) } label: { Image(systemName: "doc.on.doc") }
+                        .buttonStyle(CircleIconButtonStyle())
+                        .help("Copy the notes")
+                        .accessibilityLabel("Copy the notes")
+                } else if gen == .generating {
+                    StateLabel(.progress(nil), "Generating notes…").frame(height: 28)
                 } else {
                     Button("Generate notes") { run() }
                         .buttonStyle(.pillPrimary)
@@ -300,46 +340,10 @@ struct SummaryTab: View {
                         .keyboardShortcut(.defaultAction)
                 }
             }
-            .padding(.vertical, 12).padding(.horizontal, 16)
-            if case .failed(let message) = gen {
-                RowDivider()
-                ErrorLine(message: message) { run() }.padding(.vertical, 12).padding(.horizontal, 16)
-            }
+            if state.showContext { ContextEditor(text: $state.context).padding(.horizontal, 2).padding(.bottom, 2) }
         }
-    }
-
-    // Po wygenerowaniu: pasek we wnęce `sunk` nad notatką (makieta: `.genbar`).
-    private func bar(_ s: NoteSummary) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                templateMenu
-                Button { state.showContext.toggle() } label: {
-                    Text(state.context.isEmpty ? "Add context" : "Context: \(state.context.replacingOccurrences(of: "\n", with: " "))")
-                        .font(.callout).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Add or change the context for the model")
-                if let c = choice {
-                    Text(c.assignment.model).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1)
-                        .layoutPriority(1) // id modelu wygrywa z kontekstem (przegląd migawek: „deepseek/…-fla…”)
-                        .help(c.label ?? "Summary model")
-                }
-                Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.pill)
-                    .disabled(gen == .generating || !hasText || choice == nil)
-                Button { copy(s.markdown) } label: { Image(systemName: "doc.on.doc") }
-                    .buttonStyle(CircleIconButtonStyle())
-                    .help("Copy the notes")
-                    .accessibilityLabel("Copy the notes")
-            }
-            .padding(.leading, 8).padding(.trailing, 6).padding(.vertical, 6)
-            .background(.mnSunk, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            if choice?.isFallback == true { modelLine }
-            if state.showContext { ContextEditor(text: $state.context, minHeight: 60) }
-        }
-        .padding(.bottom, 8)
+        .padding(.leading, 8).padding(.trailing, 6).padding(.vertical, 6)
+        .background(.mnSunk, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     /// Popup szablonu: pole 130 × 28, promień 7 (makieta: `.field`). Menu zostaje systemowe.
