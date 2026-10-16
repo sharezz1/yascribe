@@ -122,6 +122,7 @@ private func fixture(_ name: String) throws -> Data {
     let rawProviders = try fixture("phase1-providers.json")
     let providers = try JSONDecoder().decode(ProvidersFile.self, from: rawProviders)
     #expect(providers.providers.map(\.name) == ["OpenRouter"])
+    #expect(providers.providers.allSatisfy { $0.kind == nil && $0.api == .openAICompatible }) // bez `kind` = OpenAI-compatible
     for (raw, again) in [(rawPresets, try JSONEncoder().encode(presets)), (rawProviders, try JSONEncoder().encode(providers))] {
         let a = try JSONSerialization.jsonObject(with: raw) as? NSDictionary
         let b = try JSONSerialization.jsonObject(with: again) as? NSDictionary

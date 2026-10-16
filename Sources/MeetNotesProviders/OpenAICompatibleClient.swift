@@ -26,11 +26,19 @@ public struct TranscriptionResult: Codable, Equatable, Sendable {
     public var words: [TranscribedWord]?
 }
 
-/// Dialekt zgodny z OpenAI — w fazie 1 jedyny. Ollama, oMLX i LM Studio wystawiają
+/// Granica ścieżki transkrypcji (runner, sonda ASR): tyle potrzebują od dostawcy. Klienta wybiera się po
+/// `Provider.api` — `OpenAICompatibleClient` albo `ElevenLabsClient`. Czat i embeddingi zostają tylko
+/// w `OpenAICompatibleClient`, bo ElevenLabs ich nie robi.
+public protocol TranscriptionClient: Sendable {
+    var provider: Provider { get }
+    func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult
+}
+
+/// Dialekt zgodny z OpenAI. Ollama, oMLX i LM Studio wystawiają
 /// `/v1/*`, więc natywny dialekt Ollamy nie jest potrzebny (odstępstwo od §3 speca,
 /// YAGNI). Transkrypcja: ciało JSON z audio w base64 — tak, jak w wywołaniu
-/// z rozdz. 11 dla OpenRoutera.
-public struct OpenAICompatibleClient: Sendable {
+/// z rozdz. 11 dla OpenRoutera. ElevenLabs bezpośrednio — `ElevenLabsClient`.
+public struct OpenAICompatibleClient: TranscriptionClient {
     public let provider: Provider
     public let key: String?
     public let http: any HTTPClient
@@ -58,14 +66,7 @@ public struct OpenAICompatibleClient: Sendable {
 
     func json(_ req: URLRequest) async throws -> [String: Any] {
         let (data, resp) = try await http.send(req)
-        guard (200..<300).contains(resp.statusCode) else {
-            // Najpierw usuń klucz z całej treści, dopiero potem przytnij — inaczej przycięcie
-            // w połowie klucza zostawiłoby jego fragment (ChatGPT #11).
-            var body = String(decoding: data, as: UTF8.self)
-            if let key, !key.isEmpty { body = body.replacingOccurrences(of: key, with: "••••") }
-            throw ProviderError.http(resp.statusCode, String(body.prefix(300)))
-        }
-        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let obj = try JSONSerialization.jsonObject(with: try checkedBody(data, resp, key: key)) as? [String: Any] else {
             throw ProviderError.badResponse("not a JSON object")
         }
         return obj
