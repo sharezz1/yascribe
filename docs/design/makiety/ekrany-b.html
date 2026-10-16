@@ -129,6 +129,22 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round
 .adding .form-row { padding: 6px 0; grid-template-columns: 70px 1fr; }
 .adding .form-row::before { display: none; }
 
+/* szablony: sekcje */
+.tsec { display: flex; gap: 10px; padding: 12px 14px 12px 8px; position: relative; }
+.tsec + .tsec::before { content:""; position:absolute; top:0; left:14px; right:14px; height:.5px; background: var(--line2); }
+.grip { width: 14px; flex: none; color: var(--text3); padding-top: 2px; }
+.grip svg { width: 12px; height: 14px; }
+.tsec .body { flex: 1; min-width: 0; }
+.tsec .body b { display: block; font-weight: 600; margin-bottom: 3px; }
+.tsec .body > span { display: block; color: var(--text2); line-height: 18px; }
+.tsec .rm { color: var(--text3); width: 22px; height: 22px; display: grid; place-items: center; flex: none; }
+.tsec .rm svg { width: 11px; height: 11px; }
+.tsec.edit { background: var(--sunk); }
+.tsec.edit .body b, .tsec.edit .body span { border-radius: 6px; }
+.caret { display: inline-block; width: 1px; height: 15px; background: var(--text); vertical-align: -3px; margin-left: 1px; }
+.ctxbox { padding: 10px 12px; line-height: 18px; color: var(--text); }
+.ctxbox.empty { color: var(--text3); }
+
 /* pigułka */
 .desk { width: 960px; height: 700px; border-radius: 16px; overflow: hidden; position: relative; flex: none; color: var(--text);
         background: radial-gradient(1200px 600px at 20% 10%, #6d8fb3, transparent), radial-gradient(900px 600px at 90% 90%, #c08a5a, transparent), #4a5a6a; }
@@ -315,7 +331,39 @@ const pill = th => `<div class="desk ${th}">
     <div style="display:flex;gap:8px"><span class="pill" style="flex:1;justify-content:center">Open note</span><span class="stop" style="flex:1;justify-content:center"><i></i>Stop</span></div>
   </div></div>`;
 
-const S = {home, meeting, presets, settings, add, pill};
+
+/* ---------------- szablony (sekcje, uwaga z odbioru 2026-10-16) ---------------- */
+const grip = '<svg viewBox="0 0 12 14"><path d="M4 2.5h.01M8 2.5h.01M4 7h.01M8 7h.01M4 11.5h.01M8 11.5h.01" stroke-width="2.2"/></svg>';
+const tsec = (t, d, edit) => `<div class="tsec ${edit?'edit':''}"><span class="grip">${grip}</span>
+  <div class="body"><b>${t}</b><span>${d}${edit?'<span class="caret"></span>':''}</span></div><span class="rm">${I.x}</span></div>`;
+const templates = th => win(th,'t', `<div class="main"><div class="col" style="width:700px;padding-bottom:70px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Templates</div><div class="pill">${I.plus}New template</div></div>
+  <div style="display:flex;gap:18px">
+    <div class="plist">
+      <div class="prow sel"><b>Standard</b><span>Built-in · edited</span></div>
+      <div class="prow"><b>1:1</b><span>Built-in</span></div>
+      <div class="prow"><b>Weekly team meeting</b><span>Built-in</span></div>
+      <div class="prow"><b>Customer: Discovery</b><span>Built-in</span></div>
+      <div class="prow"><b>testowy</b><span>Custom</span></div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="form-row" style="padding:0 2px;grid-template-columns:1fr auto auto"><div class="field" style="height:32px;font-size:15px;font-weight:500"><span class="grow">Standard</span></div>
+        <span class="dim" style="font-size:12px">Built-in · edited</span><div class="icon-btn">${I.more}</div></div>
+      <div class="sec-h"><span class="t-head">About this meeting type <span class="dim" style="font-weight:400">— optional</span></span></div>
+      <div class="card"><div class="ctxbox empty">Describe the kind of meeting and what matters in its notes.</div></div>
+      <div class="sec-h"><span class="t-head">Sections</span><span class="t-cap">in this order</span></div>
+      <div class="card" style="overflow:hidden">
+        ${tsec('Summary','One paragraph: what was discussed and what was agreed.')}
+        ${tsec('Topics','One heading per topic with the concrete details: numbers, names, dates, the options discussed; mark the favored option. A side issue gets its own heading.')}
+        ${tsec('Next steps','One bullet per action: the task in bold, the owner in parentheses (the name said in the conversation, or “owner unclear”), then one sentence of reasoning.', true)}
+      </div>
+      <div style="margin-top:10px"><span class="pill sm">${I.plus}Add section</span></div>
+    </div></div></div></div>
+  <div class="footer"><span class="note">Unsaved changes</span>
+    <span class="pill">Cancel</span><span class="pill primary">Save</span></div>`);
+
+const S = {home, meeting, presets, settings, add, pill, templates};
 const s = new URLSearchParams(location.search).get('s') || 'home';
 document.body.innerHTML = S[s]('light') + S[s]('dark');
 </script>
