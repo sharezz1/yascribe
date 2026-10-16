@@ -26,6 +26,14 @@
 podpięcie ikony do paczki (`scripts/bundle.sh`, `Info.plist`) i ewentualna zmiana nazwy to
 osobny krok po decyzji.
 
+## Faza 1.6 „Kalendarz i wykrywanie spotkań" (decyzja użytkownika 2026-10-16, przed fazą 2)
+
+Spec do przeglądu: [faza16-kalendarz](specs/2026-10-16-faza16-kalendarz-design.md) — Apple Calendar
+jako opcja w Settings, pigułka przy starcie spotkania (kalendarz i rozmowa ad hoc w Teams), auto-start
+jako przełącznik, wykrywanie końca przez aplikację (nie kalendarz), tytuł z wydarzenia, ręczne
+powiązanie wydarzenia z notatką. Google Calendar / Outlook / Slack: tylko wyszarzone wiersze „Coming soon".
+Wymaga spike'a na sprzęcie (lista procesów audio, Teams, OOO w Exchange) przed planem.
+
 ## Faza 2 (decyzje już zapadły)
 
 | Pozycja | Źródło |
@@ -55,7 +63,7 @@ osobny krok po decyzji.
 | Lokalny ASR w procesie (FluidAudio, Parakeet v3 już na dysku; Cohere Transcribe lokalnie) | [wymagania §0, §2](../wymagania.md) |
 | Diaryzacja lokalna z nastawialnym progiem, edycja rozmówców, automatyczne nazwiska; tożsamość mówcy aż do zadań | [wymagania §4, §5](../wymagania.md) |
 | Słownik i word boosting (format aliasów = `replacements.tsv`), klik na słowo → poprawka → alias (zakładka Dictionary) | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
-| Kalendarz Apple (EventKit): „Coming up” i mechaniczny koniec sesji | [wymagania §1, §5](../wymagania.md), [spec 1.5 §2](specs/2026-10-14-faza15-design.md) |
+| Kalendarz Apple: „Coming up” / oś nadchodzących spotkań (sam EventKit i wykrywanie → faza 1.6; koniec sesji z kalendarza **uchylony**) | [wymagania §5](../wymagania.md), [spec 1.6](specs/2026-10-16-faza16-kalendarz-design.md) |
 | Chat nad spotkaniem i nad archiwum (RAG, „Ask anything”) | [wymagania §4](../wymagania.md), [spec 1.5 §2](specs/2026-10-14-faza15-design.md) |
 | Zakładka zadań (zależna od tożsamości mówcy) | [wymagania §4](../wymagania.md) |
 | Dyktowanie na żywo (osobny tryb) | [wymagania §1](../wymagania.md) |

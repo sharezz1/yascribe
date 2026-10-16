@@ -43,7 +43,10 @@ Nasza aplikacja może z niego korzystać bez ponownego pobierania.
   słuchawek w trakcie spotkania urywa nagranie. Narada instaluje trzy obserwatory.
 - 🆕 🔴 **Koniec sesji musi mieć warunek mechaniczny**, nie tylko przycisk.
   MacParakeet dokleił **70 minut** przypadkowego dźwięku do 15 minut spotkania.
-  Warunki: koniec wydarzenia w kalendarzu, zamknięcie okna rozmowy, cisza dłuższa niż N minut.
+  Warunki: zamknięcie okna rozmowy (zwolnienie mikrofonu przez aplikację rozmów), cisza dłuższa niż N minut.
+  ⚠️ **Koniec wydarzenia w kalendarzu NIE jest warunkiem** (decyzja użytkownika 2026-10-16: godzinne
+  spotkanie, które skończyło się po 15 min, ma się skończyć po 15 min) — patrz
+  [spec 1.6 §4.6](superpowers/specs/2026-10-16-faza16-kalendarz-design.md).
 - 🆕 🔴 **Bramka mowy per kanał przed ASR.** Dwa osobne tryby awarii, oba zmierzone:
   cichy mikrofon → **82% halucynacji**; przesłuch z głośników → urywki cudzych zdań
   wstawiane w środek zdań rozmówcy (52 z 53 wtrąceń ≤3 słowa).
@@ -137,8 +140,10 @@ Dwa wnioski:
 
 ## 5. Organizacja spotkań
 
-- **Kalendarz Apple przez EventKit** ✅ — 🆕 **i to samo zdarzenie daje mechaniczny warunek
-  końca sesji** z §1. Jedna integracja załatwia dwie rzeczy.
+- **Kalendarz Apple przez EventKit** ✅ — wykrycie startu, tytuł notatki z wydarzenia, ręczne
+  powiązanie wydarzenia z notatką (faza 1.6, [spec](superpowers/specs/2026-10-16-faza16-kalendarz-design.md)).
+  ⚠️ Wcześniejsze „to samo zdarzenie daje mechaniczny warunek końca sesji" **uchylone**
+  2026-10-16: koniec wykrywa aplikacja (zwolnienie mikrofonu, cisza), nie godzina z kalendarza.
 - **Nadchodzące spotkania, oś czasu z podziałem na dni** ✅
 - **Edycja rozmówców** ✅ — wymaga diaryzacji, a tam:
   - 🆕 🔴 **Próg klastrowania nastawialny, default „raczej za dużo klastrów niż za mało".**
