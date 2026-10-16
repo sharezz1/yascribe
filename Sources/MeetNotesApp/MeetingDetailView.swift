@@ -28,8 +28,9 @@ struct MeetingDetailView: View {
 
     /// Uwaga 7 z odbioru: cały widok to jedna przewijana strona (wzór inne narzędzie) — tytuł, zakładki i treść w jednym
     /// `ScrollView` na całą szerokość detalu (pasek przy krawędzi okna), kolumna 640 w środku, bez wewnętrznych przewijań.
+    /// `ScrollPage`: kolumna nie przeskakuje, gdy stały pasek przewijania pojawia się na dłuższej zakładce (błąd 5).
     var body: some View {
-        ScrollView {
+        ScrollPage(640) {
         VStack(alignment: .leading, spacing: 0) {
             header
             if isRecording {
@@ -45,7 +46,6 @@ struct MeetingDetailView: View {
                 }
             }
         }
-        .contentColumn(640)
         }
         .contentBackground()
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
@@ -54,8 +54,6 @@ struct MeetingDetailView: View {
         .navigationBarBackButtonHidden(true) // własna kapsuła „Meetings” w pasku (D5)
         .onAppear {
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
-            // Pole tytułu pokazuje ten sam tytuł co lista (ręczny > auto > z notatki); „Untitled meeting" zostaje placeholderem.
-            state.titleDraft = item.title == NoteTitle.untitled ? "" : item.title
         }
         .confirmationDialog("Move “\(item.title)” to the Trash?", isPresented: Binding(
             get: { model.pendingDelete == item.id }, set: { if !$0 { model.pendingDelete = nil } }), titleVisibility: .visible) {
@@ -95,10 +93,15 @@ struct MeetingDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Untitled meeting", text: $state.titleDraft)
+            TextField("Untitled meeting", text: titleField)
                 .textFieldStyle(.plain)
                 .documentTitle()
-                .onSubmit { model.notes.setManualTitle(state.titleDraft, for: item) }
+                .onSubmit {
+                    if let edit = state.titleEdit, NoteTitle.isEdit(edit, meta: item.notes.meta, noteTitle: item.notes.summary?.title) {
+                        model.notes.setManualTitle(edit, for: item)
+                    }
+                    state.titleEdit = nil
+                }
                 .disabled(model.recordingsMove != nil)
             HStack(spacing: 12) {
                 MetaLine([
@@ -108,6 +111,7 @@ struct MeetingDetailView: View {
                     item.audioDeletedAfterDays.map { "Audio deleted after \($0) days" } ?? "",
                 ])
                 if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
+                ForEach(item.trackProblems, id: \.trackID) { problemButton($0) }
             }
             // R3: na czas przenoszenia folderu nagrań spotkanie jest tylko do odczytu.
             if model.recordingsMove != nil { StateLabel(.progress(nil), "Moving recordings…") }
@@ -116,6 +120,33 @@ struct MeetingDetailView: View {
                       systemImage: "exclamationmark.triangle")
                     .font(.callout).foregroundStyle(.mnWarn)
             }
+        }
+    }
+
+    /// Błąd 4: pole pokazuje bieżący tytuł sesji (ręczny > auto > z notatki), dopóki użytkownik nie zacznie pisać —
+    /// autotytuł zapisany przy otwartym widoku (nagranie otwiera spotkanie od razu) trafia do pola po przeładowaniu sesji.
+    private var titleField: Binding<String> {
+        Binding(get: { state.titleEdit ?? NoteTitle.fieldText(meta: item.notes.meta, noteTitle: item.notes.summary?.title) },
+                set: { state.titleEdit = NoteTitle.fieldEdit($0, meta: item.notes.meta, noteTitle: item.notes.summary?.title) })
+    }
+
+    /// Poprawka 6: problem toru nagrania w linii chipów; klik = wyjaśnienie zwykłym językiem.
+    private func problemButton(_ p: TrackProblem) -> some View {
+        Button { state.problemPopover = p.trackID } label: {
+            Label(p.name, systemImage: p.isWarning ? "exclamationmark.triangle" : "info.circle")
+                .font(.callout).foregroundStyle(p.isWarning ? Color.mnWarn : Color.mnText2)
+        }
+        .buttonStyle(.plain)
+        .help(p.line)
+        .accessibilityLabel("\(p.name): \(p.line)")
+        .popover(isPresented: Binding(get: { state.problemPopover == p.trackID },
+                                      set: { if !$0 { state.problemPopover = nil } }), arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(p.line).font(.system(size: 13, weight: .semibold))
+                Text(p.detail).font(.callout).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(14)
+            .frame(width: 300, alignment: .leading)
         }
     }
 
