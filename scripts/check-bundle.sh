@@ -9,7 +9,7 @@ APP="$(MEETNOTES_APP=.build/check/MeetNotes.app MEETNOTES_SIGN_IDENTITY=- script
 [ -d "$APP" ] || { echo "check-bundle: brak paczki $APP" >&2; exit 1; }
 PLIST="$APP/Contents/Info.plist"
 plutil -lint "$PLIST" >/dev/null
-for key in CFBundleIdentifier LSMinimumSystemVersion NSMicrophoneUsageDescription NSAudioCaptureUsageDescription; do
+for key in CFBundleIdentifier LSMinimumSystemVersion NSMicrophoneUsageDescription NSAudioCaptureUsageDescription NSCalendarsFullAccessUsageDescription; do
     plutil -extract "$key" raw "$PLIST" >/dev/null 2>&1 || { echo "check-bundle: brak klucza $key w Info.plist" >&2; exit 1; }
 done
 codesign --verify --strict "$APP"

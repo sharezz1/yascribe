@@ -9,6 +9,7 @@ struct MeetNotesApp: App {
     private let model = AppModel()
 
     init() {
+        Probes.runIfRequested()
         if Snapshots.directory != nil {
             let model = self.model
             DispatchQueue.main.async { MainActor.assumeIsolated { Snapshots.runAll(model: model) } }
