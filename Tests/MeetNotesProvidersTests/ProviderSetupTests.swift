@@ -5,7 +5,7 @@ import Testing
 @Test func presetsComeWithReadyAddressesAndRoles() {
     #expect(ProviderPreset.all.map(\.name) == ["OpenRouter", "ElevenLabs", "Ollama", "Custom endpoint"])
     #expect(ProviderPreset.openRouter.baseURL == "https://openrouter.ai/api/v1" && ProviderPreset.openRouter.needsKey)
-    #expect(ProviderPreset.elevenLabs.baseURL == "https://api.elevenlabs.io" && ProviderPreset.elevenLabs.kind == .elevenLabs)
+    #expect(ProviderPreset.elevenLabs.baseURL == "https://api.elevenlabs.io/v1" && ProviderPreset.elevenLabs.kind == .elevenLabs)
     #expect(ProviderPreset.elevenLabs.role == "Scribe v2 transcription · direct API")
     #expect(ProviderPreset.ollama.baseURL == "http://localhost:11434/v1" && !ProviderPreset.ollama.needsKey)
     #expect(ProviderPreset.ollama.role.contains("no transcription")) // Ollama bez ASR — użytkownik ma to wiedzieć
