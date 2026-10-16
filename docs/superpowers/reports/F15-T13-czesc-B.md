@@ -164,3 +164,34 @@ Transkrypty, notatki i My notes zostają.
 6. Archive search: Provider/Embedding model.
 7. Widok spotkania: cała strona przewija się jednym paskiem przy krawędzi okna; My notes i kontekst rosną przy pisaniu (wklej długi tekst); notatka na 640 pt; zaznaczanie całej notatki; Transcript w jednej linii; Meeting → Play/Pause Recording; ⌘↩ w Summary.
 8. Recordings: rozmiar na dysku w nagłówku, Change… do pustego folderu (postęp, przeniesione spotkania), Show in Finder, Keep audio, „Audio deleted after N days” na starym spotkaniu.
+
+## Wykonanie decyzji R1–R8 (2026-10-16)
+
+Użytkownik przyjął zalecenia R1–R8 („Accept the recommendations for R1–R8…”). Agenci: R1–R3 Opus, R5+R8 Sonnet.
+
+| R | Wykonanie | Commit |
+|---|---|---|
+| R1 | Skrócenie „Keep audio”: `AudioRetention.plan` (ta sama reguła co kasowanie, bez kasowania) → dialog „Delete X of audio from N meetings older than D days?” / Delete Audio / Cancel (Cancel nie zmienia ustawienia); gdy nic by nie zniknęło lub Forever — bez pytania; `apply` idzie po `plan` (reguła w jednym miejscu) | `22677e0` |
+| R2 | Po nieudanym przenoszeniu sprzątana jest tylko własna kopia (wpisy zapisane jako „nasze” przed kopiowaniem i tylko gdy ich nie było); folder docelowy usuwany tylko, jeśli go utworzyliśmy i jest pusty; ponowna próba do tego samego folderu działa | `22677e0` |
+| R3 | Na czas przenoszenia widok spotkania tylko do odczytu („Moving recordings…” pod MetaLine); blokady w modelu (`canDelete`, `generate`, `retryCorrection`, `setManualTitle`, `saveMyNotes`); oczekujący autozapis My notes zapisywany przed startem przenoszenia | `22677e0` |
+| R4 | Podpis pod „Keep audio” bez zmian | — |
+| R5 | Pigułka: kotwica w środku dolnej krawędzi; `PillPlacement.frame` (czysta funkcja w `MeetNotesRecording`, clamp do `visibleFrame`); pozycja `recordingPillBottomCenter`, stara pozycja przeliczana | `5f6ffab` |
+| R6 | „Show Recording Window” (⌘⌥R) zostaje jako ratunek | — |
+| R7 | Bez zmian | — |
+| R8 | ElevenLabs 403 z `/v1/models` → `ProviderCheck.limited("Key works for transcription only")`: trójkąt + słowa w `warn`, bez ✗ i Retry, w wierszu i w arkuszu; OpenAI-compatible 403 dalej błąd; migawki `settings-limited-*`, `settings-sheet-limited-*` | `5f6ffab`, `09e30bd` |
+
+**Testy:** `scripts/test.sh` → `229/229`. Mutacje: agent R1 4/4, R2 3/3, R5+R8 3/3; orkiestrator powtórzył
+niezależnie 3/3 (brak sprzątania, obce wpisy uznane za nasze, 403 ElevenLabs jako błąd). R3 bez testu — blokady
+to `recordingsMove != nil` w celu aplikacji, który nie ma testów (sprawdzenie na żywo).
+
+**Uwagi:** w trakcie przenoszenia My notes i rozwinięty kontekst są pokazane jako zaznaczalny tekst (NSTextView nie
+reaguje na `.disabled`); Retry korekty na liście spotkań zostaje aktywny w UI, ale blokuje go strażnik w modelu
+(komunikat „Meetings are being moved to a new folder. Try again when that finishes.”). Teksty dialogu R1 dobrał agent.
+
+### Gotowe do drugiego odbioru — dodatki do listy wyżej
+
+- R1: Keep audio 30 → 7 dni na kopii `.devdata` ze starymi spotkaniami → dialog z liczbą i rozmiarem; Cancel zostawia 30.
+- R2: Change… na folder, który nie da się zapisać (np. bez uprawnień) → komunikat, stare miejsce aktywne, w celu nic po nas; ponowna próba działa.
+- R3: w trakcie przenoszenia otwarte spotkanie tylko do odczytu z „Moving recordings…”.
+- R5: zwinięta↔rozwinięta pigułka ze wspólnym środkiem dołu; przeciągnięcie przy krawędzi ekranu.
+- R8: ElevenLabs z kluczem tylko STT → trójkąt „Key works for transcription only”.
