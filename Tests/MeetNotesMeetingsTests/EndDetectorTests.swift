@@ -46,6 +46,17 @@ private func tick(_ d: inout EndDetector, _ t: Double, _ procs: [AudioProcessSam
     #expect(tick(&d, 42, []) == nil)  // akcja tylko przy zmianie stanu
 }
 
+@Test func releaseAndSilenceThresholdsAreInclusive() {
+    var r = EndDetector(tuning: .test)
+    _ = tick(&r, 0, [.teams])
+    #expect(tick(&r, 19, []) == nil)
+    #expect(tick(&r, 20, []) == .prompt(.callReleased))   // dokładnie releaseSeconds
+
+    var s = EndDetector(tuning: .test)
+    #expect(tick(&s, 0, [.teams], silent: 179) == nil)
+    #expect(tick(&s, 1, [.teams], silent: 180) == .prompt(.silence))   // dokładnie silenceSeconds
+}
+
 @Test func shortMicReleaseDoesNotEndTheMeeting() {
     var d = EndDetector(tuning: .test)
     var actions = run(&d, 0, 5, [.teams])
@@ -74,13 +85,28 @@ private func tick(_ d: inout EndDetector, _ t: Double, _ procs: [AudioProcessSam
 }
 
 @Test func continueSnoozesThePromptForSnoozeSeconds() {
+    // granica snoozeSeconds (600 s): 599 s jeszcze cisza, 600 i 601 s pytanie wraca
+    for (after, prompts) in [(599.0, false), (600.0, true), (601.0, true)] {
+        var d = EndDetector(tuning: .test)
+        #expect(tick(&d, 0, [.teams], silent: 181) == .prompt(.silence))
+        d.continueMeeting(now: t0)
+        #expect(tick(&d, after, [.teams], silent: 181) == (prompts ? .prompt(.silence) : nil))
+    }
+}
+
+@Test func continueAfterCallReleasedDoesNotAskAgainOnTheSameReleasedCall() {
+    // Wcześniej „Continue" zostawiało śledzoną rodzinę, więc po snooze pytanie wracało co 600 s, jeśli spotkanie trwa dalej
+    // w sali (mikrofon Teams zwolniony na dobre). Teraz „Continue" zapomina rodziny: wraca tylko cisza albo nowa rozmowa.
     var d = EndDetector(tuning: .test)
     _ = tick(&d, 0, [.teams])
     #expect(tick(&d, 41, []) == .prompt(.callReleased))
     d.continueMeeting(now: t0 + 41)
-    #expect(tick(&d, 42, []) == nil)
-    #expect(tick(&d, 41 + 599, []) == nil)
-    #expect(tick(&d, 41 + 601, []) == .prompt(.callReleased))
+    #expect(run(&d, 42, 41 + 3600, [], every: 5).isEmpty)       // godzina po snooze: żadnego pytania z tego samego zwolnienia
+    #expect(tick(&d, 41 + 3601, [], silent: 181) == .prompt(.silence))   // cisza dalej pyta
+    // nowa rozmowa w tym samym nagraniu jest śledzona od nowa
+    d.continueMeeting(now: t0 + 41 + 3601)
+    _ = run(&d, 41 + 3602, 41 + 8000, [.teams], every: 100)
+    #expect(tick(&d, 41 + 8021, []) == .prompt(.callReleased))
 }
 
 @Test func manualStartAdoptsACallThatStartsLater() {
@@ -135,4 +161,13 @@ private func tick(_ d: inout EndDetector, _ t: Double, _ procs: [AudioProcessSam
     // CoreSpeech trzyma wejście cały czas, Teams zwalnia: i tak koniec rozmowy
     #expect(tick(&d, 10, [.speech]) == nil)
     #expect(tick(&d, 41, [.speech]) == .prompt(.callReleased))
+}
+
+@Test func appOnBothCallAndIgnoredListsIsNeverTracked() {
+    var t = MeetingTuning.test
+    t.callApps = ["com.microsoft.teams2"]
+    t.ignoredApps = ["com.microsoft.teams2"]
+    var d = EndDetector(tuning: t)
+    _ = tick(&d, 0, [.teams])
+    #expect(run(&d, 1, 600, []).isEmpty)   // gdyby była śledzona, zwolnienie dałoby pytanie
 }

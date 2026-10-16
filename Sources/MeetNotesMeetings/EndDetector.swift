@@ -23,7 +23,7 @@ public struct EndDetector {
     public mutating func step(now: Date, recording: Bool, processes: [AudioProcessSample], silentSeconds: Double) -> EndAction? {
         guard recording else { reset(); return nil }
         for p in processes where p.isRunningInput {
-            if let fam = tuning.family(of: p.bundleID), !tuning.ignoredApps.contains(fam) { lastInput[fam] = now }
+            if let fam = tuning.family(of: p.bundleID) { lastInput[fam] = now }
         }
         // callReleased: jest śledzona rodzina i żadna nie miała wejścia przez >= releaseSeconds.
         let released = !lastInput.isEmpty && lastInput.values.allSatisfy { now.timeIntervalSince($0) >= tuning.releaseSeconds }
@@ -40,8 +40,10 @@ public struct EndDetector {
         return .prompt(signal)
     }
 
-    /// "Continue": zdejmuje wiszące pytanie i wycisza kolejne na `snoozeSeconds`.
+    /// "Continue": zdejmuje wiszące pytanie i wycisza kolejne na `snoozeSeconds`. Zapomina śledzone rodziny: zwolniona rozmowa
+    /// nie pyta ponownie co `snoozeSeconds`, gdy spotkanie trwa dalej (wraca tylko cisza albo nowa rozmowa).
     public mutating func continueMeeting(now: Date) {
+        lastInput = [:]
         shown = nil
         snoozedUntil = now + tuning.snoozeSeconds
     }

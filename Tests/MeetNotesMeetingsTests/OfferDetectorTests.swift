@@ -77,8 +77,7 @@ private struct Rig {
 @Test func teamsHoldingTheMicForStartSecondsOffersACall() {
     var r = Rig()
     r.procs = [.teams]
-    #expect(r.step(t0) == nil)
-    #expect(r.step(t0 + 11) == nil)
+    #expect(r.run(t0, t0 + 11).isEmpty)   // tiki co 1 s: przerwa > 3 s zeruje ciągłość
     guard case .show(let o)? = r.step(t0 + 12) else { Issue.record("no offer"); return }
     #expect(o.source == .call && o.title == "Call in Teams")
     #expect(o.app == teamsFamily && o.id == "call:" + teamsFamily && o.event == nil)
@@ -116,7 +115,7 @@ private struct Rig {
     r.procs = [.speech]   // system trzyma wejście stale
     #expect(r.run(t0, t0 + 3600, every: 10).isEmpty)
     r.procs = [.speech, .wispr, .teams]
-    #expect(r.step(t0 + 3601) == nil)
+    #expect(r.run(t0 + 3601, t0 + 3612).isEmpty)
     guard case .show(let o)? = r.step(t0 + 3613) else { Issue.record("Teams blocked by an ignored app"); return }
     #expect(o.source == .call && o.app == teamsFamily)
     // po zwolnieniu przez Teams stale wejście systemu niczego nie przywraca ani nie blokuje końca sesji
@@ -318,8 +317,7 @@ private struct Rig {
     var r = Rig()
     let launch = t0 + 5000
     r.procs = [.teams]   // aplikacja startuje w trakcie trwającej rozmowy
-    #expect(r.step(launch) == nil)
-    #expect(r.step(launch + 11) == nil)
+    #expect(r.run(launch, launch + 11).isEmpty)
     guard case .show(let o)? = r.step(launch + 12) else { Issue.record("no offer"); return }
     #expect(o.source == .call)
 }
@@ -380,4 +378,96 @@ private struct Rig {
     #expect(r.run(t0, t0 + 120, every: 10).isEmpty)
     r.recording = false
     #expect(!r.run(t0 + 121, t0 + 1000, every: 5).contains(where: isOffering))
+}
+
+@Test func dismissedCalendarOfferDoesNotComeBackAsAnAdHocCall() {
+    for autoStart in [false, true] {
+        var r = Rig()
+        r.autoStart = autoStart
+        r.events = [meeting("A", at: t0)]
+        guard case .show? = r.step(t0 - 30) else { Issue.record("no offer"); return }
+        r.d.dismiss()
+        r.procs = [.teams]   // Teams dołącza już po odrzuceniu A, w oknie A: wydarzenie jest odfiltrowane, więc event == nil
+        // także po końcu okna (t0 + 600): ta sama sesja mikrofonu milknie razem z wydarzeniem
+        #expect(!r.run(t0 - 29, t0 + 700).contains(where: isOffering))
+    }
+}
+
+@Test func manualStopWithAnEventInItsWindowKeepsALaterCallQuiet() {
+    for autoStart in [false, true] {
+        var r = Rig()
+        r.autoStart = autoStart
+        r.events = [meeting("A", at: t0)]
+        r.recording = true   // nagranie ręczne w oknie A, Teams jeszcze nie gra
+        _ = r.run(t0 - 30, t0 + 100, every: 10)
+        r.recording = false
+        _ = r.step(t0 + 101)   // tik Stop bez rozmowy: wyciszenie obejmuje tylko wydarzenie A
+        r.procs = [.teams]     // Teams zaczyna po Stop, nadal w oknie A
+        #expect(!r.run(t0 + 102, t0 + 700).contains(where: isOffering))
+    }
+}
+
+@Test func aNewCallAfterTheMutedEventWindowOffersNormally() {
+    var r = Rig()
+    r.events = [meeting("A", at: t0)]
+    guard case .show? = r.step(t0 - 30) else { Issue.record("no offer"); return }
+    r.d.dismiss()
+    #expect(r.run(t0 - 29, t0 + 650, every: 5) == [.hide])
+    r.procs = [.teams]
+    #expect(r.run(t0 + 651, t0 + 662).isEmpty)
+    guard case .show(let o)? = r.step(t0 + 663) else { Issue.record("no offer for the call after the window"); return }
+    #expect(o.source == .call && o.event == nil)
+}
+
+@Test func calendarOfferEndsWithTheEventNotAfterGrace() {
+    var r = Rig()
+    r.events = [meeting("Short", at: t0, minutes: 5)]
+    guard case .show? = r.step(t0) else { Issue.record("no offer"); return }
+    #expect(r.step(t0 + 299) == nil)
+    #expect(r.step(t0 + 300) == .hide)   // koniec wydarzenia (5 min), nie start + offerGrace (10 min)
+    #expect(r.run(t0 + 301, t0 + 700, every: 5).isEmpty)
+}
+
+@Test func gapLongerThanThreeSecondsBetweenTicksResetsContinuity() {
+    // przerwa dokładnie 3 s (np. jeden pominięty tik) nie zrywa ciągłości
+    var ok = Rig()
+    ok.procs = [.teams]
+    #expect(ok.run(t0, t0 + 5).isEmpty)
+    #expect(ok.step(t0 + 8) == nil)
+    #expect(ok.run(t0 + 9, t0 + 11).isEmpty)
+    guard case .show? = ok.step(t0 + 12) else { Issue.record("3 s gap must not reset"); return }
+
+    // przerwa 4 s (uśpienie, App Nap) zeruje: ciągłość nie jest dowiedziona
+    var r = Rig()
+    r.procs = [.teams]
+    #expect(r.run(t0, t0 + 5).isEmpty)
+    #expect(r.step(t0 + 9) == nil)
+    #expect(r.run(t0 + 10, t0 + 20).isEmpty)
+    guard case .show? = r.step(t0 + 21) else { Issue.record("no offer 12 s after the gap"); return }
+}
+
+@Test func appOnBothCallAndIgnoredListsIsInvisible() {
+    var t = MeetingTuning.test
+    t.callApps = [teamsFamily]
+    t.ignoredApps = [teamsFamily]
+    var d = OfferDetector(tuning: t)
+    var out: [OfferAction] = []
+    for i in 0...60 {
+        if let a = d.step(now: t0 + Double(i), events: [], processes: [.teams], recording: false, callsEnabled: true, autoStart: true) { out.append(a) }
+    }
+    #expect(out.isEmpty)
+}
+
+@Test func micSessionEndsAtExactlyReleaseSeconds() {
+    // wyciszenie sesji znika, gdy wejście milczy >= releaseSeconds (20 s): 19 s jeszcze nie, 20 s tak
+    for (gap, offers) in [(19.0, false), (20.0, true)] {
+        var r = Rig()
+        r.procs = [.teams]
+        _ = r.run(t0, t0 + 12)   // oferta; ostatnie wejście w t0 + 12
+        r.d.dismiss()
+        r.procs = []
+        _ = r.run(t0 + 13, t0 + 12 + gap)
+        r.procs = [.teams]
+        #expect(r.run(t0 + 13 + gap, t0 + 25 + gap).contains(where: isOffering) == offers)
+    }
 }

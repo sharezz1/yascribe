@@ -23,9 +23,11 @@ public struct MeetingTuning: Equatable, Sendable {
 
 extension MeetingTuning {
     /// Rodzina aplikacji rozmów: wpis z `callApps` dopasowany po prefiksie na granicy członu
-    /// (`com.microsoft.teams2.modulehost` tak, `com.microsoft.teams2extra` nie). Wspólne dla `OfferDetector` i `EndDetector`.
+    /// (`com.microsoft.teams2.modulehost` tak, `com.microsoft.teams2extra` nie). `nil` także dla aplikacji z `ignoredApps`
+    /// (to samo dopasowanie): jedno miejsce dla `OfferDetector` i `EndDetector`.
     func family(of bundleID: String) -> String? {
-        callApps.first { bundleID == $0 || bundleID.hasPrefix($0 + ".") }
+        func hit(_ entry: String) -> Bool { bundleID == entry || bundleID.hasPrefix(entry + ".") }
+        return ignoredApps.contains(where: hit) ? nil : callApps.first(where: hit)
     }
 
     /// Zwraca kopię, w której nadpisane są TYLKO wartości niebędące `nil`.
