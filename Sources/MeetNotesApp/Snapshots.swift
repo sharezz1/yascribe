@@ -123,9 +123,15 @@ enum Snapshots {
                     let myNotes = MeetingViewState(); myNotes.tab = .myNotes
                     try render("meeting-my-notes", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: empty, state: myNotes) }
                 }
-                // T9: wbudowany szablon (tylko do odczytu) i nowy własny (niezapisany).
-                let builtin = TemplateEditorState(); builtin.select(Template.standard)
-                try render("templates-builtin", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: builtin) }
+                // T9 / uwaga 2: wbudowany szablon po edycji („Built-in · edited"), niezapisana zmiana w sekcji; nowy własny.
+                var edited = Template.standard
+                edited.sections?[1].instruction = "One heading per topic with the concrete details: numbers, names, dates, the options discussed; mark a favored option. A side issue gets its own heading."
+                try model.notes.templates.upsert(edited)
+                try model.notes.templates.upsert(Template(id: "snapshot-custom", name: "Board update",
+                                                          sections: [TemplateSection(title: "Decisions", instruction: "What was decided and by whom.")]))
+                let builtin = TemplateEditorState(); builtin.select(model.notes.templates.all().first)
+                builtin.draft?.sections?[2].instruction += " Keep it to one line."
+                try render("templates-builtin", size: CGSize(width: 900, height: 640), dark: dark, model: model) { TemplatesView(state: builtin) }
                 let custom = TemplateEditorState(); custom.startNew()
                 try render("templates-new", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: custom) }
                 // T10: pigułka przed startem; stanu nagrywania nie da się wymusić w migawce (→ odbiór ręczny T13),
