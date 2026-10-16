@@ -112,3 +112,55 @@ D5 bez nowej logiki w bibliotece (jednolinijkowe `canDelete` w `AppModel`), wię
 **Do odbioru na żywo (migawka tego nie pokaże):** pasek z wstecz i „⋯” (okno migawki nie ma paska narzędzi), menu
 Meeting i Window, dialog usuwania, zaznaczanie notatki przeciąganiem przez akapity i Cmd-A/Cmd-C (uwaga T13 #4),
 przewijanie kółkiem nad notatką, pigułka zwinięta↔rozwinięta i klik obok kapsuły, sidebar w prawdziwym oknie.
+
+## Odbiór na żywo 2026-10-16: uwagi 1–8
+
+Decyzje zapisane w `docs/design/macos.md` §11.5 (commity na `faza15`, scalone tutaj). Opus: uwaga 1, spinanie,
+mutacje; agenci: Templates, Settings, pigułka (Sonnet), widok spotkania, ElevenLabs, Recordings (Opus).
+
+| # | Wykonanie | Commit |
+|---|---|---|
+| 1 | Pasek narzędzi bez tła i tytułu (`toolbar(removing: .title)`, `toolbarBackground(.hidden)`); `navigationTitle` zostaje dla menu Window/VoiceOver | `59b0f5a` |
+| 2 | Szablon = lista sekcji (`sections?`, `about?` opcjonalne; stary prompt → jedna sekcja), prompt z sekcji po kolei; wbudowane edytowalne (override, „Built-in · edited”, Reset to default), własne: Duplicate / Delete… z potwierdzeniem; pola rosną z treścią (`TextField(axis: .vertical)`) | `a0714de` |
+| 3 | Pigułka: przezroczyste okno, cień po `invalidateShadow`, stały rozmiar (licznik o stałej szerokości, resize tylko przy zwinięta↔rozwinięta, kotwica lewy dolny róg), przesuwanie za tło (`WindowDragGesture` + `makeKey` w `mouseDown`), pozycja w UserDefaults, domyślnie środek dołu ekranu | `205a2ee` |
+| 4 | Pigułka tylko podczas nagrywania; stan „przed startem” i „Hide Recording Window” usunięte; „Show Recording Window” (⌘⌥R) aktywne tylko w trakcie — ratunek, gdy pigułka zniknie z ekranu | `205a2ee` |
+| 5 | Settings: lista OpenRouter / ElevenLabs / Ollama / Custom endpoint z oficjalnymi logo (SVG w kodzie, bez resource bundle), stan po prawej, „⋯” (Edit key…, Test again, Refresh Models, Remove…), konfiguracja w arkuszu z „Test connection” kluczem z pola (bez zapisu do pęku) i „Get an API key”. **ElevenLabs bezpośrednio:** `xi-api-key`, multipart, `scribe_v2`, `language_code` przy języku jawnym, granica `TranscriptionClient`, wybór klienta po `Provider.kind` (opcjonalne, E6) | `4c7b44b`, `714783a`, `6c639c1`, `e5803bf`, `ab43f8d` |
+| 6 | Archive search: „Provider” (tylko skonfigurowani OpenAI-compatible; ukryty przy jednym) + „Embedding model”; zmiana dostawcy czyści model | `4c7b44b` |
+| 7 | Widok spotkania = jedna przewijana strona (bez wewnętrznych ScrollView/List/TextEditor; `GrowingTextView` dla My notes i kontekstu, `LazyVStack` transkryptu); Summary bez karty, ten sam pasek przed/po; notatka na szerokość kolumny (kontener tekstu wraca do szerokości ramki po pomiarze); Transcript w jednej linii; „▶II” = odtwarzanie nagrania → przeniesione do menu Meeting („Play/Pause Recording”, bez skrótu Spacja). „Generate notes” na ⌘↩ zamiast Return (Return w polu kontekstu nie uruchamia płatnego generowania) | `402c899`, `7ca7d78` |
+| 8 | Recordings: lokalizacja (kopia → weryfikacja listy i rozmiarów → przełączenie → usunięcie starych; błąd = nic nie kasujemy) i „Keep audio” 7/14/30/90/Forever (domyślnie 30; kasuje tylko `*.caf`, tylko po ukończonej transkrypcji; znacznik `audio-deleted.json`); widok spotkania: „Audio deleted after N days”, bez odtwarzania i ponownej transkrypcji | `fe273a1`, `c94ffc2`, `997e6b4` |
+
+**Testy:** `scripts/test.sh` → `224/224`. Mutacje (każda wprowadzona po `git add`, test padł, `git checkout`):
+Templates 5/5 (override w `all()`, reset, blokada usuwania wbudowanego, migracja, kolejność sekcji), Settings 4/4
+(kolejność wierszy, filtr dostawców embeddingu, zachowanie wyboru, dopasowanie ElevenLabs), ElevenLabs 8/8 (agent),
+Recordings: agent a–d, orkiestrator powtórzył niezależnie 3/3 (retencja bez warunku transkryptu, kasowanie nie tylko
+`*.caf`, wyłączona weryfikacja przenoszenia).
+
+**Przegląd migawek (Sonnet, read-only, 50 PNG):** nic zepsutego. Poprawione: pusty edytor Presets/Templates jako
+tekst na tokenach zamiast `ContentUnavailableView`, nazwa presetu/szablonu zwykłym 15 pt (`f93f742`). Zostaje:
+brak „N GB on disk” w migawce (rozmiar liczony asynchronicznie), brak migawki z „Improve transcript”, model nie
+mieści się w linii presetu w rozwiniętej pigułce.
+
+**⚠️ Dane:** pierwsze uruchomienie tej wersji (`scripts/run.sh` w tym worktree) **trwale skasuje `*.caf`** każdego
+spotkania z ukończoną transkrypcją starszego niż 30 dni w aktywnym katalogu danych — tu kopii `.devdata`.
+Transkrypty, notatki i My notes zostają.
+
+### Decyzje dla użytkownika (z tej rundy)
+
+- **R1** Skrócenie „Keep audio” kasuje od razu, bez potwierdzenia (np. 30 → 7 dni usuwa audio spotkań w wieku 7–30 dni). Dodać potwierdzenie?
+- **R2** Po nieudanym przenoszeniu częściowa kopia zostaje w nowym folderze, więc ponowna próba do tego samego folderu jest odrzucana jako niepusty. Sprzątać własną częściową kopię?
+- **R3** W trakcie przenoszenia nie są blokowane zapisy notatek (autozapis My notes, tytuł) z widoku spotkania — zapis po usunięciu starego miejsca odtworzyłby osierocony katalog. Użytkownik jest wtedy w Settings, więc ryzyko jest małe; zablokować całkiem?
+- **R4** Podpis pod „Keep audio”: „Only audio is deleted. Transcripts, notes and My notes stay. Audio is kept until its transcription has finished.” (makieta ma inny tekst).
+- **R5** Kotwica pigułki przy rozwijaniu: lewy dolny róg (teraz) czy środek dolnej krawędzi (rozwinięta przesuwa się wtedy o 82 pt)?
+- **R6** „Show Recording Window” (⌘⌥R) zostawić jako ratunek czy usunąć?
+- **R7** Prompt z sekcji: „Write these sections in this order, each titled section under a "## <title>" heading:” + lista „N. Tytuł: instrukcja”; zapis wbudowanego z treścią równą domyślnej nie zostawia „edited”; pusty szablon odrzucany przy Save.
+- **R8** ElevenLabs: test klucza przez `GET /v1/models` — klucz ograniczony tylko do STT może dostać 403 („Not allowed…”) mimo działającej transkrypcji ⚠️.
+
+### Gotowe do drugiego odbioru (na żywo, `scripts/run.sh` — najpierw zamknij działającą instancję)
+
+1. Pasek okna: ciepłe tło do góry, bez tytułu i linii; w spotkaniu tylko wstecz i „⋯”.
+2. Templates: edycja sekcji, przeciąganie ⋮⋮, Move up/down z menu kontekstowego, Return w polach, „Built-in · edited” + Reset, Delete template….
+3–4. Pigułka: pojawia się przy Record z karty, znika po Stop; rogi i cień rozwiniętej na pierwszym planie; stały rozmiar przy tykającym liczniku; przeciąganie przy aktywnym Teams (bez odbierania fokusu); pozycja po restarcie.
+5. Settings: logo w obu motywach, arkusz z „Test connection” (OpenRouter z kluczem; **ElevenLabs z Twoim kluczem** — verify, krótka polska sesja, preset Auto), Edit key…, Remove….
+6. Archive search: Provider/Embedding model.
+7. Widok spotkania: cała strona przewija się jednym paskiem przy krawędzi okna; My notes i kontekst rosną przy pisaniu (wklej długi tekst); notatka na 640 pt; zaznaczanie całej notatki; Transcript w jednej linii; Meeting → Play/Pause Recording; ⌘↩ w Summary.
+8. Recordings: rozmiar na dysku w nagłówku, Change… do pustego folderu (postęp, przeniesione spotkania), Show in Finder, Keep audio, „Audio deleted after N days” na starym spotkaniu.
