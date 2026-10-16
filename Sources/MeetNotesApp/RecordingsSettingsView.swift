@@ -35,8 +35,9 @@ struct RecordingsSection: View {
                     }
                     if let p = model.recordingsMove {
                         StateLabel(.progress(p.fraction), Self.progressText(p))
-                    } else if let r = model.recordingsMoveResult, r.ok {
-                        StateLabel(.ok, r.text)
+                    } else if let r = model.recordingsMoveResult {
+                        // Pełny powód jest w podpisie (StateLabel ma jedną linię).
+                        StateLabel(r.moved ? .ok : .bad, r.moved ? "Meetings moved" : "Not moved")
                     }
                 }
             }
@@ -58,7 +59,7 @@ struct RecordingsSection: View {
 
     /// Błąd przenoszenia (czerwony) albo, gdy zmiana jest zablokowana, powód (`text2`).
     private var locationCaption: (text: String?, isError: Bool) {
-        if let r = model.recordingsMoveResult, !r.ok { return (r.text, true) }
+        if let detail = model.recordingsMoveResult?.detail { return (detail, true) }
         if model.recordingsMove == nil, let reason = model.recordingsMoveBlocked { return (reason, false) }
         return (nil, false)
     }

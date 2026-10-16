@@ -137,8 +137,8 @@ final class AppModel {
     var sessionsDirectory: URL { settings.recordingsPath.map { URL(fileURLWithPath: $0) } ?? paths.sessions }
     /// Postęp trwającego przenoszenia (`nil` = nic się nie przenosi).
     private(set) var recordingsMove: RecordingsMove.Progress?
-    /// Wynik ostatniego przenoszenia: błąd z powodem albo potwierdzenie (z resztkami, których nie dało się usunąć).
-    private(set) var recordingsMoveResult: (ok: Bool, text: String)?
+    /// Wynik ostatniego przenoszenia: `moved` + szczegół (powód błędu albo resztki, których nie dało się usunąć).
+    private(set) var recordingsMoveResult: (moved: Bool, detail: String?)?
     /// Rozmiar folderu nagrań w bajtach (nagłówek sekcji); `nil` = jeszcze nie policzony.
     private(set) var recordingsSize: Int64?
 
@@ -192,7 +192,7 @@ final class AppModel {
         recordingsMove = RecordingsMove.Progress(phase: .copying, done: 0, total: 0)
         let isDefault = new.standardizedFileURL.path == paths.sessions.standardizedFileURL.path
         Task.detached {
-            let outcome: (Bool, String)
+            let outcome: (Bool, String?)
             do {
                 let leftovers = try await RecordingsMove.run(from: old, to: new, progress: { p in
                     Task { @MainActor in if self.recordingsMove != nil { self.recordingsMove = p } }
@@ -207,8 +207,8 @@ final class AppModel {
                     }
                 })
                 outcome = leftovers.isEmpty
-                    ? (true, "Meetings moved.")
-                    : (false, "Meetings moved, but couldn't remove from the old folder: \(leftovers.joined(separator: ", ")).")
+                    ? (true, nil)
+                    : (true, "Couldn't remove these from the old folder: \(leftovers.joined(separator: ", ")). The copies in the new folder are complete.")
             } catch {
                 outcome = (false, "\(error)")
             }
@@ -515,6 +515,12 @@ final class AppModel {
         }
         guard recordingsMove == nil else {
             lastError = "Meetings are being moved to a new folder. Transcribe when that finishes."
+            return
+        }
+        // Bez audio przebieg utworzyłby pusty `runs/<id>/`, który przesłoniłby gotowy transkrypt (najnowszy przebieg wygrywa).
+        guard !AudioRetention.audioFiles(sessionURL).isEmpty else {
+            let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""
+            lastError = "This meeting's audio was deleted\(days), so it can't be transcribed again."
             return
         }
         transcribing.insert(id)
