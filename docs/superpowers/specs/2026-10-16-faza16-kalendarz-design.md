@@ -22,7 +22,7 @@ nagranie do wydarzenia.
 Faza 1.6 daje MeetNotes to samo, w trzech krokach: **(1)** aplikacja wykrywa początek spotkania
 (z kalendarza albo z rozmowy ad hoc, np. w Teams) i pokazuje pigułkę nagrywania; **(2)** notatka
 dostaje tytuł z nazwy spotkania; **(3)** przy dacie notatki można wybrać wydarzenie i powiązać je
-z transkrypcją. Aplikacja wykrywa też **koniec** rozmowy i pyta (albo kończy sama).
+z transkrypcją. Aplikacja wykrywa też **koniec** rozmowy i **pyta** — nigdy nie kończy sama.
 
 Kryterium sukcesu (od użytkownika, sprowadzone do testu): rozpoczynam spotkanie z Teams →
 pojawia się pigułka z nazwą spotkania → Start → po rozłączeniu pigułka pyta, czy kończyć →
@@ -38,8 +38,8 @@ notatka ma tytuł spotkania i widać powiązane wydarzenie.
 - Wykrycie startu spotkania z Kalendarza Apple (opcjonalnie) i z rozmowy ad hoc (Teams jako
   przypadek główny).
 - Pigułka z ofertą nagrywania; przełącznik auto-startu w Settings.
-- Wykrycie końca spotkania **niezależne od godziny końca w kalendarzu**; tryb „pytaj" albo
-  „kończ sam".
+- Wykrycie końca spotkania **niezależne od godziny końca w kalendarzu**; zawsze **pytanie**
+  (Stop / Continue), bez samoczynnego zatrzymania.
 - Tytuł notatki z nazwy wydarzenia; ręczne podpięcie/odpięcie wydarzenia do istniejącej
   notatki (także starej, także dla spotkania ad hoc).
 - Sekcja Integrations w Settings: Apple Calendar (działa), Google Calendar / Outlook / Slack
@@ -77,8 +77,9 @@ notatka ma tytuł spotkania i widać powiązane wydarzenie.
 7. Połączenie z Kalendarzem Apple jest **opcją w Settings** — kto chce, ten łączy. Google
    Calendar, Outlook i Slack dojdą później; teraz wyszarzone z napisem „Coming soon".
 8. **Koniec spotkania wykrywa aplikacja, nie kalendarz** (godzinne spotkanie kończące się po
-   15 min = stop po 15 min). Albo aplikacja kończy sama, albo pyta „Spotkanie się skończyło?
-   Zakończyć czy kontynuować".
+   15 min = pytanie po 15 min). Aplikacja pyta „Spotkanie się skończyło? Zakończyć czy
+   kontynuować". **Tryb automatyczny działa tylko przy starcie, nie przy zakończeniu**
+   (decyzja 2026-10-16): nagrania nie zatrzymuje sama aplikacja po sygnale końca.
 9. Najgorszy możliwy błąd: **start, gdy nie ma spotkania**.
 10. Filtr wydarzeń: bez całodniowych (urodziny, OOO), bez odrzuconych. **Out of office dodaje
     wydarzenie całodniowe — trzeba uważać** (§4.3).
@@ -108,7 +109,7 @@ połączonego kalendarza**:
   włączony, bo użytkownik chce tego jak w Granoli; pigułka niczego nie nagrywa sama.)
 - *Start recording automatically* — domyślnie **wyłączony**.
 - *Launch at login* — domyślnie **wyłączone** (§4.8).
-- *When the meeting ends* — „Ask me" (domyślnie) / „Stop automatically".
+- Brak ustawienia „When the meeting ends": koniec zawsze pyta (§4.6).
 - Zaawansowane (zwijane): lista ignorowanych aplikacji, progi czasowe z §4.2 i §4.6.
 
 Wszystkie nowe pola `GlobalSettings` są **opcjonalne** (zasada CLAUDE.md, lekcja E6).
@@ -223,25 +224,25 @@ Sygnały końca:
    rozmowę w trakcie). Spike sprawdza, czy Teams zwalnia wejście przy wyciszeniu — jeśli tak,
    wyciszenie jest fałszywym końcem i T_release/okna muszą to uwzględnić.
 2. **Cisza na obu torach** ≥ T_silence (szkic: 3 min). Samo w sobie zawodne (prezentacja bez
-   mówienia, wszyscy wyciszeni) — dlatego **zawsze pyta**, nigdy nie zatrzymuje samo w tym trybie.
+   mówienia, wszyscy wyciszeni).
 
-Zachowanie wg Settings *When the meeting ends*:
+**Zachowanie (decyzja użytkownika 2026-10-16): sygnał 1 lub 2 → zawsze stan *End prompt*** —
+pigułka pyta „Meeting ended?". „Stop" kończy (powód `button`, jak każde ręczne zatrzymanie),
+„Continue" wycisza pytanie na T_snooze (szkic: 10 min; **moja decyzja**). **Nie ma trybu
+„kończ sam"**, nie ma ustawienia i nie ma nowego `EndReason` — auto-tryb z §4.5 dotyczy
+wyłącznie startu. Zwolnienie mikrofonu przy wyciszeniu w Teams (jeśli spike to potwierdzi) jest
+więc tylko jednym zbędnym pytaniem, a nie ucięciem nagrania.
 
-- **Ask me (domyślnie):** sygnał 1 lub 2 → stan *End prompt*. „Continue" wycisza pytanie na
-  T_snooze (szkic: 10 min; **moja decyzja**), „Stop" kończy.
-- **Stop automatically:** sygnał 1 → stop z powodem `meetingEnded` (nowy przypadek `EndReason`).
-  Sygnał 2 (cisza) nadal tylko pyta.
-
-**Co z istniejącym `SilenceCondition` (600 s)?** Zostaje bez zmian jako **twardy bezpiecznik**
-w obu trybach: dziś kończy sesję po 10 min ciszy bez pytania i **nie usuwamy go**, bo to
-zabezpieczenie przed „70 min przypadkowego dźwięku" z W§1 (pytanie, na które nikt nie
-odpowiada, nie może wisieć w nieskończoność). W trybie *Ask me* pytanie pojawia się po
-T_silence (3 min) i, jeśli nikt nie odpowie, sesję kończy bezpiecznik po 10 min ciszy.
-`HardLimitCondition` (4 h) i `StallCondition` (30 s) bez zmian. **(Moja decyzja.)**
+**Co z istniejącym `SilenceCondition` (600 s)?** Zostaje bez zmian jako **twardy bezpiecznik**:
+dziś kończy sesję po 10 min ciszy bez pytania i **nie usuwamy go**, bo to zabezpieczenie przed
+„70 min przypadkowego dźwięku" z W§1 (pytanie, na które nikt nie odpowiada, nie może wisieć w
+nieskończoność). To jedyne samoczynne zatrzymanie, i istniało od fazy 1; pytanie pojawia się po
+T_silence (3 min), a bezpiecznik zadziała dopiero po 10 min ciszy, gdy nikt nie odpowie.
+`HardLimitCondition` (4 h) i `StallCondition` (30 s) bez zmian. **(Moja decyzja, patrz §8.)**
 
 `EndCondition` jest protokołem „żeby kalendarz dało się dołożyć bez dotykania rdzenia" — kalendarz
-**nie jest** dokładany; sygnały końca z 1–2 działają w warstwie aplikacji (stan pigułki) i, dla
-`meetingEnded`, przez wywołanie `stop(reason:)`. Rdzeń nagrywania dostaje tylko nowy `EndReason`.
+**nie jest** dokładany; sygnały końca z 1–2 działają w warstwie aplikacji (stan pigułki), a
+rdzeń nagrywania nie zmienia się w tej fazie.
 
 ### 4.7 Powiązanie wydarzenia z notatką
 
@@ -352,9 +353,10 @@ zaawansowanych, nie zaszyte.
 5. Wydarzenie z kalendarza + Teams razem → jedna pigułka z tytułem wydarzenia.
 6. „Not a meeting" ukrywa ofertę i nie wraca w tej samej sesji mikrofonu.
 7. Auto-start włączony: rusza tylko dla zbiegu A+B lub B; **nigdy** dla samego A.
-8. Rozłączenie z Teams → pytanie „Meeting ended?" w ≤ T_release + 5 s (Ask me) albo stop z
-   powodem `meetingEnded` (Stop automatically). Godzina końca z kalendarza nie ma wpływu.
-9. Wyciszenie w Teams **nie** kończy spotkania (lub: odstępstwo opisane po spike).
+8. Rozłączenie z Teams → pytanie „Meeting ended?" w ≤ T_release + 5 s; nagranie trwa, dopóki
+   nie klikniesz Stop. Godzina końca z kalendarza nie ma wpływu.
+9. Wyciszenie w Teams **nigdy nie zatrzymuje** nagrania (co najwyżej jedno zbędne pytanie —
+   spike pokaże, czy w ogóle).
 10. Cisza ≥ T_silence → pytanie, nie stop; brak odpowiedzi → stop przez `SilenceCondition` (600 s).
 11. Notatka z wydarzeniem: tytuł = nazwa wydarzenia; ręczny tytuł wygrywa; autotytuł nie
     nadpisuje; po „Unlink" wraca autotytuł.
@@ -383,7 +385,7 @@ Wszystko, czego użytkownik nie rozstrzygał, a co przyjęliśmy:
 - „Not a meeting" wycisza ofertę na sesję mikrofonu / to samo wydarzenie.
 - Zbieg A+B dobiera wydarzenie automatycznie; ad hoc poza tym zbiegiem nie zgaduje wydarzenia.
 - „Śledzona" aplikacja końca = ta, która trzymała mikrofon w trakcie nagrania.
-- Tryb końca domyślnie „Ask me"; „Continue" wycisza na ~10 min.
+- „Continue" wycisza pytanie o koniec na ~10 min.
 - `SilenceCondition` 600 s zostaje jako twardy bezpiecznik; pytanie po ~3 min ciszy.
 - Kolejność tytułów: ręczny > kalendarz > auto > notatka; powiązanie po fakcie przykrywa
   autotytuł bez kasowania go.
@@ -399,7 +401,12 @@ Wszystko, czego użytkownik nie rozstrzygał, a co przyjęliśmy:
 2. ~~Aplikacja w tle~~ — **rozstrzygnięte 2026-10-16:** ikona na pasku menu, uruchamianie przy
    logowaniu opcjonalne (§4.8).
 
-Brak otwartych pytań do użytkownika; zostają wyłącznie pomiary ze spike'a (§5).
+3. **Bezpiecznik ciszy 600 s zostaje** (§4.6) jako jedyne samoczynne zatrzymanie — istnieje od
+   fazy 1 i chroni przed wiszącym pytaniem bez odpowiedzi. Jeśli wolisz, żeby **nic** nie
+   zatrzymywało nagrania bez Twojego kliknięcia, wyłączamy go (koszt: zapomniane nagranie
+   trwa do twardego limitu 4 h).
+
+Poza tym brak otwartych pytań; zostają pomiary ze spike'a (§5).
 
 ## 9. Ryzyka
 
