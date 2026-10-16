@@ -524,6 +524,16 @@ w dolnym pasku, jak na `b-add.png`.
   po zapisie autotytułu; kolumna widoku spotkania przeskakuje przy zmianie zakładki, bo stały pasek
   przewijania (ustawienie systemu „zawsze”) zwęża obszar treści — miejsce na pasek zawsze
   zarezerwowane, kolumna centrowana względem okna.
+  **Problemy nagrania (drugi odbiór, 2026-10-16):** wiersz listy pokazywał „⚠ Problem: system audio”,
+  a widok spotkania nic. Dowód: sesja `2026-10-16T14-13-15Z-af52`, `track.failed` z `allZeros60s`
+  dla `system` po 60,0 s, a tor nagrywał dalej (277 s, „Them” od 0:01:04) — fałszywy alarm, film
+  ruszył po minucie. (1) Problem nagrania jest widoczny w widoku spotkania: „⚠ System audio” w
+  `MetaLine`, klik → wyjaśnienie zwykłym językiem (co, kiedy, czy nagranie trwało dalej), ta sama
+  linia `StateLabel` nad transkryptem. (2) Cisza na początku, po której przyszedł dźwięk, to
+  informacja, nie problem: bez ⚠ na liście, w widoku neutralna wzmianka („System audio was silent
+  for the first minute; recording continued”). Ostrzeżenie zostaje, gdy cisza trwa do końca (wtedy
+  przechwytywanie naprawdę nie działało). Punkt (2) to decyzja projektanta wynikająca z celu
+  wykrywacza (brak uprawnienia → cisza do końca).
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
