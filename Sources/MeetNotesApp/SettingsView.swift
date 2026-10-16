@@ -1,21 +1,6 @@
+import AppKit
 import MeetNotesProviders
 import SwiftUI
-
-/// Formularz dodawania dostawcy w miejscu (karta Providers, macos.md §11.5). `preset == nil` = zwinięty.
-/// Dostawca zapisuje się od razu przy „Save & verify"; `savedID` pamięta go, żeby kolejne „Save & verify"
-/// (poprawiony klucz) tylko podmieniło klucz (`replaceKey`) zamiast dodawać duplikat.
-final class AddProviderState: ObservableObject {
-    @Published var preset: ProviderPreset?
-    @Published var name = ""
-    @Published var url = ""
-    @Published var key = ""
-    /// Błąd przed zapisem (adres, nazwa, brak klucza, pęk kluczy). Wynik weryfikacji czytamy z `AppModel.providerChecks`.
-    @Published var error: String?
-    @Published var savedID: UUID?
-
-    func open(_ p: ProviderPreset) { preset = p; name = p.name; url = p.baseURL; key = ""; error = nil; savedID = nil }
-    func close() { preset = nil; key = ""; error = nil; savedID = nil }
-}
 
 /// Szkic sekcji „Archive": Save / Cancel obejmuje tylko ją; dostawcy zapisują się od razu (plan 1.5-B, T4).
 final class SettingsDraft: ObservableObject {
@@ -26,14 +11,43 @@ final class SettingsDraft: ObservableObject {
     func load(_ s: GlobalSettings) { embedding = s.embedding; saved = false }
 }
 
+/// Stan arkusza „Set up <dostawca>" (macos.md §11.5): nowy dostawca albo podmiana klucza istniejącego (`editing`).
+/// Wynik testu: `result` (OpenAI-compatible, przed zapisem) albo `note` (neutralna uwaga). Błąd walidacji/pęku: `error`.
+final class ProviderSheetState: ObservableObject {
+    @Published var showing = false
+    @Published var preset: ProviderPreset = .custom
+    /// Logo w nagłówku: gotowy dostawca albo `nil` = własny adres.
+    @Published var logo: ProviderPreset?
+    @Published var editing: Provider?
+    @Published var name = ""
+    @Published var url = ""
+    @Published var key = ""
+    @Published var error: String?
+    @Published var result: ProviderCheck?
+    @Published var note: String?
+    @Published var testing = false
+
+    func setUp(_ p: ProviderPreset) {
+        open(preset: p, logo: p == .custom ? nil : p, editing: nil, name: p == .custom ? "" : p.name, url: p.baseURL)
+    }
+
+    func editKey(_ provider: Provider) {
+        let match = ProviderPreset.matching(provider)
+        open(preset: match ?? .custom, logo: match, editing: provider, name: provider.name, url: provider.baseURL.absoluteString)
+    }
+
+    private func open(preset: ProviderPreset, logo: ProviderPreset?, editing: Provider?, name: String, url: String) {
+        self.preset = preset; self.logo = logo; self.editing = editing; self.name = name; self.url = url
+        key = ""; error = nil; result = nil; note = nil; testing = false; showing = true
+    }
+}
+
 /// Settings trzyma połączenia (dostawcy, klucze) i globalny embedding (§1.5). Modele STT, korekty
 /// i podsumowania wybiera się w presecie. Wygląd: macos.md §11.5 (`b-settings.png`, `b-add.png`).
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @StateObject private var add: AddProviderState
+    @StateObject private var sheet = ProviderSheetState()
     @StateObject private var draft = SettingsDraft()
-
-    init(add: AddProviderState = AddProviderState()) { _add = StateObject(wrappedValue: add) }
 
     private var isDirty: Bool { draft.embedding != model.settings.embedding }
 
@@ -44,14 +58,13 @@ struct SettingsView: View {
                     PageTitle("Settings").padding(.bottom, 4)
                     SectionHeader("Providers")
                     Card {
-                        ForEach(model.providers.providers) { p in
-                            ProviderRow(provider: p)
-                            RowDivider()
+                        let rows = ProviderListRow.rows(for: model.providers.providers)
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
+                            ProviderRowView(row: row, sheet: sheet)
+                            if i < rows.count - 1 { RowDivider() }
                         }
-                        if add.preset != nil { AddProviderForm(add: add) } else { addRow }
                     }
-                    // RoleEditor rysuje własny SectionHeader i Card.
-                    RoleEditor(title: "Archive search", role: .embedding, assignment: $draft.embedding, language: nil)
+                    archiveSearch
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Speech-to-text, correction and summary models are chosen in each preset.")
                         link("Open Presets") { model.section = .presets }
@@ -70,6 +83,7 @@ struct SettingsView: View {
         .contentBackground()
         .navigationTitle("Settings")
         .onAppear { draft.load(model.settings) }
+        .sheet(isPresented: $sheet.showing) { ProviderSetupSheet(state: sheet) }
         .confirmationDialog("Change the embedding model?", isPresented: $draft.confirming) {
             Button("Change Model", role: .destructive) { commit() }
             Button("Keep Current Model", role: .cancel) {}
@@ -78,19 +92,49 @@ struct SettingsView: View {
         }
     }
 
-    /// „Add: OpenRouter · Ollama · Custom…" — małe pigułki; dostawca już dodany jest nieaktywny (Custom nigdy).
-    private var addRow: some View {
-        HStack(spacing: 6) {
-            Text("Add:").foregroundStyle(.mnText2).padding(.trailing, 4)
-            ForEach(ProviderPreset.all) { preset in
-                Button(preset == .custom ? "Custom…" : preset.name) { add.open(preset) }
-                    .buttonStyle(.pillSmall)
-                    .disabled(preset.isAdded(in: model.providers.providers))
-                    .help(preset.isAdded(in: model.providers.providers) ? "\(preset.name) is already added" : "Add \(preset.name)")
+    // MARK: Archive search (uwaga 6)
+
+    private var candidates: [Provider] { EmbeddingChoice.providers(model.providers.providers) }
+
+    /// Dostawca, którego modele pokazujemy: wybrany (jeśli nadal jest na liście) albo jedyny kandydat.
+    private var embeddingProvider: Provider? {
+        candidates.first { $0.id == draft.embedding?.providerID } ?? (candidates.count == 1 ? candidates.first : nil)
+    }
+
+    @ViewBuilder private var archiveSearch: some View {
+        SectionHeader("Archive search")
+        Card {
+            if candidates.isEmpty {
+                Text("Set up OpenRouter, Ollama or a custom endpoint above to choose an embedding model.")
+                    .foregroundStyle(.mnText2).padding(.horizontal, 16).padding(.vertical, 12)
+            } else {
+                if EmbeddingChoice.showsProviderRow(candidates: candidates) {
+                    FormRow(label: "Provider") {
+                        FieldMenu(label: "Provider", value: embeddingProvider?.name ?? "Choose…", width: 180) {
+                            Picker("Provider", selection: Binding(
+                                get: { embeddingProvider?.id },
+                                set: { draft.embedding = EmbeddingChoice.select(provider: $0, current: draft.embedding) })) {
+                                Text("None").tag(UUID?.none)
+                                ForEach(candidates) { p in Text(p.name).tag(Optional(p.id)) }
+                            }
+                            .pickerStyle(.inline).labelsHidden()
+                        }
+                    }
+                    if embeddingProvider != nil { RowDivider() }
+                }
+                if let p = embeddingProvider {
+                    FormRow(label: "Embedding model") {
+                        ModelPicker(providerID: p.id, role: .embedding, selection: Binding(
+                            get: { draft.embedding?.providerID == p.id ? draft.embedding?.model ?? "" : "" },
+                            set: { m in
+                                var a = EmbeddingChoice.select(provider: p.id, current: draft.embedding)
+                                a?.model = m
+                                draft.embedding = a
+                            }))
+                    }
+                }
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
     /// Dolny pasek: Cancel / Save obejmuje tylko „Archive search".
@@ -129,169 +173,253 @@ struct SettingsView: View {
     }
 }
 
-/// Wiersz dostawcy: nazwa, pod nią adres (+ ograniczenie gotowego dostawcy), po prawej stan, Retry przy błędzie i menu „⋯".
-private struct ProviderRow: View {
-    @Environment(AppModel.self) private var model
-    let provider: Provider
+final class ProviderRowState: ObservableObject {
+    @Published var confirmingRemove = false
+}
 
-    private var preset: ProviderPreset? { ProviderPreset.matching(provider.baseURL) }
-    private var key: KeyStatus { KeyStatus.of({ try model.secrets.get(provider.id) }) }
+/// Wiersz karty Providers: logo, nazwa, opis roli; po prawej stan + Retry + „⋯" (skonfigurowany) albo „Set up…" / „Add…".
+private struct ProviderRowView: View {
+    @Environment(AppModel.self) private var model
+    @StateObject private var rowState = ProviderRowState()
+    let row: ProviderListRow
+    @ObservedObject var sheet: ProviderSheetState
+
+    private var provider: Provider? {
+        switch row {
+        case .preset(_, let p): p
+        case .custom(let p): p
+        case .addCustom: nil
+        }
+    }
+    private var preset: ProviderPreset? {
+        switch row {
+        case .preset(let p, _): p
+        case .custom(let p): ProviderPreset.matching(p)
+        case .addCustom: .custom
+        }
+    }
+    private var title: String {
+        switch row {
+        case .preset(let p, _): p.name
+        case .custom(let p): p.name
+        case .addCustom: ProviderPreset.custom.name
+        }
+    }
+    private var subtitle: String {
+        switch row {
+        case .preset(let p, _): p.role
+        case .custom(let p): ProviderPreset.displayAddress(p.baseURL) + (preset.map { " · " + $0.role } ?? "")
+        case .addCustom: ProviderPreset.custom.role
+        }
+    }
+    private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try model.secrets.get(p.id) }) } }
+    private var failure: String? {
+        guard let p = provider, !model.providerVerifying.contains(p.id), case .failed(let why)? = model.providerChecks[p.id] else { return nil }
+        return why
+    }
 
     var body: some View {
         HStack(spacing: 12) {
+            ProviderLogo(preset: preset)
             VStack(alignment: .leading, spacing: 2) {
-                Text(provider.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
-                Text(meta).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle)
-                if case .unreadable(let why) = key {
+                Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
+                Text(subtitle).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle)
+                if case .unreadable(let why)? = key {
                     // Błąd pęku kluczy to nie „No key" (S18 §2.4): ikona + słowo, w kolorze ostrzeżenia.
                     Label("Couldn't read the key from Keychain", systemImage: "exclamationmark.triangle")
                         .font(.system(size: 11)).foregroundStyle(.mnWarn).help(why)
                 }
+                if let failure { Text(failure).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
             }
             Spacer(minLength: 8)
-            state
-            if case .failed? = model.providerChecks[provider.id], !model.providerVerifying.contains(provider.id) {
-                Button("Retry") { Task { await model.verifyProvider(provider.id) } }
+            trailing
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .confirmationDialog("Remove \(title)?", isPresented: $rowState.confirmingRemove) {
+            Button("Remove", role: .destructive) { if let p = provider { model.removeProvider(p.id) } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The provider and its saved key are deleted. Presets that use it will need another provider.")
+        }
+    }
+
+    @ViewBuilder private var trailing: some View {
+        if let p = provider {
+            state(p)
+            if failure != nil {
+                Button("Retry") { Task { await model.verifyProvider(p.id) } }
                     .buttonStyle(.pillSmall).help("Test the connection again")
             }
             Menu {
-                Button("Verify") { Task { await model.verifyProvider(provider.id) } }
-                Button("Refresh Models") { Task { await model.refreshModels(provider.id) } }
+                if preset?.needsKey ?? true { Button("Edit key…") { sheet.editKey(p) } }
+                Button("Test again") { Task { await model.verifyProvider(p.id) } }
+                Button("Refresh Models") { Task { await model.refreshModels(p.id) } }
                 Divider()
-                Button("Remove", role: .destructive) { model.removeProvider(provider.id) }
+                Button("Remove…", role: .destructive) { rowState.confirmingRemove = true }
             } label: {
                 Image(systemName: "ellipsis").foregroundStyle(.mnText2).frame(width: 28, height: 28).contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .help("More actions for \(provider.name)")
-            .accessibilityLabel("More actions for \(provider.name)")
+            .help("More actions for \(p.name)")
+            .accessibilityLabel("More actions for \(p.name)")
+        } else if case .preset(let p, _) = row {
+            Button("Set up…") { sheet.setUp(p) }.buttonStyle(.pillSmall).help("Set up \(p.name)")
+        } else {
+            Button("Add…") { sheet.setUp(.custom) }.buttonStyle(.pillSmall).help("Add a custom OpenAI-compatible endpoint")
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    /// „openrouter.ai/api/v1 · <ograniczenie> · <zamaskowany klucz | No key>".
-    private var meta: String {
-        var parts = [ProviderPreset.displayAddress(provider.baseURL)]
-        if let note = preset?.note { parts.append(note) }
-        switch key {
-        case .set(let masked): parts.append(masked)
-        case .missing: if preset?.needsKey ?? true { parts.append("No key") }
-        case .unreadable: break
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    @ViewBuilder private var state: some View {
-        if model.providerVerifying.contains(provider.id) {
+    @ViewBuilder private func state(_ p: Provider) -> some View {
+        if model.providerVerifying.contains(p.id) {
             StateLabel(.progress(nil), "Verifying…")
         } else {
-            switch model.providerChecks[provider.id] {
+            switch model.providerChecks[p.id] {
             case .verified(let n)?: StateLabel(.ok, "Verified · \(n) models")
-            case .failed(let why)?: StateLabel(.bad, "Verification failed").help(why)
+            case .failed(let why)?: StateLabel(.bad, "Failed").help(why)
             case nil: StateLabel(.neutral, "Not verified")
             }
         }
     }
 }
 
-/// Rozwinięty formularz w karcie (tło `sunk`, linia `line2` u góry): adres, nazwa (Custom), klucz, wynik, Cancel / Save & verify.
-private struct AddProviderForm: View {
+/// Arkusz konfiguracji (macos.md §11.5, `b-add.png`): adres, klucz, link do klucza, Test connection z wynikiem w tej samej linii, Cancel / Save.
+/// Save zapisuje dostawcę od razu (`addProvider`) albo podmienia klucz (`replaceKey`); Cancel nie zapisuje nic — test przed zapisem
+/// idzie na kluczu z pola (w pamięci), więc anulowanie nie zostawia klucza w pęku bez dostawcy.
+struct ProviderSetupSheet: View {
     @Environment(AppModel.self) private var model
-    @ObservedObject var add: AddProviderState
+    @ObservedObject var state: ProviderSheetState
 
-    private var preset: ProviderPreset { add.preset ?? .custom }
-    /// Dostawca już zapisany tym formularzem (nie usunięty w międzyczasie z „⋯").
-    private var savedID: UUID? { add.savedID.flatMap { id in model.providers.providers.contains { $0.id == id } ? id : nil } }
-    private var verified: Bool { savedID.map { if case .verified? = model.providerChecks[$0] { true } else { false } } ?? false }
-
-    private var description: String {
-        switch preset.id {
-        case "openrouter": "transcription, correction and summary"
-        default: preset.note ?? ""
-        }
+    private var preset: ProviderPreset { state.preset }
+    private var editing: Bool { state.editing != nil }
+    private var title: String {
+        if let p = state.editing { return "Edit key for \(p.name)" }
+        return preset == .custom ? "Set up custom endpoint" : "Set up \(preset.name)"
     }
+    private var needsKey: Bool { preset.needsKey }
+    private var editableAddress: Bool { preset == .custom && !editing }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(preset.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
-                Text(description).font(.system(size: 11)).foregroundStyle(.mnText2)
-            }
-            .padding(.bottom, 6)
-            // Po zapisie adres i nazwa są tylko do odczytu: zmiana = Remove w „⋯" i dodanie od nowa.
-            if preset == .custom && savedID == nil {
-                row("Address") { TextField("https://example.com/v1", text: $add.url).textFieldStyle(.plain).fieldBox() }
-                row("Name") { TextField("Name", text: $add.name).textFieldStyle(.plain).fieldBox() }
-            } else {
-                row("Address") { Text(add.url).foregroundStyle(.mnText2).textSelection(.enabled) }
-                if preset == .custom { row("Name") { Text(add.name).foregroundStyle(.mnText2) } }
-            }
-            if preset.needsKey {
-                row("API key") { SecureField("Paste your key", text: $add.key).textFieldStyle(.plain).fieldBox() }
-            }
-            HStack(spacing: 8) {
-                result.help(resultText ?? "")
-                Spacer(minLength: 8)
-                if verified {
-                    Button("Done") { add.close() }.buttonStyle(.pillSmallPrimary).keyboardShortcut(.defaultAction)
-                } else {
-                    Button("Cancel") { add.close() }.buttonStyle(.pillSmall)
-                    // D4: mały primary (24 pt) obok Save w dolnym pasku, jak na b-add.png.
-                    Button("Save & verify") { saveAndVerify() }.buttonStyle(.pillSmallPrimary).keyboardShortcut(.defaultAction)
+            HStack(spacing: 12) {
+                ProviderLogo(preset: state.logo)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
+                    Text(preset.role).font(.system(size: 11)).foregroundStyle(.mnText2)
                 }
             }
-            .padding(.top, 8).padding(.leading, 82)
-        }
-        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.mnSunk)
-        .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
-    }
-
-    /// `FormRow` z etykietą 70 pt i ciaśniejszymi marginesami (makieta: `.adding .form-row`, 6/0).
-    private func row<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
-        FormRow(label: label, labelWidth: 70, content: content)
-            .padding(.horizontal, -16).padding(.vertical, -4)
-    }
-
-    private var resultText: String? {
-        if let id = savedID {
-            if model.providerVerifying.contains(id) { return "Verifying…" }
-            switch model.providerChecks[id] {
-            case .verified(let n)?: return "Verified · \(n) models available"
-            case .failed(let why)?: return why
-            case nil: return nil
+            .padding(.bottom, 12)
+            if editableAddress {
+                FormRow(label: "Address", labelWidth: 70) { TextField("https://example.com/v1", text: $state.url).textFieldStyle(.plain).fieldBox() }
+                FormRow(label: "Name", labelWidth: 70) { TextField("Name", text: $state.name).textFieldStyle(.plain).fieldBox() }
+            } else {
+                FormRow(label: "Address", labelWidth: 70) { Text(state.url).foregroundStyle(.mnText).textSelection(.enabled) }
             }
+            if needsKey {
+                FormRow(label: "API key", labelWidth: 70) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        SecureField("Paste your key", text: $state.key).textFieldStyle(.plain).fieldBox()
+                        if let page = preset.keyPage { keyLink(page) }
+                    }
+                }
+            }
+            testLine.padding(.leading, 98).padding(.trailing, 8).padding(.top, 4)
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Cancel") { state.showing = false }.buttonStyle(.pill).keyboardShortcut(.cancelAction)
+                Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
+            }
+            .padding(.top, 18).padding(.trailing, 8)
         }
-        return add.error
+        .padding(.horizontal, 16).padding(.vertical, 20)
+        .frame(width: 480)
+        .background(.mnCard)
+        .onChange(of: state.key) { _, _ in state.result = nil; state.note = nil; state.error = nil }
     }
 
-    @ViewBuilder private var result: some View {
-        if let id = savedID, model.providerVerifying.contains(id) {
-            StateLabel(.progress(nil), "Verifying…")
-        } else if let text = resultText {
-            StateLabel(verified ? .ok : .bad, text)
+    private func keyLink(_ page: URL) -> some View {
+        HStack(spacing: 0) {
+            Button { NSWorkspace.shared.open(page) } label: {
+                Text("Get an API key").fontWeight(.medium).foregroundStyle(.mnText).underline(color: .mnText3)
+            }
+            .buttonStyle(.plain)
+            Text(" on \(page.host()?.replacingOccurrences(of: "www.", with: "") ?? "")").foregroundStyle(.mnText2)
+        }
+        .font(.system(size: 11))
+    }
+
+    /// „Test connection" + wynik w tej samej linii; gdy tekst się nie mieści, pod przyciskiem.
+    private var testLine: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { testButton; resultLabel; Spacer(minLength: 0) }
+            VStack(alignment: .leading, spacing: 6) { testButton; resultLabel }
         }
     }
 
-    private func saveAndVerify() {
-        add.error = nil
-        let key = add.key.trimmingCharacters(in: .whitespacesAndNewlines)
-        if preset.needsKey && key.isEmpty { add.error = "Paste your key first."; return }
-        // Po błędzie weryfikacji: tylko nowy klucz dla tego samego dostawcy (drugi `addProvider` zablokowałby duplikat nazwy).
-        if let id = savedID {
-            add.error = model.replaceKey(id, key: key)
-            return
+    private var testButton: some View {
+        Button("Test connection") { Task { await test() } }
+            .buttonStyle(.pillSmall).disabled(state.testing)
+            .help("Checks the address and key without saving anything")
+    }
+
+    @ViewBuilder private var resultLabel: some View {
+        if state.testing {
+            StateLabel(.progress(nil), "Testing…")
+        } else if let e = state.error {
+            StateLabel(.bad, e)
+        } else if let r = state.result {
+            switch r {
+            case .verified(let n): StateLabel(.ok, "Verified · \(n) models available")
+            case .failed(let why): StateLabel(.bad, why)
+            }
+        } else if let n = state.note {
+            StateLabel(.neutral, n)
         }
-        guard let u = URL(string: add.url.trimmingCharacters(in: .whitespaces)), ["http", "https"].contains(u.scheme), u.host() != nil else {
-            add.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
-            return
+    }
+
+    // MARK: Akcje
+
+    private func trimmedKey() -> String { state.key.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private func address() -> URL? {
+        guard let u = URL(string: state.url.trimmingCharacters(in: .whitespaces)), ["http", "https"].contains(u.scheme), u.host() != nil else {
+            state.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
+            return nil
         }
-        if let e = model.addProvider(name: add.name, baseURL: u, key: key) {
-            add.error = e
+        return u
+    }
+
+    private func test() async {
+        state.error = nil; state.result = nil; state.note = nil
+        let key = trimmedKey()
+        if needsKey && key.isEmpty && !editing { state.error = "Paste your key first."; return }
+        guard let url = state.editing?.baseURL ?? address() else { return }
+        let kind = state.editing?.kind ?? preset.kind
+        state.testing = true
+        defer { state.testing = false }
+        if let r = await AppModel.testConnection(baseURL: url, kind: kind, key: key) { state.result = r; return }
+        // ElevenLabs: klient powstaje z klucza zapisanego w pęku, więc przed zapisem testu nie ma.
+        if let id = state.editing?.id, key.isEmpty {
+            await model.verifyProvider(id)
+            state.result = model.providerChecks[id]
         } else {
-            let n = add.name.trimmingCharacters(in: .whitespaces)
-            add.savedID = model.providers.providers.last { $0.name == n }?.id
+            state.note = "The key is checked right after you save."
+        }
+    }
+
+    private func save() {
+        state.error = nil
+        let key = trimmedKey()
+        if needsKey && key.isEmpty { state.error = "Paste your key first."; return }
+        if let p = state.editing {
+            // Podmiana klucza istniejącego dostawcy (adres i nazwa bez zmian): zapis i ponowna weryfikacja.
+            if let e = model.replaceKey(p.id, key: key) { state.error = e } else { state.showing = false }
+            return
+        }
+        guard let url = address() else { return }
+        if let e = model.addProvider(name: preset == .custom ? state.name : preset.name, baseURL: url, key: key, kind: preset.kind) {
+            state.error = e // duplikat nazwy albo błąd pęku kluczy; arkusz zostaje otwarty
+        } else {
+            state.showing = false
         }
     }
 }
