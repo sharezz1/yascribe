@@ -28,6 +28,10 @@ Kod: `Sources/MeetNotesRecording` (rdzeń audio), `MeetNotesSessionFormat` (dzie
 Faza 1 zamknięta 2026-10-13 (`master`). Faza 1.5 „Notatka i wygląd" na gałęzi `faza15`:
 spec `docs/superpowers/specs/2026-10-14-faza15-design.md`, plan
 `docs/superpowers/plans/2026-10-14-faza15-*.md` (przydział modeli Haiku/Sonnet/Opus w pliku 00).
+**Faza 1.5a zamknięta 2026-10-16** (tag `faza-1.5a` → `b4f5804`, 236/236): język wizualny B
+(`docs/design/macos.md` §11), trzy odbiory na żywo, ElevenLabs bezpośrednio, szablony z sekcjami,
+Recordings z retencją audio; raport `docs/superpowers/reports/F15-T13-czesc-B.md`. Dalej 1.5b:
+wyciszanie torów w pigułce (§11.5).
 
 ## Twarde zasady
 
