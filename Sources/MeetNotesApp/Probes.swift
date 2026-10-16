@@ -114,51 +114,22 @@ enum Probes {
 
     private struct Proc { var pid: Int32; var bundle: String; var input: Bool }
 
-    private static func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
-        AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
-    }
-
-    private static func processObjects() -> (ids: [AudioObjectID], status: OSStatus) {
-        var addr = address(kAudioHardwarePropertyProcessObjectList)
-        var size: UInt32 = 0
-        var st = AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size)
-        guard st == noErr else { return ([], st) }
-        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
-        st = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &ids)
-        return (st == noErr ? ids : [], st)
-    }
-
-    private static func number<T: FixedWidthInteger>(_ obj: AudioObjectID, _ selector: AudioObjectPropertySelector, as: T.Type) -> T? {
-        var addr = address(selector)
-        var v: T = 0
-        var size = UInt32(MemoryLayout<T>.size)
-        return AudioObjectGetPropertyData(obj, &addr, 0, nil, &size, &v) == noErr ? v : nil
-    }
-
-    private static func bundleID(_ obj: AudioObjectID) -> String? {
-        var addr = address(kAudioProcessPropertyBundleID)
-        var s: Unmanaged<CFString>?
-        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        guard AudioObjectGetPropertyData(obj, &addr, 0, nil, &size, &s) == noErr else { return nil }
-        return s?.takeRetainedValue() as String?
-    }
-
     /// Co sekundę lista procesów Core Audio; na stdout tylko zmiany `IsRunningInput`. Działa do Ctrl-C.
     private static func audio() async {
         let me = ProcessInfo.processInfo.processIdentifier
         var known: [AudioObjectID: Proc] = [:]
-        let first = processObjects()
+        let first = AudioProcessMonitor.processObjects()
         // Nie sprawdzam sam, czy system pokazał monit/zgodę — to widzi użytkownik; tu tylko status odczytu listy.
         out("\(clock()) process list read: OSStatus=\(first.status) objects=\(first.ids.count) (noErr=0; watch whether the system showed a permission prompt)")
         while true {
-            let (ids, st) = processObjects()
+            let (ids, st) = AudioProcessMonitor.processObjects()
             if st != noErr { out("\(clock()) process list error: OSStatus=\(st)") }
             var seen = Set<AudioObjectID>()
             for id in ids {
-                guard let pid = number(id, kAudioProcessPropertyPID, as: Int32.self), pid != me else { continue }
+                guard let pid = AudioProcessMonitor.number(id, kAudioProcessPropertyPID, as: Int32.self), pid != me else { continue }
                 seen.insert(id)
-                let input = (number(id, kAudioProcessPropertyIsRunningInput, as: UInt32.self) ?? 0) != 0
-                let p = Proc(pid: pid, bundle: bundleID(id) ?? "(no bundle id)", input: input)
+                let input = (AudioProcessMonitor.number(id, kAudioProcessPropertyIsRunningInput, as: UInt32.self) ?? 0) != 0
+                let p = Proc(pid: pid, bundle: AudioProcessMonitor.bundleID(id) ?? "(no bundle id)", input: input)
                 if (known[id]?.input ?? false) != input { out("\(clock()) \(p.bundle) pid=\(pid) input=\(input ? "ON" : "OFF")") }
                 known[id] = p
             }
