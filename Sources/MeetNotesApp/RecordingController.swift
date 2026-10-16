@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import MeetNotesNotes
 import MeetNotesRecording
 import Observation
 import SwiftUI
@@ -229,12 +230,16 @@ extension RecordingController {
 }
 
 /// Szkło tylko tutaj (§6.2): Liquid Glass regular od macOS 26, niżej zwykły materiał z cienką obwódką.
+/// `clipShape` po szkle: Liquid Glass rysuje własną poświatę (alfa 2–5 %) na CAŁYM prostokącie warstwy, także w rogach
+/// poza kształtem. Okno ma rozmiar treści, więc jego maska alfa była prostokątem i system liczył z niej prostokątny cień;
+/// cień okna klucza (macOS 26+) ma wyraźną krawędź, stąd prostokątne rogi tylko na pierwszym planie (drugi odbiór,
+/// zmierzone sondą: rogi alfa 0 dopiero po przycięciu). Bez przycięcia `invalidateShadow` nic nie zmienia.
 /// Całe szkło przeciąga okno (`WindowDragGesture`); przyciski w środku mają pierwszeństwo przed gestem rodzica.
 private extension View {
     @ViewBuilder func pillGlass<S: InsettableShape>(_ shape: S) -> some View {
         Group {
             if #available(macOS 26, *) {
-                glassEffect(.regular, in: shape)
+                glassEffect(.regular, in: shape).clipShape(shape)
             } else {
                 background(.regularMaterial, in: shape).overlay(shape.strokeBorder(.mnLine, lineWidth: 0.5))
             }
@@ -250,7 +255,7 @@ private struct StopButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 2, style: .continuous).fill(.mnRec).frame(width: 10, height: 10)
-            configuration.label.fontWeight(.semibold)
+            configuration.label.fontWeight(.semibold).lineLimit(1).fixedSize()
         }
         .font(.system(size: 13))
         .foregroundStyle(.mnRec)
@@ -285,6 +290,8 @@ struct RecordingPanelView: View {
     var recording: RecordingController?
     @ObservedObject var pill: PillState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Działa także w panelu poza sceną (sonda 2026-10-16: otwiera okno WindowGroup po jego zamknięciu).
+    @Environment(\.openWindow) private var openWindow
 
     init(model: AppModel, recording: RecordingController? = nil, pill: PillState) {
         self.model = model; self.recording = recording; self.pill = pill
@@ -308,12 +315,16 @@ struct RecordingPanelView: View {
             Circle().fill(.mnRecDot).frame(width: 8, height: 8).accessibilityHidden(true)
             LevelBars(fraction: Self.fraction(rec), animated: !reduceMotion)
             // Stała szerokość na najdłuższy format (00:00:00), żeby okno nie skakało przy przejściu 59:59 → 1:00:00.
-            Text("00:00:00").hidden().accessibilityHidden(true)
+            Text("00:00:00").lineLimit(1).fixedSize().hidden().accessibilityHidden(true)
                 .overlay(alignment: .leading) { Text(Self.shortClock(rec.elapsed)).accessibilityLabel("Recording \(Self.shortClock(rec.elapsed))") }
                 .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(.mnText)
             Button("Stop") { rec.stop() }.buttonStyle(StopButtonStyle()).keyboardShortcut(".", modifiers: .command)
             PillIconButton(systemImage: "chevron.up", label: "Show details") { pill.expanded = true }
         }
+        // Szerokość z treści przy najszerszym liczniku. Zmierzone: ideał 253, ale przy propozycji 253 układ ściskał się do 245
+        // i „Stop” łamał się na „Sto / p” (przypuszczalnie zaokrąglenie ideału do punktu);
+        // `fixedSize` tu i na etykietach trzyma je w jednej linii niezależnie od zaokrąglenia.
+        .fixedSize()
     }
 
     /// Rozwinięta: tylko odczyt (nic tu nie przełącza nagrywania poza Stop).
@@ -323,10 +334,10 @@ struct RecordingPanelView: View {
                 // D2: w pigułce czerwona tylko kropka, słowo ciemne (na liście spotkań `StateLabel(.live)` zostaje czerwony).
                 HStack(spacing: 4) {
                     Circle().fill(.mnRecDot).frame(width: 8, height: 8).accessibilityHidden(true)
-                    Text("Recording").font(.callout).fontWeight(.semibold).foregroundStyle(.mnText)
+                    Text("Recording").font(.callout).fontWeight(.semibold).foregroundStyle(.mnText).lineLimit(1).fixedSize()
                 }
                 .accessibilityElement(children: .combine)
-                Text(Self.shortClock(rec.elapsed)).font(.callout).monospacedDigit().foregroundStyle(.mnText2)
+                Text(Self.shortClock(rec.elapsed)).font(.callout).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1).fixedSize()
                 Spacer(minLength: 0)
                 PillIconButton(systemImage: "chevron.down", label: "Hide details", size: 24) { pill.expanded = false }
             }
@@ -336,14 +347,26 @@ struct RecordingPanelView: View {
             LevelRow(title: "Microphone: \(rec.micName)", db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion)
                 .padding(.top, 10)
             HStack(spacing: 8) {
-                Button("Open note") {
-                    if let id = rec.directory?.lastPathComponent { model.openSession(id) }
-                    NSApp.activate(ignoringOtherApps: true)
-                }
+                Button { openNote(rec) } label: { Text("Open note").lineLimit(1).fixedSize() }
                 .buttonStyle(PillButtonStyle(kind: .secondary, large: true)).frame(maxWidth: .infinity)
                 Button("Stop") { rec.stop() }.buttonStyle(StopButtonStyle(fill: true)).keyboardShortcut(".", modifiers: .command)
             }
             .padding(.top, 14)
+        }
+    }
+
+    /// Drugi odbiór: wcześniej tylko `openSession` (już ustawione przy starcie nagrania) i przestarzałe
+    /// `activate(ignoringOtherApps:)` — przy zamkniętym albo zminimalizowanym oknie nic się nie działo.
+    /// Zamknięte okno WindowGroup znika z `NSApp.windows` (sonda), więc wtedy otwieramy nowe; ono pokazuje już ustawioną sesję.
+    private func openNote(_ rec: RecordingController) {
+        model.go(to: .forRecording(directory: rec.directory))
+        NSApp.activate()
+        if let w = NSApp.windows.first(where: { !($0 is NSPanel) && !$0.isSheet && ($0.canBecomeMain || $0.isMiniaturized) }) {
+            if w.isMiniaturized { w.deminiaturize(nil) }
+            w.makeKeyAndOrderFront(nil)
+            w.orderFrontRegardless() // gdyby system odmówił aktywacji (Teams na pierwszym planie) — okno i tak na wierzch
+        } else {
+            openWindow(id: "main")
         }
     }
 
