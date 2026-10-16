@@ -41,21 +41,33 @@ public enum AudioRetention {
         return now.timeIntervalSince(started) > Double(days) * 86_400
     }
 
-    /// Przechodzi po sesjach w `sessions`. `days == nil` (Forever) = nic. `skip` = nazwy katalogów w użyciu
-    /// (nagrywana, transkrybowana, korekta/tytuł/notatka w toku). Zwraca nazwy sesji, z których usunięto audio, i błędy.
+    /// Co retencja skasowałaby teraz (decyzja R1, 2026-10-16): te same reguły co `apply`, bez kasowania. `days == nil`
+    /// (Forever) = nic. `skip` = nazwy katalogów w użyciu (nagrywana, transkrybowana, korekta/tytuł/notatka w toku).
+    /// `bytes` = suma rozmiarów `*.caf` tych sesji — do pytania „Delete audio from N meetings (X)?”.
+    public static func plan(sessions: URL, days: Int?, now: Date = Date(), skip: Set<String>) -> (sessions: [URL], bytes: Int64) {
+        guard let days else { return ([], 0) }
+        var out: [URL] = [], bytes: Int64 = 0
+        let dirs = (try? FileManager.default.contentsOfDirectory(at: sessions, includingPropertiesForKeys: nil)) ?? []
+        for session in dirs.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) where !skip.contains(session.lastPathComponent) {
+            let audio = audioFiles(session)
+            guard !audio.isEmpty, isExpired(session, days: days, now: now), transcriptionFinished(session) else { continue }
+            out.append(session)
+            bytes += audio.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        }
+        return (out, bytes)
+    }
+
+    /// Kasuje audio sesji z `plan`. Zwraca nazwy sesji, z których usunięto audio, i błędy.
     /// Znacznik zapisujemy PRZED kasowaniem: nieudane kasowanie ponowi następny przebieg (sesja wciąż ma `*.caf`).
     public static func apply(sessions: URL, days: Int?, now: Date = Date(), skip: Set<String>) -> (purged: [String], errors: [String]) {
         guard let days else { return ([], []) }
         var purged: [String] = [], errors: [String] = []
-        let dirs = (try? FileManager.default.contentsOfDirectory(at: sessions, includingPropertiesForKeys: nil)) ?? []
-        for session in dirs where !skip.contains(session.lastPathComponent) {
-            let audio = audioFiles(session)
-            guard !audio.isEmpty, isExpired(session, days: days, now: now), transcriptionFinished(session) else { continue }
+        for session in plan(sessions: sessions, days: days, now: now, skip: skip).sessions {
             do {
                 if AudioDeletion.read(session) == nil {
                     try JSONFile.save(AudioDeletion(afterDays: days, deletedAt: now), to: AudioDeletion.url(session))
                 }
-                for f in audio { try FileManager.default.removeItem(at: f) }
+                for f in audioFiles(session) { try FileManager.default.removeItem(at: f) }
                 purged.append(session.lastPathComponent)
             } catch {
                 errors.append("\(session.lastPathComponent): \(error.localizedDescription)")
@@ -109,34 +121,47 @@ public enum RecordingsMove {
     }
 
     /// Cały przebieg. `commit` przełącza aktywną lokalizację (i zapisuje ustawienia) po udanej weryfikacji — jeśli
-    /// rzuci, nic nie usuwamy. Rzuca `Failure` z powodem przed `commit`; po nim zwraca nazwy, których nie udało się
-    /// usunąć ze starego miejsca (kopia jest już kompletna i zweryfikowana, więc to tylko resztki).
+    /// rzuci, nic nie usuwamy ze starego miejsca. Rzuca `Failure` z powodem przed `commit`; po nim zwraca nazwy, których
+    /// nie udało się usunąć ze starego miejsca (kopia jest już kompletna i zweryfikowana, więc to tylko resztki).
+    /// Przy błędzie sprzątamy WŁASNĄ częściową kopię (decyzja R2, 2026-10-16): tylko wpisy, których przed kopiowaniem
+    /// w celu nie było, i folder docelowy, jeśli to my go utworzyliśmy i jest całkiem pusty. Nic innego w celu.
     public static func run(from old: URL, to new: URL, copy: Copy = fileManagerCopy,
                            progress: @Sendable (Progress) -> Void = { _ in },
                            commit: @Sendable () async throws -> Void) async throws -> [String] {
         if let r = destinationRefusal(from: old, to: new) { throw Failure(reason: r) }
+        let fm = FileManager.default
         let kept = "Nothing was deleted; meetings stay in \(old.path)."
-        let partial = "\(kept) Remove the partial copy in \(new.path) before trying that folder again."
-        do { try FileManager.default.createDirectory(at: new, withIntermediateDirectories: true) } catch {
+        let createdFolder = !fm.fileExists(atPath: new.path)
+        do { try fm.createDirectory(at: new, withIntermediateDirectories: true) } catch {
             throw Failure(reason: "Couldn't create \(new.path): \(error.localizedDescription). \(kept)")
+        }
+        var ours: [String] = []
+        func fail(_ why: String) -> Failure {
+            let left = removeOwnCopy(ours, in: new, removeFolder: createdFolder)
+            let tail = left.isEmpty ? "The partial copy was removed."
+                : "Couldn't remove the partial copy (\(left.joined(separator: ", "))) from \(new.path)."
+            return Failure(reason: "\(why). \(kept) \(tail)")
         }
         let items = topLevel(old)
         for (i, name) in items.enumerated() {
             progress(Progress(phase: .copying, done: i, total: items.count))
-            do { try copy(old.appendingPathComponent(name), new.appendingPathComponent(name)) } catch {
-                throw Failure(reason: "Couldn't copy \(name): \(error.localizedDescription). \(partial)")
+            let target = new.appendingPathComponent(name)
+            // Własność ustalamy PRZED kopią: urwana kopia też jest nasza, a wpis, który już był, nie jest.
+            if !fm.fileExists(atPath: target.path) { ours.append(name) }
+            do { try copy(old.appendingPathComponent(name), target) } catch {
+                throw fail("Couldn't copy \(name): \(error.localizedDescription)")
             }
         }
         progress(Progress(phase: .verifying, done: 0, total: items.count))
         let source: [String: Int], copied: [String: Int]
         do { source = try listing(old, items); copied = try listing(new, items) } catch {
-            throw Failure(reason: "Couldn't check the copy: \(error.localizedDescription). \(partial)")
+            throw fail("Couldn't check the copy: \(error.localizedDescription)")
         }
         if let bad = source.keys.sorted().first(where: { copied[$0] != source[$0] }) ?? copied.keys.sorted().first(where: { source[$0] == nil }) {
-            throw Failure(reason: "The copy doesn't match the original (\(bad)). \(partial)")
+            throw fail("The copy doesn't match the original (\(bad))")
         }
         do { try await commit() } catch {
-            throw Failure(reason: "Couldn't switch to the new folder: \(error.localizedDescription). \(partial)")
+            throw fail("Couldn't switch to the new folder: \(error.localizedDescription)")
         }
         var leftovers: [String] = []
         for (i, name) in items.enumerated() {
@@ -145,6 +170,18 @@ public enum RecordingsMove {
         }
         progress(Progress(phase: .removing, done: items.count, total: items.count))
         return leftovers
+    }
+
+    /// Usuwa z `dir` tylko wpisy `names` (nasza kopia); `removeFolder` = `dir` utworzył ten przebieg — usuwamy go,
+    /// gdy jest całkiem pusty (także bez ukrytych plików). Zwraca nazwy, których nie udało się usunąć.
+    static func removeOwnCopy(_ names: [String], in dir: URL, removeFolder: Bool) -> [String] {
+        let fm = FileManager.default
+        let left = names.filter { name in
+            let url = dir.appendingPathComponent(name)
+            return fm.fileExists(atPath: url.path) && (try? fm.removeItem(at: url)) == nil
+        }
+        if removeFolder, ((try? fm.contentsOfDirectory(atPath: dir.path)) ?? ["?"]).isEmpty { try? fm.removeItem(at: dir) }
+        return left
     }
 
     /// Rozmiar folderu w bajtach (suma plików) — nagłówek „4.2 GB on disk”.

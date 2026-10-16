@@ -47,7 +47,7 @@ struct RecordingsSection: View {
                 FieldMenu(label: "Keep audio", value: Self.label(model.settings.audioRetentionDays ?? 0), width: 140) {
                     Picker("Keep audio", selection: Binding(
                         get: { model.settings.audioRetentionDays ?? 0 },
-                        set: { model.setKeepAudio(days: $0 == 0 ? nil : $0) })) {
+                        set: { model.requestKeepAudio(days: $0 == 0 ? nil : $0) })) {
                         ForEach(Self.options, id: \.self) { Text(Self.label($0)).tag($0) }
                     }
                     .pickerStyle(.inline)
@@ -55,6 +55,23 @@ struct RecordingsSection: View {
                 }
             }
         }
+        // R1: skrócenie, które kasuje audio, wymaga potwierdzenia; Cancel zostawia ustawienie bez zmian.
+        .confirmationDialog(keepAudioQuestion, isPresented: Binding(
+            get: { model.pendingKeepAudio != nil }, set: { if !$0 { model.pendingKeepAudio = nil } }), titleVisibility: .visible) {
+            // Dni łapiemy przy budowie dialogu: zamknięcie (binding → nil) może przyjść przed akcją przycisku.
+            if let days = model.pendingKeepAudio?.days {
+                Button("Delete Audio", role: .destructive) { model.setKeepAudio(days: days) }
+            }
+            Button("Cancel", role: .cancel) { model.pendingKeepAudio = nil }
+        } message: {
+            Text("Transcripts, notes and My notes stay. Deleted audio can't be played or transcribed again.")
+        }
+    }
+
+    private var keepAudioQuestion: String {
+        guard let p = model.pendingKeepAudio else { return "" }
+        let size = ByteCountFormatter.string(fromByteCount: p.bytes, countStyle: .file)
+        return "Delete \(size) of audio from \(p.meetings) \(p.meetings == 1 ? "meeting" : "meetings") older than \(p.days) days?"
     }
 
     /// Błąd przenoszenia (czerwony) albo, gdy zmiana jest zablokowana, powód (`text2`).

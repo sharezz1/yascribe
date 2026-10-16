@@ -108,13 +108,22 @@ struct MyNotesTab: View {
     let item: SessionItem
 
     var body: some View {
-        GrowingTextView(text: Binding(get: { state.myNotes }, set: { state.myNotes = $0; model.notes.saveMyNotes($0, for: item) }),
-                        fontSize: 14, lineSpacing: 8, minHeight: 240, accessibilityLabel: "My notes")
-            .overlay(alignment: .topLeading) {
-                if state.myNotes.isEmpty {
-                    Text("Write notes…").font(.system(size: 14)).foregroundStyle(.mnText2).allowsHitTesting(false)
+        if model.recordingsMove != nil {
+            // R3: tylko do odczytu. `GrowingTextView` to NSTextView — `.disabled` nie blokuje w nim pisania.
+            Text(state.myNotes.isEmpty ? "No notes." : state.myNotes)
+                .font(.system(size: 14)).lineSpacing(8)
+                .foregroundStyle(state.myNotes.isEmpty ? Color.mnText2 : Color.mnText)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
+        } else {
+            GrowingTextView(text: Binding(get: { state.myNotes }, set: { state.myNotes = $0; model.notes.saveMyNotes($0, for: item) }),
+                            fontSize: 14, lineSpacing: 8, minHeight: 240, accessibilityLabel: "My notes")
+                .overlay(alignment: .topLeading) {
+                    if state.myNotes.isEmpty {
+                        Text("Write notes…").font(.system(size: 14)).foregroundStyle(.mnText2).allowsHitTesting(false)
+                    }
                 }
-            }
+        }
     }
 }
 
@@ -126,6 +135,7 @@ struct TranscriptTab: View {
     let item: SessionItem
     let onJump: (Utterance) -> Void
     private var busy: Bool { model.isTranscribing(item) }
+    private var moving: Bool { model.recordingsMove != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -134,6 +144,7 @@ struct TranscriptTab: View {
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
                 ErrorLine(message: "Correction failed: \(why)", retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
+                    .disabled(moving)
             }
             // Uwaga 7: jedna linia nad listą — wersja (pole-popup) po lewej, Improve transcript i Copy po prawej.
             if item.transcript != nil {
@@ -156,6 +167,7 @@ struct TranscriptTab: View {
                     if model.notes.correctionFailureMessage(item.id) == nil, model.notes.canRetryCorrection(item) {
                         Button("Improve transcript") { model.notes.retryCorrection(item) }
                             .buttonStyle(.pill)
+                            .disabled(moving)
                             .help("Run the preset's correction model on this transcript")
                     }
                     copyButton
@@ -182,7 +194,7 @@ struct TranscriptTab: View {
                 if !t.failedChunks.isEmpty {
                     Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item) }
                         .buttonStyle(.pillSmall)
-                        .disabled(busy)
+                        .disabled(busy || moving)
                         .help("Sends only the parts that failed; finished parts aren't paid for again")
                         .padding(.bottom, 8)
                 }
@@ -210,10 +222,13 @@ struct TranscriptTab: View {
                     StateLabel(.progress(nil), "Transcribing…")
                 } else {
                     // Preset zamrożony przy nagraniu, nie bieżący (spec §1.5); Resume bierze migawkę z input.json przebiegu.
-                    if let p = model.presetFor(sessionURL: item.url) {
-                        Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }.buttonStyle(.pillPrimary)
+                    Group {
+                        if let p = model.presetFor(sessionURL: item.url) {
+                            Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }.buttonStyle(.pillPrimary)
+                        }
+                        if item.runID != nil { Button("Resume Transcription") { model.resume(item) }.buttonStyle(.pill) }
                     }
-                    if item.runID != nil { Button("Resume Transcription") { model.resume(item) }.buttonStyle(.pill) }
+                    .disabled(moving)
                 }
             }
         }
@@ -237,6 +252,7 @@ struct SummaryTab: View {
     private var gen: NotesModel.GenState { model.notes.state(item.id) }
     private var template: Template { model.notes.templates.all().first { $0.id == state.templateID } ?? .standard }
     private var choice: SummaryChoice? { model.notes.summaryChoice(for: item) }
+    private var moving: Bool { model.recordingsMove != nil }
 
     /// „Using <model> from preset <nazwa>" przy zastępstwie; ostrzeżenie, gdy żaden preset nie ma modelu podsumowania.
     @ViewBuilder private var modelLine: some View {
@@ -316,6 +332,7 @@ struct SummaryTab: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .disabled(moving)
                 .help(state.showContext ? "Hide the context field" : "Add or change the context for the model")
                 .accessibilityValue(state.showContext ? "Expanded" : "Collapsed")
                 if let c = choice {
@@ -326,7 +343,7 @@ struct SummaryTab: View {
                 if let s {
                     Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
                         .buttonStyle(.pill)
-                        .disabled(gen == .generating || !hasText || choice == nil)
+                        .disabled(gen == .generating || !hasText || choice == nil || moving)
                     Button { copy(s.markdown) } label: { Image(systemName: "doc.on.doc") }
                         .buttonStyle(CircleIconButtonStyle())
                         .help("Copy the notes")
@@ -336,12 +353,21 @@ struct SummaryTab: View {
                 } else {
                     Button("Generate notes") { run() }
                         .buttonStyle(.pillPrimary)
-                        .disabled(!hasText || choice == nil)
+                        .disabled(!hasText || choice == nil || moving)
                         // ⌘↩, nie sam Return: Return w polu kontekstu ma wstawić nową linię, a nie uruchomić płatne generowanie.
                         .keyboardShortcut(.return, modifiers: .command)
                 }
             }
-            if state.showContext { ContextEditor(text: $state.context).padding(.horizontal, 2).padding(.bottom, 2) }
+            if state.showContext {
+                if moving {
+                    // R3: tylko do odczytu (NSTextView nie reaguje na `.disabled`).
+                    Text(state.context).font(.system(size: 13)).foregroundStyle(.mnText2).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                } else {
+                    ContextEditor(text: $state.context).padding(.horizontal, 2).padding(.bottom, 2)
+                }
+            }
         }
         .padding(.leading, 8).padding(.trailing, 6).padding(.vertical, 6)
         .background(.mnSunk, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -359,7 +385,7 @@ struct SummaryTab: View {
     }
 
     @ViewBuilder private var errorView: some View {
-        if case .failed(let message) = gen { ErrorLine(message: message) { run() } }
+        if case .failed(let message) = gen { ErrorLine(message: message) { run() }.disabled(moving) }
     }
 
     private func run() {
