@@ -95,6 +95,7 @@ final class AppModel {
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
         notes.onChange = { [weak self] in self?.reloadSessions() }
+        notes.isMoving = { [weak self] in self?.recordingsMove != nil }
         applyRetention()
     }
 
@@ -165,8 +166,20 @@ final class AppModel {
         if !r.purged.isEmpty { reloadSessions(); refreshRecordingsSize() }
     }
 
+    /// Skrócenie „Keep audio”, które coś by skasowało, czeka na potwierdzenie (decyzja R1): liczba spotkań i rozmiar
+    /// audio z `AudioRetention.plan` — tej samej reguły, której używa `applyRetention`. Dialog w `RecordingsSection`.
+    var pendingKeepAudio: (days: Int, meetings: Int, bytes: Int64)?
+
+    /// Wybór w „Keep audio”: gdy nic by nie zniknęło — od razu, inaczej pytanie. `days == nil` = Forever.
+    func requestKeepAudio(days: Int?) {
+        let plan = AudioRetention.plan(sessions: sessionsDirectory, days: days, skip: busySessions)
+        guard let days, !plan.sessions.isEmpty else { setKeepAudio(days: days); return }
+        pendingKeepAudio = (days, plan.sessions.count, plan.bytes)
+    }
+
     /// `days == nil` = Forever.
     func setKeepAudio(days: Int?) {
+        pendingKeepAudio = nil
         settings.keepAudioForever = days == nil ? true : nil
         settings.keepAudioDays = days
         save()
@@ -189,6 +202,7 @@ final class AppModel {
             recordingsMoveResult = (false, reason)
             return
         }
+        notes.flushPendingSaves() // autozapis My notes przed kopią, nie w trakcie (R3)
         recordingsMove = RecordingsMove.Progress(phase: .copying, done: 0, total: 0)
         let isDefault = new.standardizedFileURL.path == paths.sessions.standardizedFileURL.path
         Task.detached {
@@ -474,9 +488,9 @@ final class AppModel {
     /// Otwarte spotkanie (widok szczegółów) — dla menu Meeting; poza Meetings nic nie jest „otwarte”.
     var openItem: SessionItem? { section == .meetings ? sessions.first { $0.id == selectedSessionID } : nil }
 
-    /// Sesji nagrywanej ani transkrybowanej nie usuwamy (katalog jest w użyciu).
+    /// Sesji nagrywanej ani transkrybowanej nie usuwamy (katalog jest w użyciu); w trakcie przenoszenia żadnej (R3).
     func canDelete(_ item: SessionItem) -> Bool {
-        !SessionStatus.isRecording(item.url, recordingDirectory: recording.directory) && !isTranscribing(item)
+        recordingsMove == nil && !SessionStatus.isRecording(item.url, recordingDirectory: recording.directory) && !isTranscribing(item)
     }
 
     func copyNotes(_ item: SessionItem) {
