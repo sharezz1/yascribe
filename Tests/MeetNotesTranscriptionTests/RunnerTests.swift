@@ -355,3 +355,30 @@ private func fixture(_ name: String) throws -> Data {
     _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: input.snapshot, client: client(second)).run()
     #expect(second.requests == 0)
 }
+
+/// ElevenLabs z ręki: stała odpowiedź w kształcie z dokumentacji (słowa, odstęp, zdarzenie); zapisuje nagłówki.
+private final class FixedElevenLabs: HTTPClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var headers: [[String: String]] = []
+    func send(_ r: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        lock.withLock { headers.append(r.allHTTPHeaderFields ?? [:]) }
+        let body = #"{"language_code":"pl","language_probability":0.9,"text":"raz (śmiech) dwa","words":["#
+            + #"{"text":"raz","start":0.2,"end":0.5,"type":"word"},{"text":" ","start":0.5,"end":0.6,"type":"spacing"},"#
+            + #"{"text":"(śmiech)","start":0.6,"end":0.9,"type":"audio_event"},{"text":"dwa","start":1.0,"end":1.3,"type":"word"}]}"#
+        return (Data(body.utf8), HTTPURLResponse(url: r.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+}
+
+@Test func runnerTranscribesThroughElevenLabsClient() async throws {
+    // Granica `TranscriptionClient`: ten sam potok (bramka, okna, scalenie) z klientem ElevenLabs.
+    let http = FixedElevenLabs()
+    let provider = Provider(name: "ElevenLabs", baseURL: ElevenLabsClient.baseURL, kind: .elevenLabs)
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
+                                          client: ElevenLabsClient(provider: provider, key: "test-fake-el", http: http)).run()
+    #expect(t.utterances.map(\.text) == ["raz dwa"])
+    #expect(t.utterances.first?.approximateTiming == false)
+    #expect(http.headers.count == 1)
+    #expect(http.headers.first?["xi-api-key"] == "test-fake-el")
+    #expect(http.headers.first?["Content-Type"]?.hasPrefix("multipart/form-data; boundary=") == true)
+}
