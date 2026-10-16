@@ -1,9 +1,12 @@
 import Foundation
+import MeetNotesMeetings
 
 /// Tytuły spotkania: ręczny i automatyczny (`notes/meta.json`).
 public struct NoteMeta: Codable, Equatable, Sendable {
     public var manualTitle: String?
     public var autoTitle: String?
+    /// Powiązane wydarzenie z kalendarza (migawka). Opcjonalne: stary `meta.json` czyta się bez zmian.
+    public var calendarEvent: CalendarLink?
     public init(manualTitle: String? = nil, autoTitle: String? = nil) {
         self.manualTitle = manualTitle
         self.autoTitle = autoTitle
@@ -65,9 +68,9 @@ public enum NoteTitle {
         s.trimmingCharacters(in: CharacterSet(charactersIn: "*\"“”' ").union(.whitespaces))
     }
 
-    /// Ręczny > auto > tytuł z notatki > „Untitled meeting". Tytuł z notatki nie nadpisuje istniejącego.
+    /// Ręczny > kalendarz > auto > tytuł z notatki > „Untitled meeting". Tytuł z notatki nie nadpisuje istniejącego.
     public static func display(meta: NoteMeta, noteTitle: String?) -> String {
-        for c in [meta.manualTitle, meta.autoTitle, noteTitle] {
+        for c in [meta.manualTitle, meta.calendarEvent?.title, meta.autoTitle, noteTitle] {
             if let c, !c.trimmingCharacters(in: .whitespaces).isEmpty { return c }
         }
         return untitled

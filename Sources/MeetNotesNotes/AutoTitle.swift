@@ -3,14 +3,14 @@ import MeetNotesProviders
 import MeetNotesTranscription
 
 /// Autotytuł po transkrypcji (spec 1.5 §3, decyzja 18): jedno krótkie wywołanie modelu podsumowania, tylko po tytuł.
-/// Zapis do `meta.json.autoTitle` wyłącznie gdy nie ma ręcznego ani wcześniejszego automatycznego. Błąd = cicho
+/// Zapis do `meta.json.autoTitle` wyłącznie gdy nie ma ręcznego, wcześniejszego automatycznego ani powiązanego wydarzenia. Błąd = cicho
 /// „Untitled meeting".
 public enum AutoTitle {
     public static let maxLength = 80
     /// Trzy próbki po ~2000 znaków: początek, środek i koniec transkryptu (decyzja użytkownika 2026-10-14).
     public static let sampleChars = 2_000
 
-    public static func shouldRun(meta: NoteMeta) -> Bool { meta.manualTitle == nil && meta.autoTitle == nil }
+    public static func shouldRun(meta: NoteMeta) -> Bool { meta.manualTitle == nil && meta.autoTitle == nil && meta.calendarEvent == nil }
 
     /// `nil`, gdy nie ma czego nazywać (pusta albo w całości wykluczona transkrypcja).
     public static func prompt(transcript: Transcript, notesLanguage: LanguageCode?) -> NotePrompt? {
@@ -61,7 +61,7 @@ public enum AutoTitle {
         do {
             // Ponowne sprawdzenie pod zapisem: w międzyczasie użytkownik mógł wpisać własny tytuł.
             if let problem = try store.updateMeta({ m in
-                if m.manualTitle == nil && m.autoTitle == nil { m.autoTitle = title; stored = true }
+                if m.manualTitle == nil && m.autoTitle == nil && m.calendarEvent == nil { m.autoTitle = title; stored = true }
             }) { onProblem(problem) }
         } catch {
             onProblem("Couldn't save the meeting title: \(error)")
