@@ -445,6 +445,21 @@ w dolnym pasku, jak na `b-add.png`.
     wcześniejszy pomysł z ✕): pojawia się przy starcie nagrania, znika po Stop. Stan „przed
     startem” (preset ⌄ + Record) i pozycja „Hide Recording Window” odpadają; nagranie zaczyna
     się z karty „Record a meeting” w oknie. Podczas nagrywania nadal bez przycisku zamknięcia (D3).
+- **Settings — stan po odbiorze 2026-10-16 (uwaga 5, zastępuje opis wyżej i obrazek sprzed tej
+  daty):** karta Providers to **lista wszystkich obsługiwanych dostawców jeden pod drugim** (wzór
+  inne narzędzie), także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, a na końcu „Custom endpoint”.
+  Wiersz: **logo** w kafelku 32 pt (promień 8, obwódka `line`), nazwa, opis roli
+  („Transcription, correction and summary…”, „Scribe v2 transcription · direct API”, „Runs on this
+  Mac · correction and summary only, no transcription”), po prawej stan: ✓ „Verified · N models”
+  (`accent`), ✗ powód + Retry (`rec`) albo pigułka „Set up…” / „Add…”; menu „⋯” (Edit key…, Test
+  again, Remove…). **Konfiguracja w arkuszu** (decyzja użytkownika, wraca do arkusza ze spec §5.4,
+  odwołuje dodawanie w miejscu): logo + „Set up <dostawca>”, gotowy adres, pole klucza, link „Get
+  an API key”, „Test connection” z wynikiem w tej samej linii, Cancel / Save. **ElevenLabs
+  bezpośrednio wchodzi do fazy 1.5** (decyzja użytkownika 2026-10-16, było: faza 2): klucz w
+  nagłówku `xi-api-key`, wysyłka multipart, Scribe v2. Logo: oficjalne pliki w
+  `docs/design/makiety/logo-dostawcow/` (źródła i zasady użycia w `ZRODLA.md`); w ciemnym motywie
+  wariant ciemny właściciela (OpenRouter) albo odwrócenie na biel (ElevenLabs, Ollama). Makiety:
+  `b-settings.png`, `b-add.png`.
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
@@ -472,7 +487,8 @@ Te elementy były w pierwszej wersji makiet i zostały usunięte:
 - ikony w kwadracikach przy każdym wierszu, jeśli nie niosą informacji;
 - pastelowe tła pod statusami (stan = ikona + słowo w kolorze, bez tła);
 - szeryf w etykietach, nagłówkach sekcji i przyciskach;
-- siatki jednakowych kart „ikona + nagłówek + opis” oraz wymyślone logotypy dostawców;
+- siatki jednakowych kart „ikona + nagłówek + opis” oraz wymyślone logotypy dostawców (prawdziwe logo
+  z oficjalnych źródeł w liście dostawców są w porządku — §11.5 Settings);
 - etykiety wersalikami nad nagłówkami („ADD A PROVIDER”);
 - modal tam, gdzie wystarcza rozwinięcie w miejscu;
 - monospace jako ozdoba (adresy URL to zwykły tekst; monospace tylko dla kodu i pomiarów);
