@@ -32,7 +32,7 @@ struct MeetingsView: View {
     var body: some View {
         @Bindable var model = model
         NavigationStack {
-            ScrollView {
+            ScrollPage(580) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
                         PageTitle("Meetings")
@@ -61,7 +61,6 @@ struct MeetingsView: View {
                         }
                     }
                 }
-                .contentColumn(580)
             }
             .contentBackground()
             .navigationDestination(item: $model.selectedSessionID) { id in
@@ -205,12 +204,14 @@ struct SessionRow: View {
                         Text(item.title).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
                             .lineLimit(1).truncationMode(.tail)
                         Text(meta).font(.system(size: 11)).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1)
-                        if let bad = item.summary?.tracks.filter({ $0.failure != nil || $0.permissionDenied != nil }), !bad.isEmpty {
-                            // ChatGPT #16: brak „Oni" albo „Ja" widoczny na liście, nie tylko w dzienniku.
-                            Label("Problem: " + Set(bad.map { $0.id == "system" ? "system audio" : "microphone" }).sorted().joined(separator: ", "),
+                        // ChatGPT #16: brak „Oni" albo „Ja" widoczny na liście, nie tylko w dzienniku. Poprawka 6: tylko
+                        // ostrzeżenia — cisza na samym początku, po której przyszedł dźwięk, to informacja w widoku spotkania.
+                        let bad = item.trackProblems.filter(\.isWarning)
+                        if !bad.isEmpty {
+                            Label("Problem: " + Set(bad.map { $0.name.lowercased() }).sorted().joined(separator: ", "),
                                   systemImage: "exclamationmark.triangle")
                                 .font(.system(size: 11)).foregroundStyle(.mnWarn)
-                                .help(bad.map { "\($0.id): \($0.failure ?? $0.permissionDenied ?? "")" }.joined(separator: "\n"))
+                                .help(bad.map(\.line).joined(separator: "\n"))
                         }
                     }
                     Spacer(minLength: 8)
@@ -258,4 +259,9 @@ struct SessionRow: View {
             StateLabel(.neutral, "Not transcribed")
         }
     }
+}
+
+extension SessionItem {
+    /// Problemy torów nagrania (poprawka 6): cisza tylko na początku nagrania = informacja, nie ostrzeżenie.
+    var trackProblems: [TrackProblem] { TrackProblem.of(tracks: summary?.tracks ?? [], transcript: transcript) }
 }

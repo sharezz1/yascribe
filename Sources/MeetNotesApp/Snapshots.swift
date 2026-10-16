@@ -140,6 +140,17 @@ enum Snapshots {
                     try render("meeting-summary0", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: transcriptOnly, state: summary0) }
                     let myNotes = MeetingViewState(); myNotes.tab = .myNotes
                     try render("meeting-my-notes", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: empty, state: myNotes) }
+                    // Odbiór 2026-10-16: sam autotytuł (bez ręcznego) w polu tytułu jako tekst (błąd 4); cisza systemu tylko
+                    // przez pierwszą minutę = informacja (poprawka 6); długi transkrypt ze stałym paskiem vs krótkie My notes —
+                    // kolumna w tym samym miejscu (błąd 5).
+                    var autoTitled = transcriptOnly
+                    autoTitled.notes.meta = NoteMeta(autoTitle: "Nowe normy Euro 7 i system OBM w samochodach")
+                    if let i = autoTitled.summary?.tracks.firstIndex(where: { $0.id == "system" }) { autoTitled.summary?.tracks[i].failure = "allZeros60s" }
+                    let autoNotes = MeetingViewState(); autoNotes.tab = .myNotes
+                    try render("meeting-autotitle", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: autoTitled, state: autoNotes) }
+                    if let t = autoTitled.transcript { autoTitled.transcript?.utterances = Array(repeating: t.utterances, count: 8).flatMap { $0 } }
+                    let autoTranscript = MeetingViewState(); autoTranscript.tab = .transcript
+                    try render("meeting-autotitle-transcript", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: autoTitled, state: autoTranscript) }
                 }
                 // T9 / uwaga 2: wbudowany szablon po edycji („Built-in · edited"), niezapisana zmiana w sekcji; nowy własny.
                 var edited = Template.standard

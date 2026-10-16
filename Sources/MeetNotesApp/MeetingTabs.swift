@@ -11,7 +11,10 @@ enum MeetingTab: String, CaseIterable, Identifiable {
 
 final class MeetingViewState: ObservableObject {
     @Published var tab: MeetingTab?
-    @Published var titleDraft = ""
+    /// Edycja pola tytułu; `nil` = pole pokazuje bieżący tytuł sesji (odświeża się po zapisie autotytułu).
+    @Published var titleEdit: String?
+    /// Otwarty popover problemu toru (id toru) w nagłówku spotkania.
+    @Published var problemPopover: String?
     @Published var myNotes = ""
     @Published var loadedMyNotes = false
     @Published var useCorrected = true
@@ -139,6 +142,10 @@ struct TranscriptTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Poprawka 6: ta sama linia co w nagłówku spotkania (problem toru nagrania).
+            ForEach(item.trackProblems, id: \.trackID) { p in
+                if p.isWarning { WarnLabel(p.line) } else { StateLabel(.neutral, p.line) }
+            }
             if model.notes.isCorrecting(item.id) {
                 StateLabel(.progress(nil), "After the meeting, we improve the transcript\(modelName.map { " with \($0)" } ?? "")…")
             }

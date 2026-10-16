@@ -29,7 +29,7 @@ struct PresetsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
+            ScrollPage(700) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack {
                         PageTitle("Presets")
@@ -53,7 +53,6 @@ struct PresetsView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 }
-                .contentColumn(700)
             }
             if state.draft != nil {
                 EditorFooter(dirty: state.isDirty, error: state.error) {
