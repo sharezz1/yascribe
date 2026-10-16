@@ -1,5 +1,22 @@
 import Foundation
 
+/// Wybór klienta po `Provider.api` — jedno miejsce dla aplikacji (transkrypcja, sonda, test połączenia).
+public extension Provider {
+    func transcriptionClient(key: String?, http: any HTTPClient = URLSessionHTTPClient()) -> any TranscriptionClient {
+        switch api {
+        case .openAICompatible: OpenAICompatibleClient(provider: self, key: key, http: http)
+        case .elevenLabs: ElevenLabsClient(provider: self, key: key, http: http)
+        }
+    }
+
+    func verify(key: String?, http: any HTTPClient = URLSessionHTTPClient()) async -> ProviderCheck {
+        switch api {
+        case .openAICompatible: await OpenAICompatibleClient(provider: self, key: key, http: http).verify()
+        case .elevenLabs: await ElevenLabsClient(provider: self, key: key, http: http).verify()
+        }
+    }
+}
+
 /// ElevenLabs bezpośrednio — tylko transkrypcja, Scribe v2 (decyzja użytkownika 2026-10-16, macos.md §11.5).
 /// Źródła (oficjalna dokumentacja, odczyt 2026-10-16):
 /// - https://elevenlabs.io/docs/api-reference/speech-to-text/convert — `POST /v1/speech-to-text`, `multipart/form-data`,
