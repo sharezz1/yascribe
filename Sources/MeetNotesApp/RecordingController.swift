@@ -203,6 +203,15 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
 /// nie dostaje klawiatury (Cmd-. dla Stop, Tab); `.nonactivatingPanel` nadal nie aktywuje aplikacji.
 private final class PillPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+
+    /// Decyzja 2026-10-16 (c): stanie się oknem klucza (klik w tło, Cmd-Opt-R, Open note) niczego nie fokusuje.
+    /// Bez tego pierwszym responderem zostaje `KeyViewProxy` SwiftUI z fokusem na Stop, a Space go wciska
+    /// (zmierzone sondą) — Stop kończy nagranie. `makeFirstResponder(nil)` oddaje fokus oknu: nic nie ma pierścienia,
+    /// Tab nadal wchodzi do przycisków (Full Keyboard Access), Cmd-. zostaje jawnym skrótem Stop.
+    override func becomeKey() {
+        super.becomeKey()
+        makeFirstResponder(nil)
+    }
 }
 
 extension RecordingController {
