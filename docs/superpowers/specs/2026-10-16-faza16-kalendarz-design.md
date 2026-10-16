@@ -163,8 +163,11 @@ Wydarzenie kwalifikuje się do **oferty pigułki** wyłącznie, gdy spełnia **w
 
 1. **ma link do spotkania online** — warunek rozstrzygający (decyzja 11). Szukany w polu URL,
    lokalizacji i treści wydarzenia (Exchange potrafi trzymać link w każdym z nich; **które —
-   rozstrzyga spike**). Rozpoznawane wzorce: Teams (`teams.microsoft.com/l/meetup-join`,
-   `teams.live.com`), Google Meet, Zoom, Webex; lista nastawna. Wizyta u lekarza, wydarzenie
+   rozstrzyga spike**; pomiar T0 na kalendarzu użytkownika: link Teams leży w **treści**
+   wydarzenia, w formacie `teams.microsoft.com/meet/…`, nie `/l/meetup-join`). Rozpoznawane
+   wzorce: Teams (ogólnie `teams.microsoft.com`, `teams.live.com`), Google Meet, Zoom
+   (`zoom.us/j`); `webex.com` **nie** jest wzorcem spotkania — w zaproszeniach Teams występuje
+   jako dopisek o łączeniu z urządzeń wideo (29 z 49 wydarzeń Teams w pomiarze); lista nastawna. Wizyta u lekarza, wydarzenie
    „dojazd", urodziny, przypomnienia, bloki „focus time" nie mają linku → **brak oferty**;
 2. nie jest całodniowe (`isAllDay == false`) — urodziny, święta, OOO całodniowe;
 3. nie jest wielodniowe ani dłuższe niż próg (domyślnie 8 h; nastawny) — OOO bywa blokiem
@@ -172,8 +175,13 @@ Wydarzenie kwalifikuje się do **oferty pigułki** wyłącznie, gdy spełnia **w
 4. dostępność nie jest „nieobecny" / „poza biurem" (`availability` ≠ `.unavailable` w
    przypadkach, które spike wskaże jako OOO; **reguła zależna od tego, co Exchange faktycznie
    emituje**);
-5. status użytkownika nie jest „odrzucone" ani „anulowane" (`participantStatus == .declined`,
-   `status == .canceled`).
+5. **użytkownik odpowiedział na zaproszenie** (decyzja użytkownika 2026-10-16: „nie chcę
+   nagrywać spotkań, na które nie odpowiedziałem"): status uczestnictwa to *accepted* albo
+   *tentative* (odpowiedział „może"), albo wydarzenie jest własne (brak wpisu użytkownika wśród
+   uczestników, np. utworzone przez niego). **Odpada:** *unknown*, *pending*, *declined*,
+   *delegated* oraz wydarzenie anulowane (`status == .canceled`). Pomiar T0: codzienne
+   półgodzinne spotkania z ~50 uczestnikami mają status *unknown* i dostępność *tentative* —
+   ten warunek je wyklucza. **(Moja decyzja:** *tentative* wliczony, bo to odpowiedź.)
 
 Warunek „ma innych uczestników" (poprzednia wersja) **odpada**: link jest od niego mocniejszy
 (wizyta u lekarza nie ma uczestników, ale spotkanie z linkiem bez uczestników też jest rozmową
