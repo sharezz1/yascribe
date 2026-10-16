@@ -1,0 +1,122 @@
+import Foundation
+import MeetNotesMeetings
+import MeetNotesProviders
+import Observation
+
+/// Koordynator wykrywania spotkań (faza 1.6, spec §4.2, §4.5, §4.6): co sekundę czyta procesy audio, co 30 s (i na
+/// `EKEventStoreChanged`) wydarzenia, karmi `OfferDetector` i `EndDetector` i pokazuje wynik w pigułce.
+/// NIGDY sam nie zatrzymuje nagrania: koniec to pytanie, a "Stop" robi użytkownik (`recording.stop()`).
+@MainActor
+@Observable
+final class MeetingMonitor {
+    enum MonitorState: Equatable { case off, watching, calendarDenied, calendarSelectionStale }
+
+    private(set) var state: MonitorState = .off
+    @ObservationIgnored weak var model: AppModel?
+    @ObservationIgnored private let audio: any AudioProcessSource = AudioProcessMonitor()
+    @ObservationIgnored private var tuning = MeetingTuning()
+    @ObservationIgnored private var offers = OfferDetector(tuning: MeetingTuning())
+    @ObservationIgnored private var end = EndDetector(tuning: MeetingTuning())
+    @ObservationIgnored private var events: [CalendarEventInfo] = []
+    @ObservationIgnored private var eventsFetchedAt: Date?
+    @ObservationIgnored private var eventsDirty = false
+    @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var changesTask: Task<Void, Never>?
+
+    private static let eventsRefresh: TimeInterval = 30
+
+    func start() {
+        guard timer == nil, let model else { return }
+        let changes = model.calendarSource.changes
+        changesTask = Task { [weak self] in
+            for await _ in changes { self?.eventsDirty = true }
+        }
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            Task { @MainActor in self.tick(now: Date()) }
+        }
+        tick(now: Date())
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        changesTask?.cancel()
+        changesTask = nil
+        state = .off
+    }
+
+    private func tick(now: Date) {
+        guard let model else { return }
+        let m = model.settings.meetings
+        let calls = m?.detectCallsOrDefault ?? true
+        let calendar = m?.appleCalendarOrDefault ?? false
+        guard calls || calendar else {  // zero odpytywania
+            if state != .off { state = .off; reset() }
+            return
+        }
+        let newTuning = MeetingTuning(settings: m)
+        if newTuning != tuning {  // zmiana progów w Settings
+            tuning = newTuning
+            offers = OfferDetector(tuning: tuning)
+            end = EndDetector(tuning: tuning)
+        }
+        refreshEvents(now: now, calendar: calendar)
+        // Nieudany odczyt Core Audio to nie zwolnienie mikrofonu: pomijamy tik.
+        guard let processes = audio.snapshot() else { return }
+
+        let recording = model.recording.isRecording
+        switch offers.step(now: now, events: events, processes: processes, recording: recording, callsEnabled: calls, autoStart: m?.autoStartOrDefault ?? false) {
+        case .show(let offer):
+            model.recording.showOffer(offer, onStart: { [weak self] in self?.accept(offer) }, onDismiss: { [weak self] in self?.offers.dismiss() })
+        case .hide:
+            model.recording.hideOffer()  // tylko stan Offer, nie pigułka nagrania
+        case .startRecording(let offer):
+            accept(offer)
+        case nil:
+            break
+        }
+        switch end.step(now: now, recording: recording, processes: processes, silentSeconds: model.recording.silentSeconds) {
+        case .prompt(let signal):
+            model.recording.showEndPrompt(signal, onStop: { [weak self] in self?.model?.recording.stop() },
+                                          onContinue: { [weak self] in self?.end.continueMeeting(now: Date()) })
+        case .dismissPrompt:
+            model.recording.hideEndPrompt()
+        case nil:
+            break
+        }
+    }
+
+    /// Start z oferty (przycisk albo auto-start). Gdy się nie uda, oferta milknie, żeby nie wisiał stan "startuje".
+    private func accept(_ offer: Offer) {
+        guard let model else { return }
+        if !model.startRecording(offer: offer) {
+            offers.dismiss()
+            model.recording.hideOffer()
+        }
+    }
+
+    private func refreshEvents(now: Date, calendar: Bool) {
+        guard let model else { return }
+        guard calendar else { events = []; eventsFetchedAt = nil; state = .watching; return }
+        let source = model.calendarSource
+        guard source.authorization() == .granted else { events = []; eventsFetchedAt = nil; state = .calendarDenied; return }
+        if !eventsDirty, let at = eventsFetchedAt, now.timeIntervalSince(at) < Self.eventsRefresh { return }
+        eventsDirty = false
+        eventsFetchedAt = now
+        let ids = model.settings.meetings?.calendarIDs
+        if let ids, !ids.isEmpty, Set(ids).isDisjoint(with: source.calendars().map(\.id)) {
+            events = []  // identyfikator kalendarza ginie po pełnej synchronizacji; bez tego oferty znikałyby po cichu
+            state = .calendarSelectionStale
+            return
+        }
+        state = .watching
+        events = source.events(from: now - tuning.offerGrace - 60, to: now + tuning.offerLead + Self.eventsRefresh + 60, calendarIDs: ids)
+    }
+
+    private func reset() {
+        offers = OfferDetector(tuning: tuning)
+        end = EndDetector(tuning: tuning)
+        events = []
+        eventsFetchedAt = nil
+    }
+}

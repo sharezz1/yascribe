@@ -44,6 +44,13 @@ public final class SessionRecorder: @unchecked Sendable {
         return levels
     }
 
+    /// Sekundy od ostatniej głośnej porcji (ten sam próg i ten sam `lastLoudAt` co `SilenceCondition`) — dla pytania "Meeting ended?".
+    public func silentSeconds() -> Double {
+        let now = clock.now()
+        lock.lock(); defer { lock.unlock() }
+        return timebase.secondsBetween(now, lastLoudAt)
+    }
+
     public init(directory: URL, sources: [any AudioSource], conditions: [any EndCondition] = .standard,
                 clock: any HostClock = MachHostClock(), timebase: Timebase = .current,
                 silenceThresholdDBFS: Double = -50, zeroWatch: [String: Double] = ["system": 60], trackStallSeconds: Double = 30) {
