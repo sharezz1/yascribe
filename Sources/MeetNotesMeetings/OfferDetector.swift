@@ -42,7 +42,7 @@ public struct OfferDetector {
     /// Zwraca akcję tylko przy zmianie stanu.
     public mutating func step(now: Date, events: [CalendarEventInfo], processes: [AudioProcessSample], recording: Bool,
                               callsEnabled: Bool, autoStart: Bool) -> OfferAction? {
-        let active = Set(processes.filter(\.isRunningInput).compactMap { family(of: $0.bundleID) })
+        let active = Set(processes.filter(\.isRunningInput).compactMap { tuning.family(of: $0.bundleID) })
         for fam in tuning.callApps {
             if active.contains(fam) {
                 lastInput[fam] = now
@@ -109,11 +109,6 @@ public struct OfferDetector {
         guard let o = current else { return }
         if let f = o.app { mutedFamilies.insert(f) }
         if let e = o.event { mutedEvents[e.id] = e.start + tuning.offerGrace }
-    }
-
-    /// Dopasowanie po prefiksie na granicy członu: `com.microsoft.teams2.modulehost` tak, `com.microsoft.teams2extra` nie.
-    private func family(of bundleID: String) -> String? {
-        tuning.callApps.first { bundleID == $0 || bundleID.hasPrefix($0 + ".") }
     }
 
     private static let appNames = ["com.microsoft.teams2": "Teams"]
