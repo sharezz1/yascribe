@@ -17,6 +17,7 @@ angielsku, dokumenty w repo po polsku.
 | `docs/superpowers/reports/` | raporty sesji, przeglądy, recenzje planów |
 | `docs/superpowers/spikes/` | pomiary na sprzęcie (sondy, transkrypcja na żywo, odbiór D3) |
 | `docs/superpowers/BACKLOG.md` | rzeczy odłożone, z adnotacją dokąd idą |
+| `docs/superpowers/ROADMAP.md` | co w 1.5b, fazie 2, 3 i bez przydziału — ze źródłami |
 
 Kod: `Sources/MeetNotesRecording` (rdzeń audio), `MeetNotesSessionFormat` (dziennik, CAF),
 `MeetNotesProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy),
