@@ -413,6 +413,20 @@ w dolnym pasku, jak na `b-add.png`.
   (ikona `arrow.clockwise`, nie iskierki) i Copy. Niżej notatka (§11.2), cała jako jeden
   zaznaczalny `NSTextView` (D6). **Wstecz i „⋯” są (D5)**; „⋯” zawiera Copy notes, Show in
   Finder i Delete meeting…, a każda z tych akcji jest też w menu aplikacji (§3).
+  **Odbiór 2026-10-16 (uwaga 7, decyzja użytkownika; makiety `b-summary0.png`, `b-transcript.png`):**
+  - **cały widok spotkania to jedna przewijana strona** (wzór inne narzędzie): tytuł, `MetaLine`, zakładki
+    i treść przewijają się razem, pasek przewijania przy krawędzi okna. **Żadnych wewnętrznych
+    obszarów przewijania** w kolumnie: edytor My notes, lista transkryptu i notatka rosną z treścią
+    (koniec „białego paska” i „panelu po prawej”);
+  - tło wszystkich zakładek to `background`; **Summary bez białej karty**: ten sam pasek we wnęce
+    `sunk` przed i po generowaniu (szablon ⌄ · „Add context” · model · przycisk). Przed:
+    „Generate notes” (primary) i pod paskiem jedna linia stanu pustego („No notes yet…” + z jakiego
+    transkryptu). Po: „Regenerate” + Copy, pod paskiem notatka. „Add context” rozwija w miejscu pole
+    rosnące z treścią. **Zmienia spec decyzję 3** (karta przed / pasek po);
+  - notatka (`NSTextView`, D6) ma szerokość kolumny 640 pt — wąskie łamanie to błąd;
+  - Transcript: nad listą jedna linia — przełącznik Original/Corrected (`FieldMenuStyle`) po lewej,
+    „Improve transcript” i Copy po prawej; wiersze: czas (cyfry stałej szerokości), mówca, tekst,
+    separator `line2`; echo jako linia `StateLabel` pod tekstem.
 - **Presets** (`b-presets.png`): lista presetów (zaznaczenie `selection`, „default” w
   metadanych zamiast znaczka) i edytor: nazwa w polu, sekcje Speech to text / Correction
   (`Toggle`) / Summary jako karty z `FormRow`. Wynik sondy to linia `StateLabel` pod wyborem
@@ -431,9 +445,54 @@ w dolnym pasku, jak na `b-add.png`.
   (kapsuła z czerwonym kwadratem i słowem), ⌃. Rozwinięta (tylko odczyt): stan i licznik,
   preset, dwa mierniki (System audio, Microphone) z ✓, **nazwa mikrofonu pogrubiona**,
   Open note / Stop. Reduce Motion: poziom bez animacji (§7). **Bez przycisku zamknięcia
-  podczas nagrywania (D3**, odstępstwo 1, W§1). Przed startem pigułkę chowa pozycja w menu
-  Window („Hide Recording Window”). Okno pigułki dopasowane do treści, bez przezroczystego
+  podczas nagrywania (D3**, odstępstwo 1, W§1). Stan „przed startem” na `b-pill.png` jest
+  nieaktualny — patrz odbiór 2026-10-16 niżej. Okno pigułki dopasowane do treści, bez przezroczystego
   marginesu łapiącego kliknięcia.
+  **Odbiór 2026-10-16 (uwagi 3–4):**
+  - okno przezroczyste, bez własnego tła; cień z kształtu treści (promień 20), żadnych
+    prostokątnych rogów pod szkłem;
+  - **stały rozmiar w każdym stanie** (przed startem, zwinięta, rozwinięta); licznik cyframi
+    o stałej szerokości; rozmiar zmienia się tylko przy zmianie stanu, zakotwiczony w jednym rogu;
+  - **przesuwanie za tło** (nie za przyciski), pozycja zapamiętana między uruchomieniami,
+    domyślnie dół ekranu, środek;
+  - **pigułka jest widoczna tylko podczas nagrywania** (decyzja użytkownika 2026-10-16, zastępuje
+    wcześniejszy pomysł z ✕): pojawia się przy starcie nagrania, znika po Stop. Stan „przed
+    startem” (preset ⌄ + Record) i pozycja „Hide Recording Window” odpadają; nagranie zaczyna
+    się z karty „Record a meeting” w oknie. Podczas nagrywania nadal bez przycisku zamknięcia (D3).
+- **Settings — stan po odbiorze 2026-10-16 (uwaga 5, zastępuje opis wyżej i obrazek sprzed tej
+  daty):** karta Providers to **lista wszystkich obsługiwanych dostawców jeden pod drugim** (wzór
+  inne narzędzie), także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, a na końcu „Custom endpoint”.
+  Wiersz: **logo** w kafelku 32 pt (promień 8, obwódka `line`), nazwa, opis roli
+  („Transcription, correction and summary…”, „Scribe v2 transcription · direct API”, „Runs on this
+  Mac · correction and summary only, no transcription”), po prawej stan: ✓ „Verified · N models”
+  (`accent`), ✗ powód + Retry (`rec`) albo pigułka „Set up…” / „Add…”; menu „⋯” (Edit key…, Test
+  again, Remove…). **Konfiguracja w arkuszu** (decyzja użytkownika, wraca do arkusza ze spec §5.4,
+  odwołuje dodawanie w miejscu): logo + „Set up <dostawca>”, gotowy adres, pole klucza, link „Get
+  an API key”, „Test connection” z wynikiem w tej samej linii, Cancel / Save. **ElevenLabs
+  bezpośrednio wchodzi do fazy 1.5** (decyzja użytkownika 2026-10-16, było: faza 2): klucz w
+  nagłówku `xi-api-key`, wysyłka multipart, Scribe v2. Logo: oficjalne pliki w
+  `docs/design/makiety/logo-dostawcow/` (źródła i zasady użycia w `ZRODLA.md`); w ciemnym motywie
+  wariant ciemny właściciela (OpenRouter) albo odwrócenie na biel (ElevenLabs, Ollama). Makiety:
+  `b-settings.png`, `b-add.png`.
+  **Archive search (uwaga 6):** model embeddingu wybiera się tak jak w Presets: wiersz „Provider”
+  (`FieldMenuStyle`, tylko skonfigurowani dostawcy, którzy mają modele embeddingu — dziś OpenRouter
+  i Ollama, ElevenLabs nie) i pod nim „Embedding model” (`ModelField`, lista z wybranego dostawcy,
+  `?output_modalities=embeddings` dla OpenAI-compatible). Bez wiersza „Provider”, gdy pasuje tylko jeden
+  dostawca. Zmiana dostawcy czyści wybór modelu; potwierdzenie zmiany embeddingu bez zmian (spec §5.4).
+- **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
+  edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
+  instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
+  kontekstowym), pod listą „Add section”. Nad sekcjami opcjonalne pole „About this meeting type”.
+  Pola rosną z treścią, bez własnego przewijania (koniec szarego toru paska przewijania). Prompt dla
+  modelu składa się z sekcji po kolei. Nowe pole `sections` jest opcjonalne (E6); stary szablon z
+  jednym promptem wczytuje się jako jedna sekcja. **Wbudowane szablony da się edytować w miejscu**
+  (decyzja użytkownika 2026-10-16, zmienia spec §5.4 „tylko do odczytu”): oznaczenie „Built-in ·
+  edited”, w „⋯” Duplicate i Reset to default. Własne: w „⋯” Duplicate i Delete template… z
+  potwierdzeniem. Wbudowanych nie da się usunąć, bo wystarcza reset. Dół: „Unsaved changes”,
+  Cancel / Save. Bez ikon i emoji przy szablonach (§11.6).
+- **Pasek narzędzi okna** (odbiór 2026-10-16, uwaga 1): bez osobnego tła i linii pod spodem; ciepłe
+  `background` sięga górnej krawędzi okna, tytułu w pasku nie ma (tytuł strony jest w treści). W pasku
+  zostają tylko przycisk sidebara i, w widoku spotkania, wstecz i „⋯”.
 - **Sidebar (D7):** Meetings na górze; Presets / Templates / Settings na dole, **bez nagłówka
   sekcji** („Setup” znika).
 
@@ -447,7 +506,8 @@ Te elementy były w pierwszej wersji makiet i zostały usunięte:
 - ikony w kwadracikach przy każdym wierszu, jeśli nie niosą informacji;
 - pastelowe tła pod statusami (stan = ikona + słowo w kolorze, bez tła);
 - szeryf w etykietach, nagłówkach sekcji i przyciskach;
-- siatki jednakowych kart „ikona + nagłówek + opis” oraz wymyślone logotypy dostawców;
+- siatki jednakowych kart „ikona + nagłówek + opis” oraz wymyślone logotypy dostawców (prawdziwe logo
+  z oficjalnych źródeł w liście dostawców są w porządku — §11.5 Settings);
 - etykiety wersalikami nad nagłówkami („ADD A PROVIDER”);
 - modal tam, gdzie wystarcza rozwinięcie w miejscu;
 - monospace jako ozdoba (adresy URL to zwykły tekst; monospace tylko dla kodu i pomiarów);

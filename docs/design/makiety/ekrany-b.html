@@ -129,6 +129,30 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round
 .adding .form-row { padding: 6px 0; grid-template-columns: 70px 1fr; }
 .adding .form-row::before { display: none; }
 
+.ptile { width: 32px; height: 32px; border-radius: 8px; background: var(--card); box-shadow: inset 0 0 0 .5px var(--line); flex: none; overflow: hidden; display: grid; place-items: center; color: var(--text2); }
+.dark .ptile { background: #2e2e2c; }
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.18); z-index: 5; }
+.dark .scrim { background: rgba(0,0,0,.42); }
+.sheet { position: absolute; top: 60px; left: calc(210px + (100% - 210px)/2); transform: translateX(-50%); width: 440px; z-index: 6; border-radius: 14px; background: var(--bg);
+         box-shadow: 0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.28); padding: 22px; }
+.sheet .form-row { padding: 7px 0; grid-template-columns: 90px 1fr; }
+.sheet .form-row::before { display: none; }
+/* szablony: sekcje */
+.tsec { display: flex; gap: 10px; padding: 12px 14px 12px 8px; position: relative; }
+.tsec + .tsec::before { content:""; position:absolute; top:0; left:14px; right:14px; height:.5px; background: var(--line2); }
+.grip { width: 14px; flex: none; color: var(--text3); padding-top: 2px; }
+.grip svg { width: 12px; height: 14px; }
+.tsec .body { flex: 1; min-width: 0; }
+.tsec .body b { display: block; font-weight: 600; margin-bottom: 3px; }
+.tsec .body > span { display: block; color: var(--text2); line-height: 18px; }
+.tsec .rm { color: var(--text3); width: 22px; height: 22px; display: grid; place-items: center; flex: none; }
+.tsec .rm svg { width: 11px; height: 11px; }
+.tsec.edit { background: var(--sunk); }
+.tsec.edit .body b, .tsec.edit .body span { border-radius: 6px; }
+.caret { display: inline-block; width: 1px; height: 15px; background: var(--text); vertical-align: -3px; margin-left: 1px; }
+.ctxbox { padding: 10px 12px; line-height: 18px; color: var(--text); }
+.ctxbox.empty { color: var(--text3); }
+
 /* pigułka */
 .desk { width: 960px; height: 700px; border-radius: 16px; overflow: hidden; position: relative; flex: none; color: var(--text);
         background: radial-gradient(1200px 600px at 20% 10%, #6d8fb3, transparent), radial-gradient(900px 600px at 90% 90%, #c08a5a, transparent), #4a5a6a; }
@@ -262,33 +286,44 @@ const presets = th => win(th,'p', `<div class="main"><div class="col" style="wid
   <div class="footer"><span class="note">Unsaved changes</span>
     <span class="pill">Cancel</span><span class="pill primary">Save</span></div>`);
 
-/* ---------------- settings ---------------- */
-const settingsBody = (th, adding) => `<div class="main"><div class="col" style="width:640px">
+/* ---------------- settings (odbiór 2026-10-16, uwaga 5: lista z logo, arkusz, ✓) ---------------- */
+const logo = (th, who) => {
+  const src = {or: th=='dark' ? 'logo-dostawcow/openrouter-glyph-cloud.svg' : 'logo-dostawcow/openrouter-glyph-ink.svg',
+               el: 'logo-dostawcow/elevenlabs-symbol.svg', ol: 'logo-dostawcow/ollama.svg'}[who];
+  const inv = th=='dark' && who!='or' ? 'filter:invert(1);' : '';
+  const pad = who=='el' ? 0 : 6;
+  return who=='cu'
+    ? `<div class="ptile">${sz(I.plus,14)}</div>`
+    : `<div class="ptile"><img src="${src}" style="width:100%;height:100%;object-fit:contain;padding:${pad}px;${inv}"></div>`;
+};
+const prow = (th, who, name, desc, right) => `<div class="lrow">${logo(th, who)}<div class="t"><b>${name}</b><span>${desc}</span></div>${right}</div>`;
+const providers = th => `<div class="card" style="overflow:hidden">
+    ${prow(th,'or','OpenRouter','Transcription, correction and summary · hundreds of models', `<span class="state ok">${I.check}Verified · 312 models</span><div class="icon-btn">${I.more}</div>`)}
+    ${prow(th,'el','ElevenLabs','Scribe v2 transcription · direct API', `<span class="pill sm">Set up…</span>`)}
+    ${prow(th,'ol','Ollama','Runs on this Mac · correction and summary only, no transcription', `<span class="state bad">${I.x}Not reachable</span><span class="pill sm">Retry</span><div class="icon-btn">${I.more}</div>`)}
+    ${prow(th,'cu','Custom endpoint','Any OpenAI-compatible API · address and key', `<span class="pill sm">Add…</span>`)}
+  </div>`;
+const settingsBody = th => `<div class="main"><div class="col" style="width:640px">
   <div class="t-large" style="margin-bottom:4px">Settings</div>
   <div class="sec-h"><span class="t-head">Providers</span></div>
-  <div class="card" style="overflow:hidden">
-    ${adding ? '' : `<div class="lrow"><div class="t"><b>OpenRouter</b><span>openrouter.ai/api/v1</span></div>
-      <span class="state ok">${I.check}Verified · 312 models</span><div class="icon-btn">${I.more}</div></div>`}
-    <div class="lrow"><div class="t"><b>Ollama</b><span>localhost:11434 · correction and summary only, no transcription</span></div>
-      <span class="state bad">${I.x}Not reachable</span><span class="pill sm">Retry</span><div class="icon-btn">${I.more}</div></div>
-    ${adding ? `<div class="adding">
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><b>OpenRouter</b><span class="t-cap">transcription, correction and summary</span></div>
-      <div class="form-row"><label class="dim">Address</label><div class="field" style="box-shadow:none;background:transparent;padding:0"><span class="grow dim">https://openrouter.ai/api/v1</span></div></div>
-      <div class="form-row"><label class="dim">API key</label><div class="field focus"><span class="grow faint">Paste your key</span></div></div>
-      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 0 82px">${th=='light'
-        ? `<span class="state ok">${I.check}Verified · 312 models available</span>`
-        : `<span class="state bad">${I.x}Key rejected (401). Check the key and try again.</span>`}
-        <span style="flex:1"></span><span class="pill sm">Cancel</span><span class="pill sm primary">Save &amp; verify</span></div>
-    </div>` : `<div class="addrow"><span class="dim" style="margin-right:4px">Add</span>
-      <span class="pill sm off">OpenRouter</span><span class="pill sm">Ollama</span><span class="pill sm">Custom…</span></div>`}
-  </div>
+  ${providers(th)}
   <div class="sec-h"><span class="t-head">Archive search</span></div>
   <div class="card"><div class="form-row"><label>Embedding model</label>${model('OpenRouter','openai/text-embedding-3-small')}</div></div>
   <p class="dim" style="margin:14px 2px 0;font-size:12px;line-height:16px">Speech-to-text, correction and summary models are chosen in each preset. <span class="link">Open Presets</span></p>
   </div></div>
   <div class="footer"><span class="pill">Cancel</span><span class="pill primary">Save</span></div>`;
-const settings = th => win(th,'s', settingsBody(th, false));
-const add = th => win(th,'s', settingsBody(th, true));
+const settings = th => win(th,'s', settingsBody(th));
+const add = th => win(th,'s', settingsBody(th) + `<div class="scrim"></div><div class="sheet">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${logo(th,'el')}
+    <div><div class="t-head" style="font-size:15px;line-height:20px">Set up ElevenLabs</div><div class="t-cap" style="margin-top:2px">Scribe v2 transcription · direct API</div></div></div>
+  <div class="form-row"><label class="dim">Address</label><div class="field" style="box-shadow:none;background:transparent;padding:0"><span class="grow dim">https://api.elevenlabs.io/v1</span></div></div>
+  <div class="form-row"><label class="dim">API key</label><div class="field focus"><span class="grow faint">Paste your key</span></div></div>
+  <div style="margin:2px 0 0 102px" class="t-cap"><span class="link" style="font-size:11px">Get an API key</span> on elevenlabs.io</div>
+  <div style="display:flex;align-items:center;gap:8px;margin:14px 0 0 102px"><span class="pill sm">Test connection</span>${th=='light'
+    ? `<span class="state ok">${I.check}Verified · Scribe v2 available</span>`
+    : `<span class="state bad">${I.x}Key rejected (401)</span>`}</div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:22px"><span class="pill">Cancel</span><span class="pill primary">Save</span></div>
+</div>`);
 
 /* ---------------- pigułka ---------------- */
 const lv = h => `<span class="lvl">${h.map(x=>`<i style="height:${x}px"></i>`).join('')}</span>`;
@@ -315,7 +350,68 @@ const pill = th => `<div class="desk ${th}">
     <div style="display:flex;gap:8px"><span class="pill" style="flex:1;justify-content:center">Open note</span><span class="stop" style="flex:1;justify-content:center"><i></i>Stop</span></div>
   </div></div>`;
 
-const S = {home, meeting, presets, settings, add, pill};
+
+/* ---------------- szablony (sekcje, uwaga z odbioru 2026-10-16) ---------------- */
+const grip = '<svg viewBox="0 0 12 14"><path d="M4 2.5h.01M8 2.5h.01M4 7h.01M8 7h.01M4 11.5h.01M8 11.5h.01" stroke-width="2.2"/></svg>';
+const tsec = (t, d, edit) => `<div class="tsec ${edit?'edit':''}"><span class="grip">${grip}</span>
+  <div class="body"><b>${t}</b><span>${d}${edit?'<span class="caret"></span>':''}</span></div><span class="rm">${I.x}</span></div>`;
+const templates = th => win(th,'t', `<div class="main"><div class="col" style="width:700px;padding-bottom:70px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Templates</div><div class="pill">${I.plus}New template</div></div>
+  <div style="display:flex;gap:18px">
+    <div class="plist">
+      <div class="prow sel"><b>Standard</b><span>Built-in · edited</span></div>
+      <div class="prow"><b>1:1</b><span>Built-in</span></div>
+      <div class="prow"><b>Weekly team meeting</b><span>Built-in</span></div>
+      <div class="prow"><b>Customer: Discovery</b><span>Built-in</span></div>
+      <div class="prow"><b>testowy</b><span>Custom</span></div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="form-row" style="padding:0 2px;grid-template-columns:1fr auto auto"><div class="field" style="height:32px;font-size:15px;font-weight:500"><span class="grow">Standard</span></div>
+        <span class="dim" style="font-size:12px">Built-in · edited</span><div class="icon-btn">${I.more}</div></div>
+      <div class="sec-h"><span class="t-head">About this meeting type <span class="dim" style="font-weight:400">— optional</span></span></div>
+      <div class="card"><div class="ctxbox empty">Describe the kind of meeting and what matters in its notes.</div></div>
+      <div class="sec-h"><span class="t-head">Sections</span><span class="t-cap">in this order</span></div>
+      <div class="card" style="overflow:hidden">
+        ${tsec('Summary','One paragraph: what was discussed and what was agreed.')}
+        ${tsec('Topics','One heading per topic with the concrete details: numbers, names, dates, the options discussed; mark the favored option. A side issue gets its own heading.')}
+        ${tsec('Next steps','One bullet per action: the task in bold, the owner in parentheses (the name said in the conversation, or “owner unclear”), then one sentence of reasoning.', true)}
+      </div>
+      <div style="margin-top:10px"><span class="pill sm">${I.plus}Add section</span></div>
+    </div></div></div></div>
+  <div class="footer"><span class="note">Unsaved changes</span>
+    <span class="pill">Cancel</span><span class="pill primary">Save</span></div>`);
+
+
+/* ---------------- widok spotkania: Summary przed generowaniem i Transcript (odbiór 2026-10-16, uwaga 7) ---------------- */
+const mhead = (tab) => `<div class="toolbar" style="left:222px">
+    <div class="pill" style="width:30px;padding:0;justify-content:center">${I.back}</div><div class="sp"></div>
+    <div class="icon-btn">${I.more}</div></div>
+  <div class="t-doc">Brak lewara w negocjacjach z Ukrainą</div>
+  <div class="dim num" style="margin-top:8px">16 Oct 2026 at 11:11 · 3 min · Preset Polski</div>
+  <div class="tabs">${['My notes','Transcript','Summary'].map(t=>`<span class="tab ${t==tab?'sel':''}">${t}</span>`).join('')}</div>`;
+const pageScroll = '<div style="position:absolute;right:3px;top:60px;width:6px;height:120px;border-radius:3px;background:var(--line)"></div>';
+const summary0 = th => win(th,'m', `<div class="main">${pageScroll}<div class="col" style="width:640px">${mhead('Summary')}
+  <div class="genbar">
+    <div class="field" style="width:130px;height:28px"><span class="grow">Standard</span>${I.chev}</div>
+    <span class="ctx">Add context</span>
+    <span class="t-cap">deepseek-v4.1-flash</span>
+    <span class="pill primary" style="height:28px">Generate notes</span></div>
+  <div style="padding:28px 4px;color:var(--text2);line-height:20px">No notes yet. Pick a template, add context if you like, and generate.<br>
+    <span class="t-cap">Uses the corrected transcript (3 min, Polish).</span></div>
+  </div></div>`);
+const trow = (t, who, txt, echo) => `<div style="display:grid;grid-template-columns:62px 44px 1fr;gap:0 10px;padding:10px 0;border-top:.5px solid var(--line2)">
+  <span class="num dim">${t}</span><span style="font-weight:500">${who}</span><div style="line-height:20px">${txt}${echo?`<div style="margin-top:4px"><span class="state">${echo}</span></div>`:''}</div></div>`;
+const transcript = th => win(th,'m', `<div class="main">${pageScroll}<div class="col" style="width:640px">${mhead('Transcript')}
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div class="field" style="width:120px;height:28px"><span class="grow">Corrected</span>${I.chev}</div>
+    <span style="flex:1"></span><span class="pill" style="height:28px">Improve transcript</span><span class="pill" style="height:28px">${I.copy}Copy</span></div>
+  ${trow('0:00:00','Them','Już lewara, bo żeby osiągać nasze cele wobec naszych partnerów w polityce zagranicznej, musimy mieć jakiś lewar. Czyli wyobraź sobie teraz, jaką pozycję przetargową mieliśmy wobec Ukrainy…')}
+  ${trow('0:00:00','Me','<span class="dim">Lewara, bo żeby osiągać nasze cele wobec naszych partnerów w polityce zagranicznej…</span>','Echo of the other side — excluded from notes')}
+  ${trow('0:00:36','Them','chcemy to, to, to i to. I powiedz mi, czy wtedy Ukraina byłaby bardziej skłonna do zaspokojenia tych naszych oczekiwań, jak była pod ścianą, czy teraz…')}
+  ${trow('0:01:04','Them','a jest niewdzięczna, bo my tak pomogliśmy w 22 roku. I teraz jesteśmy wykluczeni totalnie. Nie, chodzi w negocjacji…')}
+  </div></div>`);
+
+const S = {home, meeting, presets, settings, add, pill, templates, summary0, transcript};
 const s = new URLSearchParams(location.search).get('s') || 'home';
 document.body.innerHTML = S[s]('light') + S[s]('dark');
 </script>
