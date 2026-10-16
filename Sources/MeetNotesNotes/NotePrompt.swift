@@ -33,7 +33,7 @@ public enum NotePromptBuilder {
         \(language)
 
         Structure:
-        \(template.instructions)
+        \(template.promptText)
         """
         let user = """
         Context from the user:
