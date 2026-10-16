@@ -155,7 +155,11 @@ enum Snapshots {
                 // Odbiór 2026-10-16: pigułka istnieje tylko podczas nagrywania — zwinięta i rozwinięta (kontroler z wymuszonym
                 // stanem; okno, cień i przesuwanie to odbiór na żywo), plus osobno wiersze poziomów torów.
                 let live = RecordingController.snapshotPreview(elapsed: 754)
-                try render("pill-collapsed", size: CGSize(width: 360, height: 64), dark: dark, model: model) { RecordingPanelView(model: model, recording: live, pill: PillState()) }
+                // Zwinięta w rozmiarze okna (`fittingSize`, jak `PillHostingView.fit`) przy najszerszym liczniku: przy stałym
+                // 360 pt migawka nie mogła pokazać „Sto / p” z drugiego odbioru.
+                let widest = RecordingController.snapshotPreview(elapsed: 35999) // 09:59:59
+                let collapsed = RecordingPanelView(model: model, recording: widest, pill: PillState())
+                try render("pill-collapsed", size: NSHostingView(rootView: collapsed.environment(model)).fittingSize, dark: dark, model: model) { collapsed }
                 let open = PillState(); open.expanded = true
                 try render("pill-expanded", size: CGSize(width: 360, height: 270), dark: dark, model: model) { RecordingPanelView(model: model, recording: live, pill: open) }
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {

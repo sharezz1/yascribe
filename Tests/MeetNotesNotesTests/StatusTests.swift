@@ -58,3 +58,12 @@ private func status(recording: Bool = false, progress: Double? = nil, correcting
     #expect(status(transcript: t, notes: true, correctionFailed: true) == .correctionFailed) // także gdy notatka już jest
     #expect(status(correcting: true, transcript: t, correctionFailed: true) == .correcting) // ponowienie w toku wygrywa
 }
+
+@Test func openNoteGoesToMyNotesOfTheRecordedMeeting() {
+    // Drugi odbiór 2026-10-16: „Open note” w pigułce → Meetings, nagrywana sesja (nazwa katalogu = SessionItem.id), My notes.
+    let dir = URL(fileURLWithPath: "/tmp/sessions/2026-10-16-1430/", isDirectory: true)
+    #expect(OpenNoteDestination.forRecording(directory: dir)
+            == OpenNoteDestination(section: .meetings, sessionID: "2026-10-16-1430", tab: .myNotes))
+    // Nagranie już się skończyło: sama lista spotkań, bez otwierania czegokolwiek.
+    #expect(OpenNoteDestination.forRecording(directory: nil) == OpenNoteDestination(section: .meetings, sessionID: nil, tab: nil))
+}
