@@ -382,7 +382,36 @@ const templates = th => win(th,'t', `<div class="main"><div class="col" style="w
   <div class="footer"><span class="note">Unsaved changes</span>
     <span class="pill">Cancel</span><span class="pill primary">Save</span></div>`);
 
-const S = {home, meeting, presets, settings, add, pill, templates};
+
+/* ---------------- widok spotkania: Summary przed generowaniem i Transcript (odbiór 2026-10-16, uwaga 7) ---------------- */
+const mhead = (tab) => `<div class="toolbar" style="left:222px">
+    <div class="pill" style="width:30px;padding:0;justify-content:center">${I.back}</div><div class="sp"></div>
+    <div class="icon-btn">${I.more}</div></div>
+  <div class="t-doc">Brak lewara w negocjacjach z Ukrainą</div>
+  <div class="dim num" style="margin-top:8px">16 Oct 2026 at 11:11 · 3 min · Preset Polski</div>
+  <div class="tabs">${['My notes','Transcript','Summary'].map(t=>`<span class="tab ${t==tab?'sel':''}">${t}</span>`).join('')}</div>`;
+const pageScroll = '<div style="position:absolute;right:3px;top:60px;width:6px;height:120px;border-radius:3px;background:var(--line)"></div>';
+const summary0 = th => win(th,'m', `<div class="main">${pageScroll}<div class="col" style="width:640px">${mhead('Summary')}
+  <div class="genbar">
+    <div class="field" style="width:130px;height:28px"><span class="grow">Standard</span>${I.chev}</div>
+    <span class="ctx">Add context</span>
+    <span class="t-cap">deepseek-v4.1-flash</span>
+    <span class="pill primary" style="height:28px">Generate notes</span></div>
+  <div style="padding:28px 4px;color:var(--text2);line-height:20px">No notes yet. Pick a template, add context if you like, and generate.<br>
+    <span class="t-cap">Uses the corrected transcript (3 min, Polish).</span></div>
+  </div></div>`);
+const trow = (t, who, txt, echo) => `<div style="display:grid;grid-template-columns:62px 44px 1fr;gap:0 10px;padding:10px 0;border-top:.5px solid var(--line2)">
+  <span class="num dim">${t}</span><span style="font-weight:500">${who}</span><div style="line-height:20px">${txt}${echo?`<div style="margin-top:4px"><span class="state">${echo}</span></div>`:''}</div></div>`;
+const transcript = th => win(th,'m', `<div class="main">${pageScroll}<div class="col" style="width:640px">${mhead('Transcript')}
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div class="field" style="width:120px;height:28px"><span class="grow">Corrected</span>${I.chev}</div>
+    <span style="flex:1"></span><span class="pill" style="height:28px">Improve transcript</span><span class="pill" style="height:28px">${I.copy}Copy</span></div>
+  ${trow('0:00:00','Them','Już lewara, bo żeby osiągać nasze cele wobec naszych partnerów w polityce zagranicznej, musimy mieć jakiś lewar. Czyli wyobraź sobie teraz, jaką pozycję przetargową mieliśmy wobec Ukrainy…')}
+  ${trow('0:00:00','Me','<span class="dim">Lewara, bo żeby osiągać nasze cele wobec naszych partnerów w polityce zagranicznej…</span>','Echo of the other side — excluded from notes')}
+  ${trow('0:00:36','Them','chcemy to, to, to i to. I powiedz mi, czy wtedy Ukraina byłaby bardziej skłonna do zaspokojenia tych naszych oczekiwań, jak była pod ścianą, czy teraz…')}
+  ${trow('0:01:04','Them','a jest niewdzięczna, bo my tak pomogliśmy w 22 roku. I teraz jesteśmy wykluczeni totalnie. Nie, chodzi w negocjacji…')}
+  </div></div>`);
+
+const S = {home, meeting, presets, settings, add, pill, templates, summary0, transcript};
 const s = new URLSearchParams(location.search).get('s') || 'home';
 document.body.innerHTML = S[s]('light') + S[s]('dark');
 </script>
