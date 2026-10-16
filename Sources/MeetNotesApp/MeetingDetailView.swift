@@ -26,7 +26,10 @@ struct MeetingDetailView: View {
 
     private var isRecording: Bool { SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory) }
 
+    /// Uwaga 7 z odbioru: cały widok to jedna przewijana strona (wzór Granola) — tytuł, zakładki i treść w jednym
+    /// `ScrollView` na całą szerokość detalu (pasek przy krawędzi okna), kolumna 640 w środku, bez wewnętrznych przewijań.
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 0) {
             header
             if isRecording {
@@ -43,7 +46,10 @@ struct MeetingDetailView: View {
             }
         }
         .contentColumn(640)
+        }
         .contentBackground()
+        // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
+        .focusedSceneValue(\.playRecording, isRecording ? nil : { togglePlayback() })
         .navigationTitle(item.title)
         .navigationBarBackButtonHidden(true) // własna kapsuła „Meetings” w pasku (D5)
         .onAppear {
@@ -64,16 +70,6 @@ struct MeetingDetailView: View {
                     .buttonStyle(.pill)
                     .help("Back to Meetings")
                     .accessibilityLabel("Back to Meetings")
-            }
-            ToolbarItem {
-            Button {
-                if playback.player?.isPlaying == true { playback.player?.pause() } else if playback.player != nil || load("system") { playback.player?.play() }
-            } label: {
-                Label("Play", systemImage: "playpause")
-            }
-            .keyboardShortcut(.space, modifiers: [])
-            .help("Play or pause")
-            .disabled(isRecording)
             }
             ToolbarItem {
                 Menu {
@@ -119,6 +115,11 @@ struct MeetingDetailView: View {
         }
     }
 
+    /// Odsłuch nagrania (ścieżka systemowa) od bieżącego miejsca albo pauza.
+    private func togglePlayback() {
+        if playback.player?.isPlaying == true { playback.player?.pause() } else if playback.player != nil || load("system") { playback.player?.play() }
+    }
+
     /// ChatGPT #8: „Me" nie ma w pliku odsłuchu (to tap systemowy) — gramy tor mikrofonu,
     /// przeliczając czas sesji na czas tej ścieżki.
     private func play(_ u: Utterance) {
@@ -152,40 +153,62 @@ struct MeetingDetailView: View {
     }
 }
 
+/// Menu Meeting → „Play/Pause Recording”: akcja z otwartego widoku spotkania (`focusedSceneValue`).
+/// Klucz ręcznie, bo `@Entry` to makro (CLAUDE.md).
+struct PlayRecordingKey: FocusedValueKey { typealias Value = () -> Void }
+extension FocusedValues {
+    var playRecording: (() -> Void)? {
+        get { self[PlayRecordingKey.self] }
+        set { self[PlayRecordingKey.self] = newValue }
+    }
+}
+
+/// Bez skrótu Spacja: zwykły klawisz w menu przechwyciłby spacje w tytule i w My notes.
+struct PlayRecordingButton: View {
+    @FocusedValue(\.playRecording) private var play
+    var body: some View {
+        Button("Play/Pause Recording") { play?() }.disabled(play == nil)
+    }
+}
+
+/// Wiersz transkryptu (b-transcript.png): czas (cyfry stałej szerokości, klik = odtwarzanie), mówca, tekst;
+/// echo, obcy język i przybliżony czas jako linie stanu pod tekstem.
 struct UtteranceRow: View {
     let utterance: Utterance
     let isAuto: Bool
     let onJump: () -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
             Button(MeetingDetailView.time(utterance.start), action: onJump)
                 .buttonStyle(.plain)
-                .font(.callout).monospacedDigit().foregroundStyle(.mnText2)
+                .font(.system(size: 13)).monospacedDigit().foregroundStyle(.mnText2)
+                .frame(width: 72, alignment: .leading)
                 .help("Play from here")
+                .accessibilityLabel("Play from \(MeetingDetailView.time(utterance.start))")
             Text(utterance.speaker == .me ? "Me" : "Them")
-                .font(.callout.weight(.semibold))
-                .frame(width: 40, alignment: .leading)
-                .foregroundStyle(.mnText2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(utterance.text).font(.system(size: 13)).foregroundStyle(.mnText).textSelection(.enabled)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.mnText)
+                .frame(width: 54, alignment: .leading)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(utterance.text).font(.system(size: 13)).lineSpacing(4)
+                    .foregroundStyle(utterance.excludedFromNotes ? Color.mnText2 : Color.mnText)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if let lang = utterance.languageMismatch {
                     // P11: widoczne, nie ukryte — i wyłączone z notatek.
-                    Label(isAuto ? "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes"
-                                 : "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes",
-                          systemImage: "exclamationmark.triangle")
-                        .font(.callout)
-                        .foregroundStyle(.mnWarn)
+                    WarnLabel(isAuto ? "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes"
+                                     : "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes")
                 }
                 if utterance.echoOfThem == true {
-                    Label("Echo of the other side — excluded from notes", systemImage: "speaker.wave.2")
-                        .font(.callout)
-                        .foregroundStyle(.mnText2)
+                    StateLabel(.neutral, "Echo of the other side — excluded from notes")
                 }
                 if utterance.approximateTiming {
-                    Text("Approximate timing").font(.subheadline).foregroundStyle(.mnText2)
+                    StateLabel(.neutral, "Approximate timing")
                 }
             }
         }
+        .padding(.vertical, 11)
     }
 }
