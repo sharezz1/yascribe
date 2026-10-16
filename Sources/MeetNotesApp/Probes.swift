@@ -41,6 +41,8 @@ enum Probes {
     // ponytail: wzorce na sztywno; w aplikacji będą nastawne (`MeetingTuning.linkPatterns`, plan T1)
     private static let linkPatterns: [(name: String, needles: [String])] = [
         ("teams", ["teams.microsoft.com/l/meetup-join", "teams.live.com"]),
+        ("teams-any", ["teams.microsoft.com", "teams.microsoft.us"]),
+        ("teams-text", ["microsoft teams"]),
         ("meet", ["meet.google.com"]),
         ("zoom", ["zoom.us/j"]),
         ("webex", ["webex.com"]),
@@ -50,6 +52,13 @@ enum Probes {
         guard let t = text?.lowercased(), !t.isEmpty else { return "-" }
         let hits = linkPatterns.filter { p in p.needles.contains { t.contains($0) } }.map(\.name)
         return hits.isEmpty ? "-" : hits.joined(separator: ",")
+    }
+
+    /// Pierwszy segment(y) ścieżki linku Teams (`meet`, `l/meetup-join`…) — sama struktura adresu, bez identyfikatorów.
+    private static func teamsPath(in text: String?) -> String {
+        guard let t = text?.lowercased(),
+              let r = t.range(of: #"teams\.microsoft\.com/[a-z]+(/[a-z-]+)?"#, options: .regularExpression) else { return "-" }
+        return String(t[r].dropFirst("teams.microsoft.com/".count))
     }
 
     private static func yn(_ b: Bool) -> String { b ? "Y" : "N" }
@@ -81,7 +90,7 @@ enum Probes {
                 "avail=\(e.availability.rawValue)", "status=\(e.status.rawValue)", "cal=\(e.calendar?.type.rawValue ?? -1)",
                 "me=\(myStatus)", "org=\(yn(e.organizer?.isCurrentUser ?? false))", "att=\(e.attendees?.count ?? 0)",
                 "hasURL=\(yn(e.url != nil))", "url=\(kinds(in: e.url?.absoluteString))",
-                "loc=\(kinds(in: e.location))", "notes=\(kinds(in: e.notes))",
+                "loc=\(kinds(in: e.location))", "notes=\(kinds(in: e.notes))", "nlen=\(e.notes?.count ?? 0)", "tpath=\(teamsPath(in: e.notes))",
                 "extId=\(yn(!(e.calendarItemExternalIdentifier ?? "").isEmpty))",
                 "rec=\(yn(e.hasRecurrenceRules))", "detached=\(yn(e.isDetached))",
             ].joined(separator: " | "))
