@@ -120,6 +120,22 @@ enum Snapshots {
                     // Uwaga 7: „Add context” rozwinięte w miejscu (pole rośnie z treścią).
                     let contextOpen = MeetingViewState(); contextOpen.tab = .summary; contextOpen.showContext = true
                     try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: contextOpen) }
+                    // Faza 1.6 T12: okno „Select calendar event" (dane przykładowe) i nagłówek z powiązanym wydarzeniem.
+                    let at = withNotes.startedAt
+                    let sample = [CalendarEventInfo(title: "Weekly staffing review", start: at, end: at + 1800, attendees: [.init(name: "Piotr Nowak"), .init(name: "Ada Lis"), .init(email: "team@example.com"), .init(name: "Jan Kos")]),
+                                  CalendarEventInfo(title: "Dentist (Main St clinic)", start: at - 5400, end: at - 3600, location: "Main St"),
+                                  CalendarEventInfo(title: "Forecast sync", start: at + 7200, end: at + 9000)]
+                    var linkedItem = withNotes; linkedItem.notes.meta.calendarEvent = sample[0].link()
+                    let picker = EventPickerState(); picker.ready = true
+                    picker.rows = EventRanking.order(sample, recordingStart: at, recordingEnd: at + 1800, now: at + 3600)
+                    try render("event-picker", size: CGSize(width: 380, height: 360), dark: dark, model: model) {
+                        EventPickerContent(state: picker, item: linkedItem, onPick: { _ in }, onUnlink: {}, onSettings: {})
+                    }
+                    let pickerOff = EventPickerState()
+                    try render("event-picker-not-connected", size: CGSize(width: 380, height: 130), dark: dark, model: model) {
+                        EventPickerContent(state: pickerOff, item: withNotes, onPick: { _ in }, onUnlink: {}, onSettings: {})
+                    }
+                    try render("meeting-linked-event", size: CGSize(width: 900, height: 300), dark: dark, model: model) { MeetingDetailView(item: linkedItem, state: summaryTab) }
                     // Uwaga 7 pkt 3: notatka bez proponowanej szerokości (sonda `fixedSize`) ma mieć 640 pt, nie ~250.
                     if let s = withNotes.notes.summary {
                         try render("meeting-note-unproposed", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
