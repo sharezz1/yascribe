@@ -199,6 +199,16 @@ enum Snapshots {
                     }
                     .padding(12)
                 }
+                // T9: pigułka bez nagrywania — oferta (kalendarz, rozmowa) i pytanie o koniec; rozmiar okna = `fittingSize` treści.
+                let now = Date()
+                let event = CalendarEventInfo(title: "Weekly product sync", start: now, end: now.addingTimeInterval(1800))
+                for (name, mode) in [("pill-offer-calendar", PillMode.offer(Offer(id: "e", title: event.title, source: .calendar, event: event, app: nil))),
+                                     ("pill-offer-call", .offer(Offer(id: "c", title: "Call in Teams", source: .call, event: nil, app: "com.microsoft.teams2"))),
+                                     ("pill-end-prompt", .endPrompt(.callReleased))] {
+                    let state = PillState(); state.mode = mode
+                    let view = PillContentView(model: model, pill: state)
+                    try render(name, size: NSHostingView(rootView: view.environment(model)).fittingSize, dark: dark, model: model) { view }
+                }
                 // Settings (§11.5): lista wszystkich dostawców (OpenRouter skonfigurowany, Ollama w błędzie), arkusz konfiguracji osobno.
                 if let pid = model.providers.providers.first?.id {
                     model.providerChecks[pid] = .verified(models: 312)

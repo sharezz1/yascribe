@@ -17,8 +17,10 @@ struct PillContentView: View {
         switch pill.mode {
         case .recording:
             RecordingPanelView(model: model, pill: pill)
-        case .offer, .endPrompt:
-            EmptyView() // T9
+        case .offer(let offer):
+            PillOfferView(offer: offer, pill: pill).environment(model)
+        case .endPrompt:
+            PillEndPromptView(pill: pill).environment(model)
         }
     }
 }
