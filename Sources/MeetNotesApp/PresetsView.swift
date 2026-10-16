@@ -46,9 +46,8 @@ struct PresetsView: View {
                             if state.draft != nil {
                                 PresetForm(state: state)
                             } else {
-                                ContentUnavailableView("Choose a preset", systemImage: "slider.horizontal.3",
-                                                       description: Text("A preset ties a language to its models, so they can't drift apart."))
-                                    .padding(.top, 40)
+                                EmptyEditorHint(title: "Choose a preset",
+                                                text: "A preset ties a language to its models, so they can't drift apart.")
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -156,7 +155,7 @@ struct EditorNameField: View {
         Group {
             if readOnly { Text(text).frame(maxWidth: .infinity, alignment: .leading) } else { TextField(placeholder, text: $text).textFieldStyle(.plain) }
         }
-            .font(.system(size: 15, weight: .medium))
+            .font(.system(size: 15)) // makieta: nazwa zwykłym 15 pt, nie pogrubiona
             .padding(.horizontal, 10)
             .frame(height: 32)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
@@ -382,5 +381,19 @@ func languageName(_ c: LanguageChoice) -> String {
     case .unset: "Choose…"
     case .auto: "Auto (mixed languages)"
     case .code(let code): LanguageCode.selectable.first { $0.code == code }?.name ?? "\(code)"
+    }
+}
+
+/// Pusty edytor (nic nie wybrano): dwie linie tekstu na tokenach, bez systemowej ikony (§11.6).
+struct EmptyEditorHint: View {
+    let title: String
+    let text: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
+            Text(text).font(.callout).foregroundStyle(.mnText2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 8)
     }
 }
