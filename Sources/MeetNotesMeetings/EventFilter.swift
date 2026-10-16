@@ -28,7 +28,10 @@ public enum EventFilter {
               event.end.timeIntervalSince(event.start) <= tuning.maxEventHours * 3600,
               Calendar.current.isDate(event.start, inSameDayAs: event.end - 1) else { return false }
         switch event.myStatus {
-        case .accepted, .tentative, .none: return true  // .none = wydarzenie własne
+        case .accepted, .tentative: return true
+        // .none = brak wpisu użytkownika wśród uczestników: własne tylko bez uczestników albo jako organizator
+        // (obce/udostępnione z listą uczestników i linkiem nie przechodzi)
+        case .none: return event.attendees.isEmpty || event.isOrganizer
         case .pending, .declined: return false
         }
     }

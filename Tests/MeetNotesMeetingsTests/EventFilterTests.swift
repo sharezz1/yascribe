@@ -8,9 +8,10 @@ private let teamsNotes = "Join: <https://teams.microsoft.com/meet/123456?p=abc> 
 private func fixture(minutes: Double = 30, isAllDay: Bool = false, availability: CalendarEventInfo.Availability = .busy,
                      myStatus: CalendarEventInfo.ParticipantStatus = .accepted, isCanceled: Bool = false,
                      url: URL? = nil, location: String? = nil, notes: String? = teamsNotes,
-                     attendees: [CalendarLink.Attendee] = []) -> CalendarEventInfo {
+                     attendees: [CalendarLink.Attendee] = [], isOrganizer: Bool = false) -> CalendarEventInfo {
     CalendarEventInfo(title: "Event", start: day, end: day + minutes * 60, isAllDay: isAllDay, availability: availability,
-                      myStatus: myStatus, isCanceled: isCanceled, url: url, location: location, notes: notes, attendees: attendees)
+                      myStatus: myStatus, isCanceled: isCanceled, url: url, location: location, notes: notes, attendees: attendees,
+                      isOrganizer: isOrganizer)
 }
 
 private func offerable(_ e: CalendarEventInfo) -> Bool { EventFilter.isOfferable(e, tuning: MeetingTuning()) }
@@ -37,7 +38,6 @@ private func offerable(_ e: CalendarEventInfo) -> Bool { EventFilter.isOfferable
 
 @Test func exchangeOutOfOfficeShownAsBusyIsNotOfferable() {
     let ooo = fixture(minutes: 72 * 60, isAllDay: true, availability: .busy, myStatus: .none, notes: nil)
-    #expect(ooo.availability == .busy && ooo.attendees.isEmpty)
     #expect(!offerable(ooo))
     #expect(!EventFilter.isPickable(ooo))
     // ten sam kształt, czas w progu: odcinają go wyłącznie brak linku i flaga całodniowego, nie dostępność
@@ -71,6 +71,18 @@ private func offerable(_ e: CalendarEventInfo) -> Bool { EventFilter.isOfferable
     #expect(offerable(fixture(myStatus: .accepted)))
     #expect(offerable(fixture(myStatus: .tentative)))
     #expect(offerable(fixture(myStatus: .none)))
+}
+
+@Test func foreignEventWithoutAResponseIsNotOfferableButOwnOnesAre() {
+    let others = [CalendarLink.Attendee(name: "Ola", email: "ola@example.com")]
+    // obce lub udostępnione: są uczestnicy, użytkownik nie jest organizatorem, status .none → nie jest jego spotkaniem
+    #expect(!offerable(fixture(myStatus: .none, attendees: others)))
+    // własne: bez uczestników albo jako organizator
+    #expect(offerable(fixture(myStatus: .none, attendees: [])))
+    #expect(offerable(fixture(myStatus: .none, attendees: others, isOrganizer: true)))
+    // odpowiedź (accepted/tentative) nadal wystarcza, także przy uczestnikach
+    #expect(offerable(fixture(myStatus: .accepted, attendees: others)))
+    #expect(offerable(fixture(myStatus: .tentative, attendees: others)))
 }
 
 @Test func teamsMeetLinkInNotesIsRecognised() {

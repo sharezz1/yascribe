@@ -31,8 +31,14 @@ public struct OfferDetector {
     /// Rodziny wyciszone do końca swojej sesji mikrofonu (dismiss albo zatrzymanie nagrania).
     private var mutedFamilies: Set<String> = []
     /// Id wydarzenia → koniec jego okna oferty (wtedy wpis wygasa; wydarzenie znikające z listy nie zdejmuje wyciszenia).
+    /// Dopóki jakiś wpis trwa, rozmowa ad hoc (bez wydarzenia) nie dostaje oferty ani auto-startu: wyciszone wydarzenie
+    /// jest odfiltrowane, więc bez tego ta sama rozmowa wracałaby jako "Call in Teams".
     private var mutedEvents: [String: Date] = [:]
     private var wasRecording = false
+    /// Czas poprzedniego `step`; przerwa dłuższa niż `maxTickGap` zrywa ciągłość mikrofonu.
+    private var lastStep: Date?
+    /// ponytail: 3 s = 3× tik monitora 1 s; nastawna, jeśli tiki zrzedną
+    private static let maxTickGap: Double = 3
     private var current: Offer?
     /// `.startRecording` już poszło dla bieżącej oferty; nie powtarzamy, dopóki nie zacznie się nagranie albo oferta nie zniknie.
     private var starting = false
@@ -42,6 +48,8 @@ public struct OfferDetector {
     /// Zwraca akcję tylko przy zmianie stanu.
     public mutating func step(now: Date, events: [CalendarEventInfo], processes: [AudioProcessSample], recording: Bool,
                               callsEnabled: Bool, autoStart: Bool) -> OfferAction? {
+        if let prev = lastStep, now.timeIntervalSince(prev) > Self.maxTickGap { micSince = [:] }  // uśpienie, App Nap
+        lastStep = now
         let active = Set(processes.filter(\.isRunningInput).compactMap { tuning.family(of: $0.bundleID) })
         for fam in tuning.callApps {
             if active.contains(fam) {
@@ -63,20 +71,23 @@ public struct OfferDetector {
             return current == nil ? nil : .hide
         }
         let inWindow = events.filter {
-            EventFilter.isOfferable($0, tuning: tuning) && now >= $0.start - tuning.offerLead && now <= $0.start + tuning.offerGrace
+            EventFilter.isOfferable($0, tuning: tuning) && now >= $0.start - tuning.offerLead && now <= $0.start + tuning.offerGrace && now < $0.end
         }
         if wasRecording {
             // Stop (ręczny albo bezpiecznik): trwające sesje rodzin (też po krótkiej przerwie) i bieżące okna wydarzeń milkną.
             wasRecording = false
             mutedFamilies.formUnion(lastInput.keys)
-            for e in inWindow { mutedEvents[e.id] = e.start + tuning.offerGrace }
+            for e in inWindow { mutedEvents[e.id] = windowEnd(e) }
         }
 
         let event = inWindow.filter { mutedEvents[$0.id] == nil }.min {
             let (a, b) = (abs($0.start.timeIntervalSince(now)), abs($1.start.timeIntervalSince(now)))
             return a != b ? a < b : $0.id < $1.id
         }
-        let fam = callsEnabled ? tuning.callApps.first {
+        // Rozmowa, która zaczęła się w oknie wyciszonego wydarzenia, milknie do końca swojej sesji (także po wygaśnięciu okna).
+        let adHocBlocked = event == nil && !mutedEvents.isEmpty
+        if adHocBlocked { mutedFamilies.formUnion(active) }
+        let fam = callsEnabled && !adHocBlocked ? tuning.callApps.first {
             !mutedFamilies.contains($0) && micSince[$0].map { now.timeIntervalSince($0) >= tuning.startSeconds } == true
         } : nil
         let offer: Offer? = switch (event, fam) {
@@ -108,8 +119,11 @@ public struct OfferDetector {
     public mutating func dismiss() {
         guard let o = current else { return }
         if let f = o.app { mutedFamilies.insert(f) }
-        if let e = o.event { mutedEvents[e.id] = e.start + tuning.offerGrace }
+        if let e = o.event { mutedEvents[e.id] = windowEnd(e) }
     }
+
+    /// Koniec okna oferty wydarzenia: `start + offerGrace`, nie później niż koniec wydarzenia.
+    private func windowEnd(_ e: CalendarEventInfo) -> Date { min(e.start + tuning.offerGrace, e.end) }
 
     private static let appNames = ["com.microsoft.teams2": "Teams"]
     private static func appName(_ family: String) -> String {

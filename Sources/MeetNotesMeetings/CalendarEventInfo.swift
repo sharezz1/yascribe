@@ -20,11 +20,14 @@ public struct CalendarEventInfo: Identifiable, Equatable, Sendable {
     public var eventIdentifier: String?
     public var externalIdentifier: String?
     public var occurrenceStart: Date?
+    /// Organizatorem jest bieżący użytkownik (adapter wypełnia z EventKit); razem z brakiem uczestników odróżnia wydarzenie własne od obcego.
+    public var isOrganizer: Bool
 
     public init(title: String, start: Date, end: Date, isAllDay: Bool = false, availability: Availability = .busy,
                 myStatus: ParticipantStatus = .accepted, isCanceled: Bool = false, url: URL? = nil, location: String? = nil,
                 notes: String? = nil, attendees: [CalendarLink.Attendee] = [], calendarName: String? = nil,
-                eventIdentifier: String? = nil, externalIdentifier: String? = nil, occurrenceStart: Date? = nil) {
+                eventIdentifier: String? = nil, externalIdentifier: String? = nil, occurrenceStart: Date? = nil,
+                isOrganizer: Bool = false) {
         self.title = title
         self.start = start
         self.end = end
@@ -40,6 +43,7 @@ public struct CalendarEventInfo: Identifiable, Equatable, Sendable {
         self.eventIdentifier = eventIdentifier
         self.externalIdentifier = externalIdentifier
         self.occurrenceStart = occurrenceStart
+        self.isOrganizer = isOrganizer
     }
 
     /// Stabilny na wystąpienie: wydarzenia cykliczne dzielą identyfikator serii, więc dochodzi data wystąpienia.
