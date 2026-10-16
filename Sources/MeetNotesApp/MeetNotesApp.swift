@@ -80,6 +80,10 @@ struct ContentView: View {
             }
         }
         .tint(.mnAccent) // 🔀 odstępstwo 5 (macos.md §10): stały akcent w treści
+        // Uwaga 1 z odbioru 2026-10-16 (§11.5): pasek bez własnego tła i tytułu; ciepłe tło do górnej krawędzi.
+        // `navigationTitle` zostaje w widokach — nazwa okna w menu Window i dla VoiceOver.
+        .toolbar(removing: .title)
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .sheet(isPresented: $model.showSetup) { SetupView() }
         .alert("Something went wrong", isPresented: Binding(get: { model.lastError != nil }, set: { if !$0 { model.lastError = nil } })) {
             Button("OK") { model.lastError = nil }
