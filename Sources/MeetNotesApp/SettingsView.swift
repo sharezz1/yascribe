@@ -274,7 +274,7 @@ private struct ProviderRowView: View {
             StateLabel(.progress(nil), "Verifying…")
         } else {
             switch model.providerChecks[p.id] {
-            case .verified(let n)?: StateLabel(.ok, "Verified · \(n) models")
+            case .verified(let n)?: StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s")")
             case .failed(let why)?: StateLabel(.bad, "Failed").help(why)
             case nil: StateLabel(.neutral, "Not verified")
             }
@@ -368,7 +368,7 @@ struct ProviderSetupSheet: View {
             StateLabel(.bad, e)
         } else if let r = state.result {
             switch r {
-            case .verified(let n): StateLabel(.ok, "Verified · \(n) models available")
+            case .verified(let n): StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s") available")
             case .failed(let why): StateLabel(.bad, why)
             }
         } else if let n = state.note {
@@ -396,13 +396,12 @@ struct ProviderSetupSheet: View {
         let kind = state.editing?.kind ?? preset.kind
         state.testing = true
         defer { state.testing = false }
-        if let r = await AppModel.testConnection(baseURL: url, kind: kind, key: key) { state.result = r; return }
-        // ElevenLabs: klient powstaje z klucza zapisanego w pęku, więc przed zapisem testu nie ma.
+        // Edit key… z pustym polem: test zapisanego klucza. Inaczej: klucz z pola, bez zapisu do pęku.
         if let id = state.editing?.id, key.isEmpty {
             await model.verifyProvider(id)
             state.result = model.providerChecks[id]
         } else {
-            state.note = "The key is checked right after you save."
+            state.result = await AppModel.testConnection(baseURL: url, kind: kind, key: key)
         }
     }
 
