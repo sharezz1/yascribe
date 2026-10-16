@@ -479,6 +479,19 @@ w dolnym pasku, jak na `b-add.png`.
   i Ollama, ElevenLabs nie) i pod nim „Embedding model” (`ModelField`, lista z wybranego dostawcy,
   `?output_modalities=embeddings` dla OpenAI-compatible). Bez wiersza „Provider”, gdy pasuje tylko jeden
   dostawca. Zmiana dostawcy czyści wybór modelu; potwierdzenie zmiany embeddingu bez zmian (spec §5.4).
+  **Recordings (decyzje użytkownika 2026-10-16; makieta `b-settings.png`):** sekcja między
+  Providers a Archive search, w nagłówku rozmiar na dysku („4.2 GB on disk”).
+  - **Location:** ścieżka folderu ze wszystkimi spotkaniami (skracana w środku, pełna w podpowiedzi),
+    „Change…” (panel wyboru folderu) i „Show in Finder”. **Zmiana przenosi wszystkie istniejące
+    spotkania**: najpierw kopia, potem weryfikacja (lista plików i rozmiary), dopiero potem usunięcie
+    ze starego miejsca; postęp widoczny w sekcji; przy błędzie nic nie jest usuwane, stare miejsce
+    zostaje aktywne, komunikat z powodem. Zmiana zablokowana podczas nagrywania i transkrypcji.
+  - **Keep audio:** popup 7 / 14 / **30 (domyślnie)** / 90 days / Forever. Po tym czasie kasowane jest
+    **tylko audio** spotkania (`*.caf`, później Opus); transkrypt, notatka i My notes zostają. Audio
+    spotkania bez ukończonej transkrypcji (w toku albo błąd) **nie jest kasowane**. Podpis pod
+    popupem mówi to wprost. Spotkanie bez audio pokazuje w widoku „Audio deleted after 30 days”.
+  - **Zmienia spec rdzenia** (`2026-09-24-rdzen-nagrywania-design.md`: „domyślnie nie kasuje ich
+    nic”) — to jest jawna polityka retencji, o której tam mowa.
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór Granola): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
