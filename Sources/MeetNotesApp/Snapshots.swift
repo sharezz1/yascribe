@@ -39,7 +39,7 @@ enum Snapshots {
     /// Fixture: presety i dostawca zapisane do katalogu danych, potem `load()`. Kolejne zadania dopisują sesje i stany.
     /// Sesja z dysku: rejestrator z próbek, potem transkrypt i notatki zapisane jak w aplikacji.
     static func seedSession(_ model: AppModel, name: String, transcriptJSON: String?, notes: NoteSummary?, myNotes: String = "") throws {
-        let dir = model.paths.sessions.appendingPathComponent(name)
+        let dir = model.sessionsDirectory.appendingPathComponent(name)
         let tb = Timebase(numer: 1, denom: 1)
         let src = FileSource(trackID: "system", samples: [Int16](repeating: 0, count: 16_000 * 60), sampleRate: 16_000, channels: 1,
                              startHostTime: 1_000_000_000, timebase: tb, chunkFrames: 1_600)
