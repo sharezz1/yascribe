@@ -468,7 +468,7 @@ final class AppModel {
             do { try JSONFile.save(preset, to: dir.appendingPathComponent("preset.json")) } catch {
                 lastError = "Recording, but couldn't save its preset: \(error). After a restart it will use the active preset."
             }
-            recording.showPanel(model: self)
+            if recording.isRecording { recording.showPanel(model: self) }
             reloadSessions()
             openSession(dir.lastPathComponent) // notatki pisze się w trakcie spotkania
         } catch {
