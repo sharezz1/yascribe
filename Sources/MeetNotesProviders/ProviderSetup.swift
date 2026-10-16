@@ -1,6 +1,6 @@
 import Foundation
 
-/// Gotowe kafelki „Add Provider" (odbiór T13, uwaga 7): użytkownik wkleja tylko klucz, adres jest wpisany.
+/// Gotowi dostawcy listy w Settings (macos.md §11.5): użytkownik wkleja tylko klucz, adres jest wpisany.
 /// Modele zostają w presetach; dostawcy — w Settings.
 public struct ProviderPreset: Identifiable, Equatable, Sendable {
     public var id: String
@@ -8,15 +8,34 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     public var baseURL: String
     public var needsKey: Bool
     public var note: String?
+    /// Opis roli pod nazwą w wierszu listy i w nagłówku arkusza.
+    public var role: String
+    /// API dostawcy; `nil` = OpenAI-compatible (jak `Provider.kind`).
+    public var kind: ProviderKind?
+    /// Strona z kluczem API („Get an API key"); Ollama i Custom nie mają.
+    public var keyPage: URL?
 
     public static let openRouter = ProviderPreset(id: "openrouter", name: "OpenRouter", baseURL: "https://openrouter.ai/api/v1",
-                                                  needsKey: true, note: nil)
+                                                  needsKey: true, note: nil,
+                                                  role: "Transcription, correction and summary · hundreds of models",
+                                                  kind: nil, keyPage: URL(string: "https://openrouter.ai/keys"))
+    /// ElevenLabs bezpośrednio: Scribe v2, klucz w nagłówku `xi-api-key` (decyzja 2026-10-16).
+    public static let elevenLabs = ProviderPreset(id: "elevenlabs", name: "ElevenLabs", baseURL: "https://api.elevenlabs.io",
+                                                  needsKey: true, note: nil,
+                                                  role: "Scribe v2 transcription · direct API",
+                                                  kind: .elevenLabs, keyPage: URL(string: "https://elevenlabs.io/app/settings/api-keys"))
     /// Ollama nie robi ASR (docs/wymagania.md §2): tylko korekta i podsumowanie.
     public static let ollama = ProviderPreset(id: "ollama", name: "Ollama", baseURL: "http://localhost:11434/v1", needsKey: false,
-                                              note: "correction and summary only, no transcription")
-    public static let custom = ProviderPreset(id: "custom", name: "Custom", baseURL: "", needsKey: true,
-                                              note: "Any OpenAI-compatible server.")
-    public static let all: [ProviderPreset] = [openRouter, ollama, custom]
+                                              note: "correction and summary only, no transcription",
+                                              role: "Runs on this Mac · correction and summary only, no transcription",
+                                              kind: nil, keyPage: nil)
+    public static let custom = ProviderPreset(id: "custom", name: "Custom endpoint", baseURL: "", needsKey: true,
+                                              note: "Any OpenAI-compatible server.",
+                                              role: "Any OpenAI-compatible API · address and key",
+                                              kind: nil, keyPage: nil)
+    public static let all: [ProviderPreset] = [openRouter, elevenLabs, ollama, custom]
+    /// Gotowi (z wpisanym adresem), w kolejności listy.
+    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama]
 
     /// Adres bez schematu: host[:port] + ścieżka bez końcowego „/” („openrouter.ai/api/v1"). Służy też do porównań.
     public static func displayAddress(_ url: URL) -> String {
@@ -32,16 +51,63 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
         return shown.prefix(hostLength).lowercased() + shown.dropFirst(hostLength)
     }
 
-    /// Wiersz „Add:" jest nieaktywny, gdy dostawca o tym adresie już jest. Custom — zawsze można dodać kolejny.
-    public func isAdded(in providers: [Provider]) -> Bool {
-        guard self != .custom, let mine = URL(string: baseURL) else { return false }
-        return providers.contains { Self.addressKey($0.baseURL) == Self.addressKey(mine) }
+    /// Gotowy dostawca pasujący do zapisanego dostawcy (rodzaj API, a dla OpenAI-compatible adres); Custom nigdy.
+    public static func matching(_ provider: Provider) -> ProviderPreset? {
+        if provider.api == .elevenLabs { return elevenLabs }
+        return [openRouter, ollama].first { URL(string: $0.baseURL).map(addressKey) == addressKey(provider.baseURL) }
     }
 
-    /// Gotowy dostawca pasujący do adresu (do ograniczeń w wierszu listy); Custom nigdy.
+    /// Dopasowanie samego adresu (bez rodzaju API).
     public static func matching(_ url: URL) -> ProviderPreset? {
-        [openRouter, ollama].first { URL(string: $0.baseURL).map(addressKey) == addressKey(url) }
+        matching(Provider(name: "", baseURL: url))
     }
+}
+
+/// Wiersz karty Providers: gotowy dostawca (z zapisanym albo bez), własny adres albo „Custom endpoint" na końcu.
+public enum ProviderListRow: Identifiable, Equatable, Sendable {
+    case preset(ProviderPreset, Provider?)
+    case custom(Provider)
+    case addCustom
+
+    public var id: String {
+        switch self {
+        case .preset(let p, _): "preset-\(p.id)"
+        case .custom(let p): "custom-\(p.id.uuidString)"
+        case .addCustom: "add-custom"
+        }
+    }
+
+    /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama,
+    /// potem zapisani własni (także drugi OpenRouter — dostawca to instancja), na końcu „Custom endpoint".
+    public static func rows(for providers: [Provider]) -> [ProviderListRow] {
+        var used = Set<UUID>()
+        var rows: [ProviderListRow] = ProviderPreset.ready.map { preset in
+            let match = providers.first { !used.contains($0.id) && ProviderPreset.matching($0) == preset }
+            if let match { used.insert(match.id) }
+            return .preset(preset, match)
+        }
+        rows += providers.filter { !used.contains($0.id) }.map { .custom($0) }
+        rows.append(.addCustom)
+        return rows
+    }
+}
+
+/// Archive search (macos.md §11.5, uwaga 6): wybór dostawcy i modelu embeddingu.
+public enum EmbeddingChoice {
+    /// Dostawcy z listą modeli embeddingu: OpenAI-compatible (ElevenLabs nie ma embeddingów).
+    public static func providers(_ providers: [Provider]) -> [Provider] {
+        providers.filter { $0.api == .openAICompatible }
+    }
+
+    /// Zmiana dostawcy czyści model (inny dostawca = inna lista); ten sam dostawca zachowuje wybór. `nil` = brak embeddingu.
+    public static func select(provider id: UUID?, current: RoleAssignment?) -> RoleAssignment? {
+        guard let id else { return nil }
+        if let current, current.providerID == id { return current }
+        return RoleAssignment(providerID: id, model: "")
+    }
+
+    /// Wiersz „Provider" jest zbędny, gdy do wyboru jest najwyżej jeden dostawca.
+    public static func showsProviderRow(candidates: [Provider]) -> Bool { candidates.count > 1 }
 }
 
 /// Wynik próby połączenia po dodaniu dostawcy (`listModels`): „✓ Verified" albo powód po ludzku.
