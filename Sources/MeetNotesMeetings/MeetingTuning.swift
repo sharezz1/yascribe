@@ -20,3 +20,11 @@ public struct MeetingTuning: Equatable, Sendable {
 
     public init() {}
 }
+
+extension MeetingTuning {
+    /// Rodzina aplikacji rozmów: wpis z `callApps` dopasowany po prefiksie na granicy członu
+    /// (`com.microsoft.teams2.modulehost` tak, `com.microsoft.teams2extra` nie). Wspólne dla `OfferDetector` i `EndDetector`.
+    func family(of bundleID: String) -> String? {
+        callApps.first { bundleID == $0 || bundleID.hasPrefix($0 + ".") }
+    }
+}
