@@ -81,6 +81,12 @@ public enum NoteTitle {
         return t == untitled ? "" : t
     }
 
+    /// Bufor edycji pola po zmianie tekstu: `nil`, gdy tekst jest dokładnie bieżącym tytułem (pole znów śledzi
+    /// sesję). Porównanie bez przycinania — inaczej spacja dopisana na końcu autotytułu znikałaby przy pisaniu.
+    public static func fieldEdit(_ text: String, meta: NoteMeta, noteTitle: String?) -> String? {
+        text == fieldText(meta: meta, noteTitle: noteTitle) ? nil : text
+    }
+
     /// Czy tekst z pola to nowy tytuł ręczny. Enter albo fokus bez zmiany nie zamienia autotytułu (ani tytułu
     /// z notatki) w ręczny — inaczej późniejszy autotytuł już by go nie zastąpił.
     public static func isEdit(_ edited: String, meta: NoteMeta, noteTitle: String?) -> Bool {

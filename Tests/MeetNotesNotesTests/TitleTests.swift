@@ -56,6 +56,13 @@ import Testing
     #expect(NoteTitle.isEdit("", meta: meta, noteTitle: nil)) // wyczyszczenie to zmiana (wraca autotytuł)
 }
 
+@Test func typingASpaceAfterTheAutoTitleKeepsIt() {
+    // Dopisywanie słów do autotytułu: „Forecast gap " nie może wrócić do „Forecast gap" w trakcie pisania.
+    let meta = NoteMeta(autoTitle: "Forecast gap")
+    #expect(NoteTitle.fieldEdit("Forecast gap ", meta: meta, noteTitle: nil) == "Forecast gap ")
+    #expect(NoteTitle.fieldEdit("Forecast gap", meta: meta, noteTitle: nil) == nil) // tekst = tytuł → pole śledzi sesję
+}
+
 @Test func titleRuleIsInBothPrompts() throws {
     // Odbiór T13: tytuł na 15 słów z przedrostkiem „Notatki z rozmowy". Reguła jest w prompcie notatki i autotytułu.
     let t = transcript([utt("Prognoza na sobotę jest wyższa niż na niedzielę.")])
