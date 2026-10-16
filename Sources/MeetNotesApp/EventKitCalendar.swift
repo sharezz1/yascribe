@@ -4,7 +4,8 @@ import MeetNotesMeetings
 
 /// Apple Calendar przez EventKit, tylko do odczytu. Brak dostępu → puste wyniki, nic nie rzuca.
 /// Nie loguje ani nie zapisuje tytułów, uczestników ani adresów.
-// `EKEventStore` jest bezpieczny do użycia z wielu wątków (dokumentacja Apple); stąd `@unchecked`.
+// Nagłówki EventKit dopuszczają zapytania poza wątkiem głównym, ale nie gwarantują thread-safety `EKEventStore`;
+// `@unchecked`, bo wołamy z jednego aktora (monitor, T10).
 final class EventKitCalendar: CalendarSource, @unchecked Sendable {
     private let store = EKEventStore()
 
@@ -38,7 +39,7 @@ final class EventKitCalendar: CalendarSource, @unchecked Sendable {
     }
 
     var changes: AsyncStream<Void> {
-        AsyncStream { cont in
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { cont in
             nonisolated(unsafe) let token = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: nil) { _ in
                 cont.yield()
             }

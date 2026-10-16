@@ -27,12 +27,16 @@ public enum EventFilter {
               !event.isAllDay, !event.isCanceled,
               event.end.timeIntervalSince(event.start) <= tuning.maxEventHours * 3600,
               Calendar.current.isDate(event.start, inSameDayAs: event.end - 1) else { return false }
+        // Organizator implicite zaakceptował, a Exchange potrafi wpisać go na listę ze statusem unknown/pending
+        // (→ .pending), więc sprawdzamy go przed statusem. Wyjątek: jawne .declined odrzuca także organizatora
+        // (świadoma decyzja: odrzucone własne spotkanie nie jest ofertą).
+        // .none = brak wpisu użytkownika wśród uczestników: własne tylko bez uczestników
+        // (obce/udostępnione z listą uczestników i linkiem nie przechodzi).
         switch event.myStatus {
+        case .declined: return false
         case .accepted, .tentative: return true
-        // .none = brak wpisu użytkownika wśród uczestników: własne tylko bez uczestników albo jako organizator
-        // (obce/udostępnione z listą uczestników i linkiem nie przechodzi)
+        case .pending: return event.isOrganizer
         case .none: return event.attendees.isEmpty || event.isOrganizer
-        case .pending, .declined: return false
         }
     }
 

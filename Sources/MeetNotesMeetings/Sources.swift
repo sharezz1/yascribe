@@ -22,5 +22,7 @@ public protocol CalendarSource: Sendable {
 }
 
 public protocol AudioProcessSource: Sendable {
-    func snapshot() -> [AudioProcessSample]
+    /// `nil` = odczyt Core Audio się nie udał (nie to samo co `[]`, czyli nikt nie używa mikrofonu).
+    /// Monitor (T10) pomija tik, gdy `nil`, zamiast uznać to za zwolnienie mikrofonu.
+    func snapshot() -> [AudioProcessSample]?
 }

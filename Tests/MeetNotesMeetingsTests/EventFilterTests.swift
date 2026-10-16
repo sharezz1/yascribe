@@ -121,3 +121,19 @@ private func offerable(_ e: CalendarEventInfo) -> Bool { EventFilter.isOfferable
     #expect(!EventFilter.isPickable(fixture(minutes: 72 * 60)))                            // wielodniowy blok bez flagi całodniowego
     #expect(EventFilter.isPickable(fixture(minutes: 23 * 60 + 59)))
 }
+
+@Test func organizerWithPendingEntryIsOfferable() {
+    // Exchange wpisuje organizatora na listę uczestników ze statusem unknown/pending
+    let others = [CalendarLink.Attendee(name: "Ola", email: "ola@example.com")]
+    #expect(offerable(fixture(myStatus: .pending, attendees: others, isOrganizer: true)))
+}
+
+@Test func nonOrganizerPendingStillNotOfferable() {
+    let others = [CalendarLink.Attendee(name: "Ola", email: "ola@example.com")]
+    #expect(!offerable(fixture(myStatus: .pending, attendees: others, isOrganizer: false)))
+}
+
+@Test func declinedOrganizerStillNotOffered() {
+    // jawne .declined odrzuca także organizatora
+    #expect(!offerable(fixture(myStatus: .declined, isOrganizer: true)))
+}
