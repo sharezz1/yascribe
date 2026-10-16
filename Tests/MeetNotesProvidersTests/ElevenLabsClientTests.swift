@@ -111,6 +111,17 @@ private func part(_ name: String, _ value: String, _ b: String) -> Data {
     #expect(http.calls.count == before)
 }
 
+@Test func clientIsChosenByProviderAPI() async {
+    #expect(openRouter.transcriptionClient(key: fakeKey) is OpenAICompatibleClient) // `kind == nil` = jak dotąd
+    #expect(elevenLabs.transcriptionClient(key: fakeKey) is ElevenLabsClient)
+    let el = StubHTTP { _, _ in (200, "[]") }
+    #expect(await elevenLabs.verify(key: fakeKey, http: el) == .verified(models: 1))
+    #expect(el.calls.first?.path == "/v1/models" && el.calls.first?.headers["xi-api-key"] == fakeKey)
+    let or = StubHTTP { _, _ in ok(["data": [["id": "a"]]]) }
+    #expect(await openRouter.verify(key: fakeKey, http: or) == .verified(models: 1))
+    #expect(or.calls.first?.headers["Authorization"] == "Bearer \(fakeKey)")
+}
+
 @Test func providerKindRoundTripsAndOldFilesStayOpenAICompatible() throws {
     let old = try JSONDecoder().decode(Provider.self, from: Data(#"{"id":"D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98","name":"OpenRouter","baseURL":"https://openrouter.ai/api/v1"}"#.utf8))
     #expect(old.kind == nil && old.api == .openAICompatible)

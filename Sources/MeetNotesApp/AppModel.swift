@@ -210,11 +210,7 @@ final class AppModel {
     /// Klient transkrypcji wybrany po `Provider.api`; nil = powód w `lastError`.
     func transcriptionClient(for providerID: UUID) -> (any TranscriptionClient)? {
         switch providerWithKey(providerID) {
-        case .success(let (p, key)):
-            switch p.api {
-            case .openAICompatible: return OpenAICompatibleClient(provider: p, key: key)
-            case .elevenLabs: return ElevenLabsClient(provider: p, key: key)
-            }
+        case .success(let (p, key)): return p.transcriptionClient(key: key)
         case .failure(let problem):
             lastError = problem.message
             return nil
@@ -229,11 +225,7 @@ final class AppModel {
         defer { providerVerifying.remove(id) }
         switch providerWithKey(id) {
         case .failure(let problem): providerChecks[id] = .failed(problem.message)
-        case .success(let (p, key)):
-            switch p.api {
-            case .openAICompatible: providerChecks[id] = await OpenAICompatibleClient(provider: p, key: key).verify()
-            case .elevenLabs: providerChecks[id] = await ElevenLabsClient(provider: p, key: key).verify()
-            }
+        case .success(let (p, key)): providerChecks[id] = await p.verify(key: key)
         }
     }
 
