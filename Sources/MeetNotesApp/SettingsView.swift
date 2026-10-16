@@ -53,7 +53,7 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
+            ScrollPage(640) {
                 VStack(alignment: .leading, spacing: 0) {
                     PageTitle("Settings").padding(.bottom, 4)
                     SectionHeader("Providers")
@@ -77,7 +77,6 @@ struct SettingsView: View {
                     }
                     .font(.system(size: 12)).foregroundStyle(.mnText2).padding(.top, 6).padding(.leading, 2)
                 }
-                .contentColumn(640)
             }
             footer
         }

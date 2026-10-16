@@ -72,4 +72,18 @@ public enum NoteTitle {
         }
         return untitled
     }
+
+    /// Tekst pola tytułu w widoku spotkania: tytuł z `display` w kolorze tekstu; tylko „Untitled meeting" zostaje
+    /// placeholderem (puste pole). Liczone przy każdym odświeżeniu, nie kopiowane raz przy otwarciu (odbiór 2026-10-16,
+    /// błąd 4: autotytuł zapisany w trakcie oglądania spotkania nie trafiał do pola).
+    public static func fieldText(meta: NoteMeta, noteTitle: String?) -> String {
+        let t = display(meta: meta, noteTitle: noteTitle)
+        return t == untitled ? "" : t
+    }
+
+    /// Czy tekst z pola to nowy tytuł ręczny. Enter albo fokus bez zmiany nie zamienia autotytułu (ani tytułu
+    /// z notatki) w ręczny — inaczej późniejszy autotytuł już by go nie zastąpił.
+    public static func isEdit(_ edited: String, meta: NoteMeta, noteTitle: String?) -> Bool {
+        edited.trimmingCharacters(in: .whitespacesAndNewlines) != fieldText(meta: meta, noteTitle: noteTitle)
+    }
 }
