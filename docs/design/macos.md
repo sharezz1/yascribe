@@ -492,6 +492,14 @@ w dolnym pasku, jak na `b-add.png`.
     popupem mówi to wprost. Spotkanie bez audio pokazuje w widoku „Audio deleted after 30 days”.
   - **Zmienia spec rdzenia** (`2026-09-24-rdzen-nagrywania-design.md`: „domyślnie nie kasuje ich
     nic”) — to jest jawna polityka retencji, o której tam mowa.
+  - **Decyzje R1–R8 po wdrożeniu (2026-10-16):** skrócenie „Keep audio” wymaga potwierdzenia
+    z liczbą spotkań i rozmiarem do skasowania (R1); po nieudanym przenoszeniu sprzątana jest tylko
+    własna częściowa kopia (R2); podczas przenoszenia widok spotkania jest tylko do odczytu z
+    informacją dlaczego (R3); podpis: „Only audio is deleted. Transcripts, notes and My notes stay.
+    Audio is kept until its transcription has finished.” (R4). Pigułka rozwija się zakotwiczona w
+    środku dolnej krawędzi (R5); „Show Recording Window” (⌘⌥R) zostaje jako ratunek (R6). Klucz
+    ElevenLabs z dostępem tylko do STT (403 przy `GET /v1/models`) to stan ostrzeżenia „Key works
+    for transcription only”, nie błąd (R8).
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
