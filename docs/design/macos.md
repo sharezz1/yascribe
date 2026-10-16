@@ -431,8 +431,8 @@ w dolnym pasku, jak na `b-add.png`.
   (kapsuła z czerwonym kwadratem i słowem), ⌃. Rozwinięta (tylko odczyt): stan i licznik,
   preset, dwa mierniki (System audio, Microphone) z ✓, **nazwa mikrofonu pogrubiona**,
   Open note / Stop. Reduce Motion: poziom bez animacji (§7). **Bez przycisku zamknięcia
-  podczas nagrywania (D3**, odstępstwo 1, W§1). Przed startem pigułkę chowa pozycja w menu
-  Window („Hide Recording Window”). Okno pigułki dopasowane do treści, bez przezroczystego
+  podczas nagrywania (D3**, odstępstwo 1, W§1). Stan „przed startem” na `b-pill.png` jest
+  nieaktualny — patrz odbiór 2026-10-16 niżej. Okno pigułki dopasowane do treści, bez przezroczystego
   marginesu łapiącego kliknięcia.
   **Odbiór 2026-10-16 (uwagi 3–4):**
   - okno przezroczyste, bez własnego tła; cień z kształtu treści (promień 20), żadnych
@@ -441,9 +441,10 @@ w dolnym pasku, jak na `b-add.png`.
     o stałej szerokości; rozmiar zmienia się tylko przy zmianie stanu, zakotwiczony w jednym rogu;
   - **przesuwanie za tło** (nie za przyciski), pozycja zapamiętana między uruchomieniami,
     domyślnie dół ekranu, środek;
-  - **gdy nie nagrywa: widoczny mały ✕** (nie tylko po najechaniu) chowa pigułkę. Podczas
-    nagrywania ✕ nie ma (D3). Pigułka wraca przy starcie nagrania albo z menu Window
-    („Show Recording Window”).
+  - **pigułka jest widoczna tylko podczas nagrywania** (decyzja użytkownika 2026-10-16, zastępuje
+    wcześniejszy pomysł z ✕): pojawia się przy starcie nagrania, znika po Stop. Stan „przed
+    startem” (preset ⌄ + Record) i pozycja „Hide Recording Window” odpadają; nagranie zaczyna
+    się z karty „Record a meeting” w oknie. Podczas nagrywania nadal bez przycisku zamknięcia (D3).
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
