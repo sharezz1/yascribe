@@ -89,12 +89,12 @@ final class RecordingController {
         hidePanel()
     }
 
-    /// Pigułka jest widoczna tylko podczas nagrywania (odbiór 2026-10-16): pokazuje ją start nagrania,
-    /// chowa `finish`. Ponowne wywołanie (Cmd-Opt-R) wynosi ją na wierzch i wciąga z powrotem na ekran.
+    /// Pigułka w trybie nagrania jest widoczna tylko podczas nagrywania (odbiór 2026-10-16): pokazuje ją start nagrania
+    /// (`AppModel.startRecording`), chowa `finish`; pozycja menu ma `.disabled(!isRecording)`. Okno nie sprawdza już `isRecording`
+    /// (T8, żeby żyło też bez nagrania). Ponowne wywołanie (Cmd-Opt-R) wynosi je na wierzch i wciąga z powrotem na ekran.
     func showPanel(model: AppModel) {
-        guard isRecording else { return }
         if panel == nil { panel = makePanel(model: model, pill: pill) }
-        guard let panel, let host = panel.contentView as? PillHostingView<RecordingPanelView> else { return }
+        guard let panel, let host = panel.contentView as? PillHostingView<PillContentView> else { return }
         host.fit(placing: !panel.isVisible)
         panel.orderFrontRegardless()
     }
@@ -108,6 +108,7 @@ final class RecordingController {
 /// Stan rozwinięcia pigułki; rozmiar okna zmienia się tylko razem z nim (`PillHostingView`).
 final class PillState: ObservableObject {
     @Published var expanded = false
+    @Published var mode: PillMode = .recording
 }
 
 /// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia), a treść ma stały
@@ -218,7 +219,7 @@ extension RecordingController {
     /// 🔀 Odstępstwa 1 i 2 (`docs/design/macos.md` §10): okno zostaje na wierzchu, gdy aktywny
     /// jest Teams, i klik w nie nie odbiera fokusu spotkaniu.
     fileprivate func makePanel(model: AppModel, pill: PillState) -> NSPanel {
-        let host = PillHostingView(rootView: RecordingPanelView(model: model, pill: pill), pill: pill)
+        let host = PillHostingView(rootView: PillContentView(model: model, pill: pill), pill: pill)
         let p = PillPanel(contentRect: NSRect(origin: .zero, size: host.fittingSize),
                           styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.title = "Recording" // nie widać, ale czyta go VoiceOver i menu Window
