@@ -81,6 +81,47 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct MeetingSettings: Codable, Equatable, Sendable {
+    /// Włączyć detekcję rozmów Teams (nigdy samego kalendarza do auto-startu).
+    public var detectCalls: Bool?
+    /// Automatycznie nagrywaj rozmowę Teams (tylko, nigdy samo wydarzenie kalendarza).
+    public var autoStart: Bool?
+    /// Uruchamiaj aplikację przy logowaniu.
+    public var launchAtLogin: Bool?
+    /// Włączyć dostęp do Kalendarza Apple.
+    public var appleCalendarEnabled: Bool?
+    /// ID kalendarzy Apple do śledzenia; `nil` = wszystkie dostępne.
+    public var calendarIDs: [String]?
+    /// Nadpisanie progu dla ciągłego użycia mikrofonu rozmowy, zanim padnie oferta (sekundy; `nil` = domyślny z T0).
+    public var startSeconds: Double?
+    /// Nadpisanie progu dla zwolnienia mikrofonu (sekundy; `nil` = domyślny).
+    public var releaseSeconds: Double?
+    /// Nadpisanie progu dla ciszy (sekundy; `nil` = domyślny).
+    public var silenceSeconds: Double?
+    /// Aplikacje do ignorowania przy detekcji (np. dyktowanie).
+    public var ignoredApps: [String]?
+
+    public init(detectCalls: Bool? = nil, autoStart: Bool? = nil, launchAtLogin: Bool? = nil,
+                appleCalendarEnabled: Bool? = nil, calendarIDs: [String]? = nil,
+                startSeconds: Double? = nil, releaseSeconds: Double? = nil, silenceSeconds: Double? = nil,
+                ignoredApps: [String]? = nil) {
+        self.detectCalls = detectCalls
+        self.autoStart = autoStart
+        self.launchAtLogin = launchAtLogin
+        self.appleCalendarEnabled = appleCalendarEnabled
+        self.calendarIDs = calendarIDs
+        self.startSeconds = startSeconds
+        self.releaseSeconds = releaseSeconds
+        self.silenceSeconds = silenceSeconds
+        self.ignoredApps = ignoredApps
+    }
+
+    public var detectCallsOrDefault: Bool { detectCalls ?? true }
+    public var autoStartOrDefault: Bool { autoStart ?? false }
+    public var launchAtLoginOrDefault: Bool { launchAtLogin ?? false }
+    public var appleCalendarOrDefault: Bool { appleCalendarEnabled ?? false }
+}
+
 public struct GlobalSettings: Codable, Equatable, Sendable {
     /// Jeden model embeddingu dla całego archiwum (P13).
     public var embedding: RoleAssignment?
@@ -92,16 +133,19 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var keepAudioDays: Int?
     /// `true` = audio zostaje na zawsze. Osobna flaga, bo żadna liczba dni nie może znaczyć „nigdy” (0 skasowałoby wszystko).
     public var keepAudioForever: Bool?
+    /// Ustawienia detekcji spotkań i kalendarza (opcjonalne, E6).
+    public var meetings: MeetingSettings?
 
     public static let defaultKeepAudioDays = 30
 
     public init(embedding: RoleAssignment? = nil, defaultPresetID: UUID? = nil, recordingsPath: String? = nil,
-                keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil) {
+                keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil, meetings: MeetingSettings? = nil) {
         self.embedding = embedding
         self.defaultPresetID = defaultPresetID
         self.recordingsPath = recordingsPath
         self.keepAudioDays = keepAudioDays
         self.keepAudioForever = keepAudioForever
+        self.meetings = meetings
     }
 
     /// Retencja audio w dniach; `nil` = Forever (nic nie kasujemy). Co najmniej 1 dzień.
