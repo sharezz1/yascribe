@@ -423,14 +423,7 @@ struct RecordingPanelView: View {
     /// Zamknięte okno WindowGroup znika z `NSApp.windows` (sonda), więc wtedy otwieramy nowe; ono pokazuje już ustawioną sesję.
     private func openNote(_ rec: RecordingController) {
         model.go(to: .forRecording(directory: rec.directory))
-        NSApp.activate()
-        if let w = NSApp.windows.first(where: { !($0 is NSPanel) && !$0.isSheet && ($0.canBecomeMain || $0.isMiniaturized) }) {
-            if w.isMiniaturized { w.deminiaturize(nil) }
-            w.makeKeyAndOrderFront(nil)
-            w.orderFrontRegardless() // gdyby system odmówił aktywacji (Teams na pierwszym planie) — okno i tak na wierzch
-        } else {
-            openWindow(id: "main")
-        }
+        MainWindow.show(openWindow)
     }
 
     /// Głośniejsza ze ścieżek, 0…1 (−60…0 dBFS).

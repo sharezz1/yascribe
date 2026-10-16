@@ -60,6 +60,10 @@ struct MeetNotesApp: App {
                     .disabled(model.openItem.map { !model.canDelete($0) } ?? true)
             }
         }
+        // Aplikacja żyje po zamknięciu okna (SwiftUI nie kończy jej po ostatnim oknie); ikona w Docku zostaje.
+        MenuBarExtra("MeetNotes", systemImage: "waveform") {
+            MenuBarMenu().environment(model)
+        }
     }
 }
 
