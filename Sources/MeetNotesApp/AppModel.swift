@@ -210,9 +210,9 @@ final class AppModel {
     }
 
     /// `nil` = dodano; tekst = powód odmowy (duplikat nazwy albo błąd pęku kluczy).
-    func addProvider(name: String, baseURL: URL, key: String) -> String? {
+    func addProvider(name: String, baseURL: URL, key: String, kind: ProviderKind? = nil) -> String? {
         if let e = providers.nameError(name) { return e }
-        let p = Provider(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL)
+        let p = Provider(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL, kind: kind)
         do {
             if !key.isEmpty { try secrets.set(p.id, key) }
             providers.providers.append(p)
@@ -230,6 +230,14 @@ final class AppModel {
         do { if !key.isEmpty { try secrets.set(id, key) } } catch { return "Couldn't store the key in Keychain: \(error)" }
         Task { await verifyProvider(id) }
         return nil
+    }
+
+    /// „Test connection" w arkuszu PRZED zapisem: klient z kluczem z pola (w pamięci, nic nie trafia do pęku kluczy).
+    /// ElevenLabs: klienta tworzy `makeClient` z zapisanego klucza, więc przed zapisem testu nie ma (`nil`) — arkusz weryfikuje po Save.
+    nonisolated static func testConnection(baseURL: URL, kind: ProviderKind?, key: String) async -> ProviderCheck? {
+        guard (kind ?? .openAICompatible) == .openAICompatible else { return nil }
+        let p = Provider(name: "test", baseURL: baseURL)
+        return await OpenAICompatibleClient(provider: p, key: key.isEmpty ? nil : key).verify()
     }
 
     func removeProvider(_ id: UUID) {
