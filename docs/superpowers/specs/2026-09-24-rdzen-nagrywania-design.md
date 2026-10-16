@@ -190,6 +190,13 @@ Koszt miejsca dla sesji 85-minutowej:
 Kompresja do Opusa jest osobnym, wznawialnym krokiem po sesji. Oryginały kasuje wyłącznie
 jawna polityka retencji — domyślnie nie kasuje ich nic.
 
+✏️ **Uzgodnienie 2026-10-16 (decyzja użytkownika, macos.md §11.5 „Recordings”):** polityka retencji
+istnieje i ma domyślny termin — „Keep audio” 7 / 14 / **30 (domyślnie)** / 90 dni / Forever. Po terminie
+kasowane są **tylko** `*.caf` sesji (transkrypt, notatki, My notes, dziennik i meta zostają), a sesja
+dostaje znacznik `audio-deleted.json` (`afterDays`, `deletedAt`). Audio sesji bez ukończonej transkrypcji
+(najnowszy przebieg bez transkryptu albo z lukami), nagrywanej lub przetwarzanej nie jest kasowane. Wiek
+liczony od `wallClock` zdarzenia `session.started`. Kod: `MeetNotesNotes/Recordings.swift` (`AudioRetention`).
+
 ⚠️ Mikrofon w 16 kHz mono to decyzja świadoma: tyle chce ASR, a kanał mikrofonu nie służy
 do odsłuchu. Jeśli kiedyś ma służyć, trzeba to zmienić przed nagraniem, nie po.
 

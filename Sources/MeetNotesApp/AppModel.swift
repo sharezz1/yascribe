@@ -39,6 +39,9 @@ struct SessionItem: Identifiable, Equatable {
     var runID: String?
     var corrected: CorrectedTranscript?
     var notes = SessionNotes()
+    /// Retencja usunęła audio po tylu dniach (`<sesja>/audio-deleted.json`); `nil` = audio nie było kasowane.
+    /// Widok spotkania: „Audio deleted after N days”, bez odtwarzania i ponownej transkrypcji.
+    var audioDeletedAfterDays: Int?
 
     /// Ręczny > auto > tytuł z notatki > „Untitled meeting".
     var title: String { NoteTitle.display(meta: notes.meta, noteTitle: notes.summary?.title) }
@@ -92,6 +95,7 @@ final class AppModel {
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
         notes.onChange = { [weak self] in self?.reloadSessions() }
+        applyRetention()
     }
 
     var activePreset: Preset? {
@@ -127,6 +131,96 @@ final class AppModel {
         reloadSessions()
     }
 
+    // MARK: Nagrania: lokalizacja i retencja audio (macos.md §11.5, Recordings)
+
+    /// Folder ze wszystkimi spotkaniami: z ustawień albo `<dane>/sessions`.
+    var sessionsDirectory: URL { settings.recordingsPath.map { URL(fileURLWithPath: $0) } ?? paths.sessions }
+    /// Postęp trwającego przenoszenia (`nil` = nic się nie przenosi).
+    private(set) var recordingsMove: RecordingsMove.Progress?
+    /// Wynik ostatniego przenoszenia: `moved` + szczegół (powód błędu albo resztki, których nie dało się usunąć).
+    private(set) var recordingsMoveResult: (moved: Bool, detail: String?)?
+    /// Rozmiar folderu nagrań w bajtach (nagłówek sekcji); `nil` = jeszcze nie policzony.
+    private(set) var recordingsSize: Int64?
+
+    /// Sesje, których katalogi są w użyciu (nagrywanie, transkrypcja, korekta, tytuł, notatka).
+    private var busySessions: Set<String> {
+        var s = transcribing.union(notes.correcting).union(notes.titling)
+        s.formUnion(notes.generation.filter { $0.value == .generating }.keys)
+        if let d = recording.directory { s.insert(d.lastPathComponent) }
+        return s
+    }
+
+    /// Powód, dla którego teraz nie wolno zmienić lokalizacji; `nil` = wolno.
+    var recordingsMoveBlocked: String? {
+        let busy = !transcribing.isEmpty || !notes.correcting.isEmpty || !notes.titling.isEmpty
+            || notes.generation.values.contains(.generating)
+        return RecordingsMove.blocked(recording: recording.isRecording, busy: busy, moving: recordingsMove != nil)
+    }
+
+    /// Przy starcie i po zmianie „Keep audio”. Nie w trybie migawek i nie w trakcie przenoszenia.
+    func applyRetention() {
+        guard Snapshots.directory == nil, recordingsMove == nil else { return }
+        let r = AudioRetention.apply(sessions: sessionsDirectory, days: settings.audioRetentionDays, skip: busySessions)
+        if !r.errors.isEmpty { lastError = "Couldn't delete old audio: " + r.errors.joined(separator: "\n") }
+        if !r.purged.isEmpty { reloadSessions(); refreshRecordingsSize() }
+    }
+
+    /// `days == nil` = Forever.
+    func setKeepAudio(days: Int?) {
+        settings.keepAudioForever = days == nil ? true : nil
+        settings.keepAudioDays = days
+        save()
+        applyRetention()
+    }
+
+    func refreshRecordingsSize() {
+        let dir = sessionsDirectory
+        Task.detached {
+            let size = RecordingsMove.size(of: dir)
+            await MainActor.run { self.recordingsSize = size }
+        }
+    }
+
+    /// Kopia → weryfikacja → przełączenie i zapis ustawień → usunięcie starych. Przy błędzie nic nie jest usuwane.
+    func changeRecordingsLocation(to new: URL) {
+        recordingsMoveResult = nil
+        let old = sessionsDirectory
+        if let reason = recordingsMoveBlocked ?? RecordingsMove.destinationRefusal(from: old, to: new) {
+            recordingsMoveResult = (false, reason)
+            return
+        }
+        recordingsMove = RecordingsMove.Progress(phase: .copying, done: 0, total: 0)
+        let isDefault = new.standardizedFileURL.path == paths.sessions.standardizedFileURL.path
+        Task.detached {
+            let outcome: (Bool, String?)
+            do {
+                let leftovers = try await RecordingsMove.run(from: old, to: new, progress: { p in
+                    Task { @MainActor in if self.recordingsMove != nil { self.recordingsMove = p } }
+                }, commit: {
+                    try await MainActor.run {
+                        let previous = self.settings
+                        self.settings.recordingsPath = isDefault ? nil : new.path
+                        do { try JSONFile.save(self.settings, to: self.paths.settings) } catch {
+                            self.settings = previous
+                            throw error
+                        }
+                    }
+                })
+                outcome = leftovers.isEmpty
+                    ? (true, nil)
+                    : (true, "Couldn't remove these from the old folder: \(leftovers.joined(separator: ", ")). The copies in the new folder are complete.")
+            } catch {
+                outcome = (false, "\(error)")
+            }
+            await MainActor.run {
+                self.recordingsMove = nil
+                self.recordingsMoveResult = outcome
+                self.reloadSessions()
+                self.refreshRecordingsSize()
+            }
+        }
+    }
+
     func save() {
         do {
             try JSONFile.save(providers, to: paths.providers)
@@ -140,7 +234,7 @@ final class AppModel {
 
     func reloadSessions() {
         let fm = FileManager.default
-        let dirs = (try? fm.contentsOfDirectory(at: paths.sessions, includingPropertiesForKeys: nil)) ?? []
+        let dirs = (try? fm.contentsOfDirectory(at: sessionsDirectory, includingPropertiesForKeys: nil)) ?? []
         sessions = dirs.compactMap { url -> SessionItem? in
             let sd = SessionDirectory(url: url)
             guard fm.fileExists(atPath: sd.journalURL.path) else { return nil }
@@ -150,6 +244,7 @@ final class AppModel {
             var item = SessionItem(url: url, summary: summary, startedAt: summary?.wallClock ?? .distantPast,
                                    transcript: run?.transcript, runID: run?.id)
             item.corrected = Self.loadCorrected(url, run?.id)
+            item.audioDeletedAfterDays = AudioDeletion.read(url)?.afterDays
             item.notes = SessionNotes(myNotes: store.readMyNotes(), meta: store.readMeta(),
                                       summary: (try? store.readSummary()) ?? nil, problems: store.problems())
             return item
@@ -334,13 +429,17 @@ final class AppModel {
             lastError = "A recording is already in progress."
             return
         }
+        guard recordingsMove == nil else {
+            lastError = "Meetings are being moved to a new folder. Record when that finishes."
+            return
+        }
         // ChatGPT #2: preset — z językiem — ustalony PRZED startem i zamrożony na całą sesję.
         guard let preset = activePreset, (try? preset.validate()) != nil else {
             lastError = "Choose a preset with a language before recording."
             section = .presets
             return
         }
-        let dir = paths.sessions.appendingPathComponent(Self.sessionName(Date()))
+        let dir = sessionsDirectory.appendingPathComponent(Self.sessionName(Date()))
         do {
             try recording.start(directory: dir, presetLabel: Self.label(preset)) { [weak self] _ in
                 Task { @MainActor in
@@ -443,6 +542,16 @@ final class AppModel {
         let id = sessionURL.lastPathComponent
         guard !transcribing.contains(id) else {
             lastError = "This recording is already being transcribed."
+            return
+        }
+        guard recordingsMove == nil else {
+            lastError = "Meetings are being moved to a new folder. Transcribe when that finishes."
+            return
+        }
+        // Bez audio przebieg utworzyłby pusty `runs/<id>/`, który przesłoniłby gotowy transkrypt (najnowszy przebieg wygrywa).
+        guard !AudioRetention.audioFiles(sessionURL).isEmpty else {
+            let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""
+            lastError = "This meeting's audio was deleted\(days), so it can't be transcribed again."
             return
         }
         transcribing.insert(id)

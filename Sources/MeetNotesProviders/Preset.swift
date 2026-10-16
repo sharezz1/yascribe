@@ -85,10 +85,28 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     /// Jeden model embeddingu dla całego archiwum (P13).
     public var embedding: RoleAssignment?
     public var defaultPresetID: UUID?
+    /// Folder ze wszystkimi spotkaniami (ścieżka, nie `URL` — Codable `URL` pisze obiekt). `nil` = `<dane>/sessions`.
+    /// Opcjonalne (E6), jak oba pola niżej.
+    public var recordingsPath: String?
+    /// Ile dni trzymać audio spotkania; `nil` = `defaultKeepAudioDays`. Czytaj przez `audioRetentionDays`.
+    public var keepAudioDays: Int?
+    /// `true` = audio zostaje na zawsze. Osobna flaga, bo żadna liczba dni nie może znaczyć „nigdy” (0 skasowałoby wszystko).
+    public var keepAudioForever: Bool?
 
-    public init(embedding: RoleAssignment? = nil, defaultPresetID: UUID? = nil) {
+    public static let defaultKeepAudioDays = 30
+
+    public init(embedding: RoleAssignment? = nil, defaultPresetID: UUID? = nil, recordingsPath: String? = nil,
+                keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil) {
         self.embedding = embedding
         self.defaultPresetID = defaultPresetID
+        self.recordingsPath = recordingsPath
+        self.keepAudioDays = keepAudioDays
+        self.keepAudioForever = keepAudioForever
+    }
+
+    /// Retencja audio w dniach; `nil` = Forever (nic nie kasujemy). Co najmniej 1 dzień.
+    public var audioRetentionDays: Int? {
+        keepAudioForever == true ? nil : max(keepAudioDays ?? Self.defaultKeepAudioDays, 1)
     }
 
     /// Zmiana modelu embeddingu przeindeksuje całe archiwum (P13) — pytamy tylko, gdy jakiś model już był.
