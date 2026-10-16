@@ -20,7 +20,7 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                                   role: "Transcription, correction and summary · hundreds of models",
                                                   kind: nil, keyPage: URL(string: "https://openrouter.ai/keys"))
     /// ElevenLabs bezpośrednio: Scribe v2, klucz w nagłówku `xi-api-key` (decyzja 2026-10-16).
-    public static let elevenLabs = ProviderPreset(id: "elevenlabs", name: "ElevenLabs", baseURL: "https://api.elevenlabs.io",
+    public static let elevenLabs = ProviderPreset(id: "elevenlabs", name: "ElevenLabs", baseURL: "https://api.elevenlabs.io/v1",
                                                   needsKey: true, note: nil,
                                                   role: "Scribe v2 transcription · direct API",
                                                   kind: .elevenLabs, keyPage: URL(string: "https://elevenlabs.io/app/settings/api-keys"))
