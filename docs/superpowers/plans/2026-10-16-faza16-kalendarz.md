@@ -2,7 +2,21 @@
 
 > **Dla wykonawców (Claude Code):** REQUIRED SUB-SKILL: `superpowers:subagent-driven-development` (rekomendowane) albo `superpowers:executing-plans`. Jedno zadanie = jedna sesja/podagent. Kroki używają pól `- [ ]`. **Start od T0 (spike); po T0 jest punkt STOP.**
 
-**Cel:** MeetNotes wykrywa początek spotkania (wydarzenie z linkiem w Kalendarzu Apple albo rozmowa ad hoc w Teams), pokazuje pigułkę z ofertą nagrywania, wykrywa koniec rozmowy (pyta albo kończy sam), nazywa notatkę nazwą wydarzenia i pozwala powiązać wydarzenie z notatką.
+**Cel:** MeetNotes wykrywa początek spotkania (wydarzenie z linkiem w Kalendarzu Apple albo rozmowa ad hoc w Teams), pokazuje pigułkę z ofertą nagrywania, wykrywa koniec rozmowy i **tylko pyta** (nigdy nie kończy sam), nazywa notatkę nazwą wydarzenia i pozwala powiązać wydarzenie z notatką.
+
+## Poza zakresem (czego ten plan NIE dostarcza)
+
+Przeczytaj przed startem — to nie błędy, tylko jawne granice (decyzje użytkownika i spec §2):
+
+- **Ad hoc poza Teams.** Meet, Zoom, Slack huddle i inne aplikacje nie wywołują pigułki ani auto-startu; dopisanie aplikacji to wpis na liście po pomiarze, nie ta faza. Teams w przeglądarce — tylko jeśli spike (T0) pokaże odróżnialny sygnał; inaczej nie.
+- **Pigułka dla spotkań stacjonarnych.** Wydarzenia bez linku do spotkania online (wizyta u lekarza, spotkanie w biurze) nie wywołują pigułki z kalendarza; zaczynasz je ręcznie i możesz przypiąć wydarzenie z listy.
+- **Oferta z kalendarza po `start + 10 min`** (okno nastawne); spóźniony start ręczny.
+- **Samoczynny koniec.** Aplikacja tylko pyta. Jedyne samoczynne zatrzymanie to istniejący bezpiecznik ciszy 600 s — i **„Continue" go nie przedłuża** (po 10 min ciszy nagranie i tak się kończy).
+- **Działanie bez uruchomionej aplikacji.** „Quit" wyłącza wykrywanie; „Launch at login" jest opcjonalne i domyślnie wyłączone.
+- **Integracje Google Calendar, Outlook, Slack** — wyłącznie wyszarzone wiersze „Coming soon", zero kodu.
+- **„Coming up" / oś nadchodzących spotkań** (W§5 oznacza ✅, ale spec 1.6 go nie obejmuje — zostaje w ROADMAP).
+- **Powiadomienia systemowe, nazwiska mówców, automatyczne zgadywanie wydarzenia dla rozmowy ad hoc, uczestnicy w promptach, zapis do kalendarza.**
+- **Gwarancje dla poczekalni Teams.** Jeśli T0 pokaże, że poczekalnia trzyma mikrofon dłużej niż `startSeconds`, nie obiecujemy braku pigułki w poczekalni — decyzja po raporcie (STOP po T0).
 
 **Architektura:** nowa biblioteka `MeetNotesMeetings` (tylko Foundation) z czystą logiką — typy, filtr wydarzeń, `OfferDetector`, `EndDetector`, ranking listy wyboru — i własnym testTargetem w `scripts/test.sh`. EventKit i lista procesów Core Audio wchodzą przez cienkie adaptery w `MeetNotesApp`; koordynator `MeetingMonitor` łączy je z detektorami i pigułką. Pola w zapisywanych typach (`NoteMeta`, `GlobalSettings`) wyłącznie opcjonalne.
 
@@ -10,7 +24,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-16-faza16-kalendarz-design.md` (commit `510750f`). Plan argumentuje ze speca; wykonawca czyta oba.
 
-**Gałąź:** `faza16`. ⚠️ Zadania T8–T9 dotykają pigułki (`RecordingController`), którą równolegle zmienia sesja 1.5b (wyciszanie torów, macos.md §11.5). Zacznij od `faza15` po zamknięciu 1.5b albo zrebase'uj przed T8; T0–T7 pigułki nie dotykają.
+**Gałąź:** przed T0 `git switch -c faza16` (od `faza15`). ⚠️ Zadania T8–T10 dotykają pigułki (`RecordingController`) i plików, które równolegle zmienia sesja 1.5b (wyciszanie torów, macos.md §11.5): `RecordingController.swift`, `AppModel.swift`, `Snapshots.swift`, `SettingsView.swift` (T7 też). T8 ma bramkę: zaczyna się dopiero po potwierdzeniu przez użytkownika, że 1.5b jest zamknięta albo po rebase; T0–T6 tych plików nie dotykają (poza `Snapshots`/`SettingsView` w T7).
 
 ## Wspólne ograniczenia
 
@@ -19,7 +33,7 @@ Obowiązują w każdym zadaniu (wartości dosłownie ze speca i z CLAUDE.md):
 - **Swift 6.4, tryb 6, tylko Command Line Tools, `swift-testing`.** SwiftUI bez `@State`, `@Entry`, `@Animatable`, `#Preview`; stan lokalny przez `ObservableObject` + `@StateObject`; `@Observable` działa.
 - **Testy wyłącznie `scripts/test.sh`**, nigdy goły `swift test`. Kody: 3 = usterka pluginu makr (`rm -rf .build`), 4 = rozjazd liczby testów (wynik NIEWAŻNY — STOP). Każdy `@Test` zaczyna linię. Katalogi tymczasowe: `mn-<UUID>` w `temporaryDirectory`.
 - **Nowe pola w zapisywanych typach (`NoteMeta`, `GlobalSettings`, nowe struktury na dysku) tylko opcjonalne** (lekcja E6). Stare `meta.json` / `settings.json` wczytują się bez zmian.
-- **Nigdy `git add -A` ani `git add .`** — jawne ścieżki. Mutacja każdej bramki: wprowadź → test pada → `git checkout <plik>`.
+- **Nigdy `git add -A` ani `git add .`** — jawne ścieżki. **Mutacja każdej bramki:** najpierw `git add` jawnych ścieżek zadania (żeby implementacja była w indeksie), potem wprowadź mutację → test ma paść → `git checkout -- <plik>` (przywraca zastage'owaną implementację; bez wcześniejszego `add` `checkout` skasowałby niezacommitowaną pracę albo zawiódł na pliku nowym) → dopiero commit.
 - **Klucze API i zgody TCC robi użytkownik.** Nie zmieniamy Ustawień systemowych, TCC ani pęku kluczy. Nie logujemy ani nie zapisujemy w repo tytułów, uczestników i adresów e-mail z kalendarza użytkownika (raporty spike'a: tylko flagi, długości, nazwy pól, bundle ID).
 - **Kalendarz tylko do odczytu** — nie tworzymy ani nie zmieniamy wydarzeń. Dane kalendarza nie trafiają do promptów ani do dostawców API.
 - **Interfejs po angielsku**, dokumenty w repo po polsku.
@@ -33,22 +47,37 @@ Obowiązują w każdym zadaniu (wartości dosłownie ze speca i z CLAUDE.md):
 Najpierw najbardziej prawdopodobne; każda linia ma test w zadaniu, które posiada kod:
 
 1. **Teams zwalnia mikrofon na chwilę w trakcie spotkania** (ponowne łączenie, przełączenie urządzenia). Oczekiwane: żadnego pytania o koniec, dopóki zwolnienie nie trwa ≥ `releaseSeconds`. `shortMicReleaseDoesNotEndTheMeeting` (T4).
-2. **Aplikacja startuje w trakcie trwającej rozmowy** (uruchomiona ręcznie albo przy logowaniu) i **rozmowa trwa godzinami po „Not a meeting"**. Oczekiwane: oferta po ≥ `startSeconds` ciągłego użycia, a po odrzuceniu cisza do końca tej sesji mikrofonu — nie wraca co minutę. `callAlreadyInProgressAtLaunchOffersAfterStartSeconds`, `dismissedOfferStaysQuietForTheWholeMicSession` (T3).
+2. **Aplikacja startuje w trakcie trwającej rozmowy** (uruchomiona ręcznie albo przy logowaniu), **rozmowa trwa godzinami po „Not a meeting"** i **Teams dalej trzyma mikrofon po Twoim Stop**. Oczekiwane: oferta po ≥ `startSeconds` ciągłego użycia; po odrzuceniu **albo po zatrzymaniu nagrania** cisza do końca tej sesji mikrofonu aplikacji (rodziny procesów, nie pojedynczego `pid`) — ani oferta, ani auto-start nie wracają. `callAlreadyInProgressAtLaunchOffersAfterStartSeconds`, `dismissedOfferStaysQuietForTheWholeMicSession`, `dismissedOfferStaysQuietAcrossHelperProcessesOfTheSameApp`, `manualStopSilencesAutoStartForTheSameCall`, `afterManualStopANewCallOffersAgain` (T3).
 3. **Dwa nakładające się spotkania z linkiem** (podwójna rezerwacja). Oczekiwane: jedna pigułka, z wydarzeniem, którego początek jest najbliższy „teraz"; bez migotania między dwoma. `overlappingEventsOfferTheOneStartingClosestToNow` (T3).
 4. **Dostęp do kalendarza cofnięty, wydarzenie usunięte lub przesunięte, gdy oferta jest na ekranie.** Oczekiwane: oferta znika (albo zostaje jako ad hoc, gdy Teams trzyma mikrofon), notatka z powiązaniem dalej pokazuje migawkę, nic nie rzuca. `offerDisappearsWhenItsEventIsRemoved` (T3), `linkSnapshotSurvivesWithoutCalendarAccess` (T1).
 5. **Ręczny start podczas trwającej rozmowy Teams i ręczny start bez żadnej rozmowy.** Oczekiwane: w pierwszym przypadku śledzimy Teams i pytamy o koniec po jego rozłączeniu; w drugim zwolnienie mikrofonu nie znaczy nic (nie było aplikacji rozmów) i pytanie pojawia się tylko po ciszy. `manualStartAdoptsACallThatStartsLater`, `manualStartWithoutACallNeverPromptsOnMicRelease` (T4).
 
 ---
 
-## Przydział modeli
+## Przydział modeli i effort
 
-| Model | Zadania |
-|---|---|
-| **Sonnet** | implementacja i testy T1–T10 |
-| **Opus** | T0 (nadzór nad spike'em i interpretacja), punkty STOP, rozbieżności kodu z planem, przegląd po T4, T6, T9, jeden przegląd całości przed scaleniem |
-| **Haiku** | `scripts/test.sh` + porównanie liczby, mutacje wg przepisu, odhaczanie `- [ ]`, edycje dokumentów |
+Opus tylko tam, gdzie błąd jest drogi albo decyzja trudna; resztę robi Sonnet, mechanikę Haiku. Effort = poziom rozumowania ustawiany w prompcie zadania i w sesji (narzędzie Agent nie ma parametru effort).
 
-Kolejność: **T0 → STOP → T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 → T9 → T10 → T11.**
+| Zadanie | Model | Effort | Dlaczego |
+|---|---|---|---|
+| T0 kod sond | Sonnet | **xhigh** | nieznane nazwy API Core Audio/EventKit w SDK 27, nic nie wolno zgadywać |
+| T0 interpretacja raportu (STOP) | **Opus** | **xhigh** | decyduje o regule OOO, progach, listach aplikacji |
+| T1 typy, `NoteMeta`, tytuły | Sonnet | medium | Codable i kolejność, pełne sygnatury w planie |
+| T2 filtr wydarzeń | Sonnet | high | reguły OOO/link, bramka fałszywego startu |
+| T3 `OfferDetector` | Sonnet | **xhigh** | maszyna stanów, najgorszy błąd użytkownika |
+| T4 `EndDetector` | Sonnet | high | czas, śledzona aplikacja; przegląd Opusa po zadaniu |
+| T5 `MeetingSettings` | Haiku | medium | opcjonalne pola, domyślne, mechaniczne |
+| T6 adaptery EventKit/Core Audio | Sonnet | high | API systemowe; przegląd Opusa po zadaniu |
+| T7 Settings UI | Sonnet | medium | wzór: `RecordingsSection` |
+| T8 prefactoring pigułki | Sonnet | high | AppKit, zachowanie bez zmian, porównanie migawek |
+| T9 stany Offer / End prompt | Sonnet | medium | UI wg wzoru pigułki |
+| T10 `MeetingMonitor` | Sonnet | **xhigh** | integracja czasu, detektorów i pigułki; przegląd Opusa po zadaniu |
+| T11 pasek menu, żywotność | Sonnet | medium | przegląd Opusa i STOP po zadaniu |
+| T12 lista wyboru wydarzenia | Sonnet | medium | ranking czysty + widok |
+| T13 odbiór, dokumenty | Haiku (dokumenty, `test.sh`) / **Opus xhigh** (przegląd całości) | medium / xhigh | przegląd całości przed scaleniem |
+| Po każdym zadaniu: `scripts/test.sh`, porównanie liczby testów, mutacje wg przepisu, odhaczanie `- [ ]` | Haiku | low | mechanika |
+
+Kolejność: **T0 → STOP → T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 (bramka 1.5b) → T9 → T10 → T11 → STOP → T12 → T13.**
 
 ---
 
@@ -68,7 +97,7 @@ Spec §5. Bez tego żadna wartość z planu nie jest stała, a reguła OOO i mie
 - [ ] **Step 1: Klucz Info.plist.** Dodaj `NSCalendarsFullAccessUsageDescription` („MeetNotes reads your calendar to recognise meetings and name your notes. It never changes your events.") i dopisz go do pętli kluczy w `scripts/check-bundle.sh`. Zweryfikuj nazwę klucza w SDK (`grep -r NSCalendarsFullAccess` w nagłówkach / dokumentacji Apple); jeśli inna — użyj właściwej i zapisz w raporcie.
 - [ ] **Step 2: Sonda `MEETNOTES_PROBE=calendar`.** `Probes.calendar()`: `requestFullAccessToEvents`, potem dla zdarzeń od −14 do +7 dni wypisuje **bez tytułów i adresów**: `isAllDay`, czas trwania w godzinach, `availability`, `status`, status uczestnictwa użytkownika, liczbę uczestników, `hasURL`, oraz **w których polach (url / location / notes) występuje wzorzec Teams/Meet/Zoom/Webex**, plus `calendarItemExternalIdentifier` obecny (tak/nie) i czy wydarzenie cykliczne.
 - [ ] **Step 3: Sonda `MEETNOTES_PROBE=audio`.** `Probes.audio()`: co 1 s czyta listę obiektów procesów Core Audio (`kAudioHardwarePropertyProcessObjectList`; per proces `kAudioProcessPropertyPID`, `…BundleID`, `…IsRunningInput`), wypisuje **zmiany** z czasem (bundle ID, wejście włączone/wyłączone). Pomija własny proces. Jeśli nazwy API w SDK macOS 27 się różnią — ustal właściwe i zapisz.
-- [ ] **Step 4: Sonda `MEETNOTES_PROBE=login`.** Rejestruje `SMAppService.mainApp`, wypisuje `status`, wyrejestrowuje; powtórz po przebudowie paczki (podpis „MeetNotes Dev").
+- [ ] **Step 4: Sonda `MEETNOTES_PROBE=login`.** Rejestruje `SMAppService.mainApp`, wypisuje `status`, wyrejestrowuje; powtórz po przebudowie paczki (podpis „MeetNotes Dev"). Zmienia to pozycje logowania w systemie, więc **uruchamia ją wyłącznie użytkownik, w swoim terminalu** (CLAUDE.md: nie zmieniamy ustawień systemowych); wykonawca tylko pisze sondę.
 - [ ] **Step 5: Scenariusze (robi użytkownik, w swoim terminalu; zgodę kalendarza klika użytkownik).** Uruchom paczkę (`scripts/bundle.sh`, potem `MEETNOTES_PROBE=… .build/MeetNotes.app/Contents/MacOS/MeetNotesApp`) i zmierz: rozmowa w nowym Teams (które bundle ID trzymają wejście), wyciszenie i wyłączenie wyciszenia, poczekalnia przed dołączeniem, rozłączenie, Teams w przeglądarce, dyktowanie Wispr Flow i systemowe — **kilka rozmów, nie jedna**. Kalendarz: wydarzenia (a) Teams, (b) OOO całodniowe, (c) OOO czasowe/wielodniowe, (d) focus time, (e) cykliczne, (f) odrzucone, (g) wizyta bez linku, (h) urodziny.
 - [ ] **Step 6: Raport.** Wypełnij `docs/superpowers/spikes/2026-10-16-faza16-wykrywanie.md`: surowe pomiary i sekcja „Wartości dla planu" (reguła OOO na polach `EKEvent`; pole linku; progi; listy aplikacji; `SMAppService` działa z podpisem tak/nie). **Bez tytułów i adresów w pliku.**
 - [ ] **Step 7: `scripts/test.sh` zielony** (check-bundle widzi nowy klucz). Commit:
@@ -123,8 +152,9 @@ git commit -m "Spike fazy 1.6: sondy kalendarza, procesów audio i uruchamiania 
 - [ ] **Step 2: Uruchom** `scripts/test.sh --filter MeetingsTests` i `--filter CalendarTitleTests` — oczekiwane: FAIL (brak typów).
 - [ ] **Step 3: Zaimplementuj** typy wg bloku Interfaces; `NoteTitle.display` bierze kolejność `[manualTitle, calendarEvent?.title, autoTitle, noteTitle]`; `AutoTitle` przy `m.calendarEvent != nil` nie zapisuje (zmiana w istniejącym warunku `manualTitle == nil && autoTitle == nil`).
 - [ ] **Step 4: `scripts/test.sh`** (pełny) — zielony, liczba się zgadza.
-- [ ] **Step 5: Mutacja:** w `display` zamień kalendarz i auto miejscami → `titleOrderIsManualThenCalendarThenAutoThenNote` pada → `git checkout Sources/MeetNotesNotes/NoteTitle.swift`.
-- [ ] **Step 6: Commit** (`git add Package.swift Sources/MeetNotesMeetings Sources/MeetNotesNotes/NoteTitle.swift Sources/MeetNotesNotes/AutoTitle.swift Tests/MeetNotesMeetingsTests Tests/MeetNotesNotesTests/CalendarTitleTests.swift`).
+- [ ] **Step 5: Zastage'uj** (jawne ścieżki): `git add Package.swift Sources/MeetNotesMeetings Sources/MeetNotesNotes/NoteTitle.swift Sources/MeetNotesNotes/AutoTitle.swift Tests/MeetNotesMeetingsTests Tests/MeetNotesNotesTests/CalendarTitleTests.swift`.
+- [ ] **Step 6: Mutacja:** w `display` zamień kalendarz i auto miejscami → `titleOrderIsManualThenCalendarThenAutoThenNote` pada → `git checkout -- Sources/MeetNotesNotes/NoteTitle.swift` (wraca zastage'owana implementacja).
+- [ ] **Step 7: Commit** (`git commit` z zastage'owanych plików; w razie potrzeby dołóż `git add` tych samych ścieżek).
 
 ---
 
@@ -158,7 +188,7 @@ Reguły `isOfferable` (wszystkie naraz): `meetingURL != nil` (szuka w `url`, `lo
 ```
 
 - [ ] **Step 2–3:** uruchom (FAIL) → zaimplementuj → uruchom (PASS). Wzorce linków jako `NSRegularExpression`-free: `String.contains` po wzorcach z `MeetingTuning.linkPatterns`.
-- [ ] **Step 4: Mutacje:** (a) usuń warunek `!isAllDay` → `allDayBirthday…` pada; (b) usuń warunek linku → `doctorsVisit…` pada; (c) usuń `availability` → `timedOutOfOffice…` pada (jeśli raport T0 pokazał, że OOO nie ma flagi dostępności — ta mutacja dotyczy innej reguły wskazanej w raporcie). Każdą cofnij `git checkout`.
+- [ ] **Step 4: Mutacje** (najpierw `git add Sources/MeetNotesMeetings/EventFilter.swift Tests/MeetNotesMeetingsTests/EventFilterTests.swift`): (a) usuń warunek `!isAllDay` → `allDayBirthday…` pada; (b) usuń warunek linku → `doctorsVisit…` pada; (c) usuń `availability` → `timedOutOfOffice…` pada (jeśli raport T0 pokazał, że OOO nie ma flagi dostępności — ta mutacja dotyczy innej reguły wskazanej w raporcie). Każdą cofnij `git checkout -- <plik>`.
 - [ ] **Step 5: `scripts/test.sh`**, commit (`EventFilter.swift`, `EventFilterTests.swift`).
 
 ---
@@ -179,7 +209,7 @@ Spec §4.2, §4.5.
   - `enum OfferAction: Equatable { case show(Offer), hide, startRecording(Offer) }`
   - `struct OfferDetector { init(tuning: MeetingTuning); mutating func step(now: Date, events: [CalendarEventInfo], processes: [AudioProcessSample], recording: Bool, callsEnabled: Bool, autoStart: Bool) -> OfferAction?; mutating func dismiss() }` — zwraca akcję tylko przy **zmianie** stanu (brak powtarzania `.show` co tik).
 
-Reguły: oferta A tylko dla `isOfferable` w oknie `[start − offerLead, start + offerGrace]`; oferta B tylko gdy bundle ID ∈ `callApps`, ∉ `ignoredApps`, wejście włączone **nieprzerwanie** ≥ `startSeconds`; A+B razem → jedna oferta `.calendarAndCall` z wydarzeniem; przy kilku wydarzeniach wygrywa to o początku najbliższym `now`; `recording == true` → brak ofert i `.hide`; `callsEnabled == false` wyłącza B (A zostaje); `autoStart == true` → `.startRecording` **tylko** dla `.call` i `.calendarAndCall`, nigdy dla `.calendar`; `dismiss()` wycisza ofertę dla bieżącej sesji mikrofonu (ten sam `pid`, ciągłe użycie) i dla tego `id` wydarzenia.
+Reguły: oferta A tylko dla `isOfferable` w oknie `[start − offerLead, start + offerGrace]`; oferta B tylko gdy bundle ID ∈ `callApps`, ∉ `ignoredApps`, wejście włączone **nieprzerwanie** ≥ `startSeconds`; A+B razem → jedna oferta `.calendarAndCall` z wydarzeniem; przy kilku wydarzeniach wygrywa to o początku najbliższym `now`; `recording == true` → brak ofert i `.hide`; `callsEnabled == false` wyłącza B (A zostaje); `autoStart == true` → `.startRecording` **tylko** dla `.call` i `.calendarAndCall`, nigdy dla `.calendar`; `dismiss()` wycisza ofertę dla bieżącej sesji mikrofonu **rodziny aplikacji** i dla tego `id` wydarzenia. „Rodzina" = wpis z `callApps` dopasowany **po prefiksie** bundle ID (`com.microsoft.teams2` obejmuje jej procesy pomocnicze); `pid` nie jest kluczem. Sesja rodziny kończy się (i wyciszenie z nią), gdy żaden jej proces nie trzyma wejścia przez ≥ `releaseSeconds`. **Zatrzymanie nagrania** (przejście `recording: true → false`, ręczne albo przez bezpiecznik) wycisza tak samo wszystkie trwające rodziny i bieżące wydarzenie — ani oferta, ani `.startRecording` nie wracają do końca tej sesji.
 
 - [ ] **Step 1: Testy (padają):**
 
@@ -201,15 +231,19 @@ Reguły: oferta A tylko dla `isOfferable` w oknie `[start − offerLead, start +
 @Test func autoStartFiresForACall()                              // autoStart: true + Teams ≥ startSeconds → .startRecording(.call)
 @Test func autoStartFiresForCalendarPlusCall()
 @Test func dismissedOfferStaysQuietForTheWholeMicSession()       // po dismiss(): 2 h ciągłego użycia → nigdy .show
-@Test func dismissedOfferReturnsForANewMicSession()              // Teams zwalnia, po minucie znów ≥ startSeconds → .show
+@Test func dismissedOfferReturnsForANewMicSession()              // Teams zwalnia na ≥ releaseSeconds, potem znów ≥ startSeconds → .show
+@Test func dismissedOfferStaysQuietAcrossHelperProcessesOfTheSameApp() // po dismiss() wejście przechodzi z `com.microsoft.teams2` na `com.microsoft.teams2.helper` (inny pid) → nigdy .show
+@Test func dismissedEventStaysQuietForTheSameEvent()             // po dismiss() oferty z wydarzenia: to samo `id` w oknie → nigdy .show; inne wydarzenie → .show
+@Test func manualStopSilencesAutoStartForTheSameCall()           // autoStart: true; nagranie trwało (recording: true), potem recording: false, Teams nadal trzyma wejście → żadnego .startRecording ani .show przez 2 h
+@Test func afterManualStopANewCallOffersAgain()                  // po Stop Teams zwalnia ≥ releaseSeconds, znów ≥ startSeconds → .startRecording (autoStart) / .show
 @Test func callAlreadyInProgressAtLaunchOffersAfterStartSeconds()
 @Test func offerDisappearsWhenItsEventIsRemoved()                // ofertę z wydarzenia A + zdarzenie znika z `events` → .hide
 @Test func recordingSuppressesOffers()
 @Test func callsDisabledKeepsCalendarOffers()
 ```
 
-- [ ] **Step 2–3:** FAIL → implementacja (stan: `micSince: [Int32: Date]`, `dismissedPIDs`, `dismissedEventIDs`, `currentOffer`) → PASS.
-- [ ] **Step 4: Mutacje:** (a) `autoStart` także dla `.calendar` → `autoStartNeverFiresOnCalendarAlone` pada; (b) `startSeconds` ignorowane → `lobbyBlip…` pada; (c) `dismiss()` czyści tylko do następnego tiku → `dismissedOffer…WholeMicSession` pada. Cofnij każdą.
+- [ ] **Step 2–3:** FAIL → implementacja (stan: `micSince: [String: Date]` kluczowany rodziną aplikacji, `dismissedFamilies: Set<String>`, `dismissedEventIDs`, `wasRecording`, `currentOffer`) → PASS.
+- [ ] **Step 4: Mutacje** (najpierw `git add` plików zadania): (a) `autoStart` także dla `.calendar` → `autoStartNeverFiresOnCalendarAlone` pada; (b) `startSeconds` ignorowane → `lobbyBlip…` pada; (c) `dismiss()` czyści tylko do następnego tiku → `dismissedOffer…WholeMicSession` pada; (d) klucz rodziny zastąpiony `pid` → `…AcrossHelperProcesses…` pada; (e) pomiń wyciszenie przy przejściu `recording true → false` → `manualStopSilencesAutoStart…` pada. Cofnij każdą `git checkout -- <plik>`.
 - [ ] **Step 5: `scripts/test.sh`**, commit.
 
 ---
@@ -252,7 +286,7 @@ Reguły: „śledzona" aplikacja = `callApps`, która trzymała wejście w trakc
 ```
 
 - [ ] **Step 2–3:** FAIL → implementacja → PASS.
-- [ ] **Step 4: Mutacje:** (a) pomiń `releaseSeconds` (prompt przy pierwszym tiku bez wejścia) → `shortMicRelease…` pada; (b) śledź też aplikacje spoza `callApps` → `manualStartWithoutACall…` pada; (c) pomiń `snoozeSeconds` → `continueSnoozes…` pada. Cofnij każdą.
+- [ ] **Step 4: Mutacje** (najpierw `git add` plików zadania): (a) pomiń `releaseSeconds` (prompt przy pierwszym tiku bez wejścia) → `shortMicRelease…` pada; (b) śledź też aplikacje spoza `callApps` → `manualStartWithoutACall…` pada; (c) pomiń `snoozeSeconds` → `continueSnoozes…` pada. Cofnij każdą.
 - [ ] **Step 5: `scripts/test.sh`**, commit (`EndDetector.swift`, `EndDetectorTests.swift`). `EndReason` i rdzeń nagrywania **bez zmian**.
 
 ---
@@ -270,7 +304,7 @@ Spec §4.1.
 - Produces: `struct MeetingSettings: Codable, Equatable, Sendable` — wszystkie pola `Bool?`/`String?`/`Double?`: `appleCalendarEnabled`, `calendarIDs: [String]?` (`nil` = wszystkie), `detectCalls`, `autoStart`, `launchAtLogin`, nadpisania progów (`startSeconds`, `releaseSeconds`, `silenceSeconds`), `ignoredApps: [String]?`; akcesory z domyślnymi: `var detectCallsOrDefault: Bool` (true), `autoStartOrDefault` (false), `launchAtLoginOrDefault` (false), `appleCalendarOrDefault` (false). `GlobalSettings.meetings` opcjonalne.
 
 - [ ] **Step 1: Testy (padają):** `oldSettingsJSONWithoutMeetingsDecodes`; `defaultsMatchTheSpec` (calls true, autoStart false, login false, calendar false); `overridesFlowIntoTuning` (w `MeetNotesApp` nie ma testTargetu — test `MeetingTuning`-mapowania wykonaj na czystej funkcji w `MeetNotesProviders`: `MeetingSettings.tuningValues` zwraca krotkę liczb, a `init(settings:)` tylko ją przepisuje).
-- [ ] **Step 2–4:** FAIL → implementacja → `scripts/test.sh` zielony. Mutacja: `autoStartOrDefault` zwraca `true` → `defaultsMatchTheSpec` pada → `git checkout`.
+- [ ] **Step 2–4:** FAIL → implementacja → `scripts/test.sh` zielony. Mutacja: po `git add` plików zadania: `autoStartOrDefault` zwraca `true` → `defaultsMatchTheSpec` pada → `git checkout -- <plik>`.
 - [ ] **Step 5: Commit.**
 
 ---
@@ -279,20 +313,23 @@ Spec §4.1.
 
 **Files:**
 - Create: `Sources/MeetNotesApp/EventKitCalendar.swift`, `Sources/MeetNotesApp/AudioProcessMonitor.swift`
-- Create: `Sources/MeetNotesMeetings/Providers.swift` (protokoły `CalendarSource`, `AudioProcessSource`)
-- Test: `Tests/MeetNotesMeetingsTests/EventMappingTests.swift` (tylko czysta część mapowania)
+- Create: `Sources/MeetNotesMeetings/Sources.swift` (protokoły `CalendarSource`, `AudioProcessSource`; nazwa pliku bez kolizji z modułem `MeetNotesProviders`)
+- Create: `Sources/MeetNotesMeetings/EventMapping.swift` (czysta funkcja mapowania z `EventFields`)
+- Test: `Tests/MeetNotesMeetingsTests/EventMappingTests.swift` (istniejący testTarget z T1; tylko czysta część mapowania)
 
 **Interfaces:**
+- Consumes: `CalendarEventInfo`, `CalendarLink.Attendee` (T1), `AudioProcessSample` (T3).
 - Produces:
   - `protocol CalendarSource: Sendable { func authorization() -> CalendarAuthorization; func requestAccess() async -> Bool; func calendars() -> [CalendarInfo]; func events(from: Date, to: Date, calendarIDs: [String]?) -> [CalendarEventInfo]; var changes: AsyncStream<Void> { get } }`; `enum CalendarAuthorization { notDetermined, granted, denied }`; `struct CalendarInfo: Identifiable, Equatable, Sendable { id: String; title: String }`.
   - `protocol AudioProcessSource: Sendable { func snapshot() -> [AudioProcessSample] }`.
   - `EventKitCalendar: CalendarSource` (`EKEventStore`, `requestFullAccessToEvents`, `.EKEventStoreChanged`); `AudioProcessMonitor: AudioProcessSource` (Core Audio, nazwy API ustalone w T0, **wyklucza własny PID**).
-  - Mapowanie `EKEvent → CalendarEventInfo` jako czysta funkcja przyjmująca prosty struct pól (`EventFields`), żeby dało się ją testować bez EventKit; pola `availability`/`status`/uczestnik mapowane wg raportu T0.
+  - `struct EventFields: Sendable` (surowe pola wydarzenia jako proste wartości: czas, flagi, liczby i teksty zamiast typów EventKit) i `enum EventMapping { static func map(_ f: EventFields) -> CalendarEventInfo }` w `MeetNotesMeetings` — dzięki temu mapowanie testuje się bez EventKit; pola `availability`/`status`/uczestnik mapowane wg raportu T0. Adapter w `MeetNotesApp` tylko wypełnia `EventFields` z `EKEvent`.
 
 - [ ] **Step 1: Testy mapowania (padają):** `unavailableAvailabilityMapsToUnavailable`, `declinedParticipantMapsToDeclined`, `recurringEventKeepsExternalIDAndOccurrenceStart`, `missingFieldsDoNotCrash` (wszystkie pola `nil`).
-- [ ] **Step 2–4:** FAIL → implementacja → PASS. Adaptery EventKit/Core Audio nie mają testu jednostkowego (system); weryfikuje je sonda z T0 i odbiór w T11. **Brak dostępu do kalendarza → `events` zwraca `[]`, nic nie rzuca** (Review Focus 4).
-- [ ] **Step 5: Przegląd Opusa** (po T6): czy adapter nie loguje tytułów, czy własny proces jest wykluczony, czy `changes` nie przecieka.
-- [ ] **Step 6: Commit.**
+- [ ] **Step 2–4:** FAIL → implementacja → PASS. Adaptery EventKit/Core Audio nie mają testu jednostkowego (system); weryfikuje je sonda z T0 i odbiór w T13. **Brak dostępu do kalendarza → `events` zwraca `[]`, nic nie rzuca** (Review Focus 4).
+- [ ] **Step 5: Mutacja** (najpierw `git add` plików zadania): w `EventMapping` odwróć mapowanie `declined` → `accepted` (albo `unavailable` → `busy`) → `declinedParticipantMapsToDeclined` (`unavailableAvailabilityMapsToUnavailable`) pada → `git checkout -- <plik>`. Mapowanie jest bramką filtra OOO/odrzuconych (CLAUDE.md: mutacja każdej bramki).
+- [ ] **Step 6: Przegląd Opusa** (po T6): czy adapter nie loguje tytułów, czy własny proces jest wykluczony, czy `changes` nie przecieka.
+- [ ] **Step 7: Commit.**
 
 ---
 
@@ -311,56 +348,91 @@ Spec §4.1. Interfejs po angielsku; wzór wyglądu: istniejące sekcje (`Section
 
 - [ ] **Step 1: Sekcja Integrations:** Apple Calendar (przełącznik Connect + lista kalendarzy z polami wyboru, domyślnie wszystkie) oraz wyszarzone wiersze Google Calendar, Outlook, Slack z „Coming soon" (`.disabled(true)`, bez żadnego kodu integracji).
 - [ ] **Step 2: Sekcja Meeting detection:** *Detect calls*, *Start recording automatically* (pod nim jedna linijka: „Starts only for calls in Teams, never for a calendar event alone."), *Launch at login* (z linijką „Without it, detection starts when you open MeetNotes."), zwijane *Advanced* (progi i lista ignorowanych aplikacji z wartościami domyślnymi widocznymi jako placeholdery).
-- [ ] **Step 3: Zapis** przez istniejący mechanizm `settings` (Save/Cancel jak w pozostałych sekcjach; `SettingsDraft`).
+- [ ] **Step 3: Zapis** jak w `RecordingsSection` (nie `SettingsDraft` — ten obsługuje tylko „Archive search"): przełączniki zmieniają `model.settings.meetings` i zapisują od razu istniejącym mechanizmem zapisu ustawień; Connect zapisuje stan po odpowiedzi systemu. Bez Save/Cancel dla tych sekcji.
 - [ ] **Step 4: Weryfikacja ręczna:** `scripts/run.sh`, otwórz Settings, sprawdź sekcje w jasnym i ciemnym trybie, wiersze „Coming soon" nie reagują; zrób migawki narzędziem `Snapshots`.
 - [ ] **Step 5: `scripts/test.sh`**, commit.
 
 ---
 
-### Task 8: Pigułka — stany Offer i End prompt, start z oferty, zapis powiązania
+### Task 8: Prefactoring pigułki — okno niezależne od nagrywania
 
-Spec §4.4. **Wymaga zakończonej 1.5b albo rebase** (patrz nagłówek).
+Spec §4.4. Czysty refaktor: zachowanie podczas nagrywania **bez zmian**. Dziś pigułka istnieje tylko podczas nagrania: `showPanel` ma guard `isRecording`, `PillHostingView` jest typowany na jeden widok, a `finish()` chowa okno — stany Offer i End prompt (T9) wymagają okna, które żyje bez nagrywania.
+
+**🛑 Bramka 1.5b:** zadanie zaczyna się dopiero, gdy użytkownik potwierdzi, że 1.5b (wyciszanie torów) jest zamknięta, a `faza16` jest od niej (albo po rebase). Pliki narażone na konflikt: `RecordingController.swift`, `AppModel.swift`, `Snapshots.swift`, `SettingsView.swift`. Bez potwierdzenia — STOP.
 
 **Files:**
-- Modify: `Sources/MeetNotesApp/RecordingController.swift` (stan pigułki: `idle / offer(Offer) / recording / endPrompt`), `Sources/MeetNotesApp/AppModel.swift` (`startRecording(offer:)`)
+- Modify: `Sources/MeetNotesApp/RecordingController.swift`, `Sources/MeetNotesApp/Snapshots.swift`
+
+**Interfaces:**
+- Consumes: `Offer` (T3), `EndSignal` (T4).
+- Produces: `enum PillMode: Equatable { case recording; case offer(Offer); case endPrompt(EndSignal) }`; `PillState.mode: PillMode` (domyślnie `.recording`); `RecordingController.showPanel(model:)` bez guardu `isRecording` (guard przeniesiony do wywołań z menu, które już mają `.disabled(!isRecording)`); `hidePanel()` wołane, gdy nagranie się kończy **albo** oferta/pytanie zostaje zdjęte; treść okna wybierana przez `mode` (gałąź `.recording` = dotychczasowy `RecordingPanelView`, bez zmian).
+
+- [ ] **Step 1: Potwierdzenie bramki 1.5b** (użytkownik) i `git status` czysty.
+- [ ] **Step 2: Zrzuty referencyjne.** Zrób migawki pigułki narzędziem `Snapshots` (zwinięta i rozwinięta) **przed** refaktorem i zachowaj je w scratchpadzie.
+- [ ] **Step 3: Refaktor** wg bloku Interfaces; gałęzie `.offer` i `.endPrompt` na razie renderują pusty widok zastępczy (treść w T9).
+- [ ] **Step 4: Weryfikacja zachowania.** `scripts/test.sh` zielony, liczba testów bez zmian; migawki pigułki po refaktorze identyczne z referencyjnymi; `scripts/run.sh`: Start nagrania → pigułka wygląda i działa jak dotąd, Stop → okno znika.
+- [ ] **Step 5: Commit** (`RecordingController.swift`, `Snapshots.swift` — jawne ścieżki).
+
+---
+
+### Task 9: Pigułka — stany Offer i End prompt, start z oferty, zapis powiązania
+
+Spec §4.4.
+
+**Files:**
+- Modify: `Sources/MeetNotesApp/RecordingController.swift` (treść gałęzi `.offer` i `.endPrompt`, metody poniżej), `Sources/MeetNotesApp/AppModel.swift` (`startRecording(offer:)`)
 - Modify: `Sources/MeetNotesApp/Snapshots.swift` (migawki Offer i End prompt)
 
 **Interfaces:**
-- Consumes: `Offer` (T3), `EndSignal` (T4), `CalendarLink` (T1), `NotesStore.updateMeta`.
-- Produces: `RecordingController.showOffer(_ offer: Offer, onStart: @escaping () -> Void, onDismiss: @escaping () -> Void)`, `hideOffer()`, `showEndPrompt(_ signal: EndSignal, onStop: …, onContinue: …)`, `hideEndPrompt()`; `AppModel.startRecording(offer: Offer? = nil)`.
+- Consumes: `PillMode` (T8), `Offer` (T3), `EndSignal` (T4), `CalendarLink` (T1), `NotesStore.updateMeta`.
+- Produces: `RecordingController.showOffer(_ offer: Offer, onStart: @escaping () -> Void, onDismiss: @escaping () -> Void)`, `hideOffer()`, `showEndPrompt(_ signal: EndSignal, onStop: @escaping () -> Void, onContinue: @escaping () -> Void)`, `hideEndPrompt()`; `AppModel.startRecording(offer: Offer? = nil)`.
 
-- [ ] **Step 1: Offer:** nazwa wydarzenia (lub „Call in Teams"), przyciski **Start** i **Not a meeting**. Panel **nie przejmuje fokusu** (decyzja (c) z odbioru 1.5a: stanie się oknem klucza nie fokusuje Stop). Tekst i ikona niosą stan, nie sam kolor; Reduce Motion bez pulsowania.
+- [ ] **Step 1: Offer:** nazwa wydarzenia (lub „Call in Teams"), przyciski **Start** i **Not a meeting**. Okno **nie przejmuje fokusu** (decyzja (c) z odbioru 1.5a: stanie się oknem klucza nie fokusuje Stop). Tekst i ikona niosą stan, nie sam kolor; Reduce Motion bez pulsowania.
 - [ ] **Step 2: End prompt:** „Meeting ended?" z **Stop** i **Continue**.
-- [ ] **Step 3: `startRecording(offer:)`:** jak dziś + gdy `offer.event != nil`, po starcie `NotesStore(session:).updateMeta { $0.calendarEvent = event.link() }`; błąd zapisu → `lastError` (nagranie trwa). Tytuł wydarzenia ma wyświetlać się w pigułce obok presetu.
-- [ ] **Step 4: Weryfikacja ręczna** na migawkach (`Snapshots`) i `scripts/run.sh` z wymuszoną ofertą (sztuczne wywołanie z `Probes`/debug, nie z detektora — ten przychodzi w T9).
+- [ ] **Step 3: `startRecording(offer:)`:** jak dziś + gdy `offer.event != nil`, po starcie `NotesStore(session:).updateMeta { $0.calendarEvent = event.link() }`; błąd zapisu → `lastError` (nagranie trwa). Tytuł wydarzenia wyświetlany w pigułce obok presetu.
+- [ ] **Step 4: Weryfikacja ręczna** na migawkach (`Snapshots`) i `scripts/run.sh` z wymuszoną ofertą (sztuczne wywołanie z `Probes`, nie z detektora — ten przychodzi w T10).
 - [ ] **Step 5: `scripts/test.sh`**, commit.
 
 ---
 
-### Task 9: `MeetingMonitor`, pasek menu, aplikacja żyje po zamknięciu okna — **STOP po zadaniu**
+### Task 10: `MeetingMonitor` — łączy detektory, adaptery i pigułkę
 
-Spec §4.8, §4.2, §4.6. Po zadaniu **przegląd Opusa**.
+Spec §4.2, §4.5, §4.6. Pierwsze realne zachowanie od końca do końca. Po zadaniu **przegląd Opusa**.
 
 **Files:**
 - Create: `Sources/MeetNotesApp/MeetingMonitor.swift`
-- Modify: `Sources/MeetNotesApp/MeetNotesApp.swift` (`MenuBarExtra`, zachowanie po zamknięciu okna), `Sources/MeetNotesApp/AppModel.swift` (`let monitor`, spięcie z `recording`)
-- Modify: `Sources/MeetNotesApp/RecordingController.swift` (tylko wywołania pigułki; zatrzymanie nadal wyłącznie `stop()` z przycisku Stop)
+- Modify: `Sources/MeetNotesApp/AppModel.swift` (`let monitor`, spięcie z `recording`)
 
 **Interfaces:**
 - Consumes: `OfferDetector`, `EndDetector`, `CalendarSource`, `AudioProcessSource`, `MeetingSettings`, `RecordingController`, `AppModel.startRecording(offer:)`.
 - Produces: `@MainActor final class MeetingMonitor` — `start()`, `stop()`, `state: MonitorState` (`.off / .watching / .calendarDenied`); tik co 1 s dla procesów audio, odświeżenie wydarzeń co 30 s i na `EKEventStoreChanged`; `silentSeconds` z `recording.levels` (obie ścieżki ≤ −60 dBFS od ostatniego głośnego momentu); `.startRecording` → `AppModel.startRecording(offer:)`; `EndAction.prompt` → `recording.showEndPrompt(...)` (Stop = istniejące `recording.stop()`, Continue = `endDetector.continueMeeting`). **Monitor nigdy sam nie zatrzymuje nagrania.**
 
-- [ ] **Step 1: `MenuBarExtra`** z menu: stan wykrywania (Detecting meetings / Detection off), „Open MeetNotes", „Quit MeetNotes" (tekst pod spodem: „Quitting turns off detection"). Ikona w Docku zostaje (bez `LSUIElement`).
-- [ ] **Step 2: Zamknięcie okna nie kończy aplikacji** (`applicationShouldTerminateAfterLastWindowClosed` → `false`, jeśli domyślne zachowanie `WindowGroup` na to nie pozwala); pigułka działa przy zamkniętym oknie.
-- [ ] **Step 3: Koordynator.** Wyłączone *Detect calls* i brak Apple Calendar → monitor `.off`, zero odpytywania. Bez dostępu do kalendarza ad hoc działa dalej (`.calendarDenied` tylko w menu i w Settings).
-- [ ] **Step 4: Kontrakt zakończenia.** Sygnał końca daje wyłącznie pytanie w pigułce; istniejące `SilenceCondition` (600 s), `HardLimitCondition`, `StallCondition` **bez zmian** (jedyne samoczynne zatrzymanie).
-- [ ] **Step 5: Weryfikacja ręczna** (podsumowanie w T11); `scripts/test.sh` zielony; commit.
-
-**🛑 STOP (Opus + użytkownik):** przed odbiorem na żywo — krótki przegląd, czy nic nie startuje nagrywania bez Teams, i czy „Quit" faktycznie wyłącza wykrywanie.
+- [ ] **Step 1: Koordynator.** Wyłączone *Detect calls* i brak Apple Calendar → monitor `.off`, zero odpytywania. Bez dostępu do kalendarza ad hoc działa dalej (`.calendarDenied` tylko w menu i w Settings).
+- [ ] **Step 2: Przejście `recording` do detektora.** `OfferDetector.step` dostaje `recording` z `recording.isRecording` w każdym tiku (przejście `true → false` wycisza trwającą rozmowę — T3).
+- [ ] **Step 3: Kontrakt zakończenia.** Sygnał końca daje wyłącznie pytanie w pigułce; istniejące `SilenceCondition` (600 s), `HardLimitCondition`, `StallCondition` **bez zmian** (jedyne samoczynne zatrzymanie).
+- [ ] **Step 4: Weryfikacja ręczna** (pełny odbiór w T13): ad hoc Teams → oferta → Start → rozłączenie → pytanie; `scripts/test.sh` zielony; commit.
 
 ---
 
-### Task 10: Lista wyboru wydarzenia w nagłówku notatki
+### Task 11: Pasek menu i aplikacja żyje po zamknięciu okna — **STOP po zadaniu**
+
+Spec §4.8. Po zadaniu **przegląd Opusa**.
+
+**Files:**
+- Modify: `Sources/MeetNotesApp/MeetNotesApp.swift` (`MenuBarExtra`, zachowanie po zamknięciu okna)
+
+**Interfaces:**
+- Consumes: `MeetingMonitor.state` (T10), `AppModel.setLaunchAtLogin` (T7).
+
+- [ ] **Step 1: `MenuBarExtra`** z menu: stan wykrywania (Detecting meetings / Detection off), „Open MeetNotes", „Quit MeetNotes" (tekst pod spodem: „Quitting turns off detection"). Ikona w Docku zostaje (bez `LSUIElement`).
+- [ ] **Step 2: Zamknięcie okna nie kończy aplikacji** (`applicationShouldTerminateAfterLastWindowClosed` → `false`, jeśli domyślne zachowanie `WindowGroup` na to nie pozwala); pigułka działa przy zamkniętym oknie.
+- [ ] **Step 3: Weryfikacja ręczna:** zamknij okno, wymuś ofertę, sprawdź pigułkę; „Quit" wyłącza wykrywanie; `scripts/test.sh` zielony; commit.
+
+**🛑 STOP (Opus + użytkownik):** przed odbiorem na żywo — krótki przegląd, czy nic nie startuje nagrywania bez Teams, czy po Stop rozmowa nie wywołuje auto-startu od nowa i czy „Quit" faktycznie wyłącza wykrywanie.
+
+---
+
+### Task 12: Lista wyboru wydarzenia w nagłówku notatki
 
 Spec §4.7, zrzut `SCR-20261016-qiay`.
 
@@ -371,23 +443,23 @@ Spec §4.7, zrzut `SCR-20261016-qiay`.
 
 **Interfaces:**
 - Consumes: `EventFilter.isPickable`, `CalendarSource.events`, `NotesStore.updateMeta`.
-- Produces: `enum EventRanking { static func order(_ events: [CalendarEventInfo], recordingStart: Date, recordingEnd: Date?) -> [Ranked] }`, `struct Ranked: Equatable { var event: CalendarEventInfo; var overlapsRecording: Bool }`; `AppModel.link(_ event: CalendarEventInfo, to item: SessionItem)` i `unlink(_ item: SessionItem)` (przez `updateMeta`; `notes.onChange` odświeża).
+- Produces: `enum EventRanking { static func order(_ events: [CalendarEventInfo], recordingStart: Date, recordingEnd: Date?, now: Date) -> [Ranked] }`, `struct Ranked: Equatable { var event: CalendarEventInfo; var overlapsRecording: Bool }`; `AppModel.link(_ event: CalendarEventInfo, to item: SessionItem)` i `unlink(_ item: SessionItem)` (przez `updateMeta`; `notes.onChange` odświeża).
 
-- [ ] **Step 1: Testy (padają):** `eventsAreOrderedByDistanceFromRecordingStart`, `overlappingEventsAreFlagged`, `allDayAndOutOfOfficeAreNeverListed`, `inPersonEventsWithoutALinkAreListed`, `nilRecordingEndUsesAPlausibleDefaultWindow` (nagranie w toku: bez `recordingEnd` oznaczamy nakładanie względem `now`).
+- [ ] **Step 1: Testy (padają):** `eventsAreOrderedByDistanceFromRecordingStart`, `overlappingEventsAreFlagged`, `allDayAndOutOfOfficeAreNeverListed`, `inPersonEventsWithoutALinkAreListed`, `nilRecordingEndUsesNowAsTheEnd` (nagranie w toku: bez `recordingEnd` nakładanie liczone względem `now`).
 - [ ] **Step 2–3:** FAIL → implementacja → PASS.
 - [ ] **Step 4: UI:** klik chipu daty otwiera „Select calendar event" — lista z dnia nagrania (wg rankingu, nakładające się wyróżnione), wiersz „Unlink" gdy jest powiązanie, wiersz „Connect Apple Calendar in Settings" gdy kalendarz niepodłączony; **bez** pola „Add attendees…" (nie-cel). Powiązanie działa dla starych notatek i dla ad hoc. Uczestnicy z migawki pokazani w nagłówku (tylko wyświetlanie).
 - [ ] **Step 5: Weryfikacja ręczna** na starej notatce z `.devdata`; `scripts/test.sh`; commit.
 
 ---
 
-### Task 11: Odbiór na żywo, dokumentacja, przegląd całości
+### Task 13: Odbiór na żywo, dokumentacja, przegląd całości
 
 **Files:**
 - Create: `docs/superpowers/reports/F16-odbior.md`
 - Modify: `CLAUDE.md` (sekcja „Stan"), `docs/superpowers/ROADMAP.md`, `docs/superpowers/BACKLOG.md` (jeśli pojawią się odłożone drobiazgi)
 
-- [ ] **Step 1: Odbiór — robi użytkownik, na sprzęcie** (każdy punkt: ✅/❌ + uwaga w raporcie), kryteria 1–16 ze speca §6, w tym nazwane: **wizyta u lekarza i urodziny nie wywołują pigułki; OOO w prawdziwym Exchange nie wywołuje pigułki; poczekalnia Teams nie wywołuje pigułki; auto-start nigdy na samym kalendarzu; zamknięcie okna nie wyłącza wykrywania.**
-- [ ] **Step 2:** poprawki z odbioru (bez ślepych napraw — STOP przy rozbieżnościach z specem).
+- [ ] **Step 1: Odbiór — robi użytkownik, na sprzęcie** (każdy punkt: ✅/❌ + uwaga w raporcie), kryteria 1–16 ze speca §6 (w tym 6a), w tym nazwane: **wizyta u lekarza i urodziny nie wywołują pigułki; OOO w prawdziwym Exchange nie wywołuje pigułki; poczekalnia Teams nie wywołuje pigułki (albo odstępstwo opisane po T0); auto-start nigdy na samym kalendarzu; po ręcznym Stop trwająca rozmowa nie startuje nagrania od nowa; zamknięcie okna nie wyłącza wykrywania.**
+- [ ] **Step 2:** poprawki z odbioru (bez ślepych napraw — STOP przy rozbieżnościach ze specem).
 - [ ] **Step 3:** `scripts/test.sh` zielony (liczba testów w raporcie), `check-bundle` widzi klucz kalendarza.
 - [ ] **Step 4: Przegląd całości przez Opusa** przed scaleniem `faza16`.
 - [ ] **Step 5: Dokumenty:** `CLAUDE.md` → stan fazy 1.6; ROADMAP: 1.6 zamknięta, „Coming up" i integracje Google/Outlook/Slack zostają.
@@ -400,16 +472,16 @@ Spec §4.7, zrzut `SCR-20261016-qiay`.
 | Wymóg speca | Zadanie |
 |---|---|
 | §4.1 Integrations, Meeting detection, „Coming soon" | T5, T7 |
-| §4.2 A (kalendarz) i B (ad hoc per proces, bez własnego procesu), zbieg, „Not a meeting" | T3, T6, T9 |
-| §4.3 filtr (link, całodniowe, OOO, odrzucone), lista ręczna | T2, T10 |
-| §4.4 stany pigułki | T8 |
-| §4.5 auto-start tylko przy Teams | T3 (reguła i testy), T9 |
-| §4.6 koniec: zwolnienie mikrofonu, cisza, zawsze tylko pytanie, bezpiecznik 600 s bez zmian | T4, T9 |
-| §4.7 powiązanie, migawka, tytuł, `AutoTitle` | T1, T8, T10 |
-| §4.8 pasek menu, uruchamianie przy logowaniu | T7, T9 |
+| §4.2 A (kalendarz) i B (ad hoc per proces, bez własnego procesu), zbieg, „Not a meeting", cisza po Stop | T3, T6, T10 |
+| §4.3 filtr (link, całodniowe, OOO, odrzucone), lista ręczna | T2, T12 |
+| §4.4 stany pigułki | T8 (prefactoring), T9 |
+| §4.5 auto-start tylko przy Teams | T3 (reguła i testy), T10 |
+| §4.6 koniec: zwolnienie mikrofonu, cisza, zawsze tylko pytanie, bezpiecznik 600 s bez zmian („Continue" go nie przedłuża) | T4, T10 |
+| §4.7 powiązanie, migawka, tytuł, `AutoTitle` | T1, T9, T12 |
+| §4.8 pasek menu, uruchamianie przy logowaniu | T7, T11 |
 | §4.9 `Info.plist`, `check-bundle` | T0 |
 | §4.10 nowa biblioteka z testami | T1 |
 | §5 spike | T0 |
-| §6 kryteria akceptacji | T11 (na żywo), T1–T4, T10 (testy) |
+| §6 kryteria akceptacji | T13 (na żywo), T1–T4, T12 (testy) |
 
-Nie-cele ze speca (Google/Outlook/Slack kod, „Coming up", zapis do kalendarza, auto-wiązanie ad hoc, uczestnicy w promptach, powiadomienia systemowe) nie mają zadań z założenia.
+Nie-cele (patrz „Poza zakresem" na górze) nie mają zadań z założenia.

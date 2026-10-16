@@ -144,8 +144,17 @@ jest dobierane do sygnału B automatycznie **tylko** w tym zbiegu (okno oferty A
 w pozostałych przypadkach ad hoc zostaje bez wydarzenia (nie zgadujemy — patrz nie-cele).
 
 **„To nie spotkanie".** Pigułka-oferta ma przycisk odrzucenia. Odrzucenie wycisza ofertę dla
-tej samej sesji mikrofonu (ten sam proces, ciągłe użycie) albo tego samego wydarzenia.
-**(Moja decyzja.)**
+tej samej sesji mikrofonu **aplikacji** albo tego samego wydarzenia. „Sesja mikrofonu" jest
+liczona dla **rodziny aplikacji** (bundle ID z dopasowaniem po prefiksie, np. procesy pomocnicze
+Teams), nie dla pojedynczego procesu — Teams ma kilka procesów, a inny `pid` w tej samej
+rozmowie nie może przywrócić oferty. Sesja kończy się, gdy żaden proces rodziny nie trzyma
+wejścia przez ≥ T_release. **(Moja decyzja.)**
+
+**Po zatrzymaniu nagrania cisza.** Gdy nagranie się kończy (ręczny Stop albo bezpiecznik ciszy),
+trwająca w tym momencie rozmowa i jej wydarzenie są wyciszone tak jak po „Not a meeting":
+ani oferta, ani **auto-start** nie wracają do końca tej sesji mikrofonu. Bez tego Teams trzymający
+dalej mikrofon po Twoim Stop uruchomiłby auto-start od nowa — nagranie, którego nie chcesz.
+Nowa rozmowa (po przerwie ≥ T_release) oferuje jak zwykle. **(Moja decyzja.)**
 
 ### 4.3 Filtr wydarzeń
 
@@ -238,6 +247,10 @@ dziś kończy sesję po 10 min ciszy bez pytania i **nie usuwamy go**, bo to zab
 „70 min przypadkowego dźwięku" z W§1 (pytanie, na które nikt nie odpowiada, nie może wisieć w
 nieskończoność). To jedyne samoczynne zatrzymanie, i istniało od fazy 1; pytanie pojawia się po
 T_silence (3 min), a bezpiecznik zadziała dopiero po 10 min ciszy, gdy nikt nie odpowie.
+**„Continue" nie wyłącza bezpiecznika:** wyciszenie pytania na T_snooze nie przedłuża nagrania
+przy dalszej ciszy — po łącznie 10 min ciszy sesja i tak się zakończy (przy rozmowie z ciszą
+w tle, np. prezentacja bez mówienia, trzeba więc coś powiedzieć albo dźwięk musi wrócić).
+Takie jest zachowanie bezpiecznika od fazy 1; w 1.6 go nie zmieniamy.
 `HardLimitCondition` (4 h) i `StallCondition` (30 s) bez zmian. **(Moja decyzja, patrz §8.)**
 
 `EndCondition` jest protokołem „żeby kalendarz dało się dołożyć bez dotykania rdzenia" — kalendarz
@@ -351,7 +364,10 @@ zaawansowanych, nie zaszyte.
    wydarzenie odrzucone i wydarzenie całodniowe nie wywołują pigułki z kalendarza. Spotkanie
    z linkiem Teams — wywołuje.
 5. Wydarzenie z kalendarza + Teams razem → jedna pigułka z tytułem wydarzenia.
-6. „Not a meeting" ukrywa ofertę i nie wraca w tej samej sesji mikrofonu.
+6. „Not a meeting" ukrywa ofertę i nie wraca w tej samej sesji mikrofonu aplikacji (także gdy
+   rozmowę trzyma inny proces tej samej aplikacji).
+6a. Po ręcznym Stop (lub zatrzymaniu przez bezpiecznik) trwająca rozmowa Teams nie wywołuje ani
+   oferty, ani auto-startu; nowa rozmowa po przerwie ≥ T_release oferuje jak zwykle.
 7. Auto-start włączony: rusza tylko dla zbiegu A+B lub B; **nigdy** dla samego A.
 8. Rozłączenie z Teams → pytanie „Meeting ended?" w ≤ T_release + 5 s; nagranie trwa, dopóki
    nie klikniesz Stop. Godzina końca z kalendarza nie ma wpływu.
