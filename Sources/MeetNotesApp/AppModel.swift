@@ -184,28 +184,56 @@ final class AppModel {
 
     struct ClientProblem: Error { let message: String }
 
-    /// Klient albo powód, dlaczego go nie ma — bez alertu (weryfikacja dostawcy pokazuje powód przy dostawcy).
-    func makeClient(for providerID: UUID) -> Result<OpenAICompatibleClient, ClientProblem> {
+    /// Dostawca z kluczem albo powód, dlaczego nie da się do niego wysłać żądania.
+    private func providerWithKey(_ providerID: UUID) -> Result<(Provider, String?), ClientProblem> {
         guard let p = provider(providerID) else { return .failure(ClientProblem(message: "This provider no longer exists.")) }
         let key: String?
         do { key = try secrets.get(p.id) } catch {
             return .failure(ClientProblem(message: "Couldn't read the API key for \(p.name) from Keychain: \(error)"))
         }
         // ponytail: „lokalny = bez klucza" po nazwie hosta; jawna flaga w Provider, gdy zdalny dostawca obejdzie się bez klucza.
-        guard key != nil || ["localhost", "127.0.0.1", "::1"].contains(p.baseURL.host() ?? "") else {
+        guard key != nil || (p.api == .openAICompatible && ["localhost", "127.0.0.1", "::1"].contains(p.baseURL.host() ?? "")) else {
             return .failure(ClientProblem(message: "No API key for \(p.name). Remove the provider and add it again with a key."))
         }
-        return .success(OpenAICompatibleClient(provider: p, key: key))
+        return .success((p, key))
     }
 
-    /// Test połączenia (`listModels`): Verified albo powód (zły klucz, guardrail, adres, serwer wyłączony).
+    /// Klient OpenAI-compatible (listy modeli, czat, embeddingi) albo powód — bez alertu (weryfikacja dostawcy
+    /// pokazuje powód przy dostawcy). ElevenLabs tu nie pasuje: robi tylko transkrypcję (`transcriptionClient`).
+    func makeClient(for providerID: UUID) -> Result<OpenAICompatibleClient, ClientProblem> {
+        providerWithKey(providerID).flatMap { p, key in
+            p.api == .openAICompatible ? .success(OpenAICompatibleClient(provider: p, key: key))
+                : .failure(ClientProblem(message: "\(p.name) does only speech-to-text."))
+        }
+    }
+
+    /// Klient transkrypcji wybrany po `Provider.api`; nil = powód w `lastError`.
+    func transcriptionClient(for providerID: UUID) -> (any TranscriptionClient)? {
+        switch providerWithKey(providerID) {
+        case .success(let (p, key)):
+            switch p.api {
+            case .openAICompatible: return OpenAICompatibleClient(provider: p, key: key)
+            case .elevenLabs: return ElevenLabsClient(provider: p, key: key)
+            }
+        case .failure(let problem):
+            lastError = problem.message
+            return nil
+        }
+    }
+
+    /// Test połączenia (`listModels`, u ElevenLabs `GET /v1/models`): Verified albo powód (zły klucz, guardrail, adres,
+    /// serwer wyłączony).
     func verifyProvider(_ id: UUID) async {
         providerChecks[id] = nil
         providerVerifying.insert(id)
         defer { providerVerifying.remove(id) }
-        switch makeClient(for: id) {
+        switch providerWithKey(id) {
         case .failure(let problem): providerChecks[id] = .failed(problem.message)
-        case .success(let c): providerChecks[id] = await c.verify()
+        case .success(let (p, key)):
+            switch p.api {
+            case .openAICompatible: providerChecks[id] = await OpenAICompatibleClient(provider: p, key: key).verify()
+            case .elevenLabs: providerChecks[id] = await ElevenLabsClient(provider: p, key: key).verify()
+            }
         }
     }
 
@@ -254,6 +282,10 @@ final class AppModel {
     /// Lista modeli dla roli: pobierana raz na dostawcę i rolę (`force` = odśwież).
     func loadModels(provider: UUID, role: Role, force: Bool = false) async {
         let k = key(provider, role)
+        if self.provider(provider)?.api == .elevenLabs { // stała lista (Scribe v2 dla ASR, poza tym pusto), bez sieci
+            modelLists[k] = ElevenLabsClient.models(for: role)
+            return
+        }
         guard force || modelLists[k] == nil, !loadingModels.contains(k), let c = client(for: provider) else { return }
         loadingModels.insert(k)
         defer { loadingModels.remove(k) }
@@ -268,7 +300,7 @@ final class AppModel {
     }
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
-        guard let c = client(for: providerID) else { return }
+        guard let c = transcriptionClient(for: providerID) else { return }
         let r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
         probeCache.record(r)
         save()
@@ -384,7 +416,7 @@ final class AppModel {
             lastError = "The preset's speech-to-text provider is missing."
             return
         }
-        guard let c = client(for: asr.providerID) else { return } // powód już w lastError
+        guard let c = transcriptionClient(for: asr.providerID) else { return } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
             let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe)
@@ -404,11 +436,11 @@ final class AppModel {
             lastError = "Nothing to resume for this recording."
             return
         }
-        guard let c = client(for: input.snapshot.providerID) else { return } // powód już w lastError
+        guard let c = transcriptionClient(for: input.snapshot.providerID) else { return } // powód już w lastError
         run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
     }
 
-    private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: OpenAICompatibleClient) {
+    private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: any TranscriptionClient) {
         let id = sessionURL.lastPathComponent
         guard !transcribing.contains(id) else {
             lastError = "This recording is already being transcribed."

@@ -54,12 +54,13 @@ public struct TranscriptionRunner: Sendable {
     public let session: SessionDirectory
     public let runID: String
     public let snapshot: RunSnapshot
-    public let client: OpenAICompatibleClient
+    /// OpenAI-compatible albo ElevenLabs — wybór po `Provider.api` u wołającego.
+    public let client: any TranscriptionClient
     public let maxChunkSeconds: Double
     public let gate: EnergyGate
     public let crosstalk: CrosstalkFilter
 
-    public init(session: URL, runID: String, snapshot: RunSnapshot, client: OpenAICompatibleClient,
+    public init(session: URL, runID: String, snapshot: RunSnapshot, client: any TranscriptionClient,
                 maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter()) {
         self.session = SessionDirectory(url: session)
         self.runID = runID
