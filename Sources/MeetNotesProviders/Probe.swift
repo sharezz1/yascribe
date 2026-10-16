@@ -50,9 +50,13 @@ public struct ProbeResult: Codable, Equatable, Sendable {
 /// sprawdzamy żądaniem. Ollama nie przejdzie sondy ASR, bo nie umie, a nie
 /// dlatego, że ktoś to wpisał w kod.
 public struct ProbeRunner: Sendable {
-    public let client: OpenAICompatibleClient
+    public let client: any TranscriptionClient
 
-    public init(client: OpenAICompatibleClient) { self.client = client }
+    public init(client: any TranscriptionClient) { self.client = client }
+
+    /// Czat i embeddingi ma tylko OpenAI-compatible; ElevenLabs (sam ASR) odpada bez żądania.
+    private var textClient: OpenAICompatibleClient? { client as? OpenAICompatibleClient }
+    private var asrOnly: String { "\(client.provider.name) does only speech-to-text." }
 
     public func probe(model: String, role: Role, language: LanguageCode?, now: Date = Date()) async -> ProbeResult {
         var r = ProbeResult(providerID: client.provider.id, model: model, role: role, checkedAt: now)
@@ -83,12 +87,14 @@ public struct ProbeRunner: Sendable {
             }
             r.failure = failures.joined(separator: "; ")
         case .correction, .summary:
+            guard let client = textClient else { r.failure = asrOnly; break }
             do {
                 let reply = try await client.chat(model: model, system: "You are a connectivity probe. Reply with OK.", user: "ping")
                 r.works = !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 if !r.works { r.failure = "empty reply" }
             } catch { r.failure = "\(error)" }
         case .embedding:
+            guard let client = textClient else { r.failure = asrOnly; break }
             do {
                 let v = try await client.embed(model: model, text: "probe")
                 r.works = true
