@@ -116,10 +116,28 @@ enum Snapshots {
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
                     let summaryTab = MeetingViewState(); summaryTab.tab = .summary
                     try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
+                    // Uwaga 7: „Add context” rozwinięte w miejscu (pole rośnie z treścią).
+                    let contextOpen = MeetingViewState(); contextOpen.tab = .summary; contextOpen.showContext = true
+                    try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: contextOpen) }
+                    // Uwaga 7 pkt 3: notatka bez proponowanej szerokości (sonda `fixedSize`) ma mieć 640 pt, nie ~250.
+                    if let s = withNotes.notes.summary {
+                        try render("meeting-note-unproposed", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
+                            MarkdownView(blocks: MarkdownBlocks.group(s.markdown)).fixedSize()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(20).contentBackground()
+                        }
+                    }
+                    // Transcript (b-transcript.png): w pamięci echo w wypowiedzi „Me” i wersja poprawiona → linia „Corrected ⌄”.
+                    var echoed = withNotes
+                    if var t = echoed.transcript {
+                        t.utterances[1].echoOfThem = true
+                        echoed.transcript = t
+                        echoed.corrected = CorrectedTranscript(transcript: t, model: "deepseek/deepseek-v4.1-flash", batches: 1, failedBatches: 0, rejectedLines: 0)
+                    }
                     let transcriptTab = MeetingViewState(); transcriptTab.tab = .transcript
-                    try render("meeting-transcript", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: transcriptTab) }
-                    let generateCard = MeetingViewState(); generateCard.tab = .summary
-                    try render("meeting-generate-card", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: transcriptOnly, state: generateCard) }
+                    try render("meeting-transcript", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: echoed, state: transcriptTab) }
+                    // Summary przed generowaniem (b-summary0.png): pasek z „Generate notes” i linia stanu pustego.
+                    let summary0 = MeetingViewState(); summary0.tab = .summary
+                    try render("meeting-summary0", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: transcriptOnly, state: summary0) }
                     let myNotes = MeetingViewState(); myNotes.tab = .myNotes
                     try render("meeting-my-notes", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: empty, state: myNotes) }
                 }
