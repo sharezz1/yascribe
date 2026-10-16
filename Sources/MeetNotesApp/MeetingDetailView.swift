@@ -104,6 +104,7 @@ struct MeetingDetailView: View {
                     item.startedAt.formatted(date: .abbreviated, time: .shortened),
                     item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) } ?? "",
                     model.presetFor(sessionURL: item.url).map { "Preset \($0.name)" } ?? "",
+                    item.audioDeletedAfterDays.map { "Audio deleted after \($0) days" } ?? "",
                 ])
                 if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
             }
@@ -133,6 +134,7 @@ struct MeetingDetailView: View {
 
     /// Nieudane wczytanie nie zostaje zapamiętane jako wczytana ścieżka (check S15 #4).
     private func load(_ track: String) -> Bool {
+        if let n = item.audioDeletedAfterDays { model.lastError = "This meeting's audio was deleted after \(n) days."; return false }
         do {
             playback.player = try AVAudioPlayer(contentsOf: item.url.appendingPathComponent("\(track).caf"))
             playback.track = track

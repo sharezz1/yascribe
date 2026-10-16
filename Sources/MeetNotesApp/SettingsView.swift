@@ -64,6 +64,7 @@ struct SettingsView: View {
                             if i < rows.count - 1 { RowDivider() }
                         }
                     }
+                    RecordingsSection() // uwaga 8: między Providers a Archive search
                     archiveSearch
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Speech-to-text, correction and summary models are chosen in each preset.")
