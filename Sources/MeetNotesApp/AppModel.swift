@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesProviders
 import MeetNotesRecording
@@ -76,6 +77,8 @@ final class AppModel {
     var selectedSessionID: String?
     var activePresetID: UUID?
     var lastError: String?
+    /// Kalendarz Apple (T7); prośba o dostęp dopiero z przełącznika w Settings.
+    let calendarSource: any CalendarSource = EventKitCalendar()
     var showSetup = false
     /// Spotkanie czekające na potwierdzenie usunięcia (przycisk „⋯” i menu Meeting) — dialog jest w `MeetingDetailView`.
     var pendingDelete: String?
