@@ -27,18 +27,15 @@ struct MeetNotesApp: App {
                 Button("Settings…") { model.section = .settings }
                     .keyboardShortcut(",", modifiers: .command)
             }
-            // D3: bez przycisku zamknięcia na pigułce; chowanie przed startem to pozycja menu Window.
-            CommandGroup(after: .windowArrangement) {
-                Button("Hide Recording Window") { model.recording.hidePanel() }
-                    .disabled(model.recording.isRecording || !model.recording.isPanelVisible)
-            }
             CommandMenu("Recording") {
                 Button(model.recording.isRecording ? "Stop Recording" : "Record Meeting") {
                     model.recording.isRecording ? model.recording.stop() : model.startRecording()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
+                // Pigułka jest widoczna tylko podczas nagrywania; ta pozycja wynosi ją na wierzch i wciąga na ekran.
                 Button("Show Recording Window") { model.recording.showPanel(model: model) }
                     .keyboardShortcut("r", modifiers: [.command, .option])
+                    .disabled(!model.recording.isRecording)
             }
             // D5 (macos.md §3): każda akcja z paska widoku spotkania jest też tutaj; aktywne tylko przy otwartym spotkaniu.
             CommandMenu("Meeting") {
