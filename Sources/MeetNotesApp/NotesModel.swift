@@ -30,8 +30,14 @@ final class NotesModel {
     var onChange: () -> Void = {}
     /// Komunikaty dla użytkownika (np. nieczytelny plik notatek odłożony na bok) — podłączane do `AppModel.lastError`.
     var report: (String) -> Void = { _ in }
+    /// Trwa przenoszenie folderu nagrań — widok spotkania jest tylko do odczytu, zapisy blokujemy też tutaj (R3),
+    /// żeby skrót z menu nie obszedł interfejsu. Zapis po usunięciu starego miejsca odtworzyłby osierocony katalog.
+    var isMoving: () -> Bool = { false }
+    private static let movingMessage = "Meetings are being moved to a new folder. Try again when that finishes."
 
     private var saveTasks: [String: Task<Void, Never>] = [:]
+    /// Treść My notes czekająca na autozapis (klucz: id sesji).
+    private var pendingSaves: [String: (session: URL, text: String)] = [:]
 
     func state(_ id: String) -> GenState { generation[id] ?? .idle }
 
@@ -54,6 +60,7 @@ final class NotesModel {
     }
 
     func retryCorrection(_ item: SessionItem) {
+        guard !isMoving() else { report(Self.movingMessage); return }
         guard canRetryCorrection(item), let preset = presetFor(item.url), let c = preset.correction,
               let runID = item.runID, let t = item.transcript else { return }
         let url = item.url
@@ -90,6 +97,7 @@ final class NotesModel {
 
     func generate(item: SessionItem, useCorrected: Bool, template: Template, context: String) {
         let id = item.id
+        guard !isMoving() else { report(Self.movingMessage); return }
         guard state(id) != .generating else { return }
         guard let transcript = item.transcript(corrected: useCorrected) else {
             generation[id] = .failed("This meeting has no transcript yet.")
@@ -151,21 +159,35 @@ final class NotesModel {
 
     /// Autozapis z opóźnieniem: ostatnia zmiana wygrywa, zapis 0,6 s po ostatnim znaku.
     func saveMyNotes(_ text: String, for item: SessionItem) {
+        guard !isMoving() else { report(Self.movingMessage); return }
         let id = item.id
-        let session = item.url
+        pendingSaves[id] = (item.url, text)
         saveTasks[id]?.cancel()
         saveTasks[id] = Task {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
-            do {
-                if let note = try NotesStore(session: session).writeMyNotes(text) { self.report(note) }
-            } catch {
-                self.report("Couldn't save your notes: \(error)")
-            }
+            self.writePending(id)
+        }
+    }
+
+    /// Zapisuje od razu wszystko, co czeka na autozapis — przed przenoszeniem folderu nagrań.
+    func flushPendingSaves() {
+        for (id, task) in saveTasks { task.cancel(); writePending(id) }
+        saveTasks = [:]
+    }
+
+    private func writePending(_ id: String) {
+        guard let p = pendingSaves.removeValue(forKey: id) else { return }
+        guard !isMoving() else { report("Couldn't save your notes: \(Self.movingMessage)"); return }
+        do {
+            if let note = try NotesStore(session: p.session).writeMyNotes(p.text) { report(note) }
+        } catch {
+            report("Couldn't save your notes: \(error)")
         }
     }
 
     func setManualTitle(_ title: String, for item: SessionItem) {
+        guard !isMoving() else { report(Self.movingMessage); return }
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             if let note = try NotesStore(session: item.url).updateMeta({ $0.manualTitle = t.isEmpty ? nil : t }) { report(note) }

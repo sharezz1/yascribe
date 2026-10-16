@@ -72,6 +72,32 @@ private func files(_ dir: URL) -> Set<String> {
     #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 40 * day, skip: []).purged.isEmpty)
 }
 
+@Test func retentionPlanMatchesWhatRetentionDeletes() throws {
+    let root = tempDir()
+    let done = try seed(root, "done")
+    try seed(root, "no-run", run: nil)
+    try seed(root, "busy")
+    let done2 = try seed(root, "done2")
+    let now = Date() + 31 * day
+    let cafBytes = Int64(try done.appendingPathComponent("system.caf").resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0)
+    #expect(cafBytes > 0)
+    let before = files(root)
+
+    #expect(AudioRetention.plan(sessions: root, days: nil, now: now, skip: []).sessions.isEmpty) // Forever
+    let p = AudioRetention.plan(sessions: root, days: 30, now: now, skip: ["busy"])
+    #expect(p.sessions.map(\.lastPathComponent) == ["done", "done2"])
+    #expect(p.bytes == 2 * cafBytes)
+    #expect(files(root) == before) // plan niczego nie kasuje
+    // Przed terminem (90 dni) — nic.
+    #expect(AudioRetention.plan(sessions: root, days: 90, now: now, skip: ["busy"]).sessions.isEmpty)
+
+    let r = AudioRetention.apply(sessions: root, days: 30, now: now, skip: ["busy"])
+    #expect(r.purged == p.sessions.map(\.lastPathComponent))
+    #expect(AudioRetention.audioFiles(done).isEmpty)
+    #expect(AudioRetention.audioFiles(done2).isEmpty)
+    #expect(AudioRetention.plan(sessions: root, days: 30, now: now, skip: ["busy"]).sessions.isEmpty)
+}
+
 @Test func settingsWithoutRecordingFieldsStillLoad() throws {
     let old = try JSONDecoder().decode(GlobalSettings.self, from: Data(#"{"defaultPresetID":null}"#.utf8))
     #expect(old.recordingsPath == nil)
@@ -92,9 +118,10 @@ private func oldAndNew() throws -> (URL, URL) {
     let (old, new) = try oldAndNew()
     let before = files(old)
     struct Boom: Error {}
-    // Druga sesja: kopia urwana w połowie (pusty katalog) i błąd.
+    // Druga sesja: kopia urwana w połowie (pusty katalog) i błąd; w trakcie ktoś wrzucił do celu obcy plik.
     let failSecond: RecordingsMove.Copy = { from, to in
         if from.lastPathComponent == "b" {
+            try Data("cudze".utf8).write(to: to.deletingLastPathComponent().appendingPathComponent("foreign.txt"))
             try FileManager.default.createDirectory(at: to, withIntermediateDirectories: false)
             throw Boom()
         }
@@ -104,6 +131,26 @@ private func oldAndNew() throws -> (URL, URL) {
         _ = try await RecordingsMove.run(from: old, to: new, copy: failSecond) { Issue.record("commit po błędzie kopii") }
     }
     #expect(files(old) == before)
+    // R2: nasza częściowa kopia (a, urwane b) zniknęła, obcy plik został.
+    #expect(files(new) == ["foreign.txt"])
+}
+
+@Test func moveCleanupLeavesEntriesItDidNotCreate() async throws {
+    let (old, new) = try oldAndNew()
+    let before = files(old)
+    // Obcy wpis o nazwie sesji pojawia się w celu, zanim do niego dojdziemy — kopia na nim pada, ale go nie kasujemy.
+    let foreignB: RecordingsMove.Copy = { from, to in
+        if from.lastPathComponent == "a" {
+            try FileManager.default.createDirectory(at: to.deletingLastPathComponent().appendingPathComponent("b/obce"),
+                                                    withIntermediateDirectories: true)
+        }
+        try FileManager.default.copyItem(at: from, to: to)
+    }
+    await #expect(throws: RecordingsMove.Failure.self) {
+        _ = try await RecordingsMove.run(from: old, to: new, copy: foreignB) { Issue.record("commit po błędzie kopii") }
+    }
+    #expect(files(old) == before)
+    #expect(files(new) == ["b", "b/obce"])
 }
 
 @Test func moveDeletesNothingWhenVerificationFails() async throws {
@@ -118,19 +165,26 @@ private func oldAndNew() throws -> (URL, URL) {
         _ = try await RecordingsMove.run(from: old, to: new, copy: truncating) { Issue.record("commit po złej weryfikacji") }
     }
     #expect(files(old) == before)
+    // R2: folder utworzony przez przebieg i pusty po sprzątaniu — usunięty; ponowna próba do niego przechodzi.
+    #expect(!FileManager.default.fileExists(atPath: new.path))
+    #expect(try await RecordingsMove.run(from: old, to: new) {}.isEmpty)
+    #expect(files(new) == before)
 }
 
 @Test func moveCopiesVerifiesThenDeletes() async throws {
     let (old, new) = try oldAndNew()
+    try FileManager.default.createDirectory(at: new, withIntermediateDirectories: true) // pusty folder z panelu
     let before = files(old)
     struct NoSave: Error {}
-    // Commit (zapis ustawień) nieudany — nic nie kasujemy.
+    // Commit (zapis ustawień) nieudany — nic nie kasujemy ze starego miejsca, nasza kopia znika, folder zostaje.
     await #expect(throws: RecordingsMove.Failure.self) {
         _ = try await RecordingsMove.run(from: old, to: new) { throw NoSave() }
     }
     #expect(files(old) == before)
-    try FileManager.default.removeItem(at: new)
+    #expect(files(new).isEmpty)
+    #expect(FileManager.default.fileExists(atPath: new.path))
 
+    // Ponowna próba do tego samego folderu (R2).
     let leftovers = try await RecordingsMove.run(from: old, to: new) {}
     #expect(leftovers.isEmpty)
     #expect(files(new) == before)
