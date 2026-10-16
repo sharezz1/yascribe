@@ -500,6 +500,23 @@ w dolnym pasku, jak na `b-add.png`.
     środku dolnej krawędzi (R5); „Show Recording Window” (⌘⌥R) zostaje jako ratunek (R6). Klucz
     ElevenLabs z dostępem tylko do STT (403 przy `GET /v1/models`) to stan ostrzeżenia „Key works
     for transcription only”, nie błąd (R8).
+- **Wyciszanie torów w pigułce (decyzja użytkownika 2026-10-16; faza 1.5, osobne zadanie po scaleniu
+  `faza15-design-b` do `faza15`; zmienia spec decyzję 4 „rozwinięcie tylko do odczytu”):**
+  - w rozwiniętej pigułce przy każdym torze (System audio, Microphone) przełącznik wyciszenia;
+    ikona `mic.slash` / `speaker.slash`, miernik szary i słowo „Muted” (nie sam kolor); w zwiniętej
+    pigułce ikona wyciszonego mikrofonu obok licznika;
+  - wyciszenie **zapisuje cyfrową ciszę**, nie przerwę: tory zostają wyrównane w czasie, transkrypcja
+    i pakowanie okien bez zmian (bramka ciszy pomija wyciszone fragmenty);
+  - każde nagranie startuje **bez wyciszenia**; okresy wyciszenia w dzienniku sesji, w transkrypcie
+    linia „Microphone muted 0:05–0:12”;
+  - nie da się wyciszyć obu torów naraz — przy próbie ostrzeżenie „Nothing is being recorded”;
+  - zmiana w rdzeniu (`MeetNotesRecording`): testy + mutacja (cisza w wyciszonym zakresie, wyrównanie
+    długości torów, zakaz wyciszenia obu).
+- **Drugi odbiór 2026-10-16 (do poprawki):** w zwiniętej pigułce „Stop” łamie się na dwie linie —
+  etykiety w jednej linii, szerokość stanu zwiniętego liczona z treści przy najszerszym liczniku;
+  rozwinięta pigułka na pierwszym planie nadal ma prostokątne rogi okna — panel `borderless` +
+  `nonactivatingPanel`, cień z kształtu treści (odświeżany po zmianie rozmiaru) albo cień w SwiftUI,
+  sprawdzić w stanie aktywnym i nieaktywnym.
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
