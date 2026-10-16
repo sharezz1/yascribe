@@ -3,11 +3,13 @@ import Foundation
 import MeetNotesMeetings
 
 /// Lista procesów Core Audio (`kAudioHardwarePropertyProcessObjectList`) z flagą użycia wejścia. Własny proces pominięty.
-/// Pusta lub nieudana lista → `[]`. Nie loguje niczego.
+/// Pusta lista → `[]`; nieudany odczyt → `nil`. Nie loguje niczego.
 final class AudioProcessMonitor: AudioProcessSource {
-    func snapshot() -> [AudioProcessSample] {
+    func snapshot() -> [AudioProcessSample]? {
         let me = ProcessInfo.processInfo.processIdentifier
-        return Self.processObjects().ids.compactMap { id in
+        let (ids, status) = Self.processObjects()
+        guard status == noErr else { return nil }
+        return ids.compactMap { id in
             guard let pid = Self.number(id, kAudioProcessPropertyPID, as: Int32.self), pid != me else { return nil }
             let input = (Self.number(id, kAudioProcessPropertyIsRunningInput, as: UInt32.self) ?? 0) != 0
             return AudioProcessSample(pid: pid, bundleID: Self.bundleID(id) ?? "", isRunningInput: input)
