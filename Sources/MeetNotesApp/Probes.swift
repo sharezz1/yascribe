@@ -75,9 +75,13 @@ enum Probes {
         }
         let now = Date()
         let day: TimeInterval = 86_400
-        let predicate = store.predicateForEvents(withStart: now - 14 * day, end: now + 7 * day, calendars: nil)
+        // Okno w dniach względem dziś; nadpisywane do sprawdzenia konkretnego wydarzenia (np. OOO za miesiąc).
+        let env = ProcessInfo.processInfo.environment
+        let from = Double(env["MEETNOTES_PROBE_FROM"] ?? "") ?? -14
+        let to = Double(env["MEETNOTES_PROBE_TO"] ?? "") ?? 7
+        let predicate = store.predicateForEvents(withStart: now + from * day, end: now + to * day, calendars: nil)
         let events = store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
-        out("events: \(events.count) in [-14d, +7d]")
+        out("events: \(events.count) in [\(Int(from))d, +\(Int(to))d]")
         out("# dayOffset | allDay | hours | availability | status | calType | myStatus | organizer | attendees | hasURL | url | location | notes | extId | recurring | detached")
         for e in events {
             let me = e.attendees?.first { $0.isCurrentUser }

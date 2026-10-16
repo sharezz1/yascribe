@@ -170,7 +170,7 @@ Spec §4.3.
 - Consumes: `CalendarEventInfo`, `MeetingTuning` (T1).
 - Produces: `enum EventFilter { static func meetingURL(in: CalendarEventInfo, patterns: [String]) -> URL?; static func isOfferable(_: CalendarEventInfo, tuning: MeetingTuning) -> Bool; static func isPickable(_: CalendarEventInfo) -> Bool }`.
 
-Reguły `isOfferable` (wszystkie naraz): `meetingURL != nil` (szuka w `url`, `location`, `notes` — **kolejność pól i wzorce z raportu T0**); `!isAllDay`; czas trwania ≤ `maxEventHours` i ten sam dzień kalendarzowy rozpoczęcia nie przekroczony (blok wielodniowy odpada); `availability != .unavailable` **w sposób, który raport T0 wskazał dla OOO**; `myStatus ∈ {accepted, tentative, none}` (*none* = wydarzenie własne, brak wpisu użytkownika w uczestnikach; **unknown/pending/declined/delegated odpadają** — spec §4.3 pkt 5); `!isCanceled`. Wzorce linków: ogólnie `teams.microsoft.com` (nie `/l/meetup-join` — pomiar T0), `teams.live.com`, `meet.google.com`, `zoom.us/j`; **bez** `webex.com`. `isPickable`: `!isAllDay`, nie OOO (ta sama detekcja), niezależnie od linku i statusu.
+Reguły `isOfferable` (wszystkie naraz): `meetingURL != nil` (szuka w `url`, `location`, `notes` — **kolejność pól i wzorce z raportu T0**); `!isAllDay`; czas trwania ≤ `maxEventHours` i ten sam dzień kalendarzowy rozpoczęcia nie przekroczony (blok wielodniowy odpada); **`availability` nie jest sygnałem OOO** (pomiar T0: OOO z Exchange ma dostępność *busy*; spec §4.3 pkt 4) — nie wchodzi do filtra; `myStatus ∈ {accepted, tentative, none}` (*none* = wydarzenie własne, brak wpisu użytkownika w uczestnikach; **unknown/pending/declined/delegated odpadają** — spec §4.3 pkt 5); `!isCanceled`. Wzorce linków: ogólnie `teams.microsoft.com` (nie `/l/meetup-join` — pomiar T0), `teams.live.com`, `meet.google.com`, `zoom.us/j`; **bez** `webex.com`. `isPickable`: `!isAllDay`, nie OOO (ta sama detekcja), niezależnie od linku i statusu.
 
 - [ ] **Step 1: Testy (padają)** — fixtura `CalendarEventInfo.fixture(...)` z parametrami; wartości pól dla OOO i Teams z raportu T0:
 
@@ -179,6 +179,7 @@ Reguły `isOfferable` (wszystkie naraz): `meetingURL != nil` (szuka w `url`, `lo
 @Test func doctorsVisitWithoutALinkIsNotOfferable()          // wizyta u lekarza: brak linku → false
 @Test func allDayBirthdayIsNotOfferable()
 @Test func allDayOutOfOfficeIsNotOfferable()
+@Test func exchangeOutOfOfficeShownAsBusyIsNotOfferable()        // fixtura z pomiaru T0: całodniowe, 72 h, availability .busy, bez linku i uczestników → false (dostępność nie pomaga, odcinają całodniowe i brak linku)
 @Test func timedOutOfOfficeWithoutLinkIsNotOfferable()
 @Test func multiDayBlockIsNotOfferableEvenWithALink()        // link w OOO wielodniowym nadal odpada
 @Test func declinedAndCanceledAreNotOfferable()
@@ -192,7 +193,7 @@ Reguły `isOfferable` (wszystkie naraz): `meetingURL != nil` (szuka w `url`, `lo
 ```
 
 - [ ] **Step 2–3:** uruchom (FAIL) → zaimplementuj → uruchom (PASS). Wzorce linków jako `NSRegularExpression`-free: `String.contains` po wzorcach z `MeetingTuning.linkPatterns`.
-- [ ] **Step 4: Mutacje** (najpierw `git add Sources/MeetNotesMeetings/EventFilter.swift Tests/MeetNotesMeetingsTests/EventFilterTests.swift`): (a) usuń warunek `!isAllDay` → `allDayBirthday…` pada; (b) usuń warunek linku → `doctorsVisit…` pada; (c') usuń warunek odpowiedzi użytkownika → `unansweredInvitation…` pada; (c) usuń `availability` → `timedOutOfOffice…` pada (jeśli raport T0 pokazał, że OOO nie ma flagi dostępności — ta mutacja dotyczy innej reguły wskazanej w raporcie). Każdą cofnij `git checkout -- <plik>`.
+- [ ] **Step 4: Mutacje** (najpierw `git add Sources/MeetNotesMeetings/EventFilter.swift Tests/MeetNotesMeetingsTests/EventFilterTests.swift`): (a) usuń warunek `!isAllDay` → `allDayBirthday…` pada; (b) usuń warunek linku → `doctorsVisit…` pada; (c) usuń warunek odpowiedzi użytkownika → `unansweredInvitation…` pada; (d) usuń warunek `!isAllDay` **i** warunek linku → `exchangeOutOfOfficeShownAsBusy…` pada (OOO odcinają te dwa warunki, nie dostępność). Każdą cofnij `git checkout -- <plik>`.
 - [ ] **Step 5: `scripts/test.sh`**, commit (`EventFilter.swift`, `EventFilterTests.swift`).
 
 ---

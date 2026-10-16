@@ -172,9 +172,10 @@ Wydarzenie kwalifikuje się do **oferty pigułki** wyłącznie, gdy spełnia **w
 2. nie jest całodniowe (`isAllDay == false`) — urodziny, święta, OOO całodniowe;
 3. nie jest wielodniowe ani dłuższe niż próg (domyślnie 8 h; nastawny) — OOO bywa blokiem
    czasowym lub kilkudniowym, nie tylko całodniowym;
-4. dostępność nie jest „nieobecny" / „poza biurem" (`availability` ≠ `.unavailable` w
-   przypadkach, które spike wskaże jako OOO; **reguła zależna od tego, co Exchange faktycznie
-   emituje**);
+4. **dostępność NIE jest sygnałem OOO.** Pomiar T0 na wpisie OOO użytkownika (1.12.2026,
+   Exchange): wydarzenie całodniowe, 72 h, dostępność *busy* (nie *unavailable*), brak linku,
+   brak uczestników. EventKit nie odróżnia więc OOO flagą dostępności; OOO odcinają warunki
+   1–3 (brak linku, całodniowe, długość). `availability` nie wchodzi do filtra;
 5. **użytkownik odpowiedział na zaproszenie** (decyzja użytkownika 2026-10-16: „nie chcę
    nagrywać spotkań, na które nie odpowiedziałem"): status uczestnictwa to *accepted* albo
    *tentative* (odpowiedział „może"), albo wydarzenie jest własne (brak wpisu użytkownika wśród
