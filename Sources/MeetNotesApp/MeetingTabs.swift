@@ -337,7 +337,8 @@ struct SummaryTab: View {
                     Button("Generate notes") { run() }
                         .buttonStyle(.pillPrimary)
                         .disabled(!hasText || choice == nil)
-                        .keyboardShortcut(.defaultAction)
+                        // ⌘↩, nie sam Return: Return w polu kontekstu ma wstawić nową linię, a nie uruchomić płatne generowanie.
+                        .keyboardShortcut(.return, modifiers: .command)
                 }
             }
             if state.showContext { ContextEditor(text: $state.context).padding(.horizontal, 2).padding(.bottom, 2) }
