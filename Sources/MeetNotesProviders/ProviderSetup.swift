@@ -114,6 +114,9 @@ public enum EmbeddingChoice {
 public enum ProviderCheck: Equatable, Sendable {
     case verified(models: Int)
     case failed(String)
+    /// Klucz działa do transkrypcji, ale test przez listę modeli go odrzucił (ElevenLabs: klucz z zakresem tylko STT → 403).
+    /// To ostrzeżenie, nie błąd: bez Retry, tekst do pokazania.
+    case limited(String)
 
     public static func describe(_ error: Error) -> String {
         if let p = error as? ProviderError {

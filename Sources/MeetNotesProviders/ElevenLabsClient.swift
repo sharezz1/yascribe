@@ -93,7 +93,7 @@ public struct ElevenLabsClient: TranscriptionClient {
         return try Self.parse(try checkedBody(data, resp, key: key))
     }
 
-    /// Test klucza: `GET /v1/models` (2xx = klucz działa). „N models" = modele dla ról, które ElevenLabs obsługuje (1).
+    /// Test klucza: `GET /v1/models` (2xx = klucz działa; 403 = `.limited`, klucz tylko do STT). „N models" = modele dla ról, które ElevenLabs obsługuje (1).
     public func verify() async -> ProviderCheck {
         guard let key else { return .failed(ProviderCheck.describe(ProviderError.missingKey)) }
         var r = URLRequest(url: provider.baseURL.appendingPathComponent("models"))
@@ -103,6 +103,9 @@ public struct ElevenLabsClient: TranscriptionClient {
             let (data, resp) = try await http.send(r)
             _ = try checkedBody(data, resp, key: key)
             return .verified(models: Self.models(for: .asr).count)
+        } catch ProviderError.http(403, _) {
+            // Klucz z zakresem tylko speech-to-text nie czyta `/v1/models`, a transkrybuje (decyzja 2026-10-16).
+            return .limited("Key works for transcription only")
         } catch ProviderError.http(404, _) {
             return .failed("Wrong address: use https://api.elevenlabs.io/v1.")
         } catch {

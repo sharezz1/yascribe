@@ -277,6 +277,7 @@ private struct ProviderRowView: View {
             switch model.providerChecks[p.id] {
             case .verified(let n)?: StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s")")
             case .failed(let why)?: StateLabel(.bad, "Failed").help(why)
+            case .limited(let why)?: WarnLabel(why)
             case nil: StateLabel(.neutral, "Not verified")
             }
         }
@@ -371,6 +372,7 @@ struct ProviderSetupSheet: View {
             switch r {
             case .verified(let n): StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s") available")
             case .failed(let why): StateLabel(.bad, why)
+            case .limited(let why): WarnLabel(why)
             }
         } else if let n = state.note {
             StateLabel(.neutral, n)
