@@ -221,3 +221,13 @@ Zapis w `docs/design/macos.md` §11.5 (`9cbe688`, `2bd91aa`, `dcefcdd` na `faza1
 4. Spotkanie w trakcie nagrania: autotytuł pojawia się w polu (czarny) i w wierszu listy; Enter bez zmiany nie zapisuje `manualTitle`; dopisanie słowa zapisuje ręczny.
 5. „Show scroll bars: Always”: Transcript ↔ My notes — kolumna stoi.
 6. Sesja `af52`: brak ⚠ na liście, chip „ⓘ System audio”, popover, linia nad transkryptem.
+
+### Decyzje (a)–(d) (2026-10-16)
+
+(a) placeholder bez zmian; (b) trwałe zdarzenie w dzienniku → osobne zadanie wyciszania torów; (d) jednorazowy reset
+rozmiaru okna przyjęty. **(c) zrobione** (`eb42d7b`): `PillPanel.becomeKey()` → `makeFirstResponder(nil)` — przyczyna:
+SwiftUI ustawiał first responder z fokusem na Stop jeszcze przed staniem się kluczem, więc po kliknięciu w tło Space
+zatrzymywał nagranie (sonda: `stopCount=1`). Po poprawce: brak pierścienia i brak reakcji na Space/Return po kliknięciu;
+Tab daje pierścień na Stop (Full Keyboard Access działa); ⌘. dalej zatrzymuje. Dowód: sonda z syntetycznymi `NSEvent`
+(nie CGEvent — nie dotyka innych aplikacji); `scripts/test.sh` 236/236 w worktree agenta. W tym worktree nie
+przebudowywano `.build` w trakcie trzeciego odbioru — wymaga przebudowy (`run.sh` po zamknięciu aplikacji).
