@@ -434,6 +434,20 @@ w dolnym pasku, jak na `b-add.png`.
   podczas nagrywania (D3**, odstępstwo 1, W§1). Przed startem pigułkę chowa pozycja w menu
   Window („Hide Recording Window”). Okno pigułki dopasowane do treści, bez przezroczystego
   marginesu łapiącego kliknięcia.
+- **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
+  edytor). Szablon to **lista sekcji** (wzór Granola): karta z tytułem (SF 13 Semibold) i
+  instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
+  kontekstowym), pod listą „Add section”. Nad sekcjami opcjonalne pole „About this meeting type”.
+  Pola rosną z treścią, bez własnego przewijania (koniec szarego toru paska przewijania). Prompt dla
+  modelu składa się z sekcji po kolei. Nowe pole `sections` jest opcjonalne (E6); stary szablon z
+  jednym promptem wczytuje się jako jedna sekcja. **Wbudowane szablony da się edytować w miejscu**
+  (decyzja użytkownika 2026-10-16, zmienia spec §5.4 „tylko do odczytu”): oznaczenie „Built-in ·
+  edited”, w „⋯” Duplicate i Reset to default. Własne: w „⋯” Duplicate i Delete template… z
+  potwierdzeniem. Wbudowanych nie da się usunąć, bo wystarcza reset. Dół: „Unsaved changes”,
+  Cancel / Save. Bez ikon i emoji przy szablonach (§11.6).
+- **Pasek narzędzi okna** (odbiór 2026-10-16, uwaga 1): bez osobnego tła i linii pod spodem; ciepłe
+  `background` sięga górnej krawędzi okna, tytułu w pasku nie ma (tytuł strony jest w treści). W pasku
+  zostają tylko przycisk sidebara i, w widoku spotkania, wstecz i „⋯”.
 - **Sidebar (D7):** Meetings na górze; Presets / Templates / Settings na dole, **bez nagłówka
   sekcji** („Setup” znika).
 
