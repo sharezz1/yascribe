@@ -1,4 +1,5 @@
 import AppKit
+import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesProviders
 import MeetNotesRecording
@@ -209,6 +210,22 @@ enum Snapshots {
                 let sheetCustom = ProviderSheetState(); sheetCustom.setUp(.custom); sheetCustom.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
                 try render("settings-sheet-custom", size: CGSize(width: 520, height: 400), dark: dark, model: model) { ProviderSetupSheet(state: sheetCustom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                // Faza 1.6 T7: Integrations + Meeting detection (kalendarz połączony, trzy kalendarze, jeden odznaczony; Advanced rozwinięte).
+                let meetingState = MeetingSettingsState()
+                meetingState.authorization = .granted
+                meetingState.calendars = [CalendarInfo(id: "a", title: "Work"), CalendarInfo(id: "b", title: "Personal"), CalendarInfo(id: "c", title: "Holidays")]
+                meetingState.advancedOpen = true
+                meetingState.ignoredText = "com.example.dictation"
+                model.settings.meetings = MeetingSettings(autoStart: true, appleCalendarEnabled: true, calendarIDs: ["a", "b"], startSeconds: 15)
+                meetingState.load(model.settings.meetings)
+                try render("settings-meetings", size: CGSize(width: 900, height: 900), dark: dark, model: model) {
+                    ScrollPage(640) { VStack(alignment: .leading, spacing: 0) { MeetingSettingsSections(state: meetingState) } }.contentBackground()
+                }
+                let meetingDenied = MeetingSettingsState(); meetingDenied.authorization = .denied
+                model.settings.meetings = nil
+                try render("settings-meetings-denied", size: CGSize(width: 900, height: 560), dark: dark, model: model) {
+                    ScrollPage(640) { VStack(alignment: .leading, spacing: 0) { MeetingSettingsSections(state: meetingDenied) } }.contentBackground()
+                }
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —
                 // nie używamy go w migawkach.

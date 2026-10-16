@@ -65,6 +65,7 @@ struct SettingsView: View {
                         }
                     }
                     RecordingsSection() // uwaga 8: między Providers a Archive search
+                    MeetingSettingsSections()
                     archiveSearch
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Speech-to-text, correction and summary models are chosen in each preset.")
