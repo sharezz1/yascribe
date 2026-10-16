@@ -127,7 +127,7 @@ struct MeetingDetailView: View {
     /// autotytuł zapisany przy otwartym widoku (nagranie otwiera spotkanie od razu) trafia do pola po przeładowaniu sesji.
     private var titleField: Binding<String> {
         Binding(get: { state.titleEdit ?? NoteTitle.fieldText(meta: item.notes.meta, noteTitle: item.notes.summary?.title) },
-                set: { state.titleEdit = NoteTitle.isEdit($0, meta: item.notes.meta, noteTitle: item.notes.summary?.title) ? $0 : nil })
+                set: { state.titleEdit = NoteTitle.fieldEdit($0, meta: item.notes.meta, noteTitle: item.notes.summary?.title) })
     }
 
     /// Poprawka 6: problem toru nagrania w linii chipów; klik = wyjaśnienie zwykłym językiem.
