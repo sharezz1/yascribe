@@ -99,6 +99,7 @@ struct MeetingDetailView: View {
                 .textFieldStyle(.plain)
                 .documentTitle()
                 .onSubmit { model.notes.setManualTitle(state.titleDraft, for: item) }
+                .disabled(model.recordingsMove != nil)
             HStack(spacing: 12) {
                 MetaLine([
                     item.startedAt.formatted(date: .abbreviated, time: .shortened),
@@ -108,6 +109,8 @@ struct MeetingDetailView: View {
                 ])
                 if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
             }
+            // R3: na czas przenoszenia folderu nagrań spotkanie jest tylko do odczytu.
+            if model.recordingsMove != nil { StateLabel(.progress(nil), "Moving recordings…") }
             if !item.notes.problems.isEmpty {
                 Label("\(item.notes.problems.joined(separator: ", ")) in this meeting's notes couldn't be read. They're kept aside before anything new is saved.",
                       systemImage: "exclamationmark.triangle")
