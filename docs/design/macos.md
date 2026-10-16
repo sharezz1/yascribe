@@ -434,6 +434,16 @@ w dolnym pasku, jak na `b-add.png`.
   podczas nagrywania (D3**, odstępstwo 1, W§1). Przed startem pigułkę chowa pozycja w menu
   Window („Hide Recording Window”). Okno pigułki dopasowane do treści, bez przezroczystego
   marginesu łapiącego kliknięcia.
+  **Odbiór 2026-10-16 (uwagi 3–4):**
+  - okno przezroczyste, bez własnego tła; cień z kształtu treści (promień 20), żadnych
+    prostokątnych rogów pod szkłem;
+  - **stały rozmiar w każdym stanie** (przed startem, zwinięta, rozwinięta); licznik cyframi
+    o stałej szerokości; rozmiar zmienia się tylko przy zmianie stanu, zakotwiczony w jednym rogu;
+  - **przesuwanie za tło** (nie za przyciski), pozycja zapamiętana między uruchomieniami,
+    domyślnie dół ekranu, środek;
+  - **gdy nie nagrywa: widoczny mały ✕** (nie tylko po najechaniu) chowa pigułkę. Podczas
+    nagrywania ✕ nie ma (D3). Pigułka wraca przy starcie nagrania albo z menu Window
+    („Show Recording Window”).
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór Granola): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
