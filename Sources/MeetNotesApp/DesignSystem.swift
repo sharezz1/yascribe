@@ -80,6 +80,38 @@ extension View {
     }
 }
 
+/// Przewijana strona z kolumną `contentColumn(width)` (odbiór 2026-10-16, błąd 5). Przy stałych paskach przewijania
+/// („Show scroll bars: Always") długa strona dostaje pasek 17 pt, który zwęża obszar treści — kolumna centrowana w nim
+/// przeskakiwała o ~8 pt przy zmianie zakładki. Tu kolumna jest centrowana względem całej szerokości strony: o szerokość
+/// widocznego paska (zewnętrzna − wewnętrzna) przesuwamy lewy brzeg obszaru kolumny, więc jej środek się nie rusza,
+/// a tekst nie wchodzi pod pasek. Przy paskach nakładanych różnica = 0. `.scrollIndicators(.visible)` nic tu nie
+/// rezerwuje (sprawdzone), a treść szersza niż widok wypycha pasek poza okno.
+struct ScrollPage<Content: View>: View {
+    final class Widths: ObservableObject {
+        @Published var outer: CGFloat = 0
+        @Published var inner: CGFloat = 0
+    }
+
+    let width: CGFloat
+    let content: Content
+    @StateObject private var widths = Widths()
+
+    init(_ width: CGFloat, @ViewBuilder content: () -> Content) {
+        self.width = width
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView {
+            content
+                .contentColumn(width)
+                .padding(.leading, max(0, widths.outer - widths.inner))
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths.inner = $0 }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths.outer = $0 }
+    }
+}
+
 /// Nagłówek sekcji / karty: SF 13 Semibold, opcjonalny dopisek („— optional”) i kontrolka po prawej.
 struct SectionHeader<Trailing: View>: View {
     let title: String
