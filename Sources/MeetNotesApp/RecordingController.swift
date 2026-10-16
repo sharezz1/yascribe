@@ -23,8 +23,8 @@ final class RecordingController {
     private var started = Date()
     private var panel: NSPanel?
     private var levelTimer: Timer?
-    /// Czy pływające okno jest na ekranie — steruje pozycją „Hide Recording Window” w menu Window (D3).
-    private(set) var isPanelVisible = false
+    /// Stan rozwinięcia pigułki; żyje tu, bo okno jest tworzone raz i chowane po każdym nagraniu.
+    private let pill = PillState()
 
     /// Drugi start przy żywym rejestratorze wyciekłby pierwszy (check S15 #1).
     enum StartError: Error { case alreadyRecording }
@@ -64,6 +64,17 @@ final class RecordingController {
 
     func stop() { recorder?.stop(reason: .button) }
 
+    /// Migawki (`Snapshots.swift`): kontroler w stanie „trwa nagranie” bez rejestratora i czasomierzy.
+    static func snapshotPreview(elapsed: TimeInterval) -> RecordingController {
+        let r = RecordingController()
+        r.isRecording = true
+        r.elapsed = elapsed
+        r.presetLabel = "Polish · PL"
+        r.micName = "MacBook Air Microphone"
+        r.levels = ["system": -22, "mic_raw": -41]
+        return r
+    }
+
     private func finish(_ reason: EndReason) {
         isRecording = false
         lastEndReason = reason
@@ -74,59 +85,128 @@ final class RecordingController {
         levels = [:]
         recorder = nil
         directory = nil
+        hidePanel()
     }
 
+    /// Pigułka jest widoczna tylko podczas nagrywania (odbiór 2026-10-16): pokazuje ją start nagrania,
+    /// chowa `finish`. Ponowne wywołanie (Cmd-Opt-R) wynosi ją na wierzch i wciąga z powrotem na ekran.
     func showPanel(model: AppModel) {
-        if panel == nil { panel = makePanel(model: model) }
-        panel?.orderFrontRegardless()
-        isPanelVisible = true
+        guard isRecording else { return }
+        if panel == nil { panel = makePanel(model: model, pill: pill) }
+        guard let panel, let host = panel.contentView as? PillHostingView<RecordingPanelView> else { return }
+        host.fit(placing: !panel.isVisible)
+        panel.orderFrontRegardless()
     }
 
-    /// D3: chowanie tylko przed startem (menu Window); podczas nagrywania okno nie ma jak zniknąć.
-    func hidePanel() {
-        guard !isRecording else { return }
+    private func hidePanel() {
         panel?.orderOut(nil)
-        isPanelVisible = false
+        pill.expanded = false
     }
 }
 
-/// Stan rozwinięcia pigułki; rozmiar okna podąża za treścią (`PillHostingView`).
+/// Stan rozwinięcia pigułki; rozmiar okna zmienia się tylko razem z nim (`PillHostingView`).
 final class PillState: ObservableObject {
     @Published var expanded = false
 }
 
-/// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia). Gdy treść
-/// zmienia rozmiar (zwinięta↔rozwinięta, szerszy licznik), okno dopasowuje się, a górna krawędź zostaje w miejscu.
+/// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia), a treść ma stały
+/// rozmiar w każdym stanie (licznik o stałej szerokości, nazwa mikrofonu z zarezerwowanymi dwoma wierszami).
+/// Dlatego okno zmienia rozmiar WYŁĄCZNIE przy zmianie `pill.expanded` — nie przy każdym tiku licznika.
+/// Kotwica: lewy dolny róg (pigułka stoi domyślnie przy dole ekranu, więc rośnie w górę i w prawo, w głąb
+/// ekranu); gdyby się nie mieściła, okno jest wsuwane na ekran.
 private final class PillHostingView<Content: View>: NSHostingView<Content> {
+    static var originKey: String { "recordingPillOrigin" }
+    private let pill: PillState
+    private var fittedExpanded: Bool?
     private var fitScheduled = false
+    private var fitting = false
+    private var moveObserver: NSObjectProtocol?
 
-    override func invalidateIntrinsicContentSize() {
-        super.invalidateIntrinsicContentSize()
-        scheduleFit()
+    init(rootView: Content, pill: PillState) {
+        self.pill = pill
+        super.init(rootView: rootView)
+        // Bez automatycznego rozmiaru okna z min/max treści (kotwiczy górną krawędź); rozmiar ustawia tylko `fit`.
+        sizingOptions = [.intrinsicContentSize]
     }
-    override func layout() {
-        super.layout()
-        scheduleFit()
-    }
+    @available(*, unavailable) required init(rootView: Content) { fatalError() }
+    @available(*, unavailable) @MainActor required dynamic init?(coder: NSCoder) { fatalError() }
 
-    private func scheduleFit() {
-        guard !fitScheduled else { return }
-        fitScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            self?.fitScheduled = false
-            self?.fitWindow()
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let w = window else { return }
+        // Pozycję zapamiętuje tylko przeciągnięcie przez użytkownika, nie nasza zmiana rozmiaru.
+        moveObserver = NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: w, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.fitting, let w = self.window else { return }
+                UserDefaults.standard.set(NSStringFromPoint(w.frame.origin), forKey: Self.originKey)
+            }
         }
     }
 
-    private func fitWindow() {
-        guard let w = window else { return }
-        let size = fittingSize
-        guard size.width > 0, size.height > 0, size != w.contentRect(forFrameRect: w.frame).size else { return }
-        var f = w.frameRect(forContentRect: NSRect(origin: .zero, size: size))
-        f.origin = NSPoint(x: w.frame.minX, y: w.frame.maxY - f.height)
-        w.setFrame(f, display: true)
-        w.invalidateShadow()
+    /// Gesty SwiftUI (przeciąganie za tło, `WindowDragGesture`) działają tylko w oknie klucza, a nieaktywująca
+    /// aplikacji pigułka nim nie jest, dopóki się jej nie kliknie — więc pierwszy klik robi z niej okno klucza.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    override func mouseDown(with event: NSEvent) {
+        if let w = window, !w.isKeyWindow { w.makeKey() }
+        super.mouseDown(with: event)
     }
+
+    override func layout() {
+        super.layout()
+        // Zmiana stanu dociera do układu po przebudowie widoku SwiftUI; dopasowanie po kolejce, gdy treść już nowa.
+        guard fittedExpanded != pill.expanded, !fitScheduled else { return }
+        fitScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            self?.fitScheduled = false
+            self?.fit()
+        }
+    }
+
+    /// `placing`: okno dopiero pojawia się — ustaw je w zapamiętanym albo domyślnym miejscu.
+    func fit(placing: Bool = false) {
+        guard let w = window else { return }
+        layoutSubtreeIfNeeded()
+        let size = fittingSize
+        guard size.width > 0, size.height > 0 else { return }
+        guard placing || fittedExpanded != pill.expanded else { return }
+        fittedExpanded = pill.expanded
+        var f = w.frameRect(forContentRect: NSRect(origin: .zero, size: size))
+        if placing {
+            f.origin = Self.savedOrigin() ?? Self.defaultOrigin(size: f.size)
+        } else {
+            f.origin = w.frame.origin // lewy dolny róg stoi w miejscu
+        }
+        f = Self.onScreen(f)
+        fitting = true
+        w.setFrame(f, display: true)
+        fitting = false
+        // Cień z kształtu treści (promień 20 / kapsuła) liczy się dopiero po układzie nowej treści.
+        DispatchQueue.main.async { w.invalidateShadow() }
+    }
+
+    private static func savedOrigin() -> NSPoint? {
+        UserDefaults.standard.string(forKey: originKey).map(NSPointFromString)
+    }
+
+    /// Domyślnie: dół ekranu, środek, z marginesem nad dokiem (`visibleFrame` już go omija).
+    private static func defaultOrigin(size: NSSize) -> NSPoint {
+        let v = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        return NSPoint(x: v.midX - size.width / 2, y: v.minY + 24)
+    }
+
+    /// Wsuwa okno w `visibleFrame` ekranu, z którym ma największą część wspólną (po odpięciu monitora — w główny).
+    private static func onScreen(_ f: NSRect) -> NSRect {
+        let best = NSScreen.screens.max { $0.frame.intersection(f).area < $1.frame.intersection(f).area }
+        guard let v = (best.flatMap { $0.frame.intersection(f).area > 0 ? $0 : nil } ?? NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return f }
+        var r = f
+        r.origin.x = min(max(r.minX, v.minX), max(v.minX, v.maxX - r.width))
+        r.origin.y = min(max(r.minY, v.minY), max(v.minY, v.maxY - r.height))
+        return r
+    }
+}
+
+private extension NSRect {
+    var area: CGFloat { isNull ? 0 : width * height }
 }
 
 /// Panel bez ramki i tytułu, żeby szkło (§6.2) było jedynym tłem. Bez `canBecomeKey` panel `.borderless`
@@ -138,8 +218,8 @@ private final class PillPanel: NSPanel {
 extension RecordingController {
     /// 🔀 Odstępstwa 1 i 2 (`docs/design/macos.md` §10): okno zostaje na wierzchu, gdy aktywny
     /// jest Teams, i klik w nie nie odbiera fokusu spotkaniu.
-    func makePanel(model: AppModel) -> NSPanel {
-        let host = PillHostingView(rootView: RecordingPanelView(model: model, pill: PillState()))
+    fileprivate func makePanel(model: AppModel, pill: PillState) -> NSPanel {
+        let host = PillHostingView(rootView: RecordingPanelView(model: model, pill: pill), pill: pill)
         let p = PillPanel(contentRect: NSRect(origin: .zero, size: host.fittingSize),
                           styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         p.title = "Recording" // nie widać, ale czyta go VoiceOver i menu Window
@@ -147,25 +227,31 @@ extension RecordingController {
         p.isFloatingPanel = true
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
+        // W pełni przezroczyste okno: kształt (promień 20 / kapsuła) daje tylko szkło, system liczy z niego cień.
         p.isOpaque = false
         p.backgroundColor = .clear
-        p.hasShadow = true // cień kształtu szkła rysuje system; w treści cieni nie ma
+        p.hasShadow = true
+        // Przeciąganie za tło; przyciski SwiftUI przechwytują własne kliknięcia.
         p.isMovableByWindowBackground = true
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         p.contentView = host
-        p.center()
         return p
     }
 }
 
 /// Szkło tylko tutaj (§6.2): Liquid Glass regular od macOS 26, niżej zwykły materiał z cienką obwódką.
+/// Całe szkło przeciąga okno (`WindowDragGesture`); przyciski w środku mają pierwszeństwo przed gestem rodzica.
 private extension View {
     @ViewBuilder func pillGlass<S: InsettableShape>(_ shape: S) -> some View {
-        if #available(macOS 26, *) {
-            glassEffect(.regular, in: shape)
-        } else {
-            background(.regularMaterial, in: shape).overlay(shape.strokeBorder(.mnLine, lineWidth: 0.5))
+        Group {
+            if #available(macOS 26, *) {
+                glassEffect(.regular, in: shape)
+            } else {
+                background(.regularMaterial, in: shape).overlay(shape.strokeBorder(.mnLine, lineWidth: 0.5))
+            }
         }
+        .contentShape(shape)
+        .gesture(WindowDragGesture())
     }
 }
 
@@ -206,33 +292,25 @@ private struct PillIconButton: View {
 
 struct RecordingPanelView: View {
     let model: AppModel
+    /// Domyślnie kontroler aplikacji; migawki podają własny, z wymuszonym stanem nagrywania.
+    var recording: RecordingController?
     @ObservedObject var pill: PillState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    init(model: AppModel, recording: RecordingController? = nil, pill: PillState) {
+        self.model = model; self.recording = recording; self.pill = pill
+    }
+
     var body: some View {
-        let rec = model.recording
+        let rec = recording ?? model.recording
         Group {
-            if rec.isRecording && pill.expanded {
+            if pill.expanded {
                 expandedBody(rec).padding(14).frame(width: 320).pillGlass(RoundedRectangle(cornerRadius: 20, style: .continuous))
             } else {
-                HStack(spacing: 8) {
-                    if rec.isRecording { collapsedBody(rec) } else { idleBody }
-                }
-                .padding(6).padding(.leading, 8).frame(height: 44).pillGlass(Capsule())
+                collapsedBody(rec).padding(6).padding(.leading, 8).frame(height: 44).pillGlass(Capsule())
             }
         }
         .environment(model)
-    }
-
-    /// Przed startem: preset z językiem widoczny i wybierany tutaj (W§2, W§6) + Record.
-    private var idleBody: some View {
-        HStack(spacing: 8) {
-            PresetMenu(width: nil)
-            Button { model.startRecording() } label: {
-                HStack(spacing: 6) { Circle().fill(.mnRecDot).frame(width: 8, height: 8).accessibilityHidden(true); Text("Record") }
-            }
-            .buttonStyle(PillButtonStyle(kind: .primary, large: true))
-        }
     }
 
     private func collapsedBody(_ rec: RecordingController) -> some View {
@@ -240,8 +318,10 @@ struct RecordingPanelView: View {
             // Stały wskaźnik, bez pulsowania (§7); stan mówi też licznik i słowo Stop.
             Circle().fill(.mnRecDot).frame(width: 8, height: 8).accessibilityHidden(true)
             LevelBars(fraction: Self.fraction(rec), animated: !reduceMotion)
-            Text(Self.shortClock(rec.elapsed)).font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(.mnText)
-                .frame(minWidth: 38, alignment: .leading).accessibilityLabel("Recording \(Self.shortClock(rec.elapsed))")
+            // Stała szerokość na najdłuższy format (00:00:00), żeby okno nie skakało przy przejściu 59:59 → 1:00:00.
+            Text("00:00:00").hidden().accessibilityHidden(true)
+                .overlay(alignment: .leading) { Text(Self.shortClock(rec.elapsed)).accessibilityLabel("Recording \(Self.shortClock(rec.elapsed))") }
+                .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(.mnText)
             Button("Stop") { rec.stop() }.buttonStyle(StopButtonStyle()).keyboardShortcut(".", modifiers: .command)
             PillIconButton(systemImage: "chevron.up", label: "Show details") { pill.expanded = true }
         }
@@ -347,7 +427,7 @@ struct LevelRow: View {
                 .frame(width: 14).accessibilityLabel(hasSignal ? "Signal present" : "No signal")
             }
             if let detail = parts.detail {
-                Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2).padding(.leading, 22)
+                Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2, reservesSpace: true).padding(.leading, 22) // dwa wiersze zawsze: rozmiar rozwiniętej pigułki nie zależy od nazwy mikrofonu
             }
         }
     }

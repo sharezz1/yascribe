@@ -134,9 +134,12 @@ enum Snapshots {
                 try render("templates-builtin", size: CGSize(width: 900, height: 640), dark: dark, model: model) { TemplatesView(state: builtin) }
                 let custom = TemplateEditorState(); custom.startNew()
                 try render("templates-new", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: custom) }
-                // T10: pigułka przed startem; stanu nagrywania nie da się wymusić w migawce (→ odbiór ręczny T13),
-                // więc osobno wiersze poziomów torów z rozwiniętej pigułki.
-                try render("pill-idle", size: CGSize(width: 360, height: 64), dark: dark, model: model) { RecordingPanelView(model: model, pill: PillState()) }
+                // Odbiór 2026-10-16: pigułka istnieje tylko podczas nagrywania — zwinięta i rozwinięta (kontroler z wymuszonym
+                // stanem; okno, cień i przesuwanie to odbiór na żywo), plus osobno wiersze poziomów torów.
+                let live = RecordingController.snapshotPreview(elapsed: 754)
+                try render("pill-collapsed", size: CGSize(width: 360, height: 64), dark: dark, model: model) { RecordingPanelView(model: model, recording: live, pill: PillState()) }
+                let open = PillState(); open.expanded = true
+                try render("pill-expanded", size: CGSize(width: 360, height: 270), dark: dark, model: model) { RecordingPanelView(model: model, recording: live, pill: open) }
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Preset: Polish · PL").font(.caption).foregroundStyle(.secondary)
