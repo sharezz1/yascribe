@@ -176,6 +176,12 @@ enum Snapshots {
                     model.providerChecks[ollama.id] = .failed("Can't connect. Is the server running and the address correct?")
                     try render("settings-failed", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                     model.providers.providers.removeAll { $0.id == ollama.id }
+                    // R8: klucz ElevenLabs tylko do transkrypcji (403 z /v1/models) = ostrzeżenie, nie błąd.
+                    let eleven = Provider(name: "ElevenLabs", baseURL: URL(string: "https://api.elevenlabs.io/v1")!, kind: .elevenLabs)
+                    model.providers.providers.append(eleven)
+                    model.providerChecks[eleven.id] = .limited("Key works for transcription only")
+                    try render("settings-limited", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                    model.providers.providers.removeAll { $0.id == eleven.id }
                     model.providerChecks[pid] = nil
                 }
                 // Arkusz osobną migawką (b-add.png): ElevenLabs z wynikiem, błąd klucza, Custom z błędem adresu.
@@ -183,6 +189,8 @@ enum Snapshots {
                 try render("settings-sheet-verified", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetOK) }
                 let sheetBad = ProviderSheetState(); sheetBad.setUp(.elevenLabs); sheetBad.result = .failed("Key rejected (401). Check the key and try again.")
                 try render("settings-sheet-failed", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetBad) }
+                let sheetLimited = ProviderSheetState(); sheetLimited.setUp(.elevenLabs); sheetLimited.result = .limited("Key works for transcription only")
+                try render("settings-sheet-limited", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetLimited) }
                 let sheetCustom = ProviderSheetState(); sheetCustom.setUp(.custom); sheetCustom.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
                 try render("settings-sheet-custom", size: CGSize(width: 520, height: 400), dark: dark, model: model) { ProviderSetupSheet(state: sheetCustom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
