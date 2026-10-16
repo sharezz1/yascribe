@@ -432,8 +432,8 @@ Spec §4.8. Po zadaniu **przegląd Opusa**.
 **Interfaces:**
 - Consumes: `MeetingMonitor.state` (T10), `AppModel.setLaunchAtLogin` (T7).
 
-- [ ] **Step 1: `MenuBarExtra`** z menu: stan wykrywania (Detecting meetings / Detection off), „Open MeetNotes", „Quit MeetNotes" (tekst pod spodem: „Quitting turns off detection"). Ikona w Docku zostaje (bez `LSUIElement`).
-- [ ] **Step 2: Zamknięcie okna nie kończy aplikacji** (`applicationShouldTerminateAfterLastWindowClosed` → `false`, jeśli domyślne zachowanie `WindowGroup` na to nie pozwala); pigułka działa przy zamkniętym oknie.
+- [x] **Step 1: `MenuBarExtra`** z menu: stan wykrywania (Detecting meetings / Detection off), „Open MeetNotes", „Quit MeetNotes" (tekst pod spodem: „Quitting turns off detection"). Ikona w Docku zostaje (bez `LSUIElement`).
+- [x] **Step 2: Zamknięcie okna nie kończy aplikacji** (`applicationShouldTerminateAfterLastWindowClosed` → `false`, jeśli domyślne zachowanie `WindowGroup` na to nie pozwala); pigułka działa przy zamkniętym oknie.
 - [ ] **Step 3: Weryfikacja ręczna:** zamknij okno, wymuś ofertę, sprawdź pigułkę; „Quit" wyłącza wykrywanie; `scripts/test.sh` zielony; commit.
 
 **🛑 STOP (Opus + użytkownik):** przed odbiorem na żywo — krótki przegląd, czy nic nie startuje nagrywania bez Teams, czy po Stop rozmowa nie wywołuje auto-startu od nowa i czy „Quit" faktycznie wyłącza wykrywanie.
