@@ -460,6 +460,11 @@ w dolnym pasku, jak na `b-add.png`.
   `docs/design/makiety/logo-dostawcow/` (źródła i zasady użycia w `ZRODLA.md`); w ciemnym motywie
   wariant ciemny właściciela (OpenRouter) albo odwrócenie na biel (ElevenLabs, Ollama). Makiety:
   `b-settings.png`, `b-add.png`.
+  **Archive search (uwaga 6):** model embeddingu wybiera się tak jak w Presets: wiersz „Provider”
+  (`FieldMenuStyle`, tylko skonfigurowani dostawcy, którzy mają modele embeddingu — dziś OpenRouter
+  i Ollama, ElevenLabs nie) i pod nim „Embedding model” (`ModelField`, lista z wybranego dostawcy,
+  `?output_modalities=embeddings` dla OpenAI-compatible). Bez wiersza „Provider”, gdy pasuje tylko jeden
+  dostawca. Zmiana dostawcy czyści wybór modelu; potwierdzenie zmiany embeddingu bez zmian (spec §5.4).
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór Granola): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
