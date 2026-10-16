@@ -303,10 +303,18 @@ const providers = th => `<div class="card" style="overflow:hidden">
     ${prow(th,'ol','Ollama','Runs on this Mac · correction and summary only, no transcription', `<span class="state bad">${I.x}Not reachable</span><span class="pill sm">Retry</span><div class="icon-btn">${I.more}</div>`)}
     ${prow(th,'cu','Custom endpoint','Any OpenAI-compatible API · address and key', `<span class="pill sm">Add…</span>`)}
   </div>`;
-const settingsBody = th => `<div class="main"><div class="col" style="width:640px">
+const settingsBody = th => `<div class="main"><div class="col" style="width:640px;transform:translateY(-40px)">
   <div class="t-large" style="margin-bottom:4px">Settings</div>
   <div class="sec-h"><span class="t-head">Providers</span></div>
   ${providers(th)}
+  <div class="sec-h"><span class="t-head">Recordings</span><span class="t-cap num">4.2 GB on disk</span></div>
+  <div class="card">
+    <div class="form-row"><label>Location</label><div style="display:flex;align-items:center;gap:8px;min-width:0">
+      <div class="field" style="flex:1;box-shadow:none;background:transparent;padding:0"><span class="grow">~/Library/Application Support/MeetNotes/Meetings</span></div>
+      <span class="pill sm">Change…</span><span class="pill sm">Show in Finder</span></div></div>
+    <div class="form-row" style="align-items:start"><label style="padding-top:6px">Keep audio</label><div>${popup('30 days',140)}
+      <div class="t-cap" style="margin-top:6px">After this, a meeting’s audio is deleted. Transcripts and notes stay. Audio is kept until its transcription has finished.</div></div></div>
+  </div>
   <div class="sec-h"><span class="t-head">Archive search</span></div>
   <div class="card"><div class="form-row"><label>Embedding model</label>${model('OpenRouter','openai/text-embedding-3-small')}</div></div>
   <p class="dim" style="margin:14px 2px 0;font-size:12px;line-height:16px">Speech-to-text, correction and summary models are chosen in each preset. <span class="link">Open Presets</span></p>
