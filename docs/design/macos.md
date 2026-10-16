@@ -517,6 +517,13 @@ w dolnym pasku, jak na `b-add.png`.
   rozwinięta pigułka na pierwszym planie nadal ma prostokątne rogi okna — panel `borderless` +
   `nonactivatingPanel`, cień z kształtu treści (odświeżany po zmianie rozmiaru) albo cień w SwiftUI,
   sprawdzić w stanie aktywnym i nieaktywnym.
+  Dalej z drugiego odbioru (błędy wykonania): „Open note” w pigułce nic nie robi (ma aktywować
+  aplikację, otworzyć/wysunąć okno główne i przejść do My notes nagrywanego spotkania); tytuł
+  spotkania zostaje „Untitled meeting”, choć autotytuł jest zapisany (`notes/meta.json`) — pole
+  tytułu pokazuje tytuł wyliczony wg decyzji 18 w kolorze `text`, a nie placeholder, i odświeża się
+  po zapisie autotytułu; kolumna widoku spotkania przeskakuje przy zmianie zakładki, bo stały pasek
+  przewijania (ustawienie systemu „zawsze”) zwęża obszar treści — miejsce na pasek zawsze
+  zarezerwowane, kolumna centrowana względem okna.
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
   edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
