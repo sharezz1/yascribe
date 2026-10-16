@@ -16,7 +16,8 @@ struct MeetNotesApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("MeetNotes") {
+        // `id`: „Open note” w pigułce otwiera okno na nowo, gdy użytkownik je zamknął (`openWindow(id: "main")`).
+        WindowGroup("MeetNotes", id: "main") {
             ContentView()
                 .environment(model)
                 .frame(minWidth: 820, minHeight: 520)

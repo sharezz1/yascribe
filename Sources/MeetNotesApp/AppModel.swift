@@ -485,6 +485,12 @@ final class AppModel {
         selectedSessionID = id
     }
 
+    /// „Open note” z pigułki. Zakładki nie trzeba ustawiać: widok nagrywanego spotkania pokazuje tylko My notes.
+    func go(to d: OpenNoteDestination) {
+        switch d.section { case .meetings: section = .meetings }
+        selectedSessionID = d.sessionID
+    }
+
     /// Otwarte spotkanie (widok szczegółów) — dla menu Meeting; poza Meetings nic nie jest „otwarte”.
     var openItem: SessionItem? { section == .meetings ? sessions.first { $0.id == selectedSessionID } : nil }
 
