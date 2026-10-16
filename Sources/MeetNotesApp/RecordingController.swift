@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesRecording
 import Observation
@@ -14,6 +15,10 @@ final class RecordingController {
     private(set) var lastEndReason: EndReason?
     /// Preset zamrożony przy starcie — pokazywany przez całe nagranie (ChatGPT #2).
     private(set) var presetLabel = ""
+    /// Tytuł wydarzenia z kalendarza (start z oferty) — pokazywany obok presetu; `nil` = bez wydarzenia.
+    private(set) var eventTitle: String?
+    /// Ustawia `AppModel.init`; potrzebny, by `showOffer`/`showEndPrompt` mogły utworzyć okno bez nagrywania.
+    @ObservationIgnored weak var model: AppModel?
     /// Ostatni poziom (dBFS) każdej ścieżki i nazwa mikrofonu — dla rozwiniętej pigułki.
     private(set) var levels: [String: Double] = [:]
     private(set) var micName = ""
@@ -30,7 +35,7 @@ final class RecordingController {
     /// Drugi start przy żywym rejestratorze wyciekłby pierwszy (check S15 #1).
     enum StartError: Error { case alreadyRecording }
 
-    func start(directory: URL, presetLabel: String, onEnded: @escaping @MainActor (EndReason) -> Void) throws {
+    func start(directory: URL, presetLabel: String, eventTitle: String? = nil, onEnded: @escaping @MainActor (EndReason) -> Void) throws {
         guard recorder == nil else { throw StartError.alreadyRecording }
         let r = SessionRecorder(directory: directory,
                                 sources: [SystemTapSource(), RawMicrophoneSource()]) // bez VP: ściszałby Teams przez całe nagranie (S5, spec rdzenia §2 korekta 2026-09-29)
@@ -46,6 +51,8 @@ final class RecordingController {
         recorder = r
         self.directory = directory
         self.presetLabel = presetLabel
+        self.eventTitle = eventTitle
+        pill.mode = .recording // start zdejmuje ofertę/pytanie; to samo okno staje się pigułką nagrania
         isRecording = r.endReason == nil
         micName = CoreAudioDevices.defaultInputName() ?? "Unknown microphone"
         started = Date()
@@ -97,11 +104,48 @@ final class RecordingController {
         guard let panel, let host = panel.contentView as? PillHostingView<PillContentView> else { return }
         host.fit(placing: !panel.isVisible)
         panel.orderFrontRegardless()
+        // Zmiana `mode` dociera do widoku SwiftUI po kolejce, więc rozmiar liczony tu może dotyczyć starej treści.
+        DispatchQueue.main.async { host.fit(force: true) }
     }
 
     private func hidePanel() {
         panel?.orderOut(nil)
         pill.expanded = false
+        pill.mode = .recording
+    }
+
+    // MARK: Oferta i pytanie o koniec (faza 1.6, T9)
+
+    func showOffer(_ offer: Offer, onStart: @escaping () -> Void, onDismiss: @escaping () -> Void) {
+        guard !isRecording else { return } // nigdy nie zasłaniamy pigułki nagrania
+        pill.onPrimary = onStart
+        pill.onSecondary = { [weak self] in onDismiss(); self?.hideOffer() }
+        present(.offer(offer), title: "Meeting detected")
+    }
+
+    /// Zdejmuje wyłącznie ofertę; pigułka nagrania zostaje.
+    func hideOffer() {
+        guard case .offer = pill.mode else { return }
+        if isRecording { pill.mode = .recording } else { hidePanel() }
+    }
+
+    func showEndPrompt(_ signal: EndSignal, onStop: @escaping () -> Void, onContinue: @escaping () -> Void) {
+        pill.onPrimary = onStop
+        pill.onSecondary = { [weak self] in onContinue(); self?.hideEndPrompt() }
+        present(.endPrompt(signal), title: "Meeting ended?")
+    }
+
+    /// Wraca do pigułki nagrania (pytanie wisi podczas nagrywania); bez nagrania chowa okno.
+    func hideEndPrompt() {
+        guard case .endPrompt = pill.mode else { return }
+        if isRecording { pill.mode = .recording } else { hidePanel() }
+    }
+
+    private func present(_ mode: PillMode, title: String) {
+        guard let model else { return }
+        pill.mode = mode
+        showPanel(model: model)
+        panel?.title = title // czyta go VoiceOver
     }
 }
 
@@ -109,6 +153,9 @@ final class RecordingController {
 final class PillState: ObservableObject {
     @Published var expanded = false
     @Published var mode: PillMode = .recording
+    /// Akcje przycisków oferty (Start / Not a meeting) i pytania (Stop / Continue); ustawia `RecordingController`.
+    var onPrimary: () -> Void = {}
+    var onSecondary: () -> Void = {}
 }
 
 /// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia), a treść ma stały
@@ -122,7 +169,9 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
     /// Do wersji sprzed R5: lewy dolny róg okna w stanie, w którym je przeciągnięto (szerokość nieznana).
     private static var legacyOriginKey: String { "recordingPillOrigin" }
     private let pill: PillState
-    private var fittedExpanded: Bool?
+    private struct LayoutKey: Equatable { var expanded: Bool; var mode: PillMode }
+    private var fittedKey: LayoutKey?
+    private var key: LayoutKey { LayoutKey(expanded: pill.expanded, mode: pill.mode) }
     private var fitScheduled = false
     private var fitting = false
     private var moveObserver: NSObjectProtocol?
@@ -159,7 +208,7 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
     override func layout() {
         super.layout()
         // Zmiana stanu dociera do układu po przebudowie widoku SwiftUI; dopasowanie po kolejce, gdy treść już nowa.
-        guard fittedExpanded != pill.expanded, !fitScheduled else { return }
+        guard fittedKey != key, !fitScheduled else { return }
         fitScheduled = true
         DispatchQueue.main.async { [weak self] in
             self?.fitScheduled = false
@@ -168,13 +217,13 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
     }
 
     /// `placing`: okno dopiero pojawia się — ustaw je w zapamiętanym albo domyślnym miejscu.
-    func fit(placing: Bool = false) {
+    func fit(placing: Bool = false, force: Bool = false) {
         guard let w = window else { return }
         layoutSubtreeIfNeeded()
         let size = fittingSize
         guard size.width > 0, size.height > 0 else { return }
-        guard placing || fittedExpanded != pill.expanded else { return }
-        fittedExpanded = pill.expanded
+        guard placing || force || fittedKey != key else { return }
+        fittedKey = key
         let size2 = w.frameRect(forContentRect: NSRect(origin: .zero, size: size)).size
         let anchor = placing ? Self.savedAnchor(width: size2.width) ?? Self.defaultAnchor() : NSPoint(x: w.frame.midX, y: w.frame.minY)
         let f = PillPlacement.frame(size: size2, bottomCenter: anchor, screens: NSScreen.screens.map(\.visibleFrame))
@@ -245,7 +294,7 @@ extension RecordingController {
 /// cień okna klucza (macOS 26+) ma wyraźną krawędź, stąd prostokątne rogi tylko na pierwszym planie (drugi odbiór,
 /// zmierzone sondą: rogi alfa 0 dopiero po przycięciu). Bez przycięcia `invalidateShadow` nic nie zmienia.
 /// Całe szkło przeciąga okno (`WindowDragGesture`); przyciski w środku mają pierwszeństwo przed gestem rodzica.
-private extension View {
+extension View {
     @ViewBuilder func pillGlass<S: InsettableShape>(_ shape: S) -> some View {
         Group {
             if #available(macOS 26, *) {
@@ -260,7 +309,7 @@ private extension View {
 }
 
 /// Stop: kapsuła `card` z obwódką, czerwony kwadrat 10 pt (promień 2) i słowo — stan nie tylko kolorem.
-private struct StopButtonStyle: ButtonStyle {
+struct StopButtonStyle: ButtonStyle {
     var fill = false
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 6) {
@@ -351,7 +400,8 @@ struct RecordingPanelView: View {
                 Spacer(minLength: 0)
                 PillIconButton(systemImage: "chevron.down", label: "Hide details", size: 24) { pill.expanded = false }
             }
-            Text(rec.presetLabel).font(.callout).foregroundStyle(.mnText2).padding(.leading, 16).padding(.top, 2).padding(.bottom, 14)
+            Text(rec.eventTitle.map { "\($0) · \(rec.presetLabel)" } ?? rec.presetLabel).lineLimit(rec.eventTitle == nil ? nil : 1)
+                .font(.callout).foregroundStyle(.mnText2).padding(.leading, 16).padding(.top, 2).padding(.bottom, 14)
             LevelRow(title: "System audio", db: rec.levels["system"], animated: !reduceMotion)
             // Nazwa mikrofonu wyraźnie — żeby od razu było widać, gdy nagrywa nie ten (decyzja użytkownika).
             LevelRow(title: "Microphone: \(rec.micName)", db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion)
