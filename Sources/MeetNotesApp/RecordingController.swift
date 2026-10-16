@@ -72,6 +72,9 @@ final class RecordingController {
 
     func stop() { recorder?.stop(reason: .button) }
 
+    /// Cisza trwającego nagrania (próg i `lastLoudAt` rekordera, jak `SilenceCondition`); 0 bez nagrania. Czyta ją `MeetingMonitor`.
+    var silentSeconds: Double { recorder?.silentSeconds() ?? 0 }
+
     /// Migawki (`Snapshots.swift`): kontroler w stanie „trwa nagranie” bez rejestratora i czasomierzy.
     static func snapshotPreview(elapsed: TimeInterval) -> RecordingController {
         let r = RecordingController()

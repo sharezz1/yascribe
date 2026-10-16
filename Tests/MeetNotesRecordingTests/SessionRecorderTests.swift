@@ -321,3 +321,20 @@ private final class Pump: AudioSource, @unchecked Sendable {
     #expect(r.endReason != nil) // sesja już zakończona (źródło plikowe)
     #expect(Set(r.currentLevels().keys) == ["mic_raw"]) // tor, którego nie było, nie ma poziomu
 }
+
+@Test func silentSecondsCountsFromTheLastLoudChunkWithTheSameThresholdAsSilenceCondition() throws {
+    // T10: monitor pyta o koniec po `silenceSeconds` na tym samym progu (−50 dBFS), co bezpiecznik 600 s.
+    let dir = sessionDir()
+    let clock = ManualHostClock(0)
+    let sys = Pump("system")
+    let r = SessionRecorder(directory: dir, sources: [sys], conditions: [], clock: clock, timebase: ns, zeroWatch: [:])
+    try r.start()
+    #expect(r.silentSeconds() == 0)
+    clock.set(10 * s)
+    sys.pump(at: 10)
+    #expect(r.silentSeconds() == 0)
+    clock.set(25 * s)
+    sys.handler?(.chunk(AudioChunk(samples: [Int16](repeating: 3, count: 1_600), hostTime: 25 * s))) // około −80 dBFS: cisza
+    #expect(r.silentSeconds() == 15)
+    r.stop()
+}

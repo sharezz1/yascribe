@@ -86,10 +86,13 @@ final class AppModel {
     private(set) var transcribing: Set<String> = []
 
     let recording = RecordingController()
+    /// Wykrywanie spotkań (faza 1.6); startuje `MeetNotesApp.init`, nie `AppModel.init` (migawki i testy go nie chcą).
+    let monitor = MeetingMonitor()
     let notes = NotesModel()
 
     init() {
         recording.model = self
+        monitor.model = self
         load()
         // ChatGPT #16: setup także wtedy, gdy dźwięk systemowy nigdy nie przeszedł testu tonem.
         showSetup = AVCaptureDevice.authorizationStatus(for: .audio) != .authorized

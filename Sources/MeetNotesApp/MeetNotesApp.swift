@@ -13,6 +13,8 @@ struct MeetNotesApp: App {
         if Snapshots.directory != nil {
             let model = self.model
             DispatchQueue.main.async { MainActor.assumeIsolated { Snapshots.runAll(model: model) } }
+        } else {
+            model.monitor.start()
         }
     }
 
