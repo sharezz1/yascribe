@@ -413,6 +413,20 @@ w dolnym pasku, jak na `b-add.png`.
   (ikona `arrow.clockwise`, nie iskierki) i Copy. Niżej notatka (§11.2), cała jako jeden
   zaznaczalny `NSTextView` (D6). **Wstecz i „⋯” są (D5)**; „⋯” zawiera Copy notes, Show in
   Finder i Delete meeting…, a każda z tych akcji jest też w menu aplikacji (§3).
+  **Odbiór 2026-10-16 (uwaga 7, decyzja użytkownika; makiety `b-summary0.png`, `b-transcript.png`):**
+  - **cały widok spotkania to jedna przewijana strona** (wzór Granola): tytuł, `MetaLine`, zakładki
+    i treść przewijają się razem, pasek przewijania przy krawędzi okna. **Żadnych wewnętrznych
+    obszarów przewijania** w kolumnie: edytor My notes, lista transkryptu i notatka rosną z treścią
+    (koniec „białego paska” i „panelu po prawej”);
+  - tło wszystkich zakładek to `background`; **Summary bez białej karty**: ten sam pasek we wnęce
+    `sunk` przed i po generowaniu (szablon ⌄ · „Add context” · model · przycisk). Przed:
+    „Generate notes” (primary) i pod paskiem jedna linia stanu pustego („No notes yet…” + z jakiego
+    transkryptu). Po: „Regenerate” + Copy, pod paskiem notatka. „Add context” rozwija w miejscu pole
+    rosnące z treścią. **Zmienia spec decyzję 3** (karta przed / pasek po);
+  - notatka (`NSTextView`, D6) ma szerokość kolumny 640 pt — wąskie łamanie to błąd;
+  - Transcript: nad listą jedna linia — przełącznik Original/Corrected (`FieldMenuStyle`) po lewej,
+    „Improve transcript” i Copy po prawej; wiersze: czas (cyfry stałej szerokości), mówca, tekst,
+    separator `line2`; echo jako linia `StateLabel` pod tekstem.
 - **Presets** (`b-presets.png`): lista presetów (zaznaczenie `selection`, „default” w
   metadanych zamiast znaczka) i edytor: nazwa w polu, sekcje Speech to text / Correction
   (`Toggle`) / Summary jako karty z `FormRow`. Wynik sondy to linia `StateLabel` pod wyborem
