@@ -195,3 +195,29 @@ reaguje na `.disabled`); Retry korekty na liście spotkań zostaje aktywny w UI,
 - R3: w trakcie przenoszenia otwarte spotkanie tylko do odczytu z „Moving recordings…”.
 - R5: zwinięta↔rozwinięta pigułka ze wspólnym środkiem dołu; przeciągnięcie przy krawędzi ekranu.
 - R8: ElevenLabs z kluczem tylko STT → trójkąt „Key works for transcription only”.
+
+## Drugi odbiór 2026-10-16: poprawki 1–6
+
+Zapis w `docs/design/macos.md` §11.5 (`9cbe688`, `2bd91aa`, `dcefcdd` na `faza15`, scalone). Agenci Opus: pigułka (1–3), widok spotkania (4–6).
+
+| # | Przyczyna → poprawka | Commit |
+|---|---|---|
+| 1 | „Sto / p”: idealna szerokość pigułki zaokrąglona w dół (okno 245 przy treści 253) → `lineLimit(1)` + `fixedSize` na Stop, liczniku, „Recording”, „Open note” i wierszu; migawka `pill-collapsed` w rozmiarze okna z najszerszym licznikiem 09:59:59 | `a401139` |
+| 2 | **Przyczyna rogów (zmierzona):** warstwa Liquid Glass maluje poświatę 2–5 % alfa na całym prostokącie warstwy, także w rogach poza kształtem; okno = rozmiar treści, więc maska alfa okna była prostokątem i system liczył cień z prostokąta. Cień okna klucza ma ostrą krawędź (35–40 % alfa), stąd widoczne tylko na pierwszym planie. Właściwości okna (`.borderless` + `.nonactivatingPanel`, przezroczyste) były już poprawne; sam `invalidateShadow` nic nie zmieniał. → `.clipShape(shape)` po `glassEffect`: rogi 0 alfa, cień z zaokrąglonego kształtu w obu stanach (sonda `CGWindowListCreateImage` własnego okna) | `a401139` |
+| 3 | „Open note” wołało tylko `openSession` (już ustawione) → `NSApp.activate()`, przywrócenie/wysunięcie okna głównego, `openWindow(id: "main")` gdy zamknięte; cel z `OpenNoteDestination.forRecording` (Meetings → sesja → My notes), test + mutacja | `a401139` |
+| 4 | **Przyczyna:** widok spotkania otwiera się przy starcie nagrania; `onAppear` raz kopiował tytuł do `titleDraft` (wtedy pusty), a `@StateObject` z `.id(item.id)` przeżywa przeładowania — autotytuł nigdy nie trafiał do pola. → `titleEdit: String?` (`nil` = pole pokazuje `NoteTitle.fieldText`: ręczny > auto > z notatki, w kolorze `text`); zapis ręcznego tylko gdy `NoteTitle.isEdit` (realna zmiana); testy + mutacje | `1f36b90`, `3a2c432` |
+| 5 | Stałe paski przewijania zwężały treść → `ScrollPage(width)` w DesignSystem: mierzy szerokość zewnętrzną i treści (`onGeometryChange`), przesuwa kolumnę o szerokość paska — kolumna wyśrodkowana względem okna; użyte w widoku spotkania, Presets, Settings, Templates. Dowód: migawki z `-AppleShowScrollBars Always` (argument procesu), krawędź 130/130 vs 130/123 po mutacji | `1f36b90` |
+| 6 | `allZeros60s`: dziennik nie odróżnia ciszy na początku od braku uprawnień (liczba klatek rośnie w obu), więc sygnałem jest transkrypt — wypowiedź mówcy tego toru (system → Them, mikrofon → Me) = dźwięk przyszedł później = informacja („System audio was silent for the first minute; recording continued.”), bez ⚠ na liście; brak takich wypowiedzi albo transkryptu = ostrzeżenie. W widoku: chip „ⓘ/⚠ System audio” w linii metadanych z popoverem i linia nad transkryptem. Stare dzienniki nieprzepisywane. Sesja `af52`: 1 wypowiedź Them → informacja | `1f36b90` |
+
+**Testy:** `scripts/test.sh` → `236/236`. Mutacje: agenci (tytuł 3, klasyfikacja 2, setter 1, Open note 2, ScrollPage i pigułka na migawkach/sondzie); orkiestrator powtórzył niezależnie 4/4 (autotytuł pominięty, cisza zawsze ostrzeżeniem, zły mówca, Open note bez sesji).
+
+**Do decyzji:** (a) „Untitled meeting” zostaje szarym placeholderem przy pustym tytule (zmiana na kolor `text` to jedna linia); (b) do czasu transkrypcji cisza na początku pokazuje się jako ostrzeżenie — trwałe rozróżnienie wymaga zdarzenia w dzienniku przy pierwszych niezerowych próbkach po `allZeros` (zmiana w `SessionRecorder`, poza tą rundą); (c) gdy pigułka staje się oknem klucza, wokół Stop pojawia się niebieski pierścień fokusu; (d) `WindowGroup(id: "main")` może raz zresetować zapamiętany rozmiar i pozycję okna.
+
+### Do trzeciego odbioru (na żywo)
+
+1. Pigułka zwinięta: „Stop” w jednej linii, także po 1:00:00.
+2. Rogi zwiniętej i rozwiniętej — po kliknięciu (pierwszy plan) i w tle, jasny i ciemny.
+3. „Open note” z Teams/przeglądarką na pierwszym planie (ścieżka nieprzetestowana), z oknem zminimalizowanym, zamkniętym i po ⌘H.
+4. Spotkanie w trakcie nagrania: autotytuł pojawia się w polu (czarny) i w wierszu listy; Enter bez zmiany nie zapisuje `manualTitle`; dopisanie słowa zapisuje ręczny.
+5. „Show scroll bars: Always”: Transcript ↔ My notes — kolumna stoi.
+6. Sesja `af52`: brak ⚠ na liście, chip „ⓘ System audio”, popover, linia nad transkryptem.
