@@ -27,4 +27,14 @@ extension MeetingTuning {
     func family(of bundleID: String) -> String? {
         callApps.first { bundleID == $0 || bundleID.hasPrefix($0 + ".") }
     }
+
+    /// Zwraca kopię, w której nadpisane są TYLKO wartości niebędące `nil`.
+    public func applying(startSeconds: Double?, releaseSeconds: Double?, silenceSeconds: Double?, ignoredApps: [String]?) -> MeetingTuning {
+        var copy = self
+        if let s = startSeconds { copy.startSeconds = s }
+        if let r = releaseSeconds { copy.releaseSeconds = r }
+        if let sl = silenceSeconds { copy.silenceSeconds = sl }
+        if let ia = ignoredApps { copy.ignoredApps = ia }
+        return copy
+    }
 }
