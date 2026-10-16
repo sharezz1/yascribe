@@ -86,6 +86,8 @@ private func part(_ name: String, _ value: String, _ b: String) -> Data {
     #expect(http.calls.map(\.path) == ["/v1/models"])
     #expect(http.calls[0].headers["xi-api-key"] == fakeKey)
     #expect(await check { _, _ in fail(401) }.0 == .failed("Invalid API key."))
+    // R8: klucz z zakresem tylko STT dostaje 403 na /v1/models — to ostrzeżenie, nie błąd.
+    #expect(await check { _, _ in fail(403) }.0 == .limited("Key works for transcription only"))
     #expect(await check { _, _ in fail(404) }.0 == .failed("Wrong address: use https://api.elevenlabs.io/v1."))
     let (noKey, quiet) = await check(key: nil) { _, _ in (200, "[]") }
     #expect(noKey == .failed("No API key."))

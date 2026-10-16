@@ -64,6 +64,8 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
     }
     #expect(await check { _, _ in ok(["data": [["id": "a"], ["id": "b"]]]) } == .verified(models: 2))
     #expect(await check { _, _ in fail(401) } == .failed("Invalid API key."))
+    // 403 u OpenAI-compatible zostaje błędem (guardrail dostawcy); ostrzeżeniem jest tylko 403 u ElevenLabs.
+    #expect(await check { _, _ in fail(403) } == .failed(ProviderCheck.describe(ProviderError.http(403, ""))))
     #expect(await check { _, _ in fail(403) }.failureText.contains("guardrails"))
     #expect(await check { _, _ in fail(404) }.failureText.contains("Wrong address"))
     #expect(await check { _, _ in ok(["not": "a list"]) }.failureText.contains("OpenAI-compatible"))

@@ -112,10 +112,13 @@ final class PillState: ObservableObject {
 /// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia), a treść ma stały
 /// rozmiar w każdym stanie (licznik o stałej szerokości, nazwa mikrofonu z zarezerwowanymi dwoma wierszami).
 /// Dlatego okno zmienia rozmiar WYŁĄCZNIE przy zmianie `pill.expanded` — nie przy każdym tiku licznika.
-/// Kotwica: lewy dolny róg (pigułka stoi domyślnie przy dole ekranu, więc rośnie w górę i w prawo, w głąb
-/// ekranu); gdyby się nie mieściła, okno jest wsuwane na ekran.
+/// Kotwica: środek dolnej krawędzi (decyzja 2026-10-16, R5) — zwinięta ↔ rozwinięta nie przesuwa pigułki w bok,
+/// rośnie na boki i w górę; ramkę liczy `PillPlacement` (wsunięcie w `visibleFrame`).
 private final class PillHostingView<Content: View>: NSHostingView<Content> {
-    static var originKey: String { "recordingPillOrigin" }
+    /// Zapamiętana pozycja: środek dolnej krawędzi („x, y” jako punkt).
+    static var anchorKey: String { "recordingPillBottomCenter" }
+    /// Do wersji sprzed R5: lewy dolny róg okna w stanie, w którym je przeciągnięto (szerokość nieznana).
+    private static var legacyOriginKey: String { "recordingPillOrigin" }
     private let pill: PillState
     private var fittedExpanded: Bool?
     private var fitScheduled = false
@@ -138,7 +141,7 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
         moveObserver = NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: w, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, !self.fitting, let w = self.window else { return }
-                UserDefaults.standard.set(NSStringFromPoint(w.frame.origin), forKey: Self.originKey)
+                UserDefaults.standard.set(NSStringFromPoint(NSPoint(x: w.frame.midX, y: w.frame.minY)), forKey: Self.anchorKey)
             }
         }
     }
@@ -170,13 +173,9 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
         guard size.width > 0, size.height > 0 else { return }
         guard placing || fittedExpanded != pill.expanded else { return }
         fittedExpanded = pill.expanded
-        var f = w.frameRect(forContentRect: NSRect(origin: .zero, size: size))
-        if placing {
-            f.origin = Self.savedOrigin() ?? Self.defaultOrigin(size: f.size)
-        } else {
-            f.origin = w.frame.origin // lewy dolny róg stoi w miejscu
-        }
-        f = Self.onScreen(f)
+        let size2 = w.frameRect(forContentRect: NSRect(origin: .zero, size: size)).size
+        let anchor = placing ? Self.savedAnchor(width: size2.width) ?? Self.defaultAnchor() : NSPoint(x: w.frame.midX, y: w.frame.minY)
+        let f = PillPlacement.frame(size: size2, bottomCenter: anchor, screens: NSScreen.screens.map(\.visibleFrame))
         fitting = true
         w.setFrame(f, display: true)
         fitting = false
@@ -184,29 +183,19 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
         DispatchQueue.main.async { w.invalidateShadow() }
     }
 
-    private static func savedOrigin() -> NSPoint? {
-        UserDefaults.standard.string(forKey: originKey).map(NSPointFromString)
+    private static func savedAnchor(width: CGFloat) -> NSPoint? {
+        let d = UserDefaults.standard
+        if let a = d.string(forKey: anchorKey) { return NSPointFromString(a) }
+        // Migracja: stary lewy dolny róg → środek dołu przy bieżącej (zwiniętej) szerokości; błąd co najwyżej o różnicę szerokości.
+        guard let o = d.string(forKey: legacyOriginKey).map(NSPointFromString) else { return nil }
+        return NSPoint(x: o.x + width / 2, y: o.y)
     }
 
     /// Domyślnie: dół ekranu, środek, z marginesem nad dokiem (`visibleFrame` już go omija).
-    private static func defaultOrigin(size: NSSize) -> NSPoint {
+    private static func defaultAnchor() -> NSPoint {
         let v = (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        return NSPoint(x: v.midX - size.width / 2, y: v.minY + 24)
+        return NSPoint(x: v.midX, y: v.minY + 24)
     }
-
-    /// Wsuwa okno w `visibleFrame` ekranu, z którym ma największą część wspólną (po odpięciu monitora — w główny).
-    private static func onScreen(_ f: NSRect) -> NSRect {
-        let best = NSScreen.screens.max { $0.frame.intersection(f).area < $1.frame.intersection(f).area }
-        guard let v = (best.flatMap { $0.frame.intersection(f).area > 0 ? $0 : nil } ?? NSScreen.main ?? NSScreen.screens.first)?.visibleFrame else { return f }
-        var r = f
-        r.origin.x = min(max(r.minX, v.minX), max(v.minX, v.maxX - r.width))
-        r.origin.y = min(max(r.minY, v.minY), max(v.minY, v.maxY - r.height))
-        return r
-    }
-}
-
-private extension NSRect {
-    var area: CGFloat { isNull ? 0 : width * height }
 }
 
 /// Panel bez ramki i tytułu, żeby szkło (§6.2) było jedynym tłem. Bez `canBecomeKey` panel `.borderless`
