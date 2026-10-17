@@ -84,7 +84,7 @@ final class MeetingMonitor {
         let recording = model.recording.isRecording
         switch offers.step(now: now, events: events, processes: processes, recording: recording, callsEnabled: calls, autoStart: m?.autoStartOrDefault ?? false) {
         case .show(let offer):
-            model.recording.showOffer(offer, onStart: { [weak self] in self?.accept(offer) }, onDismiss: { [weak self] in self?.offers.dismiss() })
+            present(offer)
         case .hide:
             model.recording.hideOffer()  // tylko stan Offer, nie pigułka nagrania
         case .startRecording(let offer):
@@ -103,13 +103,16 @@ final class MeetingMonitor {
         }
     }
 
-    /// Start z oferty (przycisk albo auto-start). Gdy się nie uda, oferta milknie, żeby nie wisiał stan "startuje".
+    private func present(_ offer: Offer) {
+        guard let model else { return }
+        model.recording.showOffer(offer, onStart: { [weak self] in self?.accept(offer) }, onDismiss: { [weak self] in self?.offers.dismiss() })
+    }
+
+    /// Start z oferty (przycisk albo auto-start). Gdy się nie uda (np. preset bez języka), oferta zostaje na ekranie
+    /// jako zwykła, ręczna (auto-start nie powtarza się), zamiast cicho wyciszać rozmowę; powód siedzi w `lastError`.
     private func accept(_ offer: Offer) {
         guard let model else { return }
-        if !model.startRecording(offer: offer) {
-            offers.dismiss()
-            model.recording.hideOffer()
-        }
+        if !model.startRecording(offer: offer) { present(offer) }
     }
 
     private func refreshEvents(now: Date, calendar: Bool) {

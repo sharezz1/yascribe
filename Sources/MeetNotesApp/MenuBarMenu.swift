@@ -1,4 +1,5 @@
 import AppKit
+import MeetNotesMeetings
 import SwiftUI
 
 /// Wyciąga okno główne na wierzch albo otwiera je na nowo, gdy użytkownik je zamknął (aplikacja żyje bez okna).
@@ -22,19 +23,38 @@ struct MenuBarMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     private var status: String {
-        switch model.monitor.state {
-        case .off: "Detection off"
-        case .watching: "Detecting meetings"
-        case .calendarDenied: "Detecting calls (calendar access off)"
-        case .calendarSelectionStale: "Selected calendars not found — re-select in Settings"
+        let m = model.settings.meetings
+        let problem: DetectionStatus.CalendarProblem? = switch model.monitor.state {
+        case .calendarDenied: .denied
+        case .calendarSelectionStale: .selectionStale
+        default: nil
         }
+        return model.monitor.state == .off
+            ? "Detection off"
+            : DetectionStatus.text(calls: m?.detectCallsOrDefault ?? true, calendar: m?.appleCalendarOrDefault ?? false, problem: problem)
+    }
+
+    /// Wyjście w trakcie nagrywania: najpierw Stop (sesja zamknięta czysto, nie "Recovered"), po potwierdzeniu.
+    /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
+    private func quit() {
+        if model.recording.isRecording {
+            let alert = NSAlert()
+            alert.messageText = "Stop recording and quit?"
+            alert.informativeText = "The recording is saved. Transcribe it the next time you open MeetNotes."
+            alert.addButton(withTitle: "Stop and Quit")
+            alert.addButton(withTitle: "Cancel")
+            NSApp.activate()
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            model.recording.stop()
+        }
+        NSApplication.shared.terminate(nil)
     }
 
     var body: some View {
         Text(status)
         Divider()
         Button("Open MeetNotes") { MainWindow.show(openWindow) }
-        Button("Quit MeetNotes") { NSApplication.shared.terminate(nil) }
+        Button("Quit MeetNotes") { quit() }
         Text("Quitting turns off detection")
     }
 }
