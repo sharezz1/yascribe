@@ -471,3 +471,29 @@ private struct Rig {
         #expect(r.run(t0 + 13 + gap, t0 + 25 + gap).contains(where: isOffering) == offers)
     }
 }
+
+@Test func retuningKeepsTheMuteAfterManualStop() {
+    var r = Rig()
+    r.autoStart = true
+    r.procs = [.teams]
+    _ = r.run(t0, t0 + 12)
+    r.recording = true
+    _ = r.run(t0 + 13, t0 + 30)
+    r.recording = false   // ręczny Stop; Teams dalej trzyma mikrofon
+    _ = r.run(t0 + 31, t0 + 40)
+    var t = MeetingTuning.test
+    t.startSeconds = 5    // zapis z Settings przy każdym znaku
+    r.d.retune(t)
+    #expect(!r.run(t0 + 41, t0 + 41 + 600, every: 1).contains(where: isOffering))
+}
+
+@Test func pausingDropsTheOfferButKeepsTheMute() {
+    var r = Rig()
+    r.events = [meeting("Standup", at: t0)]
+    guard case .show? = r.step(t0 - 30) else { Issue.record("no offer"); return }
+    r.d.pause()   // Detect calls i kalendarz wyłączone, potem znów włączone
+    guard case .show? = r.step(t0 - 29) else { Issue.record("offer not re-shown"); return }
+    r.d.dismiss()
+    r.d.pause()
+    #expect(!r.run(t0 - 28, t0 + 600).contains(where: isOffering))
+}

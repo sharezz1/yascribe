@@ -23,7 +23,7 @@ public enum OfferAction: Equatable, Sendable { case show(Offer), hide, startReco
 /// Klucz stanu rozmowy to RODZINA aplikacji (wpis z `callApps` dopasowany po prefiksie bundle ID), nie `pid`.
 /// Aplikacje spoza `callApps` (w tym `ignoredApps`: system, dyktowanie) nigdy nie dają oferty ani jej nie blokują.
 public struct OfferDetector {
-    private let tuning: MeetingTuning
+    private var tuning: MeetingTuning
     /// Rodzina → początek ciągłego użycia wejścia (zerowany każdym tikiem bez wejścia rodziny); liczy `startSeconds`.
     private var micSince: [String: Date] = [:]
     /// Rodzina → ostatni tik z wejściem; sesja mikrofonu trwa, dopóki przerwa < `releaseSeconds`.
@@ -44,6 +44,17 @@ public struct OfferDetector {
     private var starting = false
 
     public init(tuning: MeetingTuning) { self.tuning = tuning }
+
+    /// Zmiana progów z Settings: zachowuje cały stan (wyciszenia po Stop i "Not a meeting", bieżącą ofertę).
+    public mutating func retune(_ t: MeetingTuning) { tuning = t }
+
+    /// Wykrywanie wyłączone: zdejmuje bieżącą ofertę i ciągłość mikrofonu, ale zostawia wyciszenia (Stop nie cofa się przez przełącznik).
+    public mutating func pause() {
+        current = nil
+        starting = false
+        micSince = [:]
+        lastStep = nil
+    }
 
     /// Zwraca akcję tylko przy zmianie stanu.
     public mutating func step(now: Date, events: [CalendarEventInfo], processes: [AudioProcessSample], recording: Bool,

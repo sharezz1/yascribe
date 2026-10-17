@@ -10,7 +10,7 @@ public enum EndAction: Equatable, Sendable { case prompt(EndSignal), dismissProm
 /// (także jeśli zaczęła po starcie nagrania). Klucz to rodzina, nie `pid` (Teams przerzuca wejście między procesami pomocniczymi).
 /// Wyciszenie w Teams NIE zwalnia wejścia (pomiar T0), więc nie jest tu osobnym przypadkiem.
 public struct EndDetector {
-    private let tuning: MeetingTuning
+    private var tuning: MeetingTuning
     /// Śledzona rodzina → ostatni tik z wejściem.
     private var lastInput: [String: Date] = [:]
     /// Pytanie, które aktualnie wisi (z którego sygnału).
@@ -18,6 +18,9 @@ public struct EndDetector {
     private var snoozedUntil: Date?
 
     public init(tuning: MeetingTuning) { self.tuning = tuning }
+
+    /// Zmiana progów z Settings: zachowuje śledzone rodziny, wiszące pytanie i drzemkę.
+    public mutating func retune(_ t: MeetingTuning) { tuning = t }
 
     /// Zwraca akcję tylko przy zmianie stanu.
     public mutating func step(now: Date, recording: Bool, processes: [AudioProcessSample], silentSeconds: Double) -> EndAction? {

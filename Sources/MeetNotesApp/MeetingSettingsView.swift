@@ -152,7 +152,7 @@ struct MeetingSettingsSections: View {
         }
         if m.appleCalendarOrDefault, state.authorization == .granted {
             RowDivider()
-            FormRow(label: "Calendars") {
+            FormRow(label: "Calendars", caption: model.monitor.state == .calendarSelectionStale ? "Selected calendars not found — re-select below." : nil) {
                 VStack(alignment: .leading, spacing: 6) {
                     if state.calendars.isEmpty { Text("No calendars found").foregroundStyle(.mnText2) }
                     ForEach(state.calendars) { c in

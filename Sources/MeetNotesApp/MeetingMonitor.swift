@@ -21,6 +21,8 @@ final class MeetingMonitor {
     @ObservationIgnored private var eventsFetchedAt: Date?
     @ObservationIgnored private var eventsDirty = false
     @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var activity: NSObjectProtocol?
+    @ObservationIgnored private var lastCalendarIDs: [String]?
     @ObservationIgnored private var changesTask: Task<Void, Never>?
 
     private static let eventsRefresh: TimeInterval = 30
@@ -31,10 +33,13 @@ final class MeetingMonitor {
         changesTask = Task { [weak self] in
             for await _ in changes { self?.eventsDirty = true }
         }
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+        // `.common`: w trybie domyślnym tik staje, gdy menu w pasku jest otwarte. Bez natychmiastowego tiku: `start()` idzie z `App.init`,
+        // a oferta nie może budować panelu, zanim aplikacja skończy startować.
+        let t = Timer(timeInterval: 1, repeats: true) { _ in
             Task { @MainActor in self.tick(now: Date()) }
         }
-        tick(now: Date())
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
     }
 
     func stop() {
@@ -43,6 +48,17 @@ final class MeetingMonitor {
         changesTask?.cancel()
         changesTask = nil
         state = .off
+        setActivity(false)
+    }
+
+    /// App Nap przy zamkniętym oknie rozjeżdża tiki o > 3 s, a wtedy detektor zeruje ciągłość mikrofonu: trzymamy aktywność, gdy wykrywamy.
+    private func setActivity(_ on: Bool) {
+        if on, activity == nil {
+            activity = ProcessInfo.processInfo.beginActivity(options: .userInitiatedAllowingIdleSystemSleep, reason: "Meeting detection")
+        } else if !on, let a = activity {
+            ProcessInfo.processInfo.endActivity(a)
+            activity = nil
+        }
     }
 
     private func tick(now: Date) {
@@ -51,14 +67,15 @@ final class MeetingMonitor {
         let calls = m?.detectCallsOrDefault ?? true
         let calendar = m?.appleCalendarOrDefault ?? false
         guard calls || calendar else {  // zero odpytywania
-            if state != .off { state = .off; reset() }
+            if state != .off { goOff(model) }
             return
         }
+        setActivity(true)
         let newTuning = MeetingTuning(settings: m)
         if newTuning != tuning {  // zmiana progów w Settings
             tuning = newTuning
-            offers = OfferDetector(tuning: tuning)
-            end = EndDetector(tuning: tuning)
+            offers.retune(tuning)  // nie przebudowujemy: wyciszenia po Stop i "Not a meeting" muszą przetrwać zapis z Settings
+            end.retune(tuning)
         }
         refreshEvents(now: now, calendar: calendar)
         // Nieudany odczyt Core Audio to nie zwolnienie mikrofonu: pomijamy tik.
@@ -99,11 +116,12 @@ final class MeetingMonitor {
         guard let model else { return }
         guard calendar else { events = []; eventsFetchedAt = nil; state = .watching; return }
         let source = model.calendarSource
+        let ids = model.settings.meetings?.calendarIDs
+        if ids != lastCalendarIDs { lastCalendarIDs = ids; eventsDirty = true }  // zmiana wyboru kalendarzy działa od razu, nie po 30 s
         guard source.authorization() == .granted else { events = []; eventsFetchedAt = nil; state = .calendarDenied; return }
         if !eventsDirty, let at = eventsFetchedAt, now.timeIntervalSince(at) < Self.eventsRefresh { return }
         eventsDirty = false
         eventsFetchedAt = now
-        let ids = model.settings.meetings?.calendarIDs
         if let ids, !ids.isEmpty, Set(ids).isDisjoint(with: source.calendars().map(\.id)) {
             events = []  // identyfikator kalendarza ginie po pełnej synchronizacji; bez tego oferty znikałyby po cichu
             state = .calendarSelectionStale
@@ -113,10 +131,15 @@ final class MeetingMonitor {
         events = source.events(from: now - tuning.offerGrace - 60, to: now + tuning.offerLead + Self.eventsRefresh + 60, calendarIDs: ids)
     }
 
-    private func reset() {
-        offers = OfferDetector(tuning: tuning)
-        end = EndDetector(tuning: tuning)
+    /// Wykrywanie wyłączone w Settings: zdejmuje ofertę i pytanie z ekranu; wyciszenia zostają (`pause`).
+    private func goOff(_ model: AppModel) {
+        state = .off
+        offers.pause()
+        end.reset()
         events = []
         eventsFetchedAt = nil
+        model.recording.hideOffer()
+        model.recording.hideEndPrompt()
+        setActivity(false)
     }
 }
