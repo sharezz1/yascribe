@@ -171,3 +171,16 @@ private func tick(_ d: inout EndDetector, _ t: Double, _ procs: [AudioProcessSam
     _ = tick(&d, 0, [.teams])
     #expect(run(&d, 1, 600, []).isEmpty)   // gdyby była śledzona, zwolnienie dałoby pytanie
 }
+
+@Test func retuningKeepsThePendingQuestionAndTheSnooze() {
+    var d = EndDetector(tuning: .test)
+    _ = tick(&d, 0, [.teams])
+    #expect(tick(&d, 41, []) == .prompt(.callReleased))
+    var t = MeetingTuning.test
+    t.releaseSeconds = 25
+    d.retune(t)
+    #expect(tick(&d, 42, []) == nil)           // to samo pytanie nie wraca
+    d.continueMeeting(now: t0 + 42)
+    d.retune(.test)
+    #expect(tick(&d, 43, [], silent: 180) == nil)   // drzemka trwa po retune
+}

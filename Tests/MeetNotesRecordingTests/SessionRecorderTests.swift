@@ -336,5 +336,12 @@ private final class Pump: AudioSource, @unchecked Sendable {
     clock.set(25 * s)
     sys.handler?(.chunk(AudioChunk(samples: [Int16](repeating: 3, count: 1_600), hostTime: 25 * s))) // około −80 dBFS: cisza
     #expect(r.silentSeconds() == 15)
+    // Próg −50 dBFS: szum z pasma −60…−50 (tu ≈ −55) nadal jest ciszą, tuż nad progiem (≈ −44) już nie.
+    clock.set(40 * s)
+    sys.handler?(.chunk(AudioChunk(samples: [Int16](repeating: 58, count: 1_600), hostTime: 40 * s)))
+    #expect(r.silentSeconds() == 30)
+    clock.set(50 * s)
+    sys.handler?(.chunk(AudioChunk(samples: [Int16](repeating: 200, count: 1_600), hostTime: 50 * s)))
+    #expect(r.silentSeconds() == 0)
     r.stop()
 }
