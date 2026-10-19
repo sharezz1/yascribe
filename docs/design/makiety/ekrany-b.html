@@ -137,6 +137,26 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round
          box-shadow: 0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.28); padding: 22px; }
 .sheet .form-row { padding: 7px 0; grid-template-columns: 90px 1fr; }
 .sheet .form-row::before { display: none; }
+/* coming up (2026-10-19) */
+.cu-day { display:flex; gap:16px; padding:14px 16px; }
+.cu-date { width:64px; flex:none; }
+.cu-date b { display:block; font:400 30px/32px "NY"; letter-spacing:-.5px; }
+.cu-date span { display:block; font-size:11px; line-height:14px; color:var(--text2); margin-top:2px; }
+.cu-list { flex:1; min-width:0; display:flex; flex-direction:column; }
+.ev { display:flex; align-items:center; gap:10px; padding:7px 0; position:relative; }
+.ev + .ev::before { content:""; position:absolute; top:0; left:0; right:0; height:.5px; background:var(--line2); }
+.ev .bar2 { width:3px; align-self:stretch; border-radius:2px; background:var(--line); flex:none; }
+.ev .bar2.cal { background:#5b8def; }
+.ev .tm { width:86px; flex:none; color:var(--text2); font-size:12px; font-variant-numeric:tabular-nums; }
+.ev .t { flex:1; min-width:0; }
+.ev .t b { display:block; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ev .t span { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text2); margin-top:1px; }
+.ev .t span svg { width:11px; height:11px; }
+.ev.soon .tm { color:var(--text); font-weight:600; }
+.ev.past { opacity:.55; }
+.row.up .t b { color:var(--text); }
+.row.up .t span { color:var(--text2); }
+.tag { font-size:11px; color:var(--text2); }
 /* szablony: sekcje */
 .tsec { display: flex; gap: 10px; padding: 12px 14px 12px 8px; position: relative; }
 .tsec + .tsec::before { content:""; position:absolute; top:0; left:14px; right:14px; height:.5px; background: var(--line2); }
@@ -419,7 +439,97 @@ const transcript = th => win(th,'m', `<div class="main">${pageScroll}<div class=
   ${trow('0:01:04','Them','a jest niewdzięczna, bo my tak pomogliśmy w 22 roku. I teraz jesteśmy wykluczeni totalnie. Nie, chodzi w negocjacji…')}
   </div></div>`);
 
-const S = {home, meeting, presets, settings, add, pill, templates, summary0, transcript};
+
+/* ---------------- Coming up: 3 warianty (2026-10-19) ---------------- */
+I.video = '<svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="9" height="8" rx="2"/><path d="M10.5 7l4-2.5v7l-4-2.5"/></svg>';
+I.pin = '<svg viewBox="0 0 16 16"><path d="M8 14s4.5-4.2 4.5-7.5a4.5 4.5 0 0 0-9 0C3.5 9.8 8 14 8 14z"/><circle cx="8" cy="6.5" r="1.5"/></svg>';
+const recCard = (title, sub, primary=true) => `<div class="card" style="padding:14px 14px 14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:22px">
+    <div style="flex:1;min-width:0"><div class="t-head" style="margin-bottom:6px">${title}</div>
+      <div style="display:flex;align-items:center;gap:8px">${popup('Polish',140)}<span class="t-cap">${sub}</span></div></div>
+    <div class="pill ${primary?'primary':''} lg"><span class="dot" style="box-shadow:0 0 0 1.5px ${primary?'var(--primary)':'var(--card)'}"></span>Record</div></div>`;
+const homeHead = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Meetings</div><div class="field search" style="width:210px">${I.search}Search meetings</div></div>`;
+const ev = (tm, title, sub, cls='', right='') => `<div class="ev ${cls}"><span class="tm">${tm}</span><div class="t"><b>${title}</b><span>${sub}</span></div>${right}</div>`;
+const online = (app) => `${sz(I.video,11)}${app}`;
+const inperson = `${sz(I.pin,11)}In person · no recording offer`;
+const pastRows = `<div class="day">Today</div>
+  ${row('WFM rollout weekly sync','09:02 · 28 min · English',`<span class="state ok">${I.check}Notes ready</span>`)}
+  <div class="day" style="margin-top:18px">Yesterday</div>
+  ${row('Scheduling forecast discrepancy with Piotr','16:10 · 42 min · Polish',`<span class="state ok">${I.check}Notes ready</span>`)}`;
+
+/* A: karta dnia nad kartą Record (inne narzędzie) */
+const cuA = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${homeHead}
+  <div class="sec-h" style="margin-top:0"><span class="t-head">Coming up</span><span class="link" style="font-size:12px">Open Calendar</span></div>
+  <div class="card cu-day" style="margin-bottom:22px"><div class="cu-date"><b>19</b><span>October<br>Monday</span></div>
+    <div class="cu-list">
+      ${ev('10:00 – 10:30','WFM daily standup',online('Teams · in 8 min'),'soon',`<span class="pill sm">Record</span>`)}
+      ${ev('11:30 – 12:30','Scheduling forecast review',online('Teams'))}
+      ${ev('14:00 – 15:00','Dentist',inperson)}
+      ${ev('16:00 – 16:30','1:1 Adrian',online('Google Meet'))}
+    </div></div>
+  ${recCard('Record a meeting','PL · microsoft/mai-transcribe-2', false)}
+  ${pastRows}
+</div></div>`);
+
+/* B: karta Record zamienia się w „następne spotkanie” */
+const cuB = th => win(th,'m', `<div class="main"><div class="col" style="width:580px">${homeHead}
+  <div class="card" style="padding:16px;margin-bottom:8px">
+    <div class="t-cap" style="margin-bottom:6px">Next · in 8 min · Teams</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0"><div style="font:400 20px/26px 'NY';margin-bottom:8px">WFM daily standup</div>
+        <div style="display:flex;align-items:center;gap:8px">${popup('Polish',140)}<span class="t-cap num">10:00 – 10:30 · 6 attendees</span></div></div>
+      <div class="pill primary lg"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</div></div></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:0 4px 22px">
+    <span class="t-cap">Later today: 11:30 Scheduling forecast review · 14:00 Dentist · 16:00 1:1 Adrian</span>
+    <span class="link" style="font-size:12px">Record something else</span></div>
+  ${pastRows}
+</div></div>`);
+
+/* C: jedna oś dnia — nadchodzące i nagrane razem */
+const upRow = (tm, title, sub, right) => `<div class="row up"><span class="num" style="width:44px;flex:none;font-size:12px;color:var(--text2)">${tm}</span><div class="t"><b>${title}</b><span style="display:flex;align-items:center;gap:4px">${sub}</span></div>${right}</div>`;
+const cuC = th => win(th,'m', `<div class="main"><div class="col" style="width:580px">${homeHead}
+  ${recCard('Record a meeting','PL · microsoft/mai-transcribe-2')}
+  <div class="day">Today · Monday 19 October</div>
+  ${upRow('16:00','1:1 Adrian',online('Google Meet'),'<span class="tag">Upcoming</span>')}
+  ${upRow('14:00','Dentist',inperson,'<span class="tag">Upcoming</span>')}
+  ${upRow('11:30','Scheduling forecast review',online('Teams'),'<span class="tag">Upcoming</span>')}
+  ${upRow('10:00','WFM daily standup',online('Teams · in 8 min'),`<span class="pill sm">Record</span>`)}
+  <div style="display:flex;align-items:center;gap:8px;margin:6px 4px 6px"><span style="flex:1;height:1px;background:var(--text2);opacity:.5"></span><span class="t-cap num">Now 9:52</span></div>
+  ${upRow('09:02','WFM rollout weekly sync','28 min · English',`<span class="state ok">${I.check}Notes ready</span>`)}
+</div></div>`);
+
+/* stan pusty: kalendarz niepodłączony (wariant A) */
+const cuEmpty = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${homeHead}
+  <div class="sec-h" style="margin-top:0"><span class="t-head">Coming up</span></div>
+  <div class="card cu-day" style="margin-bottom:22px"><div class="cu-date"><b>19</b><span>October<br>Monday</span></div>
+    <div class="cu-list" style="justify-content:center;gap:8px"><div class="dim">See your meetings here and start recording from them.</div>
+      <div><span class="pill sm">Connect Apple Calendar…</span></div></div></div>
+  ${recCard('Record a meeting','PL · microsoft/mai-transcribe-2')}
+  ${pastRows}
+</div></div>`);
+
+/* B2: następne spotkanie + stały mały przycisk ad hoc w nagłówku (decyzja 2026-10-19) */
+const headAdhoc = (primary) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">
+    <div class="t-large" style="flex:1">Meetings</div><div class="field search" style="width:170px">${I.search}Search</div>
+    <div class="field" style="width:96px;height:28px"><span class="grow">Polish</span>${I.chev}</div>
+    <div class="pill ${primary?'primary':''}" style="height:28px"><span class="dot" style="width:7px;height:7px;box-shadow:0 0 0 1.5px ${primary?'var(--primary)':'var(--card)'}"></span>Record</div></div>`;
+const cuB2 = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${headAdhoc(false)}
+  <div class="card" style="padding:16px;margin-bottom:8px">
+    <div class="t-cap" style="margin-bottom:6px">Next · in 8 min · ${sz(I.video,11)} Teams</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0"><div style="font:400 20px/26px 'NY';margin-bottom:4px">WFM daily standup</div>
+        <div class="t-cap num">10:00 – 10:30 · 6 attendees · notes titled and linked to this event</div></div>
+      <div class="pill primary lg"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</div></div></div>
+  <div style="margin:0 4px 22px" class="t-cap">Later today: 11:30 Scheduling forecast review · 14:00 Dentist (in person) · 16:00 1:1 Adrian</div>
+  ${pastRows}
+</div></div>`);
+const cuB2none = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${headAdhoc(true)}
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;margin-bottom:14px;border-bottom:.5px solid var(--line2)">
+    <span class="dim">No more meetings today.</span><span class="link" style="font-size:12px">Open Calendar</span></div>
+  ${pastRows}
+</div></div>`);
+
+const S = {home, meeting, presets, settings, add, pill, templates, summary0, transcript, cuA, cuB, cuC, cuEmpty, cuB2, cuB2none};
 const s = new URLSearchParams(location.search).get('s') || 'home';
 document.body.innerHTML = S[s]('light') + S[s]('dark');
 </script>

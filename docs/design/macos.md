@@ -403,6 +403,25 @@ w dolnym pasku, jak na `b-add.png`.
 
 ### 11.5 Ekrany (stan zatwierdzony)
 
+- **Strona główna z „Coming up” (decyzja użytkownika 2026-10-19, wariant B; zastępuje kartę
+  „Record a meeting” opisaną niżej; makiety `b-cuB2.png`, `b-cuB2none.png`; odrzucone `b-cuA.png`,
+  `b-cuC.png`):**
+  - **nagłówek, zawsze:** tytuł „Meetings”, wyszukiwarka-kapsuła, popup presetu (`FieldMenuStyle`)
+    i mała pigułka „● Record” do nagrań **ad hoc**. Jeden popup presetu na stronę, wspólny dla
+    obu przycisków Record (ten sam aktywny preset co w ofercie pigułki z fazy 1.6, §4.4 speca 1.6);
+  - **karta najbliższego spotkania**, gdy z Apple Calendar jest wydarzenie, które zaczyna się w
+    ciągu **60 minut** albo właśnie trwa: nad tytułem linia `text2` „Next · in 8 min · Teams”
+    (ikona wideo + nazwa aplikacji z linku; przy braku linku „In person”), tytuł New York 20 pt,
+    godziny i liczba uczestników, dopisek „notes titled and linked to this event”; po prawej
+    **„Record” `.primary`** — nagranie od razu z tytułem i powiązaniem z wydarzeniem (§4.7 speca
+    1.6). Wtedy „● Record” w nagłówku jest drugorzędny (jeden primary na ekranie, §11.4);
+  - pod kartą jedna linia `text2` „Later today: 11:30 … · 14:00 Dentist (in person) · …”;
+  - **bez najbliższego spotkania** (nic w 60 min, koniec dnia, kalendarz niepodłączony): karty nie
+    ma; linia „No more meetings today · Open Calendar” albo „Connect Apple Calendar…” (→ Settings
+    → Integrations), a „● Record” w nagłówku staje się `.primary`;
+  - lista zdarzeń: tylko wydarzenia z godziną (całodniowe i OOO ukryte jak w filtrze 1.6);
+    wydarzenie bez linku pokazane, ale bez oferty pigułki (decyzja 11 speca 1.6);
+  - niżej archiwum po dniach bez zmian.
 - **Strona główna** (`b-home.png`): tytuł i wyszukiwarka-kapsuła, karta „Record a meeting”
   (popup presetu + „PL · model” w `text2` + Record jako `.primary` z czerwoną kropką), pod
   nią lista po dniach, bez ikon w wierszach, ze stanem po prawej. „Correction failed” ma obok
