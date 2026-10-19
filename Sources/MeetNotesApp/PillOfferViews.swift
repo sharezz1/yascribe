@@ -7,6 +7,7 @@ import SwiftUI
 struct PillOfferView: View {
     let offer: Offer
     @ObservedObject var pill: PillState
+    @Environment(AppModel.self) private var model
 
     private var kind: (icon: String, label: String) {
         switch offer.source {
@@ -26,6 +27,12 @@ struct PillOfferView: View {
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
+            }
+            // Język spotkania jest jawny (W§): wybór presetu w ofercie to ten sam `activePresetID` co na stronie Meetings.
+            FieldMenu(label: "Preset", value: model.activePreset.map(AppModel.label) ?? "No preset", prefix: "Preset", width: 292) {
+                ForEach(model.presets.presets) { p in
+                    Button(AppModel.label(p)) { model.activePresetID = p.id }
+                }
             }
             HStack(spacing: 8) {
                 Button { pill.onSecondary() } label: { Text("Not a meeting").frame(maxWidth: .infinity) }.buttonStyle(PillButtonStyle(kind: .secondary, large: true))

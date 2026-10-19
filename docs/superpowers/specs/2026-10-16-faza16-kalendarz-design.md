@@ -219,7 +219,8 @@ dwa nowe stany obok „nagrywa":
 
 Pigułka-oferta **nie przejmuje fokusu** i nie wymaga okna głównego (decyzja (c) z odbioru 1.5a:
 stanie się oknem klucza nie fokusuje Stop). Start z oferty używa presetu wybranego na stronie
-głównej (jak dziś przycisk Record).
+głównej (jak dziś przycisk Record) albo w samej ofercie (menu Preset; ten sam `activePresetID`, bo spotkanie może być w innym języku;
+decyzja użytkownika 2026-10-19).
 
 ### 4.5 Auto-start
 
