@@ -5,7 +5,7 @@ oraz decyzja (b) z raportu F15-T13 część B (zdarzenie przy pierwszych niezero
 Gałąź `claude/adoring-pasteur-77900b` z `faza15` @ `49c4980`. Plan i decyzje 1–4 zaakceptowane przez użytkownika 2026-10-19.
 
 Commity: `aef4629` (T1 rdzeń), `efd1971` (T2 notatki), `1f75c3e` (T3 aplikacja), raport w commicie domykającym.
-Testy: `scripts/test.sh` → **344/344** (było 334; +10: 5 rejestrator, 3 podsumowanie, 2 TrackProblem/MuteNote).
+Testy: `scripts/test.sh` → **345/345** po poprawkach z odbioru (344/344 przed nimi) (było 334; +10: 5 rejestrator, 3 podsumowanie, 2 TrackProblem/MuteNote).
 
 Merge Danger: NIEODWRACALNE — zmienia format dziennika sesji na dysku: trzy nowe rodzaje zdarzeń (`track.muted`,
 `track.unmuted`, `track.audible`). Build sprzed 1.5b nie przeczyta dziennika, który je zawiera (`corruptLine`), a
@@ -89,6 +89,21 @@ ma po prawej od licznika puste ~22 pt (zarezerwowane miejsce, decyzja 2).
    stronie wywoła więc to pytanie już po 3 minutach, a autostop po 10 min. Pytanie tylko pyta (Stop / Continue).
 4. Pole przełącznika to ikona 14×20 pt. Jeśli w praktyce trudno w nią trafić, łatwo powiększyć.
 5. Poza zakresem (zgodnie z planem): skrót klawiszowy do wyciszania, zapamiętywanie wyciszenia między nagraniami.
+
+## Pierwszy odbiór na żywo (2026-10-19) i poprawki
+
+Sesja `2026-10-19T10-03-38Z-113d` (`.devdata` w worktree):
+- Działa: 3 okresy wyciszenia mikrofonu w dzienniku. Dźwięk systemowy nie ma żadnego, bo próba wyciszenia obu torów
+  została odrzucona. Tory są równe (system 111,06 s; mikrofon 139,26 s − 28,2 s przesunięcia). Wypowiedzi „Me” nie ma
+  w wyciszonym zakresie 0:13–1:43.
+- Użytkownik: ikona-przełącznik działa, ale jest mało czytelna, i poprosił o przycisk po prawej. Poprawka `18971f1`:
+  „Mute” / „Unmute” w każdym wierszu toru, „Unmute” wypełnione kolorem `warn`, rozwinięta pigułka 360 pt.
+- Błąd: dźwięk systemowy dał pierwszą próbkę 28 s po mikrofonie, więc dwa wyciszenia wypadły przed zerem osi
+  („Microphone muted 0:00–0:00”, czas „0:00:-13”). Poprawka zgodnie z decyzją użytkownika: okres zakończony przed zerem
+  nie dostaje linii, a przekraczający zero zaczyna się od 0:00. Test `mutesBeforeTheSessionAxisStartAreSkippedOrClippedToZero`,
+  mutacje M10 (bez pomijania) i M11 (bez przycięcia) zabite. 345/345.
+- Ujemne czasy wypowiedzi „Me” przed pierwszą próbką systemu istniały już wcześniej, więc trafiły do BACKLOG zamiast
+  do tej poprawki.
 
 ## Odbiór na żywo (wymaga użytkownika)
 

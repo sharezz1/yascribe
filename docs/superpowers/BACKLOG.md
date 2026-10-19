@@ -104,6 +104,15 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] VoiceOver czyta tytuł okna pigułki „Meeting detected"/„Meeting ended?" w trakcie nagrywania. *(uwaga 7)*
 - [ ] Potwierdzenie Quit działa tylko z paska menu; Cmd-Q, Dock i wylogowanie w trakcie nagrania dają „Recovered" (sprzed 1.6, auto-start w tle ułatwia trafienie). *(uwaga 8)*
 
+## Z odbioru wyciszania torów (2026-10-19, `reports/F15b-wyciszanie.md`)
+
+- [ ] **Ujemne czasy wypowiedzi „Me” przed pierwszą próbką dźwięku systemowego.** Oś sesji zaczyna pierwsza próbka toru
+  `system`, a process tap potrafi dać ją dopiero przy pierwszym dźwięku (sesja `2026-10-19T10-03-38Z-113d`: 28 s po
+  mikrofonie; `2026-10-13T10-27-14Z-6d17`: 57 s). Wypowiedź z mikrofonu sprzed tej chwili ma ujemne `start`, a
+  `MeetingDetailView.time` formatuje je jako „0:00:-13” (też w Copy; odtwarzanie liczy od złego miejsca). Linie
+  wyciszenia już to omijają (`MuteNote`). Do decyzji: oś od początku nagrania (np. `session.started` albo najwcześniejsza
+  pierwsza próbka), co zmienia czasy w istniejących transkryptach — albo tylko formatowanie i przycięcie.
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.

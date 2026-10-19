@@ -63,3 +63,23 @@ private func silentStart(_ id: String = "system") -> SessionSummary.Track {
     #expect(MuteNote.of(summary: sum).map(\.start) == [5, 10])
     #expect(MuteNote.of(summary: nil).isEmpty)
 }
+
+@Test func mutesBeforeTheSessionAxisStartAreSkippedOrClippedToZero() throws {
+    // Odbiór 2026-10-19: dźwięk systemowy ruszył 28 s po mikrofonie, a dwa wyciszenia wypadły przed zerem osi
+    // („Microphone muted 0:00–0:00”, czas „0:00:-13”).
+    let ns = Timebase(numer: 1, denom: 1)
+    let sum = try SessionSummary.rebuild(from: [
+        .sessionStarted(hostTime: 0, timebase: ns, wallClock: Date(timeIntervalSince1970: 0)),
+        .trackOpened("system", hostTime: 0, sampleRate: 48_000, channels: 2, deviceUID: "spk"),
+        .trackOpened("mic_raw", hostTime: 0, sampleRate: 16_000, channels: 1, deviceUID: "mic"),
+        .trackFirstSample("mic_raw", hostTime: 1_000_000_000),
+        .trackFirstSample("system", hostTime: 29_000_000_000), // oś: 0 = 28 s toru mikrofonu
+        .trackMute("mic_raw", muted: true, frameIndex: 16_000 * 15, hostTime: 16_000_000_000),
+        .trackMute("mic_raw", muted: false, frameIndex: 16_000 * 17, hostTime: 18_000_000_000),
+        .trackMute("mic_raw", muted: true, frameIndex: 16_000 * 20, hostTime: 21_000_000_000),
+        .trackMute("mic_raw", muted: false, frameIndex: 16_000 * 40, hostTime: 41_000_000_000),
+    ])
+    let notes = MuteNote.of(summary: sum)
+    #expect(notes.map(\.line) == ["Microphone muted 0:00–0:12"])
+    #expect(notes.map(\.start) == [0])
+}
