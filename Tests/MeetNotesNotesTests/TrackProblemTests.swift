@@ -36,3 +36,30 @@ private func silentStart(_ id: String = "system") -> SessionSummary.Track {
     #expect(p.map { $0.trackID } == ["system", "mic_raw"])
     #expect(p.allSatisfy { $0.isWarning })
 }
+
+@Test func journaledSoundAfterSilenceIsInformationWithoutATranscript() throws {
+    // 1.5b: `track.audible` rozstrzyga od razu — bez czekania na transkrypt (decyzja (b) z F15-T13 część B).
+    var t = silentStart()
+    t.audibleFrame = 64 * 48_000
+    let p = try #require(TrackProblem.of(tracks: [t], transcript: nil).first)
+    #expect(!p.isWarning)
+    #expect(p.line == "System audio was silent for the first minute; recording continued.")
+    #expect(p.detail.contains("1:04"))
+}
+
+@Test func mutePeriodsBecomeTranscriptLinesOnTheSessionAxis() throws {
+    let ns = Timebase(numer: 1, denom: 1)
+    let sum = try SessionSummary.rebuild(from: [
+        .sessionStarted(hostTime: 0, timebase: ns, wallClock: Date(timeIntervalSince1970: 0)),
+        .trackOpened("system", hostTime: 0, sampleRate: 48_000, channels: 2, deviceUID: "spk"),
+        .trackOpened("mic_raw", hostTime: 0, sampleRate: 16_000, channels: 1, deviceUID: "mic"),
+        .trackFirstSample("system", hostTime: 1_000_000_000),
+        .trackFirstSample("mic_raw", hostTime: 1_000_000_000),
+        .trackMute("system", muted: true, frameIndex: 480_000, hostTime: 11_000_000_000), // do końca (awaria)
+        .trackMute("mic_raw", muted: true, frameIndex: 80_000, hostTime: 6_000_000_000),
+        .trackMute("mic_raw", muted: false, frameIndex: 192_000, hostTime: 13_000_000_000),
+    ])
+    #expect(MuteNote.of(summary: sum).map(\.line) == ["Microphone muted 0:05–0:12", "System audio muted from 0:10 to the end"])
+    #expect(MuteNote.of(summary: sum).map(\.start) == [5, 10])
+    #expect(MuteNote.of(summary: nil).isEmpty)
+}
