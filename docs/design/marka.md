@@ -1,8 +1,11 @@
 # Marka: nazwa, logo, ikona
 
-> Status: **w toku, 2026-10-19**. Zapadły: nazwa, motto, kompozycja znaku. Czeka: wybór
-> zestawu kolorów (użytkownik konsultuje), potem ikona na macOS 27 i podpięcie do paczki.
-> Sesja designu nie dotyka `Sources/`, `Tests/`, `scripts/`.
+> Status: **w toku, 2026-10-19**. Zapadły: nazwa, motto, kompozycja znaku. **Tymczasowo zestaw 3**
+> (użytkownik: „na razie v3”, kolory można zmienić później; konsultuje z żoną). Ikona **jest
+> podpięta do paczki** (zgoda użytkownika 2026-10-19). Czeka: ikona na małe rozmiary, warstwy pod
+> macOS 27, logotyp.
+> Sesja designu nie dotyka `Sources/` ani `Tests/`; `scripts/bundle.sh` i `Resources/Info.plist`
+> zmienione tylko za zgodą (sekcja „Ikona w paczce”).
 
 ## Zapadło (decyzje użytkownika)
 
@@ -51,18 +54,41 @@ przybliżenie squircle'a macOS.
 Złoto `#F2BD55` jest bliskie ciemnemu `warn` z §11.1 (`#E0B050`), więc w ikonie nie wprowadza
 obcego koloru, ale **nie mierzono jeszcze kontrastu** ikony w Docku jasnym i ciemnym.
 
+## Ikona w paczce (2026-10-19)
+
+Zestaw 3 jest ikoną tymczasową. Zmiana koloru to: edycja tablicy `V` w `zloz-ikone.py`
+(albo wybór innego `wN.svg`), potem `docs/design/marka/zrob-icns.sh wN.svg`.
+
+- `docs/design/marka/zrob-icns.sh`: SVG → Chrome headless (PNG 1024 z alfą) → `sips` (16…512 i @2x)
+  → `iconutil` → `Resources/AppIcon.icns`. Działa na samych Command Line Tools **plus Google Chrome**
+  (do rasteryzacji SVG; `rsvg-convert`, ImageMagick i Inkscape nie ma). `.icns` jest w repo, więc
+  budowa paczki Chrome nie wymaga.
+- `Resources/Info.plist`: `CFBundleIconFile` = `AppIcon`. `scripts/bundle.sh`: kopiuje
+  `Resources/AppIcon.icns` do `Contents/Resources/`. `scripts/check-bundle.sh` przechodzi.
+- **Sprawdzone:** `NSWorkspace.icon(forFile:)` na zbudowanej paczce zwraca naszą ikonę w squircle'u
+  z cieniem systemu, **bez szarego tła** (tło 824 pt w kanwie 1024 mieści się w masce).
+- **Nie sprawdzone na żywo w Docku:** w chwili zmiany działała instancja użytkownika (PID 11254),
+  której nie ruszano. Ikona pojawi się po przebudowie `scripts/run.sh` (LaunchServices może
+  trzymać starą w pamięci podręcznej; pomaga `touch .build/MeetNotes.app` albo `killall Dock`).
+- **Ograniczenie CLT (bez Icon Composera):** to zwykłe `.icns`, a więc **jedna płaska warstwa**:
+  brak warstw pod Liquid Glass, brak wariantów ciemnego, Clear i Tinted. System może je
+  przetworzyć automatycznie (np. Tinted), ale jakości tego nie mierzono. Warstwowy format
+  `.icon` wymaga Icon Composera z Xcode. Zbadać, czy da się go złożyć ręcznie (to JSON plus SVG-i),
+  bo wtedy Xcode niepotrzebny; **niesprawdzone**.
+- Wersja na 16 i 32 pt jest ta sama co duża (słupki zlewają się). Uproszczona wersja jest
+  w „Do zrobienia”.
+
 ## Do zrobienia
 
-1. **Wybór zestawu kolorów** (użytkownik).
+1. **Wybór zestawu kolorów** (użytkownik; na razie 3).
 2. **Ikona na małe rozmiary (16, 32 pt):** mniej słupków, grubsze, bez nacięć pióra. Pomiar
    czytelności na podglądzie 1:1.
 3. **macOS 27:** warstwy pod Liquid Glass (tło, pióro, fale jako osobne warstwy), wariant ciemny,
-   Clear, Tinted. Zakaz SF Symbols w ikonie i logo (macos.md §7). Sprawdzić, co da się zrobić na
-   samych Command Line Tools (`iconutil` → `.icns`, bez Icon Composera) i **zapisać ograniczenia**.
+   Clear, Tinted (ograniczenia CLT w sekcji „Ikona w paczce”). Zakaz SF Symbols w ikonie i logo
+   (macos.md §7).
 4. **Logotyp:** „Yascribe” w New York (§11.2), duże Y, ułożenie znaku i nazwy, wersja na jasne
    i ciemne tło.
-5. **Podpięcie ikony do paczki** (`scripts/bundle.sh`, `Info.plist`): osobny krok, tylko za
-   zgodą użytkownika.
+5. ~~Podpięcie ikony do paczki~~ zrobione 2026-10-19 (zob. wyżej).
 
 ## Odrzucone kierunki (historia)
 
