@@ -191,6 +191,20 @@ private func oldAndNew() throws -> (URL, URL) {
     #expect(RecordingsMove.topLevel(old).isEmpty)
 }
 
+@Test func moveDeletesNothingWhenCommitThrows() async throws {
+    // Folder celu tworzy sam przebieg (nie istnieje przed nim) — po nieudanym commit znika razem z naszą kopią.
+    let (old, new) = try oldAndNew()
+    let before = files(old)
+    struct NoSave: Error {}
+    var failure: RecordingsMove.Failure?
+    do { _ = try await RecordingsMove.run(from: old, to: new) { throw NoSave() } }
+    catch let f as RecordingsMove.Failure { failure = f }
+    #expect(failure != nil, "commit rzuca, więc run musi rzucić Failure")
+    #expect(failure?.reason.contains("Nothing was deleted") == true)
+    #expect(files(old) == before)
+    #expect(!FileManager.default.fileExists(atPath: new.path))
+}
+
 @Test func moveRefusesBadDestinations() throws {
     let (old, new) = try oldAndNew()
     #expect(RecordingsMove.destinationRefusal(from: old, to: old) != nil)
