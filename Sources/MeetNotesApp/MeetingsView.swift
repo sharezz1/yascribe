@@ -1,16 +1,22 @@
+import AppKit
+import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesProviders
 import SwiftUI
 
-/// Strona główna, wariant B bez kalendarza (spec 1.5 §5.1): karta „Record a meeting" i oś spotkań po dniach.
-/// Miejsce po „Coming up" zajmuje karta; kalendarz wróci w fazie 3. Wygląd: macos.md §11.5, makieta b-home.png.
+/// Strona główna, wariant B z „Coming up” (macos.md §11.5, decyzja 2026-10-19; makiety b-cuB2.png, b-cuB2none.png):
+/// nagłówek z Record ad hoc, karta najbliższego spotkania z Apple Calendar, linia reszty dnia i oś spotkań po dniach.
 final class MeetingsViewState: ObservableObject {
     @Published var query = ""
+    /// Migawki: kalendarz i chwila na sztywno zamiast EventKit i zegara.
+    var preview: (connected: Bool, events: [CalendarEventInfo], now: Date)?
 }
 
 struct MeetingsView: View {
     @Environment(AppModel.self) private var model
-    @StateObject private var state = MeetingsViewState()
+    @StateObject private var state: MeetingsViewState
+
+    init(state: MeetingsViewState = MeetingsViewState()) { _state = StateObject(wrappedValue: state) }
 
     private var days: [(Date, [SessionItem])] {
         let cal = Calendar.current
@@ -32,15 +38,12 @@ struct MeetingsView: View {
     var body: some View {
         @Bindable var model = model
         NavigationStack {
-            ScrollPage(580) {
+            ScrollPage(600) {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        PageTitle("Meetings")
-                        Spacer(minLength: 12)
-                        SearchCapsule(text: $state.query)
+                    // Co minutę: „in 8 min” i wejście spotkania w okno 60 min. Kalendarz czyta tylko `ComingUpHeader`.
+                    TimelineView(.everyMinute) { ctx in
+                        ComingUpHeader(state: state, now: state.preview?.now ?? ctx.date)
                     }
-                    .padding(.bottom, 18)
-                    RecordCard().padding(.bottom, 26)
                     if model.sessions.isEmpty {
                         ContentUnavailableView {
                             Label("No meetings yet", systemImage: "waveform")
@@ -88,66 +91,156 @@ struct SearchCapsule: View {
             }
         }
         .padding(.horizontal, 10)
-        .frame(width: 210, height: 28)
+        .frame(width: 170, height: 28)
         .background(.mnField, in: Capsule())
         .overlay(Capsule().strokeBorder(.mnLine, lineWidth: 0.5))
         .help("Search titles, notes and transcripts")
     }
 }
 
-/// 🔴 Preset — z językiem i modelem ASR — widoczny przed startem (W§2, §6; BACKLOG D3 „preset nieczytelny").
-struct RecordCard: View {
+/// Góra strony: tytuł, wyszukiwarka, preset i „● Record” ad hoc; pod nimi karta najbliższego spotkania albo jedna linia.
+/// Jeden primary na ekranie (§11.4): Record na karcie, a bez karty (albo w trakcie nagrania: Stop) ten w nagłówku.
+struct ComingUpHeader: View {
     @Environment(AppModel.self) private var model
-
-    @ViewBuilder private func detail(_ p: Preset) -> some View {
-        HStack(spacing: 4) {
-            if p.isAutoLanguage {
-                // Auto = ryzyko zmyślonej angielszczyzny (W§2): ostrzeżenie to ikona + słowo, nie sam kolor.
-                Label("Auto language", systemImage: "exclamationmark.triangle").foregroundStyle(.mnWarn)
-                Text("· " + (p.asr?.model ?? "no speech-to-text model"))
-            } else {
-                Text("\(p.languageLabel) · \(p.asr?.model ?? "no speech-to-text model")")
-            }
-        }
-        .font(.callout).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle)
-    }
+    @ObservedObject var state: MeetingsViewState
+    let now: Date
 
     var body: some View {
+        @Bindable var model = model
+        // ponytail: EventKit pytany przy każdym przeliczeniu (co minutę, przy zmianie Settings lub nagrania); cache, gdyby było wolno.
+        let connected = state.preview?.connected ?? model.calendarReady
+        let up = ComingUp.of(state.preview?.events ?? model.todaysEvents(now: now), now: now)
         let recording = model.recording.isRecording
-        Card {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(recording ? "Recording in progress" : "Record a meeting")
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
-                    if recording {
-                        Text("\(RecordingPanelView.clock(model.recording.elapsed)) · \(model.recording.presetLabel)")
-                            .font(.callout).monospacedDigit().foregroundStyle(.mnText2)
-                    } else {
-                        HStack(spacing: 8) {
-                            PresetMenu()
-                            if let p = model.activePreset { detail(p) } else {
-                                Text("Create a preset to start").font(.callout).foregroundStyle(.mnText2)
-                            }
-                        }
-                    }
-                }
-                Spacer(minLength: 8)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                PageTitle("Meetings")
+                Spacer(minLength: 12)
+                SearchCapsule(text: $state.query)
+                PresetMenu(width: 96)
                 Button {
                     recording ? model.recording.stop() : model.startRecording()
                 } label: {
                     HStack(spacing: 6) {
                         if recording {
-                            Image(systemName: "stop.fill").font(.system(size: 10)).foregroundStyle(.mnRecDot)
+                            Image(systemName: "stop.fill").font(.system(size: 9)).foregroundStyle(.mnRecDot)
                         } else {
-                            Circle().fill(.mnRecDot).frame(width: 8, height: 8)
+                            Circle().fill(.mnRecDot).frame(width: 7, height: 7)
                         }
                         Text(recording ? "Stop" : "Record")
                     }
                 }
-                .buttonStyle(PillButtonStyle(kind: .primary, large: true))
-                .help(recording ? "Stop recording" : "Record a meeting")
+                .buttonStyle(PillButtonStyle(kind: recording || up.next == nil ? .primary : .secondary))
+                .help(recording ? "Stop recording" : "Record now, without a calendar event")
             }
-            .padding(.vertical, 14).padding(.leading, 16).padding(.trailing, 14)
+            .padding(.bottom, model.activePreset?.isAutoLanguage == true ? 6 : 18)
+            // Auto = ryzyko zmyślonej angielszczyzny (W§2): ostrzeżenie widoczne przed startem, ikona + słowo.
+            if model.activePreset?.isAutoLanguage == true {
+                WarnLabel("Auto language: the preset has no fixed language").font(.system(size: 11)).padding(.bottom, 14)
+            }
+            if let next = up.next {
+                NextMeetingCard(event: next, now: now, recording: recording).padding(.bottom, 8)
+                if !up.later.isEmpty {
+                    Text(Self.laterLine(up.later)).font(.system(size: 11)).foregroundStyle(.mnText2).monospacedDigit()
+                        .lineLimit(1).truncationMode(.tail).padding(.horizontal, 4)
+                }
+                Color.clear.frame(height: 22)
+            } else {
+                HStack(spacing: 12) {
+                    Text(!connected ? "See your meetings here and start recording from them."
+                         : up.later.isEmpty ? "No more meetings today." : Self.laterLine(up.later))
+                        .foregroundStyle(.mnText2).monospacedDigit().lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: 8)
+                    if connected {
+                        LinkButton("Open Calendar") {
+                            if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") {
+                                NSWorkspace.shared.openApplication(at: app, configuration: .init())
+                            }
+                        }
+                    } else {
+                        LinkButton("Connect Apple Calendar…") { model.section = .settings }
+                            .help("Settings → Integrations")
+                    }
+                }
+                .font(.system(size: 13))
+                .padding(.vertical, 12).padding(.horizontal, 4)
+                .overlay(alignment: .bottom) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
+                .padding(.bottom, 14)
+            }
+        }
+    }
+
+    /// „Later today: 11:30 Forecast review · 14:00 Dentist (in person) · …”
+    static func laterLine(_ events: [CalendarEventInfo]) -> String {
+        "Later today: " + events.map {
+            $0.start.formatted(date: .omitted, time: .shortened) + " " + $0.title + (ComingUp.appName($0) == nil ? " (in person)" : "")
+        }.joined(separator: " · ")
+    }
+}
+
+/// Odnośnik tekstowy (podkreślenie `text3`, jak `.link` w ekrany-b.html).
+struct LinkButton: View {
+    let title: String
+    let action: () -> Void
+    init(_ title: String, action: @escaping () -> Void) { self.title = title; self.action = action }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 12, weight: .medium)).foregroundStyle(.mnText).underline(color: .mnText3)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Karta najbliższego spotkania: „Next · in 8 min · Teams”, tytuł New York 20, godziny i uczestnicy; Record z tytułem
+/// i powiązaniem z wydarzeniem (`calendarEvent`, spec 1.6 §4.7).
+struct NextMeetingCard: View {
+    @Environment(AppModel.self) private var model
+    let event: CalendarEventInfo
+    let now: Date
+    let recording: Bool
+
+    private var details: String {
+        var parts = [event.start.formatted(date: .omitted, time: .shortened) + " – " + event.end.formatted(date: .omitted, time: .shortened)]
+        let n = event.attendees.count
+        if n > 0 { parts.append(n == 1 ? "1 attendee" : "\(n) attendees") }
+        parts.append("notes titled and linked to this event")
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        let app = ComingUp.appName(event)
+        Card {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Text(ComingUp.timing(event, now: now) + " ·")
+                    if let app {
+                        Image(systemName: "video").font(.system(size: 9)).accessibilityHidden(true)
+                        Text(app)
+                    } else {
+                        Text("In person")
+                    }
+                }
+                .font(.system(size: 11)).foregroundStyle(.mnText2)
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(event.title).font(.system(size: 20, design: .serif)).foregroundStyle(.mnText).lineLimit(1).truncationMode(.tail)
+                        Text(details).font(.system(size: 11)).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        model.startRecording(event: event)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Circle().fill(.mnRecDot).frame(width: 8, height: 8)
+                            Text("Record")
+                        }
+                    }
+                    .buttonStyle(PillButtonStyle(kind: recording ? .secondary : .primary, large: true))
+                    .disabled(recording)
+                    .help(recording ? "A recording is already in progress" : "Record “\(event.title)”: the note gets its title and is linked to this event")
+                }
+            }
+            .padding(16)
         }
     }
 }
@@ -165,7 +258,8 @@ struct PresetMenu: View {
             Divider()
             Button("Edit Presets…") { model.section = .presets }
         }
-        .help("Preset used for the next recording: language and models")
+        .help(model.activePreset.map { "Preset for the next recording: \($0.languageLabel) · \($0.asr?.model ?? "no speech-to-text model")" }
+              ?? "Create a preset to start recording")
     }
 }
 

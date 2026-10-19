@@ -446,11 +446,15 @@ final class AppModel {
     // MARK: Nagrywanie i transkrypcja
 
     /// Ręczny start (menu, przycisk): wywołania w ternarnych wyrażeniach typu `()` nie znoszą wyniku `Bool`.
-    func startRecording() { startRecording(offer: nil) }
+    func startRecording() { startRecording(event: nil, background: false) }
 
-    /// `offer != nil`: start z detekcji w tle — błąd tylko w `lastError`, bez przełączania sekcji. `true` = nagranie trwa.
+    /// Start z oferty (detekcja w tle) — błąd tylko w `lastError`, bez przełączania sekcji. `true` = nagranie trwa.
     @discardableResult
-    func startRecording(offer: Offer?) -> Bool {
+    func startRecording(offer: Offer) -> Bool { startRecording(event: offer.event, background: true) }
+
+    /// `event`: nagranie od razu z tytułem i powiązaniem (spec 1.6 §4.7) — z oferty albo z karty „Coming up” (§11.5).
+    @discardableResult
+    func startRecording(event: CalendarEventInfo?, background: Bool = false) -> Bool {
         guard !recording.isRecording else {
             lastError = "A recording is already in progress."
             return false
@@ -462,12 +466,12 @@ final class AppModel {
         // ChatGPT #2: preset — z językiem — ustalony PRZED startem i zamrożony na całą sesję.
         guard let preset = activePreset, (try? preset.validate()) != nil else {
             lastError = "Choose a preset with a language before recording."
-            if offer == nil { section = .presets }
+            if !background { section = .presets }
             return false
         }
         let dir = sessionsDirectory.appendingPathComponent(Self.sessionName(Date()))
         do {
-            try recording.start(directory: dir, presetLabel: Self.label(preset), eventTitle: offer?.event?.title) { [weak self] _ in
+            try recording.start(directory: dir, presetLabel: Self.label(preset), eventTitle: event?.title) { [weak self] _ in
                 Task { @MainActor in
                     self?.reloadSessions()
                     self?.transcribe(sessionURL: dir, preset: preset)
@@ -477,7 +481,7 @@ final class AppModel {
             do { try JSONFile.save(preset, to: dir.appendingPathComponent("preset.json")) } catch {
                 lastError = "Recording, but couldn't save its preset: \(error). After a restart it will use the active preset."
             }
-            if let event = offer?.event {
+            if let event {
                 do {
                     if let note = try NotesStore(session: dir).updateMeta({ $0.calendarEvent = event.link() }) { lastError = note }
                 } catch { lastError = "Recording, but couldn't link the calendar event: \(error)" }

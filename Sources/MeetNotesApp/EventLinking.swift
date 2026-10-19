@@ -22,6 +22,14 @@ extension AppModel {
         return EventRanking.order(events, recordingStart: item.startedAt, recordingEnd: item.duration.map { item.startedAt + $0 }, now: Date())
     }
 
+    /// Wydarzenia dnia `now` (północ–północ) dla „Coming up” na stronie głównej. `[]` bez podłączonego kalendarza.
+    func todaysEvents(now: Date) -> [CalendarEventInfo] {
+        guard calendarReady else { return [] }
+        let from = Calendar.current.startOfDay(for: now)
+        return calendarSource.events(from: from, to: Calendar.current.date(byAdding: .day, value: 1, to: from) ?? from + 86400,
+                                     calendarIDs: settings.meetings?.calendarIDs)
+    }
+
     private func setCalendarEvent(_ link: CalendarLink?, for item: SessionItem) {
         guard recordingsMove == nil else { lastError = "Meetings are being moved to a new folder. Try again when that finishes."; return }
         do {
