@@ -13,22 +13,19 @@ raportu przeglądu (`157d94b`). Nie scalone do `faza15`/`master`, bez pusha i ta
 | P1 `RecordingsMove.run`, `commit` rzuca | `ff2a229` | nowy `moveDeletesNothingWhenCommitThrows` (`RecordingsTests.swift`) | przed `do { try await commit() }` dopisana pętla kasująca stare wpisy | `moveDeletesNothingWhenCommitThrows` (`files(old) == before`); poza tym `moveCopiesVerifiesThenDeletes`, `moveDeletesNothingWhenVerificationFails` |
 | P2 `RunDirectory.latestRunID` | `e42c6a8` (+ BACKLOG `2f9f07a`) | nowy `retentionIgnoresCliRunsWhenAppRunHasGaps`; rozszerzony `latestRunIgnoresTheNotesDirectory` (`debug`, `notes.txt`) | stary filtr `isValid(runID:)` | `retentionIgnoresCliRunsWhenAppRunHasGaps` (4 asercje: `latestRunID == run1`, `!transcriptionFinished`, `purged.isEmpty`, audio zostaje), `latestRunIgnoresTheNotesDirectory` |
 | P4 tiki co 1 s w `OfferDetectorTests` | `ed629eb` (+ BACKLOG `165e00c`) | 6 poprawionych: `manualStopSilencesAutoStartForTheSameCall`, `manualStopDuringAMicBlipStaysQuiet`, `dismissedOfferStaysQuietForTheWholeMicSession`, `dismissedOfferStaysQuietAcrossHelperProcessesOfTheSameApp`, `ignoredAppsNeverOffer`, `unknownAppsNeverOffer` | (A) bez `mutedFamilies.formUnion(lastInput.keys)` | `manualStopDuringAMicBlipStaysQuiet`, `manualStopSilencesAutoStartForTheSameCall` (+ `afterManualStopANewCallOffersAgain`) |
-| P4 | — | — | (B) bez `mutedFamilies.insert(f)` w `dismiss()` | **żaden z poprawionych** — patrz „STOP” niżej; padają `dismissedOfferReturnsForANewMicSession` i `micSessionEndsAtExactlyReleaseSeconds` |
+| P4 (dodatek, po decyzji użytkownika) | `a6341a8` | `dismissedOfferStaysQuietForTheWholeMicSession` i `…AcrossHelperProcessesOfTheSameApp` z blipem mikrofonu 10 s < `releaseSeconds` | (B) bez `mutedFamilies.insert(f)` w `dismiss()` | oba poprawione `dismissed…` (`!r.run(t0 + 3611, …).contains(where: isOffering)`), a także `dismissedOfferReturnsForANewMicSession` i `micSessionEndsAtExactlyReleaseSeconds` |
 
 Wszystkie mutacje cofnięte `git checkout <plik>`; po każdej `git status` czysty. Wszystkie padnięcia są na asercjach
 (`Expectation failed`), nie na budowaniu.
 
 ## Odstępstwa od opisu (do decyzji użytkownika)
 
-**STOP 1 — mutacja B (P4) nie pada na poprawionych testach.** Usunięcie `mutedFamilies.insert(f)` w `dismiss()` nie
-zmienia zachowania `dismissedOfferStaysQuietForTheWholeMicSession` ani `…AcrossHelperProcessesOfTheSameApp`, także przy
-tikach co 1 s: po `dismiss()` kolejne `step` liczą tę samą ofertę co `current`, więc `step` nie zwraca żadnej akcji
-(`.show` tylko przy zmianie oferty), a `.hide` nie jest `isOffering`. Wyciszenie rodziny zmienia obserwowalne zachowanie
-dopiero, gdy oferta zniknie i wróci w tej samej sesji mikrofonu — tego pilnują `dismissedOfferReturnsForANewMicSession`
-(blip 10 s, t0+111…200) i `micSessionEndsAtExactlyReleaseSeconds`, oba już z tikami co 1 s i niezmienione. Czyli
-bramka `dismiss` ma strażnika, ale nie są nim testy z listy P4. Nic nie dopisywałem „na ślepo”. Do wyboru: zostawić (bramka
-pokryta), albo dopisać do obu testów `dismissed…` krok, który zmusza ofertę do zniknięcia i powrotu (np. krótki blip
-mikrofonu poniżej `releaseSeconds` w trakcie godziny).
+**STOP 1 (rozwiązany) — mutacja B (P4) nie padała na poprawionych testach.** Po samej zmianie tików usunięcie
+`mutedFamilies.insert(f)` w `dismiss()` nie zmieniało `dismissedOfferStaysQuietForTheWholeMicSession` ani
+`…AcrossHelperProcessesOfTheSameApp`: po `dismiss()` `step` liczy tę samą ofertę co `current`, więc nie zwraca akcji
+(`.show` tylko przy zmianie oferty). Wyciszenie rodziny jest obserwowalne dopiero, gdy oferta zniknie i wróci w tej samej
+sesji mikrofonu. Za decyzją użytkownika dopisałem do obu testów blip mikrofonu (10 s < `releaseSeconds`) w godzinie ciszy
+(`a6341a8`); teraz mutacja B pada także na nich (wiersz w tabeli).
 
 **Uwaga 2 — P1: przegląd twierdził, że żaden test nie woła `commit`, który rzuca.** `moveCopiesVerifiesThenDeletes`
 już to robi (`{ throw NoSave() }`) i pada przy mutacji „kasuj przed `commit`”. Nowy test dokłada to, czego tamten nie
