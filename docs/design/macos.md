@@ -512,6 +512,10 @@ w dolnym pasku, jak na `b-add.png`.
   - nie da się wyciszyć obu torów naraz — przy próbie ostrzeżenie „Nothing is being recorded”;
   - zmiana w rdzeniu (`MeetNotesRecording`): testy + mutacja (cisza w wyciszonym zakresie, wyrównanie
     długości torów, zakaz wyciszenia obu).
+  - **Wdrożone 2026-10-19** (raport `docs/superpowers/reports/F15b-wyciszanie.md`), decyzje użytkownika:
+    (1) ostrzeżenie zastępuje linię presetu na 4 s; (2) miejsce na `mic.slash` w zwiniętej pigułce zarezerwowane na
+    stałe; (3) szary pasek pokazuje rzeczywisty poziom; (4) wyciszony tor liczy się jako cichy dla autostopu i
+    „Meeting ended?”. Przy okazji `track.audible`: cisza na początku odróżniona od braku uprawnienia bez transkryptu.
 - **Drugi odbiór 2026-10-16 (do poprawki):** w zwiniętej pigułce „Stop” łamie się na dwie linie —
   etykiety w jednej linii, szerokość stanu zwiniętego liczona z treści przy najszerszym liczniku;
   rozwinięta pigułka na pierwszym planie nadal ma prostokątne rogi okna — panel `borderless` +
