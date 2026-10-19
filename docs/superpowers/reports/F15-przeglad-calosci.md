@@ -6,7 +6,8 @@ poprawek w kodzie nie ma (mutacje cofnięte `git checkout`).
 
 `scripts/test.sh` na `02ca8ae` (ostatnia linia): `test.sh: 353/353 testów uruchomionych i zaliczonych.` (`check-bundle: OK`)
 
-**Wynik: 0 blokujących, 4 do poprawy, 8 do BACKLOG.** W `BACKLOG.md` otwartych pozycji jest dziś 34 (`- [ ]`); 8 nowych
+**Wynik: 0 blokujących, 4 do poprawy, 8 do BACKLOG.** P1, P2 i P4 są zrobione w `reports/F15-poprawki-P1-P2-P4.md`
+(355/355), a P3 w dokumentach przy scaleniu. W `BACKLOG.md` otwartych pozycji jest dziś 34 (`- [ ]`); 8 nowych
 z tego raportu jeszcze tam nie trafiło (P3).
 
 ## Co sprawdziłem
@@ -70,8 +71,10 @@ i powiązanie `busySessions` z retencją sprawdził tylko odbiór na żywo.
 **P1. Ścieżka „`commit` rzuca → nic nie jest usuwane” w `RecordingsMove.run` nie ma testu.**
 `Sources/MeetNotesNotes/Recordings.swift`, `run`, blok `do { try await commit() } catch { throw fail(...) }`. To bramka
 przed utratą danych: gdy nie da się zapisać nowej lokalizacji, stare spotkania muszą zostać, a własna kopia ma zniknąć.
-Kod jest poprawny, ale testy (`moveDeletesNothingWhenCopyFails`, `…VerificationFails`, `moveCopiesVerifiesThenDeletes`)
-nie wołają `commit`, który rzuca. Gdyby ktoś przeniósł usuwanie przed `commit`, nic by tego nie złapało.
+Kod jest poprawny. **Korekta po poprawkach:** to twierdzenie było za mocne. `moveCopiesVerifiesThenDeletes` już woła
+`commit: { throw NoSave() }` i pada przy mutacji „kasuj przed `commit`” (mój grep szukał słowa `commit` w treści testu
+i go nie znalazł). Brakowało tylko sprawdzenia komunikatu „Nothing was deleted” i usunięcia folderu celu utworzonego
+przez przebieg.
 **Propozycja (Sonnet):** test z `commit: { throw … }`. Ma sprawdzić, że stare pliki zostały, cel jest pusty albo usunięty,
 a `Failure` zawiera „Nothing was deleted”. Mutacja: usuwanie przed `commit` → test pada.
 

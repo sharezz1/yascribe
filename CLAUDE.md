@@ -22,23 +22,22 @@ angielsku, dokumenty w repo po polsku.
 Kod: `Sources/MeetNotesRecording` (rdzeń audio), `MeetNotesSessionFormat` (dziennik, CAF),
 `MeetNotesProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy),
 `MeetNotesTranscription` (bramka, pakowanie okien, wznawianie), `MeetNotesApp` (SwiftUI),
-`meetnotes-cli` (narzędzie deweloperskie).
+`MeetNotesNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań), `MeetNotesMeetings` (kalendarz, wykrywanie spotkań, Coming up), `meetnotes-cli` (narzędzie deweloperskie).
 
 ## Stan
 
-Faza 1 zamknięta 2026-10-13 (`master`). Faza 1.5 „Notatka i wygląd" na gałęzi `faza15`:
-spec `docs/superpowers/specs/2026-10-14-faza15-design.md`, plan
-`docs/superpowers/plans/2026-10-14-faza15-*.md` (przydział modeli Haiku/Sonnet/Opus w pliku 00).
-**Faza 1.5a zamknięta 2026-10-16** (tag `faza-1.5a` → `b4f5804`, 236/236): język wizualny B
-(`docs/design/macos.md` §11), trzy odbiory na żywo, ElevenLabs bezpośrednio, szablony z sekcjami,
-Recordings z retencją audio; raport `docs/superpowers/reports/F15-T13-czesc-B.md`.
-**Faza 1.5b „Wyciszanie torów" scalona do `faza15` 2026-10-19** (345/345, odbiór na żywo zaliczony): przycisk
-Mute/Unmute w pigułce, cyfrowa cisza zamiast przerwy, zdarzenia `track.muted/unmuted/audible` w dzienniku (nowy format —
-starszy build ich nie przeczyta); raport `docs/superpowers/reports/F15b-wyciszanie.md`.
-**Faza 1.6 „Kalendarz i wykrywanie spotkań" scalona do `faza15` 2026-10-19** (334/334, bez tagu):
-spec `docs/superpowers/specs/2026-10-16-faza16-kalendarz-design.md`, plan `…/plans/2026-10-16-faza16-kalendarz.md`,
-odbiór `…/reports/F16-odbior.md`, przegląd `…/reports/F16-przeglad.md` (0 blokujących, 8 uwag w BACKLOG).
-**Niezamknięta:** poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji; lekarz/urodziny/OOO tylko z testów.
+Faza 1 zamknięta 2026-10-13 (`master`).
+**Faza 1.5** („Notatka i wygląd": 1.5a, 1.5b „Wyciszanie torów", 1.6 „Kalendarz i wykrywanie spotkań", Coming up)
+**scalona do `master` 2026-10-19** (`--no-ff`, tag `faza-1.5` na commicie scalenia; wcześniejsze tagi: `faza-1.5a` → `b4f5804`,
+`faza-1.6` → `49c4980`, `faza-1.5b-wyciszanie`), 355/355. Przegląd całości: `docs/superpowers/reports/F15-przeglad-calosci.md`
+(poprawki P1, P2, P4: `docs/superpowers/reports/F15-poprawki-P1-P2-P4.md`).
+Spec i plany: `docs/superpowers/specs/2026-10-14-faza15-design.md`, `docs/superpowers/plans/2026-10-14-faza15-*.md`
+(przydział modeli Haiku/Sonnet/Opus w pliku 00); 1.6: `docs/superpowers/specs/2026-10-16-faza16-kalendarz-design.md`,
+`docs/superpowers/plans/2026-10-16-faza16-kalendarz.md`.
+Raporty: 1.5a `docs/superpowers/reports/F15-T13-czesc-B.md`; 1.5b `docs/superpowers/reports/F15b-wyciszanie.md`;
+1.6 `docs/superpowers/reports/F16-odbior.md`, `docs/superpowers/reports/F16-przeglad.md`.
+**Niezamknięta:** poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji; lekarz/urodziny/OOO tylko z testów;
+pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
 
 ## Twarde zasady
 

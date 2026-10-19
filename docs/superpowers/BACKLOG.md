@@ -77,7 +77,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] `NoteTitle.parse`: tekst przed tytułem (np. ostrzeżenie o niespójnym transkrypcie) znika z treści; prompt zabrania tekstu przed `# `, więc rzadkie. Ogrodzenie bloku kodu z tekstem po nim nie jest zdejmowane.
 - [ ] `MarkdownBlocks`: tabele rozpadają się na akapit na komórkę, blok kodu i cytat spadają do akapitu, akapit kontynuacji w punkcie dostaje zbędny znacznik. Nic nie ginie; tylko wygląd — prompt „Standard" nie prosi o tabele.
 - [x] `RunDirectory.latestRunID` filtruje dopuszczalne znaki, nie wzorzec daty: zabłąkany `runs/notes.txt` albo `--run debug` z CLI wygrywa jako „najnowszy". Zaostrzyć do katalogów i wzorca `…Z`. *(zrobione w `e42c6a8`: tylko wzorzec `AppModel.sessionName`; od retencji decyduje o kasowaniu audio, przegląd całości P2; domyślny runID CLI `…Z` bez `-xxxx` też jest pomijany)*
-- [ ] `NotesStore.updateMeta` czyta, zmienia i zapisuje bez serializacji: `AutoTitle.generate` (poza MainActor) i `setManualTitle` (UI) mogą się przeplecieć i autotytuł zgubi ręczny tytuł (okno < 1 ms). Sprawdzić przy T6/T7 (serializacja przez jeden aktor/kolejkę).
+- [ ] `NotesStore.updateMeta` czyta, zmienia i zapisuje bez serializacji: `AutoTitle.generate` (poza MainActor) i `setManualTitle` (UI) mogą się przeplecieć i autotytuł zgubi ręczny tytuł (okno < 1 ms). Sprawdzić przy T6/T7 (serializacja przez jeden aktor/kolejkę). *(od 1.6 także powiązanie z kalendarzem — przegląd całości B6)*
 - [ ] `NotesStore`: brak testu ścieżki „nieudane przeniesienie `.corrupt-…` rzuca i nic nie zapisuje"; okno TOCTOU między `problems()` a odłożeniem (nie gubi danych, wg przeglądu).
 
 ## Z przeglądu T6 (2026-10-14, `reports/F15-T6.md`) — drobne, bez rundy poprawek
@@ -132,3 +132,15 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - 2026-10-13 — S16: CLI `session-from-file` — istniejący `journal.jsonl` sprawdzany przed czytaniem audio; komunikat z podpowiedzią „świeży katalog na każdy plik korpusu" (nadal odmowa, kod 1).
 - 2026-10-13 — S16: oś sesji vs offsety plików — notka w pomocy CLI („czas w pliku ścieżki = czas na osi − przesunięcie z summarize").
 - 2026-10-13 — S16: `AppModel.startRecording` — zapis `preset.json` przez do-catch → `lastError` (nagranie trwa dalej).
+
+## Z przeglądu całości faza15 (2026-10-19, `reports/F15-przeglad-calosci.md`) — bez rundy poprawek
+
+- [ ] **B1.** `SessionRecorder.setMuted` liczy tor `stalled30s`, `allZeros60s` albo z błędem zapisu jako nagrywający, więc da się wyciszyć jedyny żywy tor; zgodne dosłownie z §11.5, do rozważenia przy fazie 2.
+- [ ] **B2.** Wyciszenie toru, który nie wystartował (np. mikrofon bez zgody), zwraca `false` i pigułka pokazuje „Nothing is being recorded”; sprawdzić, czy pigułka w ogóle pokazuje przełącznik dla takiego toru.
+- [ ] **B3.** Awaria aplikacji w trakcie kopiowania przenoszenia zostawia częściową kopię w celu; ponowna próba dostaje „Choose an empty folder”, a sprzątanie działa tylko w ścieżce błędu, nie po restarcie.
+- [ ] **B4.** Widok spotkania ma dwie osie czasu: `TrackProblem` liczy przez `offsetSeconds + frame/sampleRate`, a `MuteNote` przez `SessionClock` (z dryfem); przy długim nagraniu różnica może sięgać sekund.
+- [ ] **B5.** `NotesModel.runCorrection` zapisuje `corrected.json` przez `try?`, więc błąd zapisu ginie po cichu; skutek łagodny, lepiej zgłosić przez `report`.
+- [ ] **B6.** Wyścig `NotesStore.updateMeta` ma od 1.6 więcej piszących (powiązanie z kalendarzem przy starcie, link i unlink, autotytuł poza MainActor, ręczny tytuł); przegrany zapis może zgubić powiązanie wydarzenia, nie tylko tytuł.
+- [ ] **B7.** Pierwsze uruchomienie po aktualizacji z fazy 1 stosuje domyślne 30 dni bez pytania R1; faza 1 nie kasowała nic, więc pierwsze audio zniknie ok. 2026-11-12 (patrz „Dla użytkownika” w raporcie).
+- [ ] **B8.** `EndDetector`: gdy pytanie wisi z sygnału `silence`, a potem przychodzi `callReleased`, treść pytania się nie zmienia (`shown != nil` → `nil`); kosmetyka.
+- [ ] Domyślny `runID` CLI (`2026-10-14T10-00-00Z`, bez `-xxxx`) nie pasuje do wzorca `latestRunID` (P2, `e42c6a8`): sesja transkrybowana tylko z CLI nie pokaże transkryptu w aplikacji; kierunek bezpieczny dla retencji. Rozważyć dopisanie sufiksu w CLI.
