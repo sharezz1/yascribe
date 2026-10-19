@@ -15,6 +15,11 @@ public struct SessionSummary: Codable, Equatable, Sendable {
     public struct Mute: Codable, Equatable, Sendable {
         public var frameIndex: Int
         public var endFrame: Int?
+
+        public init(frameIndex: Int, endFrame: Int? = nil) {
+            self.frameIndex = frameIndex
+            self.endFrame = endFrame
+        }
     }
 
     public struct ClockAnchor: Codable, Equatable, Sendable {

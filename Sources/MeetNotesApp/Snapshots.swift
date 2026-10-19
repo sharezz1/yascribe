@@ -152,6 +152,12 @@ enum Snapshots {
                     }
                     let transcriptTab = MeetingViewState(); transcriptTab.tab = .transcript
                     try render("meeting-transcript", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: echoed, state: transcriptTab) }
+                    // 1.5b: mikrofon wyciszony w pigułce 0:17–0:19 → linia między wypowiedziami.
+                    var mutedItem = echoed
+                    var mic = SessionSummary.Track(id: "mic_raw", sampleRate: 16_000, channels: 1, frames: 16_000 * 60)
+                    mic.mutes = [SessionSummary.Mute(frameIndex: 16_000 * 17, endFrame: 16_000 * 19)]
+                    mutedItem.summary?.tracks.append(mic)
+                    try render("meeting-transcript-muted", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: mutedItem, state: transcriptTab) }
                     // Summary przed generowaniem (b-summary0.png): pasek z „Generate notes” i linia stanu pustego.
                     let summary0 = MeetingViewState(); summary0.tab = .summary
                     try render("meeting-summary0", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: transcriptOnly, state: summary0) }
@@ -190,6 +196,17 @@ enum Snapshots {
                 try render("pill-collapsed", size: NSHostingView(rootView: collapsed.environment(model)).fittingSize, dark: dark, model: model) { collapsed }
                 let open = PillState(); open.expanded = true
                 try render("pill-expanded", size: CGSize(width: 360, height: 270), dark: dark, model: model) { RecordingPanelView(model: model, recording: live, pill: open) }
+                // 1.5b: wyciszony mikrofon (zwinięta: ikona przy liczniku w zarezerwowanym miejscu; rozwinięta: „Muted”, szary pasek)
+                // i próba wyciszenia drugiego toru („Nothing is being recorded” w miejscu linii presetu).
+                let widestMuted = RecordingController.snapshotPreview(elapsed: 35999, muted: ["mic_raw"])
+                let collapsedMuted = RecordingPanelView(model: model, recording: widestMuted, pill: PillState())
+                try render("pill-collapsed-muted", size: NSHostingView(rootView: collapsedMuted.environment(model)).fittingSize, dark: dark, model: model) { collapsedMuted }
+                try render("pill-expanded-muted", size: CGSize(width: 360, height: 270), dark: dark, model: model) {
+                    RecordingPanelView(model: model, recording: RecordingController.snapshotPreview(elapsed: 754, muted: ["mic_raw"]), pill: open)
+                }
+                try render("pill-expanded-warning", size: CGSize(width: 360, height: 270), dark: dark, model: model) {
+                    RecordingPanelView(model: model, recording: RecordingController.snapshotPreview(elapsed: 754, muted: ["system"], muteWarning: true), pill: open)
+                }
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Preset: Polish · PL").font(.caption).foregroundStyle(.secondary)
