@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MeetNotes — ekrany, kierunek B</title>
+<!-- Makieta wysokiej wierności, kierunek B (ciepły, inne narzędzie), po teście „AI slop" (impeccable operate.md, craft-floor.md).
+     1 px = 1 pt; render 2×. ?s=home|meeting|presets|settings|add|pill — jasny i ciemny obok siebie.
+     Tokeny = docs/design/macos.md §11. -->
+<style>
+@font-face { font-family: "NY"; src: url("file:///System/Library/Fonts/NewYork.ttf"); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font: 13px/16px system-ui; background: #8a8f98; padding: 28px; display: flex; gap: 28px; -webkit-font-smoothing: antialiased; }
+
+/* ---------- tokeny §11 ---------- */
+.light { --bg:#f7f6f2; --side:#ebe8e0; --sideEdge:rgba(60,50,20,.12); --sel:rgba(60,50,20,.08);
+  --card:#ffffff; --sunk:#f1efe9; --line:rgba(60,50,20,.14); --line2:rgba(60,50,20,.08);
+  --text:#22211e; --text2:#666259; --text3:#a8a49a; --primary:#22211e; --onPrimary:#ffffff;
+  --accent:#2f6b4f; --rec:#c4271c; --warn:#8a5a00; --glass:rgba(250,249,246,.74); --glassEdge:rgba(60,50,20,.16); }
+.dark { --bg:#1c1c1b; --side:#151514; --sideEdge:rgba(255,255,255,.08); --sel:rgba(255,255,255,.08);
+  --card:#262624; --sunk:#2e2e2c; --line:rgba(255,255,255,.11); --line2:rgba(255,255,255,.06);
+  --text:#ecebe6; --text2:#9a978f; --text3:#6b6963; --primary:#ecebe6; --onPrimary:#1c1c1b;
+  --accent:#7cc39c; --rec:#ff6b5e; --warn:#e0b050; --glass:rgba(36,36,34,.72); --glassEdge:rgba(255,255,255,.12); }
+
+/* ---------- okno i sidebar (systemowe) ---------- */
+.win { width: 960px; height: 700px; border-radius: 12px; overflow: hidden; position: relative; flex: none;
+       background: var(--bg); color: var(--text); box-shadow: 0 0 0 .5px rgba(0,0,0,.35), 0 18px 50px rgba(0,0,0,.35); }
+.lights { position: absolute; top: 18px; left: 20px; display: flex; gap: 8px; z-index: 3; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.lights i:nth-child(1){background:#ff5f57} .lights i:nth-child(2){background:#febc2e} .lights i:nth-child(3){background:#28c840}
+/* macOS 27: sidebar przy krawędzi okna, ciemniejsze tło, kolorowe ikony */
+.side { position: absolute; top: 0; left: 0; bottom: 0; width: 210px; background: var(--side);
+        box-shadow: inset -.5px 0 0 var(--sideEdge); padding: 52px 10px 10px; display: flex; flex-direction: column; }
+.nav { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 7px; }
+.nav.sel { background: var(--sel); font-weight: 500; }
+.side .spacer { flex: 1; }
+svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.nav svg { width: 15px; height: 15px; color: var(--accent); }
+.main { position: absolute; top: 0; left: 210px; right: 0; bottom: 0; overflow: hidden; }
+.col { margin: 0 auto; padding-top: 54px; }
+
+/* ---------- typografia: szeryf tylko w tytułach stron i dokumentów ---------- */
+.t-large { font: 400 30px/36px "NY"; letter-spacing: -.3px; }
+.t-doc   { font: 400 28px/34px "NY"; letter-spacing: -.3px; }
+.t-head  { font: 600 13px/16px system-ui; }
+.t-cap   { font-size: 11px; line-height: 14px; color: var(--text2); }
+.dim { color: var(--text2); } .faint { color: var(--text3); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ---------- komponenty ---------- */
+.card { background: var(--card); border-radius: 12px; box-shadow: 0 0 0 .5px var(--line); }
+.pill { height: 28px; padding: 0 13px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+        background: var(--card); box-shadow: inset 0 0 0 .5px var(--line); font-weight: 500; }
+.pill.primary { background: var(--primary); color: var(--onPrimary); box-shadow: none; font-weight: 600; }
+.pill.lg { height: 32px; padding: 0 16px; }
+.pill.sm { height: 24px; padding: 0 10px; font-size: 12px; }
+.pill.off { color: var(--text3); }
+.pill svg { width: 13px; height: 13px; }
+.state { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; color: var(--text2); }
+.state svg { width: 12px; height: 12px; stroke-width: 1.8; }
+.state.ok { color: var(--accent); } .state.bad { color: var(--rec); } .state.live { color: var(--rec); font-weight: 600; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; display: inline-block; flex: none; }
+.field { height: 28px; border-radius: 7px; background: var(--card); box-shadow: inset 0 0 0 .5px var(--line);
+         display: flex; align-items: center; gap: 6px; padding: 0 10px; min-width: 0; }
+.dark .field { background: var(--sunk); }
+.field .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field svg { width: 10px; height: 10px; color: var(--text2); }
+.field.focus { box-shadow: inset 0 0 0 1px var(--text2), 0 0 0 3px var(--line2); }
+.search { border-radius: 999px; color: var(--text3); }
+.search svg { width: 13px; height: 13px; color: var(--text3); }
+.form-row { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 12px; padding: 10px 16px; position: relative; }
+.form-row + .form-row::before, .lrow + .lrow::before { content:""; position:absolute; top:0; left:16px; right:16px; height:.5px; background: var(--line2); }
+.form-row label { color: var(--text2); }
+.switch { width: 32px; height: 19px; border-radius: 999px; background: var(--accent); position: relative; flex: none; }
+.switch::after { content:""; position:absolute; top:2px; right:2px; width:15px; height:15px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.25); }
+.footer { position: absolute; left: 210px; right: 0; bottom: 0; height: 56px; display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+          padding: 0 28px; border-top: .5px solid var(--line2); background: var(--bg); }
+.footer .note { margin-right: auto; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+.icon-btn { width: 28px; height: 28px; border-radius: 999px; display: grid; place-items: center; color: var(--text2); }
+.icon-btn svg { width: 15px; height: 15px; }
+.toolbar { position: absolute; top: 12px; left: 16px; right: 16px; height: 30px; display: flex; align-items: center; gap: 6px; z-index: 2; }
+.toolbar .sp { flex: 1; }
+.sec-h { display: flex; align-items: center; gap: 8px; margin: 22px 0 8px 2px; }
+.sec-h .t-head { flex: 1; }
+.link { color: var(--text); font-weight: 500; text-decoration: underline; text-decoration-color: var(--text3); text-underline-offset: 2px; }
+
+/* lista spotkań */
+.day { font: 500 12px/15px system-ui; color: var(--text2); margin: 0 0 2px 4px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; position: relative; }
+.row + .row::before { content:""; position:absolute; top:0; left:4px; right:4px; height:.5px; background: var(--line2); }
+.row .t { flex: 1; min-width: 0; }
+.row .t b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .t span { display: block; color: var(--text2); font-size: 11px; line-height: 14px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.bar { width: 38px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.bar u { display: block; height: 100%; width: 41%; background: var(--text2); }
+.spin { width: 11px; height: 11px; border-radius: 50%; border: 1.6px solid var(--line); border-top-color: var(--text2); }
+
+/* widok spotkania */
+.tabs { display: flex; gap: 22px; border-bottom: .5px solid var(--line); margin: 18px 0 16px; }
+.tab { padding: 0 0 9px; color: var(--text2); font-weight: 500; position: relative; }
+.tab.sel { color: var(--text); }
+.tab.sel::after { content:""; position:absolute; left:0; right:0; bottom:-.5px; height:2px; border-radius:1px; background: var(--text); }
+.genbar { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 8px; border-radius: 10px; background: var(--sunk); margin-bottom: 20px; }
+.genbar .ctx { flex: 1; min-width: 0; color: var(--text2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.note { font-size: 14px; line-height: 22px; }
+.note p { margin-bottom: 16px; }
+.note h4 { font: 600 15px/20px system-ui; margin: 20px 0 6px; }
+.note ul { padding-left: 18px; margin: 0; }
+.note li { margin-bottom: 3px; }
+.note li::marker { color: var(--text3); }
+.note .why { color: var(--text2); }
+
+/* presets */
+.plist { width: 196px; flex: none; display: flex; flex-direction: column; gap: 2px; }
+.prow { padding: 8px 10px; border-radius: 8px; }
+.prow b { display: block; font-weight: 500; }
+.prow > span { display: block; font-size: 11px; line-height: 14px; color: var(--text2); margin-top: 2px; }
+.prow.sel { background: var(--sel); }
+.prompt { border-radius: 7px; box-shadow: inset 0 0 0 .5px var(--line); background: var(--card); padding: 8px 10px; line-height: 18px; min-height: 58px; }
+.dark .prompt { background: var(--sunk); }
+
+/* settings */
+.lrow { display: flex; align-items: center; gap: 12px; padding: 12px 16px; position: relative; }
+.lrow .t { flex: 1; min-width: 0; }
+.lrow .t b { font-weight: 500; display: block; }
+.lrow .t span { font-size: 11px; color: var(--text2); display: block; margin-top: 2px; }
+.addrow { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-top: .5px solid var(--line2); }
+.adding { padding: 12px 16px 14px; background: var(--sunk); border-top: .5px solid var(--line2); }
+.dark .adding { background: rgba(255,255,255,.03); }
+.adding .form-row { padding: 6px 0; grid-template-columns: 70px 1fr; }
+.adding .form-row::before { display: none; }
+
+.ptile { width: 32px; height: 32px; border-radius: 8px; background: var(--card); box-shadow: inset 0 0 0 .5px var(--line); flex: none; overflow: hidden; display: grid; place-items: center; color: var(--text2); }
+.dark .ptile { background: #2e2e2c; }
+.scrim { position: absolute; inset: 0; background: rgba(0,0,0,.18); z-index: 5; }
+.dark .scrim { background: rgba(0,0,0,.42); }
+.sheet { position: absolute; top: 60px; left: calc(210px + (100% - 210px)/2); transform: translateX(-50%); width: 440px; z-index: 6; border-radius: 14px; background: var(--bg);
+         box-shadow: 0 0 0 .5px var(--line), 0 20px 50px rgba(0,0,0,.28); padding: 22px; }
+.sheet .form-row { padding: 7px 0; grid-template-columns: 90px 1fr; }
+.sheet .form-row::before { display: none; }
+/* coming up (2026-10-19) */
+.cu-day { display:flex; gap:16px; padding:14px 16px; }
+.cu-date { width:64px; flex:none; }
+.cu-date b { display:block; font:400 30px/32px "NY"; letter-spacing:-.5px; }
+.cu-date span { display:block; font-size:11px; line-height:14px; color:var(--text2); margin-top:2px; }
+.cu-list { flex:1; min-width:0; display:flex; flex-direction:column; }
+.ev { display:flex; align-items:center; gap:10px; padding:7px 0; position:relative; }
+.ev + .ev::before { content:""; position:absolute; top:0; left:0; right:0; height:.5px; background:var(--line2); }
+.ev .bar2 { width:3px; align-self:stretch; border-radius:2px; background:var(--line); flex:none; }
+.ev .bar2.cal { background:#5b8def; }
+.ev .tm { width:86px; flex:none; color:var(--text2); font-size:12px; font-variant-numeric:tabular-nums; }
+.ev .t { flex:1; min-width:0; }
+.ev .t b { display:block; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ev .t span { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--text2); margin-top:1px; }
+.ev .t span svg { width:11px; height:11px; }
+.ev.soon .tm { color:var(--text); font-weight:600; }
+.ev.past { opacity:.55; }
+.row.up .t b { color:var(--text); }
+.row.up .t span { color:var(--text2); }
+.tag { font-size:11px; color:var(--text2); }
+/* szablony: sekcje */
+.tsec { display: flex; gap: 10px; padding: 12px 14px 12px 8px; position: relative; }
+.tsec + .tsec::before { content:""; position:absolute; top:0; left:14px; right:14px; height:.5px; background: var(--line2); }
+.grip { width: 14px; flex: none; color: var(--text3); padding-top: 2px; }
+.grip svg { width: 12px; height: 14px; }
+.tsec .body { flex: 1; min-width: 0; }
+.tsec .body b { display: block; font-weight: 600; margin-bottom: 3px; }
+.tsec .body > span { display: block; color: var(--text2); line-height: 18px; }
+.tsec .rm { color: var(--text3); width: 22px; height: 22px; display: grid; place-items: center; flex: none; }
+.tsec .rm svg { width: 11px; height: 11px; }
+.tsec.edit { background: var(--sunk); }
+.tsec.edit .body b, .tsec.edit .body span { border-radius: 6px; }
+.caret { display: inline-block; width: 1px; height: 15px; background: var(--text); vertical-align: -3px; margin-left: 1px; }
+.ctxbox { padding: 10px 12px; line-height: 18px; color: var(--text); }
+.ctxbox.empty { color: var(--text3); }
+
+/* pigułka */
+.desk { width: 960px; height: 700px; border-radius: 16px; overflow: hidden; position: relative; flex: none; color: var(--text);
+        background: radial-gradient(1200px 600px at 20% 10%, #6d8fb3, transparent), radial-gradient(900px 600px at 90% 90%, #c08a5a, transparent), #4a5a6a; }
+.desk.dark { background: radial-gradient(1200px 600px at 20% 10%, #24364a, transparent), radial-gradient(900px 600px at 90% 90%, #4a3424, transparent), #15191e; }
+.teams { position: absolute; left: 60px; top: 40px; width: 840px; height: 290px; border-radius: 14px; background: rgba(40,40,60,.85);
+         box-shadow: 0 16px 40px rgba(0,0,0,.35); color: #ddd; padding: 18px 22px; font-size: 12px; }
+.teams .tiles2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; height: 220px; }
+.teams .tiles2 div { border-radius: 10px; background: rgba(255,255,255,.07); display: grid; place-items: center; color: #aaa; }
+.glass { background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+         box-shadow: inset 0 0 0 .5px var(--glassEdge), 0 10px 30px rgba(0,0,0,.25); }
+.pil { position: absolute; border-radius: 999px; display: flex; align-items: center; gap: 8px; padding: 6px; height: 44px; }
+.lvl { display: flex; align-items: center; gap: 2px; height: 16px; }
+.lvl i { width: 3px; border-radius: 2px; background: var(--text); display: block; }
+.stop { height: 32px; padding: 0 12px 0 10px; border-radius: 999px; background: var(--card); box-shadow: inset 0 0 0 .5px var(--line); color: var(--rec);
+        display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.stop i { width: 10px; height: 10px; border-radius: 2px; background: var(--rec); display: block; }
+.panel { position: absolute; width: 320px; border-radius: 20px; padding: 14px; }
+.meter { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter u { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.ann { position: absolute; font: 500 11px/14px system-ui; color: rgba(255,255,255,.8); }  /* adnotacja makiety, nie UI */
+</style>
+</head>
+<body>
+<script>
+const I = {
+  list:'<svg viewBox="0 0 16 16"><path d="M5 4h9M5 8h9M5 12h9M2 4h.01M2 8h.01M2 12h.01" stroke-width="1.6"/></svg>',
+  sliders:'<svg viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="1.6" fill="var(--side)"/><circle cx="10" cy="8" r="1.6" fill="var(--side)"/><circle cx="6" cy="12" r="1.6" fill="var(--side)"/></svg>',
+  tmpl:'<svg viewBox="0 0 16 16"><rect x="2.5" y="2" width="11" height="12" rx="2"/><path d="M5 5.5h6M5 8h6M5 10.5h3.5"/></svg>',
+  gear:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>',
+  search:'<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>',
+  check:'<svg viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5"/></svg>',
+  x:'<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+  chev:'<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>',
+  up:'<svg viewBox="0 0 16 16"><path d="M4 10l4-4 4 4"/></svg>',
+  back:'<svg viewBox="0 0 16 16"><path d="M10 3 5 8l5 5"/></svg>',
+  copy:'<svg viewBox="0 0 16 16"><rect x="5" y="5" width="8.5" height="8.5" rx="2"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>',
+  more:'<svg viewBox="0 0 16 16"><path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2.4"/></svg>',
+  redo:'<svg viewBox="0 0 16 16"><path d="M13 3v3.5H9.5"/><path d="M12.6 6.4A5 5 0 1 0 13 10"/></svg>',
+  plus:'<svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>',
+  speaker:'<svg viewBox="0 0 16 16"><path d="M2.5 6h2.5L8.5 3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></svg>',
+  mic:'<svg viewBox="0 0 16 16"><rect x="5.5" y="1.8" width="5" height="8" rx="2.5"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5v2"/></svg>',
+};
+const sz = (svg, n) => svg.replace('<svg', `<svg style="width:${n}px;height:${n}px"`);
+const side = sel => `<div class="side">
+  <div class="nav ${sel=='m'?'sel':''}">${I.list}Meetings</div><div class="spacer"></div>
+  <div class="nav ${sel=='p'?'sel':''}">${I.sliders}Presets</div>
+  <div class="nav ${sel=='t'?'sel':''}">${I.tmpl}Templates</div>
+  <div class="nav ${sel=='s'?'sel':''}">${I.gear}Settings</div></div>`;
+const win = (th, sel, inner) => `<div class="win ${th}"><div class="lights"><i></i><i></i><i></i></div>${side(sel)}${inner}</div>`;
+const popup = (txt, w) => `<div class="field" style="${w?`width:${w}px`:''}"><span class="grow">${txt}</span>${I.chev}</div>`;
+const model = (prov, id) => `<div class="field"><span class="dim">${prov}</span><span class="faint">·</span><span class="grow">${id}</span>${I.chev}</div>`;
+
+/* ---------------- strona główna ---------------- */
+const row = (title, meta, state) => `<div class="row"><div class="t"><b>${title}</b><span>${meta}</span></div>${state}</div>`;
+const home = th => win(th,'m', `<div class="main"><div class="col" style="width:580px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Meetings</div><div class="field search" style="width:210px">${I.search}Search meetings</div></div>
+  <div class="card" style="padding:14px 14px 14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:26px">
+    <div style="flex:1"><div class="t-head" style="margin-bottom:6px">Record a meeting</div>
+      <div style="display:flex;align-items:center;gap:8px">${popup('Polish',140)}<span class="t-cap">PL · microsoft/mai-transcribe-2</span></div></div>
+    <div class="pill primary lg"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</div></div>
+  <div class="day">Today</div>
+  ${row('Untitled meeting','14:02 · Polish',`<span class="state live num"><span class="dot" style="width:7px;height:7px"></span>Recording 12:04</span>`)}
+  ${row('Scheduling forecast discrepancy with Piotr','11:29 · 42 min · Polish',`<span class="state ok">${I.check}Notes ready</span>`)}
+  ${row('WFM rollout weekly sync','09:02 · 28 min · English',`<span class="state">Transcript ready</span>`)}
+  <div class="day" style="margin-top:20px">Yesterday</div>
+  ${row('Untitled meeting','16:10 · 51 min · Polish',`<span class="state"><span class="spin"></span>Correcting…</span>`)}
+  ${row('Untitled meeting','14:30 · 1 h 05 min · Polish',`<span class="state num"><span class="bar"><u></u></span>Transcribing 41%</span>`)}
+  ${row('Untitled meeting','10:15 · 33 min · Polish',`<span class="state bad">${I.x}Correction failed</span><span class="pill sm">Retry</span>`)}
+</div></div>`);
+
+/* ---------------- widok spotkania, Summary ---------------- */
+const meeting = th => win(th,'m', `<div class="toolbar" style="left:222px">
+    <div class="pill" style="width:30px;padding:0;justify-content:center">${I.back}</div><div class="sp"></div>
+    <div class="icon-btn">${I.more}</div></div>
+  <div class="main"><div class="col" style="width:640px">
+  <div class="t-doc">Scheduling forecast discrepancy with Piotr</div>
+  <div class="dim num" style="margin-top:8px">Oct 15, 11:29 · 42 min · Preset Polish</div>
+  <div class="tabs"><span class="tab">My notes</span><span class="tab">Transcript</span><span class="tab sel">Summary</span></div>
+  <div class="genbar">
+    <div class="field" style="width:130px;height:28px"><span class="grow">Standard</span>${I.chev}</div>
+    <span class="ctx">Context: Piotr, Wojciech — weekend schedule review</span>
+    <span class="t-cap">claude-sonnet-4.5</span>
+    <span class="pill" style="height:28px">${I.redo}Regenerate</span>
+    <span class="pill" style="height:28px;width:28px;padding:0;justify-content:center">${I.copy}</span></div>
+  <div class="note">
+    <p>Przegląd rozbieżności między prognozą a grafikiem na weekend: w sobotę prognoza ~9&nbsp;000 interakcji, w niedzielę ~4&nbsp;000, a grafik daje w niedzielę o ~30% więcej agentów. Osobno: błąd zapisu w Orbit (ID 24) do zgłoszenia.</p>
+    <h4>Prognoza a grafik</h4>
+    <ul><li>Sobota: ~9&nbsp;000 interakcji, 180–240 agentów.</li><li>Niedziela: ~4&nbsp;000 interakcji, 200–300 agentów.</li>
+        <li>Oczekiwane: w sobotę około dwa razy więcej agentów niż w niedzielę.</li></ul>
+    <h4>Błąd zapisu w Orbit (osobny wątek)</h4>
+    <ul><li>Zapis zmian kończy się błędem o ID 24; poprawka po stronie Orbit.</li><li>ID agentów zebrane dla zespołu wsparcia.</li></ul>
+    <h4>Następne kroki</h4>
+    <ul><li><b>Zbadać logikę przydziału sobota/niedziela</b> (Piotr) <span class="why">— grafik przeczy prognozie, przyczyna nieznana.</span></li>
+        <li><b>Zgłosić błąd zapisu ID 24 do wsparcia</b> (Michał) <span class="why">— ID agentów już zebrane.</span></li></ul>
+  </div></div></div>`);
+
+/* ---------------- presets ---------------- */
+const presets = th => win(th,'p', `<div class="main"><div class="col" style="width:700px;padding-bottom:70px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Presets</div><div class="pill">${I.plus}New preset</div></div>
+  <div style="display:flex;gap:18px">
+    <div class="plist">
+      <div class="prow sel"><b>Polish</b><span>PL · mai-transcribe-2 · default</span></div>
+      <div class="prow"><b>English</b><span>EN · mai-transcribe-2</span></div>
+      <div class="prow"><b>Mixed PL + EN</b><span>Auto · scribe-v2</span></div>
+      <div class="prow"><b class="dim">New preset</b><span style="font-style:italic">unsaved</span></div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="form-row" style="padding:0 2px;grid-template-columns:1fr auto"><div class="field" style="height:32px;font-size:15px;font-weight:500"><span class="grow">Polish</span></div>
+        <span class="dim" style="font-size:12px">Default preset</span></div>
+      <div class="sec-h"><span class="t-head">Speech to text</span></div>
+      <div class="card">
+        <div class="form-row"><label>Model</label>${model('OpenRouter','microsoft/mai-transcribe-2')}</div>
+        <div class="form-row"><label>Language</label>${popup('Polish',160)}</div>
+        <div style="display:flex;gap:14px;padding:0 16px 12px 158px;margin-top:-4px"><span class="state ok">${I.check}Verified</span><span class="state ok">${I.check}Language enforced</span></div>
+      </div>
+      <div class="sec-h"><span class="t-head">Correction <span class="dim" style="font-weight:400">— optional</span></span><span class="switch"></span></div>
+      <div class="card">
+        <div class="form-row"><label>Model</label>${model('OpenRouter','deepseek/deepseek-v4.1-flash')}</div>
+        <div class="form-row" style="align-items:start"><label style="padding-top:8px">Instructions</label>
+          <div><div class="prompt">Keep product names unchanged: Orbit, WFM, OnTrack.</div>
+          <div class="t-cap" style="margin-top:6px">Added to the correction prompt.</div></div></div>
+      </div>
+      <div class="sec-h"><span class="t-head">Summary</span></div>
+      <div class="card">
+        <div class="form-row"><label>Model</label>${model('OpenRouter','anthropic/claude-sonnet-4.5')}</div>
+        <div class="form-row"><label>Notes language</label>${popup('Polish',160)}</div>
+      </div>
+    </div></div></div></div>
+  <div class="footer"><span class="note">Unsaved changes</span>
+    <span class="pill">Cancel</span><span class="pill primary">Save</span></div>`);
+
+/* ---------------- settings (odbiór 2026-10-16, uwaga 5: lista z logo, arkusz, ✓) ---------------- */
+const logo = (th, who) => {
+  const src = {or: th=='dark' ? 'logo-dostawcow/openrouter-glyph-cloud.svg' : 'logo-dostawcow/openrouter-glyph-ink.svg',
+               el: 'logo-dostawcow/elevenlabs-symbol.svg', ol: 'logo-dostawcow/ollama.svg'}[who];
+  const inv = th=='dark' && who!='or' ? 'filter:invert(1);' : '';
+  const pad = who=='el' ? 0 : 6;
+  return who=='cu'
+    ? `<div class="ptile">${sz(I.plus,14)}</div>`
+    : `<div class="ptile"><img src="${src}" style="width:100%;height:100%;object-fit:contain;padding:${pad}px;${inv}"></div>`;
+};
+const prow = (th, who, name, desc, right) => `<div class="lrow">${logo(th, who)}<div class="t"><b>${name}</b><span>${desc}</span></div>${right}</div>`;
+const providers = th => `<div class="card" style="overflow:hidden">
+    ${prow(th,'or','OpenRouter','Transcription, correction and summary · hundreds of models', `<span class="state ok">${I.check}Verified · 312 models</span><div class="icon-btn">${I.more}</div>`)}
+    ${prow(th,'el','ElevenLabs','Scribe v2 transcription · direct API', `<span class="pill sm">Set up…</span>`)}
+    ${prow(th,'ol','Ollama','Runs on this Mac · correction and summary only, no transcription', `<span class="state bad">${I.x}Not reachable</span><span class="pill sm">Retry</span><div class="icon-btn">${I.more}</div>`)}
+    ${prow(th,'cu','Custom endpoint','Any OpenAI-compatible API · address and key', `<span class="pill sm">Add…</span>`)}
+  </div>`;
+const settingsBody = th => `<div class="main"><div class="col" style="width:640px;transform:translateY(-40px)">
+  <div class="t-large" style="margin-bottom:4px">Settings</div>
+  <div class="sec-h"><span class="t-head">Providers</span></div>
+  ${providers(th)}
+  <div class="sec-h"><span class="t-head">Recordings</span><span class="t-cap num">4.2 GB on disk</span></div>
+  <div class="card">
+    <div class="form-row"><label>Location</label><div style="display:flex;align-items:center;gap:8px;min-width:0">
+      <div class="field" style="flex:1;box-shadow:none;background:transparent;padding:0"><span class="grow">~/Library/Application Support/MeetNotes/Meetings</span></div>
+      <span class="pill sm">Change…</span><span class="pill sm">Show in Finder</span></div></div>
+    <div class="form-row" style="align-items:start"><label style="padding-top:6px">Keep audio</label><div>${popup('30 days',140)}
+      <div class="t-cap" style="margin-top:6px">After this, a meeting’s audio is deleted. Transcripts and notes stay. Audio is kept until its transcription has finished.</div></div></div>
+  </div>
+  <div class="sec-h"><span class="t-head">Archive search</span></div>
+  <div class="card"><div class="form-row"><label>Embedding model</label>${model('OpenRouter','openai/text-embedding-3-small')}</div></div>
+  <p class="dim" style="margin:14px 2px 0;font-size:12px;line-height:16px">Speech-to-text, correction and summary models are chosen in each preset. <span class="link">Open Presets</span></p>
+  </div></div>
+  <div class="footer"><span class="pill">Cancel</span><span class="pill primary">Save</span></div>`;
+const settings = th => win(th,'s', settingsBody(th));
+const add = th => win(th,'s', settingsBody(th) + `<div class="scrim"></div><div class="sheet">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${logo(th,'el')}
+    <div><div class="t-head" style="font-size:15px;line-height:20px">Set up ElevenLabs</div><div class="t-cap" style="margin-top:2px">Scribe v2 transcription · direct API</div></div></div>
+  <div class="form-row"><label class="dim">Address</label><div class="field" style="box-shadow:none;background:transparent;padding:0"><span class="grow dim">https://api.elevenlabs.io/v1</span></div></div>
+  <div class="form-row"><label class="dim">API key</label><div class="field focus"><span class="grow faint">Paste your key</span></div></div>
+  <div style="margin:2px 0 0 102px" class="t-cap"><span class="link" style="font-size:11px">Get an API key</span> on elevenlabs.io</div>
+  <div style="display:flex;align-items:center;gap:8px;margin:14px 0 0 102px"><span class="pill sm">Test connection</span>${th=='light'
+    ? `<span class="state ok">${I.check}Verified · Scribe v2 available</span>`
+    : `<span class="state bad">${I.x}Key rejected (401)</span>`}</div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:22px"><span class="pill">Cancel</span><span class="pill primary">Save</span></div>
+</div>`);
+
+/* ---------------- pigułka ---------------- */
+const lv = h => `<span class="lvl">${h.map(x=>`<i style="height:${x}px"></i>`).join('')}</span>`;
+const pill = th => `<div class="desk ${th}">
+  <div class="teams"><b>Weekly sync — Microsoft Teams</b><div class="tiles2"><div>Piotr</div><div>Wojciech</div><div>Adrian</div><div>You</div></div></div>
+  <div class="ann" style="left:60px;top:548px">Before start</div>
+  <div class="pil glass" style="left:60px;top:568px;padding-left:14px">
+    <span style="font-weight:500">Polish</span><span class="dim">· PL</span>${sz(I.chev,10)}
+    <span class="pill primary" style="height:32px;margin-left:6px"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</span></div>
+  <div class="ann" style="left:60px;top:628px">Recording, collapsed</div>
+  <div class="pil glass" style="left:60px;top:646px;padding-left:14px">
+    <span class="dot"></span>${lv([6,11,15,9,13,5,8])}<span class="num" style="font-weight:600;min-width:38px">12:04</span>
+    <span class="stop"><i></i>Stop</span><span class="icon-btn" style="width:32px;height:32px">${I.up}</span></div>
+  <div class="ann" style="left:580px;top:356px">Recording, expanded (read-only)</div>
+  <div class="panel glass" style="left:580px;top:376px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span class="dot"></span><b>Recording</b><span class="num dim">12:04</span>
+      <span style="flex:1"></span><span class="icon-btn" style="width:24px;height:24px">${I.chev}</span></div>
+    <div class="dim" style="margin:0 0 14px 16px">Polish · PL · mai-transcribe-2</div>
+    <div style="display:flex;align-items:center;gap:8px">${sz(I.speaker,14)}<span style="flex:none;width:92px">System audio</span>
+      <span class="meter"><u style="width:62%"></u></span><span class="state ok">${I.check}</span></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">${sz(I.mic,14)}<span style="flex:none;width:92px">Microphone</span>
+      <span class="meter"><u style="width:38%"></u></span><span class="state ok">${I.check}</span></div>
+    <div style="margin:2px 0 14px 22px;font-weight:600">MacBook Pro Microphone</div>
+    <div style="display:flex;gap:8px"><span class="pill" style="flex:1;justify-content:center">Open note</span><span class="stop" style="flex:1;justify-content:center"><i></i>Stop</span></div>
+  </div></div>`;
+
+
+/* ---------------- szablony (sekcje, uwaga z odbioru 2026-10-16) ---------------- */
+const grip = '<svg viewBox="0 0 12 14"><path d="M4 2.5h.01M8 2.5h.01M4 7h.01M8 7h.01M4 11.5h.01M8 11.5h.01" stroke-width="2.2"/></svg>';
+const tsec = (t, d, edit) => `<div class="tsec ${edit?'edit':''}"><span class="grip">${grip}</span>
+  <div class="body"><b>${t}</b><span>${d}${edit?'<span class="caret"></span>':''}</span></div><span class="rm">${I.x}</span></div>`;
+const templates = th => win(th,'t', `<div class="main"><div class="col" style="width:700px;padding-bottom:70px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Templates</div><div class="pill">${I.plus}New template</div></div>
+  <div style="display:flex;gap:18px">
+    <div class="plist">
+      <div class="prow sel"><b>Standard</b><span>Built-in · edited</span></div>
+      <div class="prow"><b>1:1</b><span>Built-in</span></div>
+      <div class="prow"><b>Weekly team meeting</b><span>Built-in</span></div>
+      <div class="prow"><b>Customer: Discovery</b><span>Built-in</span></div>
+      <div class="prow"><b>testowy</b><span>Custom</span></div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="form-row" style="padding:0 2px;grid-template-columns:1fr auto auto"><div class="field" style="height:32px;font-size:15px;font-weight:500"><span class="grow">Standard</span></div>
+        <span class="dim" style="font-size:12px">Built-in · edited</span><div class="icon-btn">${I.more}</div></div>
+      <div class="sec-h"><span class="t-head">About this meeting type <span class="dim" style="font-weight:400">— optional</span></span></div>
+      <div class="card"><div class="ctxbox empty">Describe the kind of meeting and what matters in its notes.</div></div>
+      <div class="sec-h"><span class="t-head">Sections</span><span class="t-cap">in this order</span></div>
+      <div class="card" style="overflow:hidden">
+        ${tsec('Summary','One paragraph: what was discussed and what was agreed.')}
+        ${tsec('Topics','One heading per topic with the concrete details: numbers, names, dates, the options discussed; mark the favored option. A side issue gets its own heading.')}
+        ${tsec('Next steps','One bullet per action: the task in bold, the owner in parentheses (the name said in the conversation, or “owner unclear”), then one sentence of reasoning.', true)}
+      </div>
+      <div style="margin-top:10px"><span class="pill sm">${I.plus}Add section</span></div>
+    </div></div></div></div>
+  <div class="footer"><span class="note">Unsaved changes</span>
+    <span class="pill">Cancel</span><span class="pill primary">Save</span></div>`);
+
+
+/* ---------------- widok spotkania: Summary przed generowaniem i Transcript (odbiór 2026-10-16, uwaga 7) ---------------- */
+const mhead = (tab) => `<div class="toolbar" style="left:222px">
+    <div class="pill" style="width:30px;padding:0;justify-content:center">${I.back}</div><div class="sp"></div>
+    <div class="icon-btn">${I.more}</div></div>
+  <div class="t-doc">Brak lewara w negocjacjach z Ukrainą</div>
+  <div class="dim num" style="margin-top:8px">16 Oct 2026 at 11:11 · 3 min · Preset Polski</div>
+  <div class="tabs">${['My notes','Transcript','Summary'].map(t=>`<span class="tab ${t==tab?'sel':''}">${t}</span>`).join('')}</div>`;
+const pageScroll = '<div style="position:absolute;right:3px;top:60px;width:6px;height:120px;border-radius:3px;background:var(--line)"></div>';
+const summary0 = th => win(th,'m', `<div class="main">${pageScroll}<div class="col" style="width:640px">${mhead('Summary')}
+  <div class="genbar">
+    <div class="field" style="width:130px;height:28px"><span class="grow">Standard</span>${I.chev}</div>
+    <span class="ctx">Add context</span>
+    <span class="t-cap">deepseek-v4.1-flash</span>
+    <span class="pill primary" style="height:28px">Generate notes</span></div>
+  <div style="padding:28px 4px;color:var(--text2);line-height:20px">No notes yet. Pick a template, add context if you like, and generate.<br>
+    <span class="t-cap">Uses the corrected transcript (3 min, Polish).</span></div>
+  </div></div>`);
+const trow = (t, who, txt, echo) => `<div style="display:grid;grid-template-columns:62px 44px 1fr;gap:0 10px;padding:10px 0;border-top:.5px solid var(--line2)">
+  <span class="num dim">${t}</span><span style="font-weight:500">${who}</span><div style="line-height:20px">${txt}${echo?`<div style="margin-top:4px"><span class="state">${echo}</span></div>`:''}</div></div>`;
+const transcript = th => win(th,'m', `<div class="main">${pageScroll}<div class="col" style="width:640px">${mhead('Transcript')}
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div class="field" style="width:120px;height:28px"><span class="grow">Corrected</span>${I.chev}</div>
+    <span style="flex:1"></span><span class="pill" style="height:28px">Improve transcript</span><span class="pill" style="height:28px">${I.copy}Copy</span></div>
+  ${trow('0:00:00','Them','Już lewara, bo żeby osiągać nasze cele wobec naszych partnerów w polityce zagranicznej, musimy mieć jakiś lewar. Czyli wyobraź sobie teraz, jaką pozycję przetargową mieliśmy wobec Ukrainy…')}
+  ${trow('0:00:00','Me','<span class="dim">Lewara, bo żeby osiągać nasze cele wobec naszych partnerów w polityce zagranicznej…</span>','Echo of the other side — excluded from notes')}
+  ${trow('0:00:36','Them','chcemy to, to, to i to. I powiedz mi, czy wtedy Ukraina byłaby bardziej skłonna do zaspokojenia tych naszych oczekiwań, jak była pod ścianą, czy teraz…')}
+  ${trow('0:01:04','Them','a jest niewdzięczna, bo my tak pomogliśmy w 22 roku. I teraz jesteśmy wykluczeni totalnie. Nie, chodzi w negocjacji…')}
+  </div></div>`);
+
+
+/* ---------------- Coming up: 3 warianty (2026-10-19) ---------------- */
+I.video = '<svg viewBox="0 0 16 16"><rect x="1.5" y="4" width="9" height="8" rx="2"/><path d="M10.5 7l4-2.5v7l-4-2.5"/></svg>';
+I.pin = '<svg viewBox="0 0 16 16"><path d="M8 14s4.5-4.2 4.5-7.5a4.5 4.5 0 0 0-9 0C3.5 9.8 8 14 8 14z"/><circle cx="8" cy="6.5" r="1.5"/></svg>';
+const recCard = (title, sub, primary=true) => `<div class="card" style="padding:14px 14px 14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:22px">
+    <div style="flex:1;min-width:0"><div class="t-head" style="margin-bottom:6px">${title}</div>
+      <div style="display:flex;align-items:center;gap:8px">${popup('Polish',140)}<span class="t-cap">${sub}</span></div></div>
+    <div class="pill ${primary?'primary':''} lg"><span class="dot" style="box-shadow:0 0 0 1.5px ${primary?'var(--primary)':'var(--card)'}"></span>Record</div></div>`;
+const homeHead = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <div class="t-large">Meetings</div><div class="field search" style="width:210px">${I.search}Search meetings</div></div>`;
+const ev = (tm, title, sub, cls='', right='') => `<div class="ev ${cls}"><span class="tm">${tm}</span><div class="t"><b>${title}</b><span>${sub}</span></div>${right}</div>`;
+const online = (app) => `${sz(I.video,11)}${app}`;
+const inperson = `${sz(I.pin,11)}In person · no recording offer`;
+const pastRows = `<div class="day">Today</div>
+  ${row('WFM rollout weekly sync','09:02 · 28 min · English',`<span class="state ok">${I.check}Notes ready</span>`)}
+  <div class="day" style="margin-top:18px">Yesterday</div>
+  ${row('Scheduling forecast discrepancy with Piotr','16:10 · 42 min · Polish',`<span class="state ok">${I.check}Notes ready</span>`)}`;
+
+/* A: karta dnia nad kartą Record (inne narzędzie) */
+const cuA = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${homeHead}
+  <div class="sec-h" style="margin-top:0"><span class="t-head">Coming up</span><span class="link" style="font-size:12px">Open Calendar</span></div>
+  <div class="card cu-day" style="margin-bottom:22px"><div class="cu-date"><b>19</b><span>October<br>Monday</span></div>
+    <div class="cu-list">
+      ${ev('10:00 – 10:30','WFM daily standup',online('Teams · in 8 min'),'soon',`<span class="pill sm">Record</span>`)}
+      ${ev('11:30 – 12:30','Scheduling forecast review',online('Teams'))}
+      ${ev('14:00 – 15:00','Dentist',inperson)}
+      ${ev('16:00 – 16:30','1:1 Adrian',online('Google Meet'))}
+    </div></div>
+  ${recCard('Record a meeting','PL · microsoft/mai-transcribe-2', false)}
+  ${pastRows}
+</div></div>`);
+
+/* B: karta Record zamienia się w „następne spotkanie” */
+const cuB = th => win(th,'m', `<div class="main"><div class="col" style="width:580px">${homeHead}
+  <div class="card" style="padding:16px;margin-bottom:8px">
+    <div class="t-cap" style="margin-bottom:6px">Next · in 8 min · Teams</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0"><div style="font:400 20px/26px 'NY';margin-bottom:8px">WFM daily standup</div>
+        <div style="display:flex;align-items:center;gap:8px">${popup('Polish',140)}<span class="t-cap num">10:00 – 10:30 · 6 attendees</span></div></div>
+      <div class="pill primary lg"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</div></div></div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin:0 4px 22px">
+    <span class="t-cap">Later today: 11:30 Scheduling forecast review · 14:00 Dentist · 16:00 1:1 Adrian</span>
+    <span class="link" style="font-size:12px">Record something else</span></div>
+  ${pastRows}
+</div></div>`);
+
+/* C: jedna oś dnia — nadchodzące i nagrane razem */
+const upRow = (tm, title, sub, right) => `<div class="row up"><span class="num" style="width:44px;flex:none;font-size:12px;color:var(--text2)">${tm}</span><div class="t"><b>${title}</b><span style="display:flex;align-items:center;gap:4px">${sub}</span></div>${right}</div>`;
+const cuC = th => win(th,'m', `<div class="main"><div class="col" style="width:580px">${homeHead}
+  ${recCard('Record a meeting','PL · microsoft/mai-transcribe-2')}
+  <div class="day">Today · Monday 19 October</div>
+  ${upRow('16:00','1:1 Adrian',online('Google Meet'),'<span class="tag">Upcoming</span>')}
+  ${upRow('14:00','Dentist',inperson,'<span class="tag">Upcoming</span>')}
+  ${upRow('11:30','Scheduling forecast review',online('Teams'),'<span class="tag">Upcoming</span>')}
+  ${upRow('10:00','WFM daily standup',online('Teams · in 8 min'),`<span class="pill sm">Record</span>`)}
+  <div style="display:flex;align-items:center;gap:8px;margin:6px 4px 6px"><span style="flex:1;height:1px;background:var(--text2);opacity:.5"></span><span class="t-cap num">Now 9:52</span></div>
+  ${upRow('09:02','WFM rollout weekly sync','28 min · English',`<span class="state ok">${I.check}Notes ready</span>`)}
+</div></div>`);
+
+/* stan pusty: kalendarz niepodłączony (wariant A) */
+const cuEmpty = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${homeHead}
+  <div class="sec-h" style="margin-top:0"><span class="t-head">Coming up</span></div>
+  <div class="card cu-day" style="margin-bottom:22px"><div class="cu-date"><b>19</b><span>October<br>Monday</span></div>
+    <div class="cu-list" style="justify-content:center;gap:8px"><div class="dim">See your meetings here and start recording from them.</div>
+      <div><span class="pill sm">Connect Apple Calendar…</span></div></div></div>
+  ${recCard('Record a meeting','PL · microsoft/mai-transcribe-2')}
+  ${pastRows}
+</div></div>`);
+
+/* B2: następne spotkanie + stały mały przycisk ad hoc w nagłówku (decyzja 2026-10-19) */
+const headAdhoc = (primary) => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px">
+    <div class="t-large" style="flex:1">Meetings</div><div class="field search" style="width:170px">${I.search}Search</div>
+    <div class="field" style="width:96px;height:28px"><span class="grow">Polish</span>${I.chev}</div>
+    <div class="pill ${primary?'primary':''}" style="height:28px"><span class="dot" style="width:7px;height:7px;box-shadow:0 0 0 1.5px ${primary?'var(--primary)':'var(--card)'}"></span>Record</div></div>`;
+const cuB2 = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${headAdhoc(false)}
+  <div class="card" style="padding:16px;margin-bottom:8px">
+    <div class="t-cap" style="margin-bottom:6px">Next · in 8 min · ${sz(I.video,11)} Teams</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0"><div style="font:400 20px/26px 'NY';margin-bottom:4px">WFM daily standup</div>
+        <div class="t-cap num">10:00 – 10:30 · 6 attendees · notes titled and linked to this event</div></div>
+      <div class="pill primary lg"><span class="dot" style="box-shadow:0 0 0 1.5px var(--primary)"></span>Record</div></div></div>
+  <div style="margin:0 4px 22px" class="t-cap">Later today: 11:30 Scheduling forecast review · 14:00 Dentist (in person) · 16:00 1:1 Adrian</div>
+  ${pastRows}
+</div></div>`);
+const cuB2none = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${headAdhoc(true)}
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;margin-bottom:14px;border-bottom:.5px solid var(--line2)">
+    <span class="dim">No more meetings today.</span><span class="link" style="font-size:12px">Open Calendar</span></div>
+  ${pastRows}
+</div></div>`);
+
+const S = {home, meeting, presets, settings, add, pill, templates, summary0, transcript, cuA, cuB, cuC, cuEmpty, cuB2, cuB2none};
+const s = new URLSearchParams(location.search).get('s') || 'home';
+document.body.innerHTML = S[s]('light') + S[s]('dark');
+</script>
+</body>
+</html>

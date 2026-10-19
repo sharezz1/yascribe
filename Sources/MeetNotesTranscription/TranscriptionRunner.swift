@@ -36,6 +36,18 @@ public struct RunDirectory: Sendable {
         !runID.isEmpty && runID.count <= 64 && !runID.hasPrefix(".")
             && runID.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }
     }
+
+    /// Najnowszy przebieg aplikacji: `runID` ma wzorzec `AppModel.sessionName` (`yyyy-MM-dd'T'HH-mm-ss'Z'-xxxx`), więc
+    /// sortuje się chronologicznie. Decyduje o kasowaniu audio (`AudioRetention`), dlatego nazwy spoza wzorca
+    /// (`--run debug` z CLI, `notes.txt`, `.DS_Store`) są pomijane — inaczej `debug` wygrywałby jako „najnowszy”.
+    /// Katalogi obok `runs/` (jak `notes/`) tu nie wchodzą w ogóle.
+    public static func latestRunID(in session: URL) -> String? {
+        let runs = session.appendingPathComponent("runs")
+        return ((try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? [])
+            .filter { $0.range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-[0-9a-f]{4}$"#, options: .regularExpression) != nil }
+            .sorted().last
+    }
+
     public func chunk(_ track: String, _ i: Int) -> URL { url.appendingPathComponent("chunks/\(track)-\(i).json") }
 }
 
@@ -46,12 +58,13 @@ public struct TranscriptionRunner: Sendable {
     public let session: SessionDirectory
     public let runID: String
     public let snapshot: RunSnapshot
-    public let client: OpenAICompatibleClient
+    /// OpenAI-compatible albo ElevenLabs — wybór po `Provider.api` u wołającego.
+    public let client: any TranscriptionClient
     public let maxChunkSeconds: Double
     public let gate: EnergyGate
     public let crosstalk: CrosstalkFilter
 
-    public init(session: URL, runID: String, snapshot: RunSnapshot, client: OpenAICompatibleClient,
+    public init(session: URL, runID: String, snapshot: RunSnapshot, client: any TranscriptionClient,
                 maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter()) {
         self.session = SessionDirectory(url: session)
         self.runID = runID

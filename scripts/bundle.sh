@@ -12,7 +12,7 @@ CONFIG="${CONFIG:-debug}"
 # Logi budowy na stderr: stdout to wyłącznie ścieżka paczki (kontrakt z run.sh).
 swift build -c "$CONFIG" --product MeetNotesApp >&2
 BIN="$(swift build -c "$CONFIG" --show-bin-path)/MeetNotesApp"
-APP=".build/MeetNotes.app"
+APP="${MEETNOTES_APP:-.build/MeetNotes.app}"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/MeetNotesApp"

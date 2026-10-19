@@ -34,4 +34,30 @@ public enum LanguageGuard {
             return nil
         }
     }
+
+    /// Auto: wypowiedź, w której większość liter nie jest łacińska, to bełkot (inne narzędzie „Multi" na polskim → cyrylica).
+    /// Zwraca język dominującego obcego alfabetu (`ru`, `el`, `ja`…, a dla nieznanego `zz`); za mało liter albo większość
+    /// łacińska → `nil` (jeden cudzy wyraz w polskim zdaniu nie jest bełkotem).
+    public static func nonLatinScript(_ text: String) -> LanguageCode? {
+        let letters = text.unicodeScalars.filter { $0.properties.isAlphabetic }
+        guard letters.count >= 4 else { return nil }
+        let foreign = letters.filter { !isLatin($0) }
+        guard foreign.count * 2 > letters.count else { return nil }
+        let code: String
+        switch foreign[foreign.startIndex].value {
+        case 0x0400...0x052F: code = "ru"
+        case 0x0370...0x03FF: code = "el"
+        case 0x0590...0x05FF: code = "he"
+        case 0x0600...0x06FF: code = "ar"
+        case 0x0900...0x097F: code = "hi"
+        case 0x0E00...0x0E7F: code = "th"
+        case 0x3040...0x30FF: code = "ja"
+        case 0xAC00...0xD7AF: code = "ko"
+        case 0x4E00...0x9FFF: code = "zh"
+        default: code = "zz"
+        }
+        return try? LanguageCode(code)
+    }
+
+    static func isLatin(_ s: Unicode.Scalar) -> Bool { s.value <= 0x024F || (0x1E00...0x1EFF).contains(s.value) }
 }

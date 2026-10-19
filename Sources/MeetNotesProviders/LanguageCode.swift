@@ -31,6 +31,9 @@ public struct LanguageCode: Codable, Hashable, Sendable, CustomStringConvertible
 
     public var description: String { rawValue }
 
+    /// Nazwa po angielsku (do promptów i interfejsu): „Polish"; nieznany kod → sam kod.
+    public var englishName: String { Self.selectable.first { $0.code == self }?.name ?? rawValue }
+
     public static let polish = try! LanguageCode("pl")
     public static let english = try! LanguageCode("en")
 

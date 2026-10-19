@@ -115,7 +115,7 @@ import MeetNotesSessionFormat
     let asr = SnapshotRecordingASR()
     _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: snap, client: client(asr)).run()
     #expect(!asr.sent.isEmpty)
-    #expect(asr.sent.allSatisfy { $0 == Sent(model: snap.model, language: snap.language.rawValue) })
+    #expect(asr.sent.allSatisfy { $0 == Sent(model: snap.model, language: snap.language?.rawValue) })
 }
 
 @Test func resumeSendsTheSnapshotFromInputJSON() async throws {
@@ -125,7 +125,7 @@ import MeetNotesSessionFormat
     _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
                                       client: client(ListeningASR(failWhen: { $0 >= 2 }))).run()
     let saved = try #require(try JSONFile.load(RunInput?.self, from: RunDirectory(session: dir, runID: "r1").input, default: nil)).snapshot
-    let expected = Sent(model: saved.model, language: saved.language.rawValue)
+    let expected = Sent(model: saved.model, language: saved.language?.rawValue)
     // bieżący preset z innym modelem i językiem: odmowa albo migawka z pliku — nic innego nie wychodzi
     var current = try snapshot(language: .english)
     current.model = "other/model"
@@ -289,4 +289,96 @@ final class Recorder: @unchecked Sendable {
                          clock: SessionClock(summary: SessionSummary(startedHostTime: 0, timebase: ns, tracks: [])),
                          language: .polish)
     #expect(t.utterances.map(\.text) == ["a b", "c"])
+}
+
+@Test func autoLanguageSkipsTheLanguageGuard() async throws {
+    // Auto: nie ma języka, którego strażnik miałby pilnować — angielszczyzna w „polskiej" rozmowie nie jest oznaczana.
+    struct EnglishASR: HTTPClient {
+        func send(_ r: URLRequest) async throws -> (Data, HTTPURLResponse) {
+            let d = try JSONSerialization.data(withJSONObject: ["text": "I think there is a problem with the production of the products."])
+            return (d, HTTPURLResponse(url: r.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+    }
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    let snap = try autoSnapshot()
+    #expect(snap.language == nil)
+    let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: snap, client: client(EnglishASR())).run()
+    let u = try #require(t.utterances.first)
+    #expect(u.languageMismatch == nil)
+    #expect(!u.excludedFromNotes)
+}
+
+@Test func phaseOneInputJSONKeepsItsShapeAndResumes() async throws {
+    // Lekcja E6: nowe pola tylko opcjonalne. Wznowienie po zmianie kodu nie może dać `inputMismatch`.
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(ListeningASR())).run()
+    let text = try String(contentsOf: RunDirectory(session: dir, runID: "r1").input, encoding: .utf8)
+    #expect(text.contains("\"language\" : \"pl\"")) // język jawny nadal zapisany kluczem z fazy 1
+    #expect(!text.contains("languageAuto"))          // nowego klucza nie ma, dopóki nie jest ustawiony
+    let again = ListeningASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(again)).run()
+    #expect(again.requests == 0) // opłacone okna z dysku, bez inputMismatch
+}
+
+@Test func autoLanguageFlagsGibberishInAnotherScript() async throws {
+    // inne narzędzie „Multi" zamieniła polską wypowiedź w rosyjski bełkot. Przy Auto taki tekst jest oznaczony i poza notatkami.
+    struct CyrillicASR: HTTPClient {
+        func send(_ r: URLRequest) async throws -> (Data, HTTPURLResponse) {
+            let d = try JSONSerialization.data(withJSONObject: ["text": "Привет это проверка связи с вами сегодня"])
+            return (d, HTTPURLResponse(url: r.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+    }
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try autoSnapshot(), client: client(CyrillicASR())).run()
+    let u = try #require(t.utterances.first)
+    #expect(u.languageMismatch == (try LanguageCode("ru")))
+    #expect(u.excludedFromNotes)
+}
+
+private func fixture(_ name: String) throws -> Data {
+    try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/\(name)"))
+}
+
+@Test func realPhaseOneInputJSONDecodesRoundTripsAndResumes() async throws {
+    // Prawdziwy input.json z sesji fazy 1: stara migawka wczytuje się, nic się nie zmienia po ponownym zakodowaniu
+    // i wznowienie z niej nie daje inputMismatch ani nie płaci drugi raz.
+    let raw = try fixture("phase1-input.json")
+    let input = try JSONDecoder().decode(RunInput.self, from: raw)
+    #expect(input.snapshot.language == .polish)
+    #expect(input.snapshot.preset.summary?.model == "deepseek/deepseek-v4.1-flash")
+    let a = try JSONSerialization.jsonObject(with: raw) as? NSDictionary
+    let b = try JSONSerialization.jsonObject(with: JSONEncoder().encode(input)) as? NSDictionary
+    #expect(a == b) // ani dodanych, ani zgubionych kluczy
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: input.snapshot, client: client(ListeningASR())).run()
+    let second = ListeningASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: input.snapshot, client: client(second)).run()
+    #expect(second.requests == 0)
+}
+
+/// ElevenLabs z ręki: stała odpowiedź w kształcie z dokumentacji (słowa, odstęp, zdarzenie); zapisuje nagłówki.
+private final class FixedElevenLabs: HTTPClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private(set) var headers: [[String: String]] = []
+    func send(_ r: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        lock.withLock { headers.append(r.allHTTPHeaderFields ?? [:]) }
+        let body = #"{"language_code":"pl","language_probability":0.9,"text":"raz (śmiech) dwa","words":["#
+            + #"{"text":"raz","start":0.2,"end":0.5,"type":"word"},{"text":" ","start":0.5,"end":0.6,"type":"spacing"},"#
+            + #"{"text":"(śmiech)","start":0.6,"end":0.9,"type":"audio_event"},{"text":"dwa","start":1.0,"end":1.3,"type":"word"}]}"#
+        return (Data(body.utf8), HTTPURLResponse(url: r.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+}
+
+@Test func runnerTranscribesThroughElevenLabsClient() async throws {
+    // Granica `TranscriptionClient`: ten sam potok (bramka, okna, scalenie) z klientem ElevenLabs.
+    let http = FixedElevenLabs()
+    let provider = Provider(name: "ElevenLabs", baseURL: ElevenLabsClient.baseURL, kind: .elevenLabs)
+    let dir = try makeSession(system: silence(seconds: 2, rate: 16_000) + tone(seconds: 3, rate: 16_000) + silence(seconds: 2, rate: 16_000))
+    let t = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
+                                          client: ElevenLabsClient(provider: provider, key: "test-fake-el", http: http)).run()
+    #expect(t.utterances.map(\.text) == ["raz dwa"])
+    #expect(t.utterances.first?.approximateTiming == false)
+    #expect(http.headers.count == 1)
+    #expect(http.headers.first?["xi-api-key"] == "test-fake-el")
+    #expect(http.headers.first?["Content-Type"]?.hasPrefix("multipart/form-data; boundary=") == true)
 }

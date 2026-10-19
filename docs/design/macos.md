@@ -16,6 +16,11 @@
 > - **Ustawienia są zakładką w oknie głównym**, a nie osobnym oknem. To świadome odstępstwo
 >   od HIG, zapisane w §10 jako odstępstwo 3.
 > - **Słownik (Dictionary) jest osobną zakładką**, a nie sekcją ustawień.
+>
+> ✏️ **Uzgodnienie z 2026-10-15 (język wizualny):** obszar treści dostaje własny system
+> wizualny, opisany w §11 (kierunek B, „ciepły”, wzorowany na inne narzędzie). Łamie on trzy reguły
+> z §5 i §6.1, a odstępstwa 4–7 w §10 je uzasadniają. Ramka okna, sidebar, menu i kontrolki
+> systemowe zostają bez zmian.
 
 **Oznaczenia:** ✅ potwierdzone w Apple HIG (pobrane 2026-09-24, strona podana w nawiasie) ·
 ⚠️ z pamięci albo z dokumentacji API, niesprawdzone w tej sesji · 📐 wymaga pomiaru albo
@@ -158,7 +163,8 @@ użytkownik by podziękował, i zapisz ten powód w §10.
   | Caption 2 | 10 / 13 | Medium | Semibold |
 
 - **Jedna rodzina kroju pisma.** Aplikacja-narzędzie nie potrzebuje pary krój nagłówkowy +
-  krój treści (impeccable, tryb Operate).
+  krój treści (impeccable, tryb Operate). 🔀 Wyjątek: New York w dwóch rolach tytułowych
+  (§11.2, odstępstwo 6).
 - **Znaczniki czasu cyframi o stałej szerokości** (`.monospacedDigit()` ⚠️ API), żeby
   kolumna czasu się nie przesuwała. To nie jest „monospace dla ozdoby”, tylko pomiar.
 - **Transkrypt to tekst do czytania, nie etykieta.** Długość wiersza warto ograniczyć do
@@ -174,10 +180,13 @@ użytkownik by podziękował, i zapisz ten powód w §10.
 - **Dynamiczne kolory systemowe**, nigdy surowy hex dla tła, tekstu i separatorów, np.
   `controlBackgroundColor`, `controlTextColor`, `alternatingContentBackgroundColors` dla list
   i tabel (✅ color). Mają warianty dla trybu ciemnego i zwiększonego kontrastu (✅ accessibility).
+  🔀 Obszar treści ma własną paletę z §11.1 (odstępstwo 4). Sidebar, ramka okna i kontrolki
+  systemowe dalej korzystają z kolorów dynamicznych.
 - **Kolor akcentu aplikacji działa tylko wtedy**, gdy użytkownik ma w ustawieniach akcent
   „wielokolorowy”. W każdym innym przypadku system podmienia go na kolor użytkownika (✅ color).
   **Wniosek: akcent nigdy nie niesie znaczenia.** Nie może oznaczać np. stanu nagrywania ani
-  kanału „Me”.
+  kanału „Me”. 🔀 W treści używamy stałego akcentu z §11.1 (odstępstwo 5). Zasada zostaje:
+  kolor zawsze idzie w parze z ikoną i słowem.
 - **Stały kolor ikony w sidebarze** nie jest nadpisywany przez akcent użytkownika, więc
   nadaje się do ikon, których kolor coś znaczy (✅ color, sidebars).
 - **Kontrast co najmniej 4,5:1**, sprawdzany w trybie jasnym **i** ciemnym (✅ accessibility).
@@ -273,7 +282,401 @@ słowach. Od tego zależy wygląd podświetlenia, zaznaczania i menu kontekstowe
 | 2 | 🔀 Klik w panel zwykle go aktywuje | **Klik w okno nagrywania nie odbiera fokusu** aplikacji ze spotkaniem ⚠️ (AppKit: `NSPanel` z `.nonactivatingPanel`; sam SwiftUI `.windowLevel(.floating)` tego nie daje, do sprawdzenia) | Użytkownik w trakcie rozmowy nie może przez przypadek przełączyć okna Teams |
 | 3 | 🔀 Ustawienia w osobnym oknie, otwieranym z menu aplikacji i skrótem Cmd-, (✅ settings) | **Ustawienia są zakładką w oknie głównym.** Pozycja **Settings…** w menu i **Cmd-,** prowadzą do tej zakładki | Decyzja użytkownika z 2026-09-24 (spec fazy 1, §1.2). Na zrzutach z tego dnia pięciu konkurentów (inne narzędzie, inne narzędzie, inne narzędzie, inne narzędzie, inne narzędzie) trzyma Ustawienia w nawigacji bocznej. Zachowujemy to, czego HIG pilnuje ze względu na odkrywalność: pozycję w menu i standardowy skrót |
 
+| 4 | 🔀 Dynamiczne kolory systemowe, bez surowego hex (§6.1, ✅ color) | **Własna ciepła paleta w obszarze treści** (§11.1), jasna i ciemna, zdefiniowana w kodzie jako kolory dynamiczne | Odbiór F15-T13 (2026-10-15): domyślne szare `Form`/`GroupBox` wyglądały „jak Windows 98 z zaokrąglonymi rogami”. Użytkownik wybrał kierunek B. Zostają warianty jasny i ciemny oraz kontrast ≥ 4,5:1, zmierzony dla każdej pary w §11.1. Sidebar i kontrolki systemowe nie są przemalowywane |
+| 5 | 🔀 Akcent aplikacji ustępuje akcentowi użytkownika (✅ color) | **Stały akcent: stonowana zieleń** (`tint` w treści) | Akcent użytkownika (np. niebieski) gryzie się z ciepłym tłem. Kolor nadal niczego nie znaczy sam: każdy stan to ikona i słowo (§11.4) |
+| 6 | 🔀 Jedna rodzina kroju (§5, impeccable) | **New York w dwóch rolach**: tytuł strony i tytuł spotkania (§11.2). Wszystkie etykiety, nagłówki sekcji, przyciski i dane zostają w SF | Wzór: inne narzędzie i inne narzędzie. Szeryf w etykietach UI odpadł w teście „product slop” (impeccable, `operate.md`), dlatego jest ograniczony do tytułów. New York jest krojem systemowym (`design: .serif`), więc nie trzeba niczego dołączać |
+| 7 | 🔀 Standardowe style przycisków; bez własnego przycisku o białym tle i czarnym tekście (§4, ✅ buttons) | **Przyciski-pigułki** (`Capsule`, własny `ButtonStyle`). Przycisk drugorzędny w trybie jasnym jest biały z ciemnym tekstem | Część kierunku B. HIG rezerwuje ten wygląd dla stanu „włączony”, dlatego **pigułka nigdy nie jest przełącznikiem**. Przełączniki to systemowy `Toggle(.switch)`, a wybory to `Picker`/`Menu`. Wymiary, fokus z klawiatury i pozycje menu bez zmian |
+
 Każde nowe odstępstwo dopisuj tutaj, z uzasadnieniem opartym na pomiarze albo wymaganiu.
+
+---
+
+## 11. Język wizualny (kierunek B, ciepły)
+
+> Status: **zatwierdzone przez użytkownika 2026-10-15** (sesja designu po odbiorze F15-T13).
+> Kierunek B został wybrany spośród trzech (A Native+, B Ciepły, C Redakcyjny), a potem
+> przeszedł test „product slop” z impeccable (`skill/reference/operate.md`,
+> `craft-floor.md`). Makiety jasne i ciemne: `docs/design/makiety/ekrany-b.html`
+> (`?s=home|meeting|presets|settings|add|pill`), wyrenderowane do `b-*.png` w skali 2×,
+> gdzie 1 px = 1 pt. Kierunki odrzucone: `kierunek-a.png`, `kierunek-c.png`.
+> Makiety B pokazują okno z **macOS 27 „Golden Gate”** (sidebar przy krawędzi okna,
+> bardziej kwadratowe rogi). Makiety kierunków mają jeszcze pływający sidebar z macOS 26.
+
+**Zasada:** system wizualny daje aplikacji paletę, typografię, gęstość i jeden charakterystyczny
+ruch: ciepłe tło z białymi kartami i tytuły w New York. Nie zmienia nawigacji ani kontrolek.
+Ramka okna, `NavigationSplitView` z systemowym sidebarem, menu, `Toggle`, `Picker`, pola
+tekstowe i popovery zostają systemowe. Przemalowujemy wyłącznie obszar treści.
+
+### 11.1 Kolory
+
+Każdy token to jeden kolor dynamiczny w kodzie:
+`NSColor(name:dynamicProvider:)` → `Color(nsColor:)` ⚠️ API z pamięci. Katalog zasobów
+(`Assets.xcassets`) odpada, bo kompiluje go `actool` z Xcode, którego nie mamy. Wariant
+wybiera `appearance.bestMatch(from: [.aqua, .darkAqua])`.
+
+| Token | Rola | Jasny | Ciemny |
+|---|---|---|---|
+| `background` | tło obszaru treści | `#F7F6F2` | `#1C1C1B` |
+| `card` | karta, pole tekstowe, przycisk drugorzędny | `#FFFFFF` | `#262624` (pole: `#2E2E2C`) |
+| `sunk` | wnęka: pasek generowania, wiersz dodawania | `#F1EFE9` | `#2E2E2C` |
+| `selection` | zaznaczony wiersz listy presetów | `#3C3214` 8% | `#FFFFFF` 8% |
+| `line` | obwódka karty i pola (0,5 pt) | `#3C3214` 14% | `#FFFFFF` 11% |
+| `line2` | separator wierszy | `#3C3214` 8% | `#FFFFFF` 6% |
+| `text` | tekst główny | `#22211E` | `#ECEBE6` |
+| `text2` | etykiety, metadane, stany neutralne | `#666259` (D1; było `#6F6B62`) | `#9A978F` |
+| `text3` | tylko kontrolki nieaktywne (zwolnione z wymogu kontrastu WCAG) | `#A8A49A` | `#6B6963` |
+| `primary` / `onPrimary` | jedyny główny przycisk na ekranie | `#22211E` / `#FFFFFF` | `#ECEBE6` / `#1C1C1B` |
+| `accent` | stan „gotowe/zweryfikowane”, `Toggle`, `tint` | `#2F6B4F` | `#7CC39C` |
+| `rec` | nagrywanie, błąd | `#C4271C` | `#FF6B5E` |
+| `warn` | ostrzeżenie (np. język Auto) | `#8A5A00` | `#E0B050` |
+| kropka nagrywania | stała, poza paletą | `#FF3B30` (systemRed) | `#FF3B30` |
+
+Zmierzony kontrast (WCAG): `text`/`background` 14,9 i 14,3; `text2`/`background` 5,62
+i 5,85; `text2`/`card` 6,08 i 5,20; `text2`/`selection` 4,88 (jasny; przy `#6F6B62` było 4,26 — D1); `accent` 5,36 (na `#E6EFE8`) i 7,32 (na `card`); `rec` 4,90 (na
+`#FBE9E6`) i 5,43; `warn` 5,28 i 7,58; `text2`/`sunk` 5,28 i 4,66. Tło `rec`/`accent` nie
+występuje w UI, ale pomiar na nim jest najgorszym przypadkiem. Każdą nową parę mierz przed użyciem.
+
+**Placeholdery** (pole szukania, „Paste your key”) mają systemowy kolor podpowiedzi, który
+dają natywne `TextField` i `.searchable`, a nie `text3`. `text3` ma tylko 2,3–3,1:1, więc nadaje się wyłącznie
+dla stanu nieaktywnego. Na makietach placeholdery są w `text3` tylko poglądowo.
+
+- Sidebar **nie dostaje** koloru `background`, tylko systemowy materiał. W macOS 27 sidebar
+  sięga krawędzi okna, ma tło ciemniejsze niż treść i kolorowe ikony. Na makiecie
+  (`#EBE8E0` / `#151514`, ikony w `accent`) to przybliżenie: ⚠️ odcień i kolor ikon wybiera
+  system (`tint` aplikacji albo akcent użytkownika), sprawdzić w migawkach T0.
+- 📐 **Increase Contrast**: provider powinien zwracać ciemniejsze `text2` i `line` przy
+  `.accessibilityHighContrastAqua`. Do sprawdzenia w migawkach T0.
+- Czerwień nagrywania i błędu różni się od akcentu (zieleń), więc nie ma kolizji znaczeń.
+
+### 11.2 Typografia
+
+| Rola | Krój | Rozmiar / interlinia | Waga | SwiftUI |
+|---|---|---|---|---|
+| Tytuł strony (Meetings, Presets, Settings) | New York | 30 / 36, tracking −0,3 | Regular | `.system(size: 30, design: .serif)` |
+| Tytuł spotkania (edytowalny) | New York | 28 / 34, tracking −0,3 | Regular | `.system(size: 28, design: .serif)` |
+| Nagłówek sekcji / karty | SF | 13 / 16 | Semibold | `.headline` ⚠️ (13 pt Bold na macOS, zamiennie `.system(size: 13, weight: .semibold)`) |
+| Tekst UI, etykiety pól | SF | 13 / 16 | Regular | `.body` |
+| Metadane w linii, stany | SF | 12 / 15 | Regular | `.callout` |
+| Podpis pod polem, data w wierszu | SF | 11 / 14 | Regular | `.subheadline` |
+| Treść notatki | SF | 14 / 22 | Regular | `NSTextView` tylko do odczytu (D6): `NSParagraphStyle` z interlinią 22 pt, wcięciem punktów 18 pt i odstępem 16 pt między akapitami |
+| Nagłówek w notatce | SF | 15 / 20 | Semibold | `.system(size: 15, weight: .semibold)` |
+
+- Szeryf **tylko** w dwóch tytułach. Nagłówki sekcji, przyciski, statusy i dane zawsze SF.
+- Czasy i liczniki: `.monospacedDigit()` (§5).
+- Szerokość kolumny treści ogranicza długość wiersza notatki do ~75 znaków (640 pt przy 14 pt).
+
+### 11.3 Odstępy, promienie, głębia
+
+- **Siatka 4 pt.** Kroki: 4, 8, 12, 16, 22, 28. Między grupami więcej (22–26), w grupie
+  mniej (8–12). Nad nagłówkiem sekcji więcej miejsca niż pod nim (22 / 8).
+- **Kolumna treści**, wyśrodkowana w obszarze szczegółów: lista spotkań 580 pt, spotkanie
+  i Settings 640 pt, Presets 700 pt (lista 196 + edytor). Górny margines 54 pt, bo pod
+  paskiem tytułu.
+- **Promienie:** karta 12, pole tekstowe i popup 7, zaznaczenie w liście 8, panel
+  pigułki 20. Przyciski i pigułka nagrywania to pełna kapsuła. Rogi okna rysuje system
+  (w macOS 27 jednakowe dla wszystkich aplikacji); karta 12 ma ich nie przekraczać.
+- **Głębia:** w treści tylko obwódka 0,5 pt (`line`), **bez cieni**. Cień i materiał ma tylko
+  pływająca pigułka (Liquid Glass, §6.2). Zakaz łączenia obwódki z szerokim cieniem.
+- **Wiersze:** wiersz listy spotkań ma 9 pt w pionie i separator `line2`, wiersz formularza
+  10 / 16 pt z etykietą w kolumnie 130 pt.
+
+### 11.4 Komponenty wspólne
+
+Wdrażane raz i używane we wszystkich widokach (por. F15-T13 część B pkt 3). Bez makr:
+`ButtonStyle`/`ViewModifier` jako zwykłe struktury, stan przez `ObservableObject`.
+
+| Komponent | Opis | Stany |
+|---|---|---|
+| `PageTitle`, `DocumentTitle` | tytuły New York z §11.2 | — |
+| `SectionHeader` | SF 13 Semibold, opcjonalny dopisek `text2` („— optional”) i kontrolka po prawej (`Toggle`) | — |
+| `Card` | `card` + obwódka 0,5 pt + promień 12; zawartość to wiersze z separatorami | — |
+| `FormRow` | etykieta (130 pt, `text2`) + kontrolka; pod kontrolką opcjonalny podpis 11 pt | błąd: podpis w `rec` |
+| `PillButtonStyle` | kapsuła; `.primary` (wypełniona `primary`), `.secondary` (`card` + obwódka), `.small` (24 pt) | hover: tło `sunk`; wciśnięty: krycie 0,7; nieaktywny: tekst `text3`; fokus: systemowy pierścień ⚠️ sprawdzić w migawkach, czy własny `ButtonStyle` go zachowuje |
+| `StateLabel` | ikona SF Symbol + słowo, 12 pt; rodzaje: `ok` (`accent`, ✓), `bad` (`rec`, ✗), `live` (`rec`, kropka, Semibold, licznik; **w pigułce słowo w `text`, czerwona tylko kropka** — D2), `neutral` (`text2`), `progress` (mały `ProgressView` lub pasek 38×4 + %) | — |
+| `ModelField` | popup „Dostawca · id ⌄” (dostawca w `text2`), otwiera `ModelPicker` | — |
+| `FieldMenuStyle` | **wszystkie popupy** (preset na karcie Record i w pigułce, Language, Notes language, Provider, szablon) wyglądają jak pole: `card`/`sunk`, obwódka, promień 7, mały ⌄. Pod spodem standardowe `Menu`/`Picker` (D8) | — |
+| `MetaLine` | jedna linia `text2`: „Oct 15, 11:29 · 42 min · Preset Polish” | — |
+
+**Na ekranie jest najwyżej jeden przycisk `.primary`:** Record, Save, Save & verify. Wyjątek (D4):
+w rozwiniętym formularzu dodawania dostawcy „Save & verify” to mały primary (24 pt) obok Save
+w dolnym pasku, jak na `b-add.png`.
+
+### 11.5 Ekrany (stan zatwierdzony)
+
+- **Strona główna z „Coming up” (decyzja użytkownika 2026-10-19, wariant B; zastępuje kartę
+  „Record a meeting” opisaną niżej; makiety `b-cuB2.png`, `b-cuB2none.png`; odrzucone `b-cuA.png`,
+  `b-cuC.png`):**
+  - **nagłówek, zawsze:** tytuł „Meetings”, wyszukiwarka-kapsuła, popup presetu (`FieldMenuStyle`)
+    i mała pigułka „● Record” do nagrań **ad hoc**. Jeden popup presetu na stronę, wspólny dla
+    obu przycisków Record (ten sam aktywny preset co w ofercie pigułki z fazy 1.6, §4.4 speca 1.6);
+  - **karta najbliższego spotkania**, gdy z Apple Calendar jest wydarzenie, które zaczyna się w
+    ciągu **60 minut** albo właśnie trwa: nad tytułem linia `text2` „Next · in 8 min · Teams”
+    (ikona wideo + nazwa aplikacji z linku; przy braku linku „In person”), tytuł New York 20 pt,
+    godziny i liczba uczestników, dopisek „notes titled and linked to this event”; po prawej
+    **„Record” `.primary`** — nagranie od razu z tytułem i powiązaniem z wydarzeniem (§4.7 speca
+    1.6). Wtedy „● Record” w nagłówku jest drugorzędny (jeden primary na ekranie, §11.4);
+  - pod kartą jedna linia `text2` „Later today: 11:30 … · 14:00 Dentist (in person) · …”;
+  - **bez najbliższego spotkania** (nic w 60 min, koniec dnia, kalendarz niepodłączony): karty nie
+    ma, a „● Record” w nagłówku staje się `.primary`. Linia pod nagłówkiem (D1, decyzja użytkownika
+    2026-10-19): gdy później tego dnia są wydarzenia — „Later today: 14:00 Dentist (in person) ·
+    16:00 1:1 Adrian · Open Calendar”; „No more meetings today · Open Calendar” **tylko** gdy do
+    końca dnia nic nie ma; „Connect Apple Calendar…” (→ Settings → Integrations), gdy kalendarz
+    niepodłączony;
+  - lista zdarzeń: tylko wydarzenia z godziną (całodniowe i OOO ukryte jak w filtrze 1.6);
+    wydarzenie bez linku pokazane, ale bez oferty pigułki (decyzja 11 speca 1.6);
+  - niżej archiwum po dniach bez zmian.
+- **Strona główna** (`b-home.png`): tytuł i wyszukiwarka-kapsuła, karta „Record a meeting”
+  (popup presetu + „PL · model” w `text2` + Record jako `.primary` z czerwoną kropką), pod
+  nią lista po dniach, bez ikon w wierszach, ze stanem po prawej. „Correction failed” ma obok
+  małą pigułkę Retry.
+- **Widok spotkania, Summary** (`b-meeting.png`): przycisk wstecz (kapsuła) i „⋯” w pasku,
+  tytuł New York, `MetaLine`, zakładki tekstowe z podkreśleniem 2 pt. Pasek generowania we
+  wnęce `sunk`: popup szablonu, kontekst (jedna linia, obcięta), model w 11 pt, Regenerate
+  (ikona `arrow.clockwise`, nie iskierki) i Copy. Niżej notatka (§11.2), cała jako jeden
+  zaznaczalny `NSTextView` (D6). **Wstecz i „⋯” są (D5)**; „⋯” zawiera Copy notes, Show in
+  Finder i Delete meeting…, a każda z tych akcji jest też w menu aplikacji (§3).
+  **Odbiór 2026-10-16 (uwaga 7, decyzja użytkownika; makiety `b-summary0.png`, `b-transcript.png`):**
+  - **cały widok spotkania to jedna przewijana strona** (wzór inne narzędzie): tytuł, `MetaLine`, zakładki
+    i treść przewijają się razem, pasek przewijania przy krawędzi okna. **Żadnych wewnętrznych
+    obszarów przewijania** w kolumnie: edytor My notes, lista transkryptu i notatka rosną z treścią
+    (koniec „białego paska” i „panelu po prawej”);
+  - tło wszystkich zakładek to `background`; **Summary bez białej karty**: ten sam pasek we wnęce
+    `sunk` przed i po generowaniu (szablon ⌄ · „Add context” · model · przycisk). Przed:
+    „Generate notes” (primary) i pod paskiem jedna linia stanu pustego („No notes yet…” + z jakiego
+    transkryptu). Po: „Regenerate” + Copy, pod paskiem notatka. „Add context” rozwija w miejscu pole
+    rosnące z treścią. **Zmienia spec decyzję 3** (karta przed / pasek po);
+  - notatka (`NSTextView`, D6) ma szerokość kolumny 640 pt — wąskie łamanie to błąd;
+  - Transcript: nad listą jedna linia — przełącznik Original/Corrected (`FieldMenuStyle`) po lewej,
+    „Improve transcript” i Copy po prawej; wiersze: czas (cyfry stałej szerokości), mówca, tekst,
+    separator `line2`; echo jako linia `StateLabel` pod tekstem.
+- **Presets** (`b-presets.png`): lista presetów (zaznaczenie `selection`, „default” w
+  metadanych zamiast znaczka) i edytor: nazwa w polu, sekcje Speech to text / Correction
+  (`Toggle`) / Summary jako karty z `FormRow`. Wynik sondy to linia `StateLabel` pod wyborem
+  języka. Na dole pasek: „Unsaved changes” oraz Cancel / Save.
+- **Settings** (`b-settings.png`, `b-add.png`): karta Providers z wierszami „nazwa, adres,
+  stan, ⋯”. Ograniczenie dostawcy jest w adresie („correction and summary only, no
+  transcription”). Ostatni wiersz karty to **„Add: OpenRouter · Ollama · Custom…”** (małe
+  pigułki; dodany już dostawca jest nieaktywny). Klik **rozwija formularz w miejscu**, w
+  karcie: gotowy adres, pole klucza, wynik weryfikacji w tej samej linii („✓ Verified · 312
+  models available” albo „✗ Key rejected (401). Check the key and try again.”), Cancel /
+  Save & verify. **Decyzja użytkownika z 2026-10-15:** kafelki z uwagi 7 i arkusz z
+  spec §5.4 zostają zastąpione, a funkcja się nie zmienia. Pod spodem karta Archive search
+  i zdanie z odnośnikiem „Open Presets”.
+- **Pigułka** (`b-pill.png`): `NSPanel` z Liquid Glass (`.glassEffect()` ⚠️, macOS 26+, wariant
+  regular). Przed startem: preset ⌄ + Record. Zwinięta: kropka, poziom, licznik, Stop
+  (kapsuła z czerwonym kwadratem i słowem), ⌃. Rozwinięta (tylko odczyt): stan i licznik,
+  preset, dwa mierniki (System audio, Microphone) z ✓, **nazwa mikrofonu pogrubiona**,
+  Open note / Stop. Reduce Motion: poziom bez animacji (§7). **Bez przycisku zamknięcia
+  podczas nagrywania (D3**, odstępstwo 1, W§1). Stan „przed startem” na `b-pill.png` jest
+  nieaktualny — patrz odbiór 2026-10-16 niżej. Okno pigułki dopasowane do treści, bez przezroczystego
+  marginesu łapiącego kliknięcia.
+  **Odbiór 2026-10-16 (uwagi 3–4):**
+  - okno przezroczyste, bez własnego tła; cień z kształtu treści (promień 20), żadnych
+    prostokątnych rogów pod szkłem;
+  - **stały rozmiar w każdym stanie** (przed startem, zwinięta, rozwinięta); licznik cyframi
+    o stałej szerokości; rozmiar zmienia się tylko przy zmianie stanu, zakotwiczony w jednym rogu;
+  - **przesuwanie za tło** (nie za przyciski), pozycja zapamiętana między uruchomieniami,
+    domyślnie dół ekranu, środek;
+  - **pigułka jest widoczna tylko podczas nagrywania** (decyzja użytkownika 2026-10-16, zastępuje
+    wcześniejszy pomysł z ✕): pojawia się przy starcie nagrania, znika po Stop. Stan „przed
+    startem” (preset ⌄ + Record) i pozycja „Hide Recording Window” odpadają; nagranie zaczyna
+    się z karty „Record a meeting” w oknie. Podczas nagrywania nadal bez przycisku zamknięcia (D3).
+- **Settings — stan po odbiorze 2026-10-16 (uwaga 5, zastępuje opis wyżej i obrazek sprzed tej
+  daty):** karta Providers to **lista wszystkich obsługiwanych dostawców jeden pod drugim** (wzór
+  inne narzędzie), także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, a na końcu „Custom endpoint”.
+  Wiersz: **logo** w kafelku 32 pt (promień 8, obwódka `line`), nazwa, opis roli
+  („Transcription, correction and summary…”, „Scribe v2 transcription · direct API”, „Runs on this
+  Mac · correction and summary only, no transcription”), po prawej stan: ✓ „Verified · N models”
+  (`accent`), ✗ powód + Retry (`rec`) albo pigułka „Set up…” / „Add…”; menu „⋯” (Edit key…, Test
+  again, Remove…). **Konfiguracja w arkuszu** (decyzja użytkownika, wraca do arkusza ze spec §5.4,
+  odwołuje dodawanie w miejscu): logo + „Set up <dostawca>”, gotowy adres, pole klucza, link „Get
+  an API key”, „Test connection” z wynikiem w tej samej linii, Cancel / Save. **ElevenLabs
+  bezpośrednio wchodzi do fazy 1.5** (decyzja użytkownika 2026-10-16, było: faza 2): klucz w
+  nagłówku `xi-api-key`, wysyłka multipart, Scribe v2. Logo: oficjalne pliki w
+  `docs/design/makiety/logo-dostawcow/` (źródła i zasady użycia w `ZRODLA.md`); w ciemnym motywie
+  wariant ciemny właściciela (OpenRouter) albo odwrócenie na biel (ElevenLabs, Ollama). Makiety:
+  `b-settings.png`, `b-add.png`.
+  **Archive search (uwaga 6):** model embeddingu wybiera się tak jak w Presets: wiersz „Provider”
+  (`FieldMenuStyle`, tylko skonfigurowani dostawcy, którzy mają modele embeddingu — dziś OpenRouter
+  i Ollama, ElevenLabs nie) i pod nim „Embedding model” (`ModelField`, lista z wybranego dostawcy,
+  `?output_modalities=embeddings` dla OpenAI-compatible). Bez wiersza „Provider”, gdy pasuje tylko jeden
+  dostawca. Zmiana dostawcy czyści wybór modelu; potwierdzenie zmiany embeddingu bez zmian (spec §5.4).
+  **Recordings (decyzje użytkownika 2026-10-16; makieta `b-settings.png`):** sekcja między
+  Providers a Archive search, w nagłówku rozmiar na dysku („4.2 GB on disk”).
+  - **Location:** ścieżka folderu ze wszystkimi spotkaniami (skracana w środku, pełna w podpowiedzi),
+    „Change…” (panel wyboru folderu) i „Show in Finder”. **Zmiana przenosi wszystkie istniejące
+    spotkania**: najpierw kopia, potem weryfikacja (lista plików i rozmiary), dopiero potem usunięcie
+    ze starego miejsca; postęp widoczny w sekcji; przy błędzie nic nie jest usuwane, stare miejsce
+    zostaje aktywne, komunikat z powodem. Zmiana zablokowana podczas nagrywania i transkrypcji.
+  - **Keep audio:** popup 7 / 14 / **30 (domyślnie)** / 90 days / Forever. Po tym czasie kasowane jest
+    **tylko audio** spotkania (`*.caf`, później Opus); transkrypt, notatka i My notes zostają. Audio
+    spotkania bez ukończonej transkrypcji (w toku albo błąd) **nie jest kasowane**. Podpis pod
+    popupem mówi to wprost. Spotkanie bez audio pokazuje w widoku „Audio deleted after 30 days”.
+  - **Zmienia spec rdzenia** (`2026-09-24-rdzen-nagrywania-design.md`: „domyślnie nie kasuje ich
+    nic”) — to jest jawna polityka retencji, o której tam mowa.
+  - **Decyzje R1–R8 po wdrożeniu (2026-10-16):** skrócenie „Keep audio” wymaga potwierdzenia
+    z liczbą spotkań i rozmiarem do skasowania (R1); po nieudanym przenoszeniu sprzątana jest tylko
+    własna częściowa kopia (R2); podczas przenoszenia widok spotkania jest tylko do odczytu z
+    informacją dlaczego (R3); podpis: „Only audio is deleted. Transcripts, notes and My notes stay.
+    Audio is kept until its transcription has finished.” (R4). Pigułka rozwija się zakotwiczona w
+    środku dolnej krawędzi (R5); „Show Recording Window” (⌘⌥R) zostaje jako ratunek (R6). Klucz
+    ElevenLabs z dostępem tylko do STT (403 przy `GET /v1/models`) to stan ostrzeżenia „Key works
+    for transcription only”, nie błąd (R8).
+- **Wyciszanie torów w pigułce (decyzja użytkownika 2026-10-16; faza 1.5, osobne zadanie po scaleniu
+  `faza15-design-b` do `faza15`; zmienia spec decyzję 4 „rozwinięcie tylko do odczytu”):**
+  - w rozwiniętej pigułce przy każdym torze (System audio, Microphone) przełącznik wyciszenia;
+    ikona `mic.slash` / `speaker.slash`, miernik szary i słowo „Muted” (nie sam kolor); w zwiniętej
+    pigułce ikona wyciszonego mikrofonu obok licznika;
+  - wyciszenie **zapisuje cyfrową ciszę**, nie przerwę: tory zostają wyrównane w czasie, transkrypcja
+    i pakowanie okien bez zmian (bramka ciszy pomija wyciszone fragmenty);
+  - każde nagranie startuje **bez wyciszenia**; okresy wyciszenia w dzienniku sesji, w transkrypcie
+    linia „Microphone muted 0:05–0:12”;
+  - nie da się wyciszyć obu torów naraz — przy próbie ostrzeżenie „Nothing is being recorded”;
+  - zmiana w rdzeniu (`MeetNotesRecording`): testy + mutacja (cisza w wyciszonym zakresie, wyrównanie
+    długości torów, zakaz wyciszenia obu).
+  - **Wdrożone 2026-10-19** (raport `docs/superpowers/reports/F15b-wyciszanie.md`), decyzje użytkownika:
+    (1) ostrzeżenie zastępuje linię presetu na 4 s; (2) miejsce na `mic.slash` w zwiniętej pigułce zarezerwowane na
+    stałe; (3) szary pasek pokazuje rzeczywisty poziom; (4) wyciszony tor liczy się jako cichy dla autostopu i
+    „Meeting ended?”. Przy okazji `track.audible`: cisza na początku odróżniona od braku uprawnienia bez transkryptu.
+- **Drugi odbiór 2026-10-16 (do poprawki):** w zwiniętej pigułce „Stop” łamie się na dwie linie —
+  etykiety w jednej linii, szerokość stanu zwiniętego liczona z treści przy najszerszym liczniku;
+  rozwinięta pigułka na pierwszym planie nadal ma prostokątne rogi okna — panel `borderless` +
+  `nonactivatingPanel`, cień z kształtu treści (odświeżany po zmianie rozmiaru) albo cień w SwiftUI,
+  sprawdzić w stanie aktywnym i nieaktywnym.
+  Dalej z drugiego odbioru (błędy wykonania): „Open note” w pigułce nic nie robi (ma aktywować
+  aplikację, otworzyć/wysunąć okno główne i przejść do My notes nagrywanego spotkania); tytuł
+  spotkania zostaje „Untitled meeting”, choć autotytuł jest zapisany (`notes/meta.json`) — pole
+  tytułu pokazuje tytuł wyliczony wg decyzji 18 w kolorze `text`, a nie placeholder, i odświeża się
+  po zapisie autotytułu; kolumna widoku spotkania przeskakuje przy zmianie zakładki, bo stały pasek
+  przewijania (ustawienie systemu „zawsze”) zwęża obszar treści — miejsce na pasek zawsze
+  zarezerwowane, kolumna centrowana względem okna.
+  **Problemy nagrania (drugi odbiór, 2026-10-16):** wiersz listy pokazywał „⚠ Problem: system audio”,
+  a widok spotkania nic. Dowód: sesja `2026-10-16T14-13-15Z-af52`, `track.failed` z `allZeros60s`
+  dla `system` po 60,0 s, a tor nagrywał dalej (277 s, „Them” od 0:01:04) — fałszywy alarm, film
+  ruszył po minucie. (1) Problem nagrania jest widoczny w widoku spotkania: „⚠ System audio” w
+  `MetaLine`, klik → wyjaśnienie zwykłym językiem (co, kiedy, czy nagranie trwało dalej), ta sama
+  linia `StateLabel` nad transkryptem. (2) Cisza na początku, po której przyszedł dźwięk, to
+  informacja, nie problem: bez ⚠ na liście, w widoku neutralna wzmianka („System audio was silent
+  for the first minute; recording continued”). Ostrzeżenie zostaje, gdy cisza trwa do końca (wtedy
+  przechwytywanie naprawdę nie działało). Punkt (2) to decyzja projektanta wynikająca z celu
+  wykrywacza (brak uprawnienia → cisza do końca).
+- **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
+  edytor). Szablon to **lista sekcji** (wzór inne narzędzie): karta z tytułem (SF 13 Semibold) i
+  instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
+  kontekstowym), pod listą „Add section”. Nad sekcjami opcjonalne pole „About this meeting type”.
+  Pola rosną z treścią, bez własnego przewijania (koniec szarego toru paska przewijania). Prompt dla
+  modelu składa się z sekcji po kolei. Nowe pole `sections` jest opcjonalne (E6); stary szablon z
+  jednym promptem wczytuje się jako jedna sekcja. **Wbudowane szablony da się edytować w miejscu**
+  (decyzja użytkownika 2026-10-16, zmienia spec §5.4 „tylko do odczytu”): oznaczenie „Built-in ·
+  edited”, w „⋯” Duplicate i Reset to default. Własne: w „⋯” Duplicate i Delete template… z
+  potwierdzeniem. Wbudowanych nie da się usunąć, bo wystarcza reset. Dół: „Unsaved changes”,
+  Cancel / Save. Bez ikon i emoji przy szablonach (§11.6).
+- **Pasek narzędzi okna** (odbiór 2026-10-16, uwaga 1): bez osobnego tła i linii pod spodem; ciepłe
+  `background` sięga górnej krawędzi okna, tytułu w pasku nie ma (tytuł strony jest w treści). W pasku
+  zostają tylko przycisk sidebara i, w widoku spotkania, wstecz i „⋯”.
+- **Sidebar (D7):** Meetings na górze; Presets / Templates / Settings na dole, **bez nagłówka
+  sekcji** („Setup” znika).
+
+Decyzje D1–D8 podjął użytkownik 2026-10-15 po wdrożeniu na `faza15-design-b`
+(raport `docs/superpowers/reports/F15-T13-czesc-B.md`).
+
+### 11.6 Czego nie robimy (wynik testu „product slop”)
+
+Te elementy były w pierwszej wersji makiet i zostały usunięte:
+
+- ikony w kwadracikach przy każdym wierszu, jeśli nie niosą informacji;
+- pastelowe tła pod statusami (stan = ikona + słowo w kolorze, bez tła);
+- szeryf w etykietach, nagłówkach sekcji i przyciskach;
+- siatki jednakowych kart „ikona + nagłówek + opis” oraz wymyślone logotypy dostawców (prawdziwe logo
+  z oficjalnych źródeł w liście dostawców są w porządku — §11.5 Settings);
+- etykiety wersalikami nad nagłówkami („ADD A PROVIDER”);
+- modal tam, gdzie wystarcza rozwinięcie w miejscu;
+- monospace jako ozdoba (adresy URL to zwykły tekst; monospace tylko dla kodu i pomiarów);
+- iskierki ✨ jako ikona „AI”;
+- rzędy chipów z ikonami na metadane (zamiast tego jedna linia tekstu);
+- obwódka połączona z cieniem na kartach.
+
+### 11.7 Weryfikacja wdrożenia
+
+Migawki T0 (§9) przed i po, w obu motywach, porównane z `b-*.png`. Kontrast nowych par
+mierzony liczbowo, nie na oko. Pełna obsługa klawiaturą (Tab przez pigułki, fokus widoczny).
+Odbiór na żywo u użytkownika.
+
+### 11.8 Kontekst: trendy UX na macOS i Windows (research 2026-10-15)
+
+Po co: sprawdzić, czy kierunek B nie zestarzeje się zaraz po wdrożeniu. Źródła są na końcu.
+Pewność oznaczona: **mocne** (ogłoszenie producenta, recenzja wydanej wersji), **średnie**
+(relacja z drugiej ręki, analizy systemów designu), **słabe** (listy trendów agencji).
+
+**Teraz (2026)**
+
+- **macOS 27 „Golden Gate” (wydany 09.2026) koryguje Tahoe — mocne.**
+  - Liquid Glass ma bardziej jednolitą refrakcję i lepszy kontrast. W Ustawieniach → Wygląd
+    jest suwak przezroczystości („ultra-clear” → „fully tinted”).
+  - Sidebar wraca do krawędzi okna, z ciemniejszym tłem i kolorowymi ikonami.
+  - Paski narzędzi znów są paskami, a nie pływającymi przyciskami.
+  - Rogi okien są jednakowe we wszystkich aplikacjach.
+  - Z pozycji menu zniknęła większość ikon.
+  - Kierunek Apple: szkło zostaje, ale spokojniejsze i regulowane przez użytkownika.
+- **Liquid Glass jest na stałe — średnie.** Według relacji z rozmów w Apple Xcode 27 nie
+  będzie respektował flagi odraczającej szkło, a od I kw. 2027 ma być włączone wszędzie.
+  My budujemy na CLT, więc dostajemy wygląd tego SDK, którym kompilujemy.
+- **Windows trzyma się Fluent 2 i WinUI 3 — mocne.** Na Build 2026 Microsoft ogłosił, że
+  nie będzie nowego frameworka ani języka wizualnego. Starsze dialogi w powłoce są wymieniane na
+  WinUI (Mica, Acrylic, zaokrąglone rogi, tryb ciemny), a rozwój toczy się publicznie na
+  GitHubie. Tło: krytyka aplikacji na WebView2/Electron za zużycie pamięci.
+- **Natywne aplikacje Maca nadal przeważają — średnie.** W próbce 2440 aplikacji (III 2026)
+  70,8% jest natywnych, a 19,3% to Electron. Głośna jest krytyka Electronu za pamięć i baterię.
+- **Ciepły minimalizm w narzędziach do notatek — średnie.** Notion, inne narzędzie i Craft mają
+  kremowe lub ciepłe tło, szeryfowe tytuły i tekst w sansie, zamiast zimnych szarości. To dokładnie
+  kierunek B.
+- **Spokojniejsze interfejsy narzędzi — mocne (Linear).** Refresh Lineara z 2026 przygasza
+  sidebar, żeby wyróżnić treść, ogranicza ikony, zmiękcza separatory i ujednolica nagłówki,
+  zachowując gęstość informacji. To ta sama linia co test „slop” w §11.6.
+- **AI w miejscu pracy zamiast czatu z boku — słabe/średnie.** Wynik AI pojawia się tam, gdzie
+  się pracuje. Ważne są: widoczne źródło (który model, z czego powstało), kontrola człowieka,
+  wznowienie przy błędzie i jawne stany oczekiwania.
+
+**Za rok (2027) — niska pewność**
+
+- Apple dalej łagodzi szkło i oddaje kontrolę użytkownikowi. Szkło nie znika.
+- Windows wymienia kolejne dialogi na WinUI. Wielkie aplikacje webowe (Teams, Outlook) mogą
+  zostać przy WebView jeszcze długo.
+- O „generatywnym UI” i nawigacji rozmową piszą głównie agencje, twardych danych nie ma.
+- Ciepła typografia redakcyjna raczej zostanie, ale to opinia, nie pomiar.
+
+**Wnioski dla MeetNotes**
+
+1. Kierunek B jest zgodny z tym, co w 2026 robią najlepsze narzędzia do notatek. Test
+   „slop” idzie w tę samą stronę co Linear. Nic do zmiany w palecie ani typografii.
+2. **Sidebar, pasek narzędzi i rogi zostawiamy systemowi** (tak już mówi zasada §11), bo
+   zmieniają się co wersję macOS. Makiety B pokazują już macOS 27.
+3. **Pozycje menu bez ikon** (macOS 27). Dotyczy menu aplikacji i menu kontekstowych.
+4. **Szkło tylko w pigułce i tylko systemowe** (`.glassEffect()`), żeby suwak przezroczystości
+   użytkownika działał też u nas. Żadnego własnego rozmycia.
+5. Notatka już pokazuje źródło (model, szablon, kontekst w pasku generowania). Pomysł do fazy 2:
+   punkty notatki z odnośnikiem do miejsca w transkrypcie, czyli widoczne źródło.
+
+**Źródła**
+
+- MacRumors, „Apple Announces macOS 27 Golden Gate…”, 2026-06-08 —
+  https://www.macrumors.com/2026/06/08/apple-announces-macos-golden-gate/
+- Six Colors, „macOS 27 Golden Gate review”, 2026-09 —
+  https://sixcolors.com/post/2026/09/macos-27-golden-gate-review-bridging-the-tahoe-gap/
+- 9to5Mac, zmiany dla krytyków Tahoe, 2026-06-09 —
+  https://9to5mac.com/2026/06/09/macos-27-golden-gate-includes-these-changes-that-tahoe-critics-will-appreciate/
+- Michael Tsai, „Liquid Glass Is Permanent”, 2026-03-23 —
+  https://mjtsai.com/blog/2026/03/23/liquid-glass-is-permanent
+- Windows Latest, powrót natywnych aplikacji, 2026-08-29 —
+  https://www.windowslatest.com/2026/08/29/windows-11s-native-app-era-is-coming-back-after-years-of-web-app-slop-and-microsoft-is-finally-building-it-in-public/
+- Fluent 2, Windows — https://fluent2.microsoft.design/components/windows
+- Linear, „Behind the latest design refresh” — https://linear.app/now/behind-the-latest-design-refresh
+- Desktop Insights, „State of desktop app development 2026” —
+  https://desktopinsights.com/blog/state-of-desktop-app-development-2026
+- Analizy ciepłego minimalizmu (Notion, Craft): https://getdesign.md/notion/design-md,
+  https://www.webdesignhot.com/design.md/craft/
+- AI UX: https://www.lazarev.agency/articles/ai-ux-patterns,
+  https://aiindigo.com/blog/beyond-the-chatbot-5-ai-native-ux-patterns-for-modern-document-apps
 
 ---
 

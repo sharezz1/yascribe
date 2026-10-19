@@ -176,16 +176,17 @@ struct CLI {
             FileHandle.standardError.write(Data("\(dir.path): to nie katalog sesji (brak journal.jsonl)\n".utf8)); exit(64)
         }
         guard let langRaw = value(args, "--language") else {
-            FileHandle.standardError.write(Data("--language jest obowiązkowe (nigdy auto)\n".utf8)); exit(64)
+            FileHandle.standardError.write(Data("--language jest obowiązkowe (pl, en… albo auto — tylko do pomiarów)\n".utf8)); exit(64)
         }
-        let language = try LanguageCode(langRaw)
+        let language: LanguageCode? = langRaw.lowercased() == "auto" ? nil : try LanguageCode(langRaw)
         let runOption = value(args, "--run")
         if let s = value(args, "--shape"), s != ASRShape.audioTranscriptions.rawValue {
             FileHandle.standardError.write(Data("--shape \(s): w transcribe dozwolone tylko audioTranscriptions\n".utf8)); exit(64)
         }
         let c = try client(try positional(args, 1))
         let preset = Preset(name: "cli", language: language,
-                            asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)))
+                            asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)),
+                            languageAuto: language == nil ? true : nil)
         let shape = ASRShape.audioTranscriptions
         let probe = ProbeResult(providerID: c.provider.id, model: try positional(args, 2), role: .asr, works: true,
                                 shape: shape, languageHandling: .unknown)

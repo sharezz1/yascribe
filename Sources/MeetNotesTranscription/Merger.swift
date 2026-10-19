@@ -32,7 +32,7 @@ public enum Merger {
     public static let utteranceGap = 1.2
 
     public static func merge(_ results: [ChunkResult], speakers: [String: Speaker], clock: SessionClock,
-                             language: LanguageCode, failures: [ChunkFailure] = []) -> Transcript {
+                             language: LanguageCode?, failures: [ChunkFailure] = []) -> Transcript {
         var utterances: [Utterance] = []
         for track in Set(results.map(\.track)).sorted() {
             let speaker = speakers[track] ?? .them
@@ -67,9 +67,16 @@ public enum Merger {
             flush()
         }
         for i in utterances.indices {
-            utterances[i].languageMismatch = LanguageGuard.mismatch(utterances[i].text, expected: language)
+            let text = utterances[i].text
+            if let language {
+                utterances[i].languageMismatch = LanguageGuard.mismatch(text, expected: language)
+            } else {
+                // Auto: nie ma oczekiwanego języka, więc strażnik PL/EN milczy; tekst w większości w obcym alfabecie
+                // to bełkot (spec 1.5, decyzja użytkownika 2026-10-14) — flaga i poza notatkami.
+                utterances[i].languageMismatch = LanguageGuard.nonLatinScript(text)
+            }
         }
         utterances.sort { $0.start < $1.start }
-        return Transcript(utterances: utterances, failedChunks: failures)
+        return Transcript(utterances: EchoFilter.mark(utterances), failedChunks: failures)
     }
 }
