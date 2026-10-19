@@ -112,6 +112,25 @@ enum Snapshots {
                 try render("presets-editing", size: CGSize(width: 900, height: 640), dark: dark, model: model) { PresetsView(state: editing) }
                 // T8: lista z kartą Record i trzy stany spotkania (notatki / karta Generate / My notes bez transkryptu).
                 try render("meetings-full", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
+                // §11.5 „Coming up” (b-cuB2.png): 9:52, standup za 8 min, reszta dnia; całodniowe i OOO odfiltrowane.
+                let nine = Calendar.current.date(bySettingHour: 9, minute: 52, second: 0, of: Date())!
+                func ev(_ title: String, _ h: Int, _ m: Int, _ minutes: Double, link: Bool = true, people: Int = 0, allDay: Bool = false) -> CalendarEventInfo {
+                    let start = Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: nine)!
+                    return CalendarEventInfo(title: title, start: start, end: start + minutes * 60, isAllDay: allDay,
+                                             notes: link ? "Join: https://teams.microsoft.com/meet/123" : nil,
+                                             attendees: (0..<people).map { .init(name: "Person \($0)") })
+                }
+                let day = [ev("WFM daily standup", 10, 0, 30, people: 6), ev("Scheduling forecast review", 11, 30, 60),
+                           ev("Dentist", 14, 0, 45, link: false), ev("1:1 Adrian", 16, 0, 30),
+                           ev("Ada's birthday", 0, 0, 24 * 60, link: false, allDay: true), ev("Out of office", 0, 0, 72 * 60, link: false)]
+                let next = MeetingsViewState(); next.preview = (true, day, nine)
+                try render("meetings-next", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView(state: next) }
+                // b-cuB2none.png: po ostatnim spotkaniu dnia — linia „No more meetings today”, Record w nagłówku primary.
+                let none = MeetingsViewState(); none.preview = (true, day, Calendar.current.date(bySettingHour: 17, minute: 0, second: 0, of: nine)!)
+                try render("meetings-none", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView(state: none) }
+                // Nic w 60 min, ale coś później: linia „Later today: …” zamiast „No more meetings today”.
+                let gap = MeetingsViewState(); gap.preview = (true, day, Calendar.current.date(bySettingHour: 12, minute: 40, second: 0, of: nine)!)
+                try render("meetings-later", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView(state: gap) }
                 if let withNotes = model.sessions.first(where: { $0.id.hasSuffix("aa11") }),
                    let transcriptOnly = model.sessions.first(where: { $0.id.hasSuffix("bb22") }),
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
