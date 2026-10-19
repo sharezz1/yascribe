@@ -2,8 +2,8 @@
 
 > Status: **w toku, 2026-10-19**. Zapadły: nazwa, motto, kompozycja znaku. **Tymczasowo zestaw 3**
 > (użytkownik: „na razie v3”, kolory można zmienić później; konsultuje z żoną). Ikona **jest
-> podpięta do paczki** (zgoda użytkownika 2026-10-19), z wersją na małe rozmiary. Logotyp: propozycja
-> do akceptacji. Czeka: warstwy pod macOS 27.
+> podpięta do paczki** (zgoda użytkownika 2026-10-19), z wersją na małe rozmiary. Logotyp **zaakceptowany**
+> (2026-10-19). Czeka: warstwy pod macOS 27, licencja kroju przed publicznym użyciem.
 > Sesja designu nie dotyka `Sources/` ani `Tests/`; `scripts/bundle.sh` i `Resources/Info.plist`
 > zmienione tylko za zgodą (sekcja „Ikona w paczce”).
 
@@ -80,7 +80,7 @@ Zestaw 3 jest ikoną tymczasową. Zmiana koloru to: edycja tablicy `V` w `zloz-i
   Na podglądzie 1:1 przy 32 i 64 px wyraźnie czytelniejsza niż duża; przy 16 px to wciąż
   rozpoznawalny kształt (pióro i dwie fale), ale bez detalu. Rozmiary od 128 px: wersja pełna.
 
-## Logotyp (propozycja 2026-10-19, do akceptacji)
+## Logotyp (zaakceptowany przez użytkownika 2026-10-19)
 
 Znak (squircle z piórem i falami) plus nazwa **Yascribe** w New York Regular (§11.2, jak tytuły
 stron), kerning −2 przy rozmiarze 200. Dwa układy, każdy w wersji na jasne (`#F7F6F2`, tekst
@@ -107,7 +107,7 @@ Podgląd: `marka/podglad-logo.png`. Pliki: `marka/logo-poziome-{jasne,ciemne}.sv
 3. **macOS 27:** warstwy pod Liquid Glass (tło, pióro, fale jako osobne warstwy), wariant ciemny,
    Clear, Tinted (ograniczenia CLT w sekcji „Ikona w paczce”). Zakaz SF Symbols w ikonie i logo
    (macos.md §7).
-4. **Logotyp:** propozycja gotowa (sekcja „Logotyp”), czeka na akceptację użytkownika.
+4. ~~Logotyp~~ zaakceptowany 2026-10-19 (sekcja „Logotyp”). Otwarte tylko: licencja kroju.
 5. ~~Podpięcie ikony do paczki~~ zrobione 2026-10-19 (zob. wyżej).
 
 ## Odrzucone kierunki (historia)
