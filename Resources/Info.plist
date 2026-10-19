@@ -10,6 +10,8 @@
     <string>MeetNotes</string>
     <key>CFBundleDisplayName</key>
     <string>MeetNotes</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleExecutable</key>
     <string>MeetNotesApp</string>
     <key>CFBundlePackageType</key>
