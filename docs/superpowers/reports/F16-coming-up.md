@@ -9,9 +9,12 @@ Gałąź `claude/infallible-wu-2aef0e` (od `faza15` @ 5f3f696). Zadanie: decyzja
 - 60b0c4f — widok: nagłówek (tytuł, wyszukiwarka 170 pt, popup presetu 96 pt, „● Record” ad hoc), karta najbliższego
   spotkania, linia pod kartą albo linia bez karty; karta „Record a meeting” usunięta; `startRecording(event:background:)`;
   `todaysEvents(now:)`; migawki.
-- HEAD — ten raport.
+- 97a7598 — raport (pierwsza wersja), ROADMAP, BACKLOG.
+- b87bce0 — merge `faza15` @ d66ed4a (faza 1.5b wyciszanie torów, zapis D1 w macos.md §11.5). Konflikt tylko
+  w `BACKLOG.md` (dwie nowe sekcje obok siebie, obie zostały). Kod scalił się sam.
+- HEAD — ta aktualizacja raportu.
 
-`scripts/test.sh`: `test.sh: 342/342 testów uruchomionych i zaliczonych.` (było 334 + 8 nowych).
+`scripts/test.sh` przed scaleniem: 342/342 (334 + 8 nowych). **Po scaleniu `faza15`:** `test.sh: 353/353 testów uruchomionych i zaliczonych.` Migawki `meetings-*` po scaleniu bez zmian.
 
 ## Co działa jak w specu
 
@@ -54,9 +57,9 @@ Tabela pokazuje tę drugą serię. M1 był pierwszą zmianą, więc jest ważny.
 - `meetings-later-*`: 12:40, nic w 60 min, ale 14:00 i 16:00 później (patrz D1).
 - `meetings-*` / `meetings-full-*`: kalendarz niepodłączony → „Connect Apple Calendar…”.
 
-## Decyzje do potwierdzenia przez użytkownika (przyjąłem domyślne, łatwe do zmiany)
+## Decyzje (D1 potwierdzone; D2–D9 to domyślne, do potwierdzenia przy odbiorze)
 
-- **D1. Nic w 60 min, ale coś później dziś.** Spec mówi wtedy „No more meetings today”, co byłoby nieprawdą. Zamiast tego
+- **D1 — POTWIERDZONE przez użytkownika 2026-10-19** („Later today: … · Open Calendar”, gdy nic w 60 min, a coś później; „No more meetings today” tylko, gdy nic do końca dnia; zapis w macos.md §11.5, d66ed4a). **Nic w 60 min, ale coś później dziś.** Spec mówi wtedy „No more meetings today”, co byłoby nieprawdą. Zamiast tego
   ta sama linia ma tekst „Later today: 14:00 Dentist (in person) · 16:00 1:1 Adrian” + „Open Calendar”, a Record
   w nagłówku jest primary (migawka `meetings-later`).
 - **D2. Trwające i nadchodzące naraz.** Karta bierze wydarzenie z najbliższym startem (w przód albo w tył), remis po id,
