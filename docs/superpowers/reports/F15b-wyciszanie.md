@@ -84,7 +84,7 @@ ma po prawej od licznika puste ~22 pt (zarezerwowane miejsce, decyzja 2).
    o ~30 pt krótsze niż przed zmianą. Dzięki temu pasek nie skacze przy przełączaniu.
 2. Wyciszenie liczy się od następnej porcji audio (dokładność ~10–20 ms). Okres w dzienniku to dokładne ramki, które
    zapisały ciszę.
-3. **Pytanie do użytkownika.** Decyzja 4 dotyczy też pytania „Meeting ended?” z fazy 1.6 (`silentSeconds` używa
+3. **Decyzja użytkownika 2026-10-19: zostaje tak, także dla „Meeting ended?”.** Decyzja 4 dotyczy też pytania „Meeting ended?” z fazy 1.6 (`silentSeconds` używa
    tego samego `lastLoudAt`; próg `MeetingTuning.silenceSeconds` = 180 s). Wyciszony mikrofon przy milczącej drugiej
    stronie wywoła więc to pytanie już po 3 minutach, a autostop po 10 min. Pytanie tylko pyta (Stop / Continue).
 4. Pole przełącznika to ikona 14×20 pt. Jeśli w praktyce trudno w nią trafić, łatwo powiększyć.
