@@ -105,7 +105,7 @@ Sesja `2026-10-19T10-03-38Z-113d` (`.devdata` w worktree):
 - Ujemne czasy wypowiedzi „Me” przed pierwszą próbką systemu istniały już wcześniej, więc trafiły do BACKLOG zamiast
   do tej poprawki.
 
-## Odbiór na żywo (wymaga użytkownika)
+## Odbiór na żywo — zaliczony 2026-10-19
 
 W worktree, na osobnym `.devdata` (patrz Merge Danger), przy zamkniętej innej instancji MeetNotes:
 
@@ -115,11 +115,11 @@ cd /Users/michalprzytulski/meetnotes/.claude/worktrees/adoring-pasteur-77900b &&
 
 | # | Punkt | Wynik | Uwaga |
 |---|---|---|---|
-| 1 | Nagranie startuje bez wyciszenia; rozwinięta pigułka: klik w ikonę mikrofonu → `mic.slash`, szary pasek reaguje na głos, „Muted” | | |
-| 2 | Zwinięta pigułka przy wyciszonym mikrofonie: `mic.slash` obok licznika, rozmiar okna bez zmian | | |
-| 3 | Próba wyciszenia drugiego toru → „Nothing is being recorded” na ~4 s, nic się nie wycisza | | |
-| 4 | Wyciszenie dźwięku systemowego (`speaker.slash`) i odciszenie | | |
-| 5 | Po Stop i transkrypcji: w Transcript linia „Microphone muted M:SS–M:SS” we właściwym miejscu; Copy ją zawiera | | |
-| 6 | Wypowiedzi z czasu wyciszenia nie ma w transkrypcie; czasy wypowiedzi po odciszeniu zgadzają się z odsłuchem | | |
-| 7 | Następne nagranie znów startuje bez wyciszenia | | |
-| 8 | (opcjonalnie) Film/dźwięk systemowy dopiero po ≥ 60 s ciszy → w widoku od razu neutralne „silent for the first minute”, bez ⚠ na liście, jeszcze przed transkryptem | | |
+| 1 | Nagranie startuje bez wyciszenia; rozwinięta pigułka: „Mute” przy mikrofonie → `mic.slash`, „Unmute”, szary pasek reaguje na głos, „Muted” | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 2 | Zwinięta pigułka przy wyciszonym mikrofonie: `mic.slash` obok licznika, rozmiar okna bez zmian | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 3 | Próba wyciszenia drugiego toru → „Nothing is being recorded” na ~4 s, nic się nie wycisza | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 4 | Wyciszenie dźwięku systemowego (`speaker.slash`) i odciszenie | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 5 | Po Stop i transkrypcji: w Transcript linia „Microphone muted M:SS–M:SS” we właściwym miejscu; Copy ją zawiera | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 6 | Wypowiedzi z czasu wyciszenia nie ma w transkrypcie; czasy wypowiedzi po odciszeniu zgadzają się z odsłuchem | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 7 | Następne nagranie znów startuje bez wyciszenia | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 8 | (opcjonalnie) Film/dźwięk systemowy dopiero po ≥ 60 s ciszy → w widoku od razu neutralne „silent for the first minute”, bez ⚠ na liście, jeszcze przed transkryptem | — | nie sprawdzane (opcjonalne); pokryte testem `soundAfterAllZerosIsJournaledAsAudible` |
