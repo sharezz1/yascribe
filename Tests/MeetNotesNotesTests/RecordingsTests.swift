@@ -8,10 +8,13 @@ import MeetNotesSessionFormat
 
 private let ns1 = Timebase(numer: 1, denom: 1)
 private let day: TimeInterval = 86_400
+/// Nazwy przebiegów aplikacji (wzorzec `AppModel.sessionName`); `run2` jest nowszy.
+private let run1 = "2026-10-01T10-00-00Z-aaaa"
+private let run2 = "2026-10-02T10-00-00Z-bbbb"
 
 /// Sesja w `root/name`: `system.caf` + dziennik (wallClock = teraz), opcjonalnie przebieg z transkryptem i My notes.
 @discardableResult
-private func seed(_ root: URL, _ name: String, run: String? = "2026-10-01-1000", transcript t: Transcript? = transcript([utt("hej")]),
+private func seed(_ root: URL, _ name: String, run: String? = run1, transcript t: Transcript? = transcript([utt("hej")]),
                   myNotes: String = "moje") throws -> URL {
     let dir = root.appendingPathComponent(name)
     let src = FileSource(trackID: "system", samples: [Int16](repeating: 100, count: 16_000), sampleRate: 16_000, channels: 1,
@@ -38,8 +41,8 @@ private func files(_ dir: URL) -> Set<String> {
     gaps.failedChunks = [ChunkFailure(track: "system", index: 0, start: 0, end: 59, error: "500")]
     let partial = try seed(root, "partial", transcript: gaps)
     // Starszy przebieg ukończony, nowszy przerwany („Transcribe again”) — liczy się najnowszy.
-    let rerun = try seed(root, "rerun", run: "2026-10-01-1000")
-    try FileManager.default.createDirectory(at: RunDirectory(session: rerun, runID: "2026-10-02-1000").url, withIntermediateDirectories: true)
+    let rerun = try seed(root, "rerun", run: run1)
+    try FileManager.default.createDirectory(at: RunDirectory(session: rerun, runID: run2).url, withIntermediateDirectories: true)
     let busy = try seed(root, "busy")
 
     let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: ["busy"])
@@ -49,6 +52,21 @@ private func files(_ dir: URL) -> Set<String> {
         #expect(AudioRetention.audioFiles(s).count == 1, "\(s.lastPathComponent)")
         #expect(AudioDeletion.read(s) == nil)
     }
+}
+
+@Test func retentionIgnoresCliRunsWhenAppRunHasGaps() throws {
+    let root = tempDir()
+    var gaps = transcript([utt("hej")])
+    gaps.failedChunks = [ChunkFailure(track: "system", index: 0, start: 0, end: 59, error: "500")]
+    let s = try seed(root, "gaps", transcript: gaps) // przebieg aplikacji z lukami: audio potrzebne do ponowienia
+    // Kompletny przebieg z CLI (`--run debug`) sortuje się leksykalnie ZA datą aplikacji — nie może go przesłonić.
+    let debug = RunDirectory(session: s, runID: "debug")
+    try FileManager.default.createDirectory(at: debug.url, withIntermediateDirectories: true)
+    try JSONFile.save(transcript([utt("hej")]), to: debug.transcript)
+    #expect(RunDirectory.latestRunID(in: s) == run1)
+    #expect(!AudioRetention.transcriptionFinished(s))
+    #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: []).purged.isEmpty)
+    #expect(AudioRetention.audioFiles(s).count == 1)
 }
 
 @Test func retentionDeletesOnlyCafAndOnlyAfterTheTerm() throws {

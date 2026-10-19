@@ -45,9 +45,11 @@ private func makeSession() throws -> URL {
     defer { try? FileManager.default.removeItem(at: dir) }
     #expect(RunDirectory.latestRunID(in: dir) == nil)
     let runs = dir.appendingPathComponent("runs")
-    try FileManager.default.createDirectory(at: runs.appendingPathComponent("2026-10-14-1000"), withIntermediateDirectories: true)
-    try FileManager.default.createDirectory(at: runs.appendingPathComponent("2026-10-14-1100"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: runs.appendingPathComponent("2026-10-14T10-00-00Z-aaaa"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: runs.appendingPathComponent("2026-10-14T11-00-00Z-bbbb"), withIntermediateDirectories: true)
     try Data().write(to: runs.appendingPathComponent("zz stray.txt")) // spoza wzorca runID i sortuje się ZA prawdziwymi przebiegami
+    try Data().write(to: runs.appendingPathComponent("notes.txt"))
+    try FileManager.default.createDirectory(at: runs.appendingPathComponent("debug"), withIntermediateDirectories: true) // `--run debug` z CLI
     try NotesStore(session: dir).writeMyNotes("x") // katalog notes/ obok runs/
-    #expect(RunDirectory.latestRunID(in: dir) == "2026-10-14-1100")
+    #expect(RunDirectory.latestRunID(in: dir) == "2026-10-14T11-00-00Z-bbbb")
 }
