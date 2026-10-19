@@ -33,6 +33,10 @@ spec `docs/superpowers/specs/2026-10-14-faza15-design.md`, plan
 (`docs/design/macos.md` §11), trzy odbiory na żywo, ElevenLabs bezpośrednio, szablony z sekcjami,
 Recordings z retencją audio; raport `docs/superpowers/reports/F15-T13-czesc-B.md`. Dalej 1.5b:
 wyciszanie torów w pigułce (§11.5).
+**Faza 1.6 „Kalendarz i wykrywanie spotkań" scalona do `faza15` 2026-10-19** (334/334, bez tagu):
+spec `docs/superpowers/specs/2026-10-16-faza16-kalendarz-design.md`, plan `…/plans/2026-10-16-faza16-kalendarz.md`,
+odbiór `…/reports/F16-odbior.md`, przegląd `…/reports/F16-przeglad.md` (0 blokujących, 8 uwag w BACKLOG).
+**Niezamknięta:** poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji; lekarz/urodziny/OOO tylko z testów.
 
 ## Twarde zasady
 

@@ -34,6 +34,8 @@ jako przełącznik, wykrywanie końca przez aplikację (nie kalendarz), tytuł z
 powiązanie wydarzenia z notatką. Google Calendar / Outlook / Slack: tylko wyszarzone wiersze „Coming soon".
 Wymaga spike'a na sprzęcie (lista procesów audio, Teams, OOO w Exchange) przed planem.
 
+**Stan (2026-10-19):** kod T0–T12 scalony do `faza15`, odbiór na żywo T10/T11 zaliczony przez użytkownika (zbiorczo), przegląd całości: [F16-przeglad](reports/F16-przeglad.md) (0 blokujących). **Niezamknięte:** poczekalnia Teams (kryterium §6 pkt 2) bez pomiaru i decyzji; wizyta u lekarza, urodziny i OOO pokryte tylko testami z pomiaru T0. Bez tagu. „Coming up" i integracje Google/Outlook/Slack zostają.
+
 ## Faza 2 (decyzje już zapadły)
 
 | Pozycja | Źródło |

@@ -93,6 +93,17 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] `levels` trzyma ostatnią porcję bez końca: tor, który stanął lub padł, nadal pokazuje ✓ (D4; z założenia „ostatnia porcja"). Rozważyć wygaszanie po N sekundach bez porcji.
 - [ ] Zwinięta pigułka nie ma wskaźnika poziomu, który wymienia spec §5.3 (D5; plan to przepisał). `PillState.expanded` przeżywa koniec nagrania — następne nagranie startuje rozwinięte (D7). Test `levelsAreKeptPerTrackAndReadableAfterTheEnd` ma jedno źródło i nie odróżnia „klucz tylko dla torów z porcją" (D6; wpływ na UI zerowy).
 
+## Z przeglądu fazy 1.6 (2026-10-19, `reports/F16-przeglad.md`)
+
+- [ ] **Poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji.** Ekran przed dołączeniem może trzymać mikrofon ≥ 12 s; przy włączonym auto-starcie nagranie ruszyłoby przed wejściem na spotkanie. Pomiar sondą audio (`MEETNOTES_PROBE=audio`) albo zapisane odstępstwo. *(uwaga 1)*
+- [ ] Testy „cisza przez godzinę" (`manualStopSilencesAutoStartForTheSameCall`, `manualStopDuringAMicBlipStaysQuiet`, dwugodzinna część `dismissedOfferStaysQuietForTheWholeMicSession`) mają tiki co 5–60 s, więc od 44e586f przerwa > 3 s zeruje ciągłość mikrofonu i przechodzą bez wyciszenia; tiki co 1 s. Luka: Stop w chwili krótkiego zwolnienia mikrofonu (`lastInput.keys` → `active` przechodzi cały zestaw). *(uwaga 2)*
+- [ ] Start kończący się od razu (`noSources`): zakolejkowany `finish` chowa ofertę mimo poprawki 14ceaa7; powstaje pusta sesja. *(uwaga 3)*
+- [ ] Nieudany auto-start zostawia `starting`; gdy rozmowa przechodzi w spotkanie z kalendarza, Start nagra bez powiązanego wydarzenia. *(uwaga 4)*
+- [ ] Odpięcie wydarzenia przypiętego przy starcie daje „Untitled meeting" (autotytuł nie powstał); do decyzji. *(uwaga 5)*
+- [ ] „Launch at login" pokazuje zapisane ustawienie, nie stan `SMAppService` (np. `.requiresApproval`). *(uwaga 6)*
+- [ ] VoiceOver czyta tytuł okna pigułki „Meeting detected"/„Meeting ended?" w trakcie nagrywania. *(uwaga 7)*
+- [ ] Potwierdzenie Quit działa tylko z paska menu; Cmd-Q, Dock i wylogowanie w trakcie nagrania dają „Recovered" (sprzed 1.6, auto-start w tle ułatwia trafienie). *(uwaga 8)*
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
