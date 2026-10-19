@@ -345,3 +345,110 @@ private final class Pump: AudioSource, @unchecked Sendable {
     #expect(r.silentSeconds() == 0)
     r.stop()
 }
+
+// MARK: Wyciszanie torów (macos.md §11.5) i track.audible
+
+/// Porcja 0,1 s (1 600 ramek przy 16 kHz) z ciągłym czasem hosta — bez luk.
+private func feed(_ p: Pump, _ i: Int, zeros: Bool = false) {
+    let samples = zeros ? [Int16](repeating: 0, count: 1_600) : sine(frames: 1_600, channels: 1, rate: 16_000)
+    p.handler?(.chunk(AudioChunk(samples: samples, hostTime: UInt64(i) * s / 10)))
+}
+
+private func mutes(_ dir: URL, _ track: String) throws -> [[Int]]? {
+    try SessionDirectory(url: dir).summarize().tracks.first { $0.id == track }?.mutes?.map { [$0.frameIndex, $0.endFrame ?? -1] }
+}
+
+@Test func mutedRangeIsDigitalSilenceAndTracksStayAligned() throws {
+    let dir = sessionDir()
+    let sys = Pump("system"), mic = Pump("mic_raw")
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: ManualHostClock(0), timebase: ns)
+    try r.start()
+    for i in 0..<30 {
+        if i == 10 { #expect(r.setMuted("mic_raw", true)) }
+        if i == 20 { #expect(r.setMuted("mic_raw", false)) }
+        feed(sys, i); feed(mic, i)
+    }
+    r.stop()
+    let micSamples = try CAFReader(url: dir.appendingPathComponent("mic_raw.caf")).samples
+    // Cisza, nie przerwa: tyle samo ramek co tor systemowy, bez luk.
+    #expect(micSamples.count == (try CAFReader(url: dir.appendingPathComponent("system.caf")).frames))
+    #expect(micSamples.count == 30 * 1_600)
+    #expect(micSamples[16_000..<32_000].allSatisfy { $0 == 0 })
+    #expect(micSamples[0..<16_000].contains { $0 != 0 })
+    #expect(micSamples[32_000...].contains { $0 != 0 })
+    #expect(try SessionDirectory(url: dir).summarize().tracks.allSatisfy { $0.gaps.isEmpty })
+    #expect(try mutes(dir, "mic_raw") == [[16_000, 32_000]])
+    #expect(try mutes(dir, "system") == nil)
+}
+
+@Test func bothTracksCannotBeMutedAtOnce() throws {
+    let dir = sessionDir()
+    let sys = Pump("system"), mic = Pump("mic_raw")
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: ManualHostClock(0), timebase: ns)
+    try r.start()
+    #expect(r.setMuted("system", true))
+    #expect(!r.setMuted("mic_raw", true)) // „Nothing is being recorded”
+    #expect(r.mutedTracks() == ["system"])
+    #expect(r.setMuted("system", false))
+    #expect(r.setMuted("mic_raw", true))
+    #expect(r.setMuted("mic_raw", true)) // ponowne wyciszenie to nie nowy okres
+    r.stop()
+    let events = try SessionJournal.read(url: SessionDirectory(url: dir).journalURL)
+    #expect(events.filter { $0.type == .trackMuted }.map(\.trackID) == ["system", "mic_raw"])
+    #expect(events.filter { $0.type == .trackUnmuted }.map(\.trackID) == ["system"])
+    // Wyciszenie trwające przy Stop kończy się na ostatniej ramce toru (tu: 0).
+    #expect(try mutes(dir, "mic_raw") == [[0, 0]])
+
+    // Jedyny tor (drugi bez uprawnienia) też nie może zamilknąć.
+    let dir2 = sessionDir()
+    let lone = Pump("mic_raw")
+    let r2 = SessionRecorder(directory: dir2, sources: [DeniedSource("system"), lone], conditions: [], clock: ManualHostClock(0), timebase: ns)
+    try r2.start()
+    #expect(!r2.setMuted("mic_raw", true))
+    r2.stop()
+}
+
+@Test func mutedTrackIsSilentForTheSilenceConditionButKeepsItsRealLevel() throws {
+    let dir = sessionDir()
+    let mic = Pump("mic_raw"), sys = Pump("system")
+    let clock = ManualHostClock(0)
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: clock, timebase: ns)
+    try r.start()
+    #expect(r.setMuted("mic_raw", true))
+    for i in 0..<20 { feed(mic, i); feed(sys, i, zeros: true) }
+    clock.set(2 * s)
+    #expect(r.silentSeconds() >= 2) // wyciszony głos nie podtrzymuje nagrania (decyzja 4)
+    #expect((r.currentLevels()["mic_raw"] ?? -160) > -50) // miernik pokazuje, że mówisz (decyzja 3)
+    r.stop()
+}
+
+@Test func soundAfterAllZerosIsJournaledAsAudible() throws {
+    // Decyzja (b) z F15-T13 część B: cisza na początku trwale odróżniona od braku uprawnienia.
+    let dir = sessionDir()
+    let sys = Pump("system")
+    let r = SessionRecorder(directory: dir, sources: [sys], conditions: [], clock: ManualHostClock(0), timebase: ns,
+                            zeroWatch: ["system": 1])
+    try r.start()
+    for i in 0..<15 { feed(sys, i, zeros: true) }
+    for i in 15..<20 { feed(sys, i) }
+    r.stop()
+    let events = try SessionJournal.read(url: SessionDirectory(url: dir).journalURL)
+    #expect(events.filter { $0.type == .trackAudible }.count == 1)
+    let t = try #require(try SessionDirectory(url: dir).summarize().tracks.first)
+    #expect(t.failure == "allZeros1s")
+    #expect((24_000...24_001).contains(t.audibleFrame ?? -1)) // pierwsza próbka sinusa to 0
+}
+
+@Test func mutedSystemTrackIsNotMistakenForMissingPermission() throws {
+    // Wykrywacz zer patrzy na surowy dźwięk: wyciszony, ale działający tor nie dostaje allZeros.
+    let dir = sessionDir()
+    let sys = Pump("system"), mic = Pump("mic_raw")
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: ManualHostClock(0), timebase: ns,
+                            zeroWatch: ["system": 1])
+    try r.start()
+    #expect(r.setMuted("system", true))
+    for i in 0..<20 { feed(sys, i); feed(mic, i) }
+    r.stop()
+    #expect(try SessionDirectory(url: dir).summarize().tracks.first { $0.id == "system" }?.failure == nil)
+    #expect(try CAFReader(url: dir.appendingPathComponent("system.caf")).samples.allSatisfy { $0 == 0 })
+}
