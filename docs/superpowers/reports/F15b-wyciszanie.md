@@ -7,9 +7,11 @@ Gałąź `claude/adoring-pasteur-77900b` z `faza15` @ `49c4980`. Plan i decyzje 
 Commity: `aef4629` (T1 rdzeń), `efd1971` (T2 notatki), `1f75c3e` (T3 aplikacja), raport w commicie domykającym.
 Testy: `scripts/test.sh` → **344/344** (było 334; +10: 5 rejestrator, 3 podsumowanie, 2 TrackProblem/MuteNote).
 
-Merge Danger: odwracalne. Kod da się cofnąć, ale dziennik dostaje trzy nowe rodzaje zdarzeń. Build sprzed 1.5b nie
-przeczyta dziennika, który je zawiera (`corruptLine`), a `track.audible` powstaje w każdej sesji, w której dźwięk
-systemowy zaczął się po minucie ciszy. Nowy build czyta stare dzienniki bez zmian (test na prawdziwej sesji z `.devdata`).
+Merge Danger: NIEODWRACALNE — zmienia format dziennika sesji na dysku: trzy nowe rodzaje zdarzeń (`track.muted`,
+`track.unmuted`, `track.audible`). Build sprzed 1.5b nie przeczyta dziennika, który je zawiera (`corruptLine`), a
+`track.audible` powstaje w każdej sesji, w której dźwięk systemowy zaczął się po minucie ciszy. Nowy build czyta stare
+dzienniki bez zmian (test na prawdziwej sesji z `.devdata`). Dlatego odbiór na żywo idzie na osobnym `.devdata` w
+worktree (skopiowane tylko `providers/presets/settings/probe-cache.json`, bez sesji), a nie na danych z `faza15`.
 
 ## Co zrobione
 
@@ -82,15 +84,18 @@ ma po prawej od licznika puste ~22 pt (zarezerwowane miejsce, decyzja 2).
    o ~30 pt krótsze niż przed zmianą. Dzięki temu pasek nie skacze przy przełączaniu.
 2. Wyciszenie liczy się od następnej porcji audio (dokładność ~10–20 ms). Okres w dzienniku to dokładne ramki, które
    zapisały ciszę.
-3. Decyzja 4 dotyczy też pytania „Meeting ended?” z fazy 1.6 (`silentSeconds` używa tego samego `lastLoudAt`).
-   Wyciszony mikrofon przy milczącej drugiej stronie może więc wywołać to pytanie, tak samo jak autostop po 10 min.
+3. **Pytanie do użytkownika.** Decyzja 4 dotyczy też pytania „Meeting ended?” z fazy 1.6 (`silentSeconds` używa
+   tego samego `lastLoudAt`; próg `MeetingTuning.silenceSeconds` = 180 s). Wyciszony mikrofon przy milczącej drugiej
+   stronie wywoła więc to pytanie już po 3 minutach, a autostop po 10 min. Pytanie tylko pyta (Stop / Continue).
 4. Pole przełącznika to ikona 14×20 pt. Jeśli w praktyce trudno w nią trafić, łatwo powiększyć.
 5. Poza zakresem (zgodnie z planem): skrót klawiszowy do wyciszania, zapamiętywanie wyciszenia między nagraniami.
 
 ## Odbiór na żywo (wymaga użytkownika)
 
+W worktree, na osobnym `.devdata` (patrz Merge Danger), przy zamkniętej innej instancji MeetNotes:
+
 ```bash
-scripts/run.sh
+cd /Users/michalprzytulski/meetnotes/.claude/worktrees/adoring-pasteur-77900b && scripts/run.sh
 ```
 
 | # | Punkt | Wynik | Uwaga |
