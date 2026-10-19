@@ -93,8 +93,12 @@ public struct MuteNote: Equatable, Sendable {
             guard t.sampleRate > 0 else { return [] }
             let name = t.id == SessionSummary.timelineTrackID ? "System audio" : "Microphone"
             let at = { (f: Int) in clock.sessionSeconds(track: t.id, trackSeconds: Double(f) / t.sampleRate) }
-            return (t.mutes ?? []).map { m in
-                let start = at(m.frameIndex)
+            // Oś sesji zaczyna pierwsza próbka dźwięku systemowego, która potrafi przyjść długo po starcie mikrofonu
+            // (odbiór 2026-10-19: 28 s). Okres zakończony przed zerem osi nie dotyczy niczego w transkrypcie — bez linii;
+            // przekraczający zero zaczyna się od 0:00 (decyzja użytkownika 2026-10-19).
+            return (t.mutes ?? []).compactMap { m in
+                if let end = m.endFrame, at(end) <= 0 { return nil }
+                let start = max(0, at(m.frameIndex))
                 let line = m.endFrame.map { "\(name) muted \(TrackProblem.clock(start))–\(TrackProblem.clock(at($0)))" }
                     ?? "\(name) muted from \(TrackProblem.clock(start)) to the end"
                 return MuteNote(trackID: t.id, start: start, line: line)
