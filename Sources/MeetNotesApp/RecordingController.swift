@@ -400,7 +400,7 @@ struct RecordingPanelView: View {
         let rec = recording ?? model.recording
         Group {
             if pill.expanded {
-                expandedBody(rec).padding(14).frame(width: 320).pillGlass(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                expandedBody(rec).padding(14).frame(width: 360).pillGlass(RoundedRectangle(cornerRadius: 20, style: .continuous))
             } else {
                 collapsedBody(rec).padding(6).padding(.leading, 8).frame(height: 44).pillGlass(Capsule())
             }
@@ -508,8 +508,9 @@ private struct LevelBars: View {
 }
 
 /// Poziom ścieżki (makieta `.meter`): ikona, nazwa, pasek 6 pt (`line` + wypełnienie `accent`) i ✓/— (stan nie tylko kolorem).
-/// Z `onToggleMute` ikona jest przełącznikiem wyciszenia (1.5b): wyciszony tor ma ikonę `…slash`, szary pasek (rzeczywisty
-/// poziom — widać, że mówisz przy wyciszeniu, decyzja 3) i słowo „Muted” zamiast ✓.
+/// Z `onToggleMute` po prawej przycisk „Mute” / „Unmute” (1.5b, odbiór 2026-10-19: ikona-przełącznik była nieczytelna);
+/// wyciszony tor ma ikonę `…slash`, szary pasek (rzeczywisty poziom — widać, że mówisz przy wyciszeniu, decyzja 3)
+/// i słowo „Muted” zamiast ✓, a „Unmute” jest wypełnione kolorem ostrzeżenia.
 /// Tytuł „Microphone: nazwa” dzieli się na etykietę w wierszu i nazwę pogrubioną pod spodem (nazwa nie może być ucięta).
 struct LevelRow: View {
     let title: String
@@ -531,13 +532,16 @@ struct LevelRow: View {
 
     @ViewBuilder private var icon: some View {
         let name = isMic ? (muted ? "mic.slash" : "mic") : (muted ? "speaker.slash" : "speaker.wave.2")
-        let image = Image(systemName: name).font(.system(size: 12)).foregroundStyle(.mnText2).frame(width: 14)
+        Image(systemName: name).font(.system(size: 12)).foregroundStyle(.mnText2).frame(width: 14).accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var muteButton: some View {
         if let onToggleMute {
-            let label = "\(muted ? "Unmute" : "Mute") \(isMic ? "microphone" : "system audio")"
-            Button(action: onToggleMute) { image.frame(height: 20).contentShape(Rectangle()) }
-                .buttonStyle(.plain).help(label).accessibilityLabel(label)
-        } else {
-            image.accessibilityHidden(true)
+            let what = isMic ? "microphone" : "system audio"
+            Button(muted ? "Unmute" : "Mute", action: onToggleMute)
+                .buttonStyle(MuteButtonStyle(muted: muted))
+                .help(muted ? "Record \(what) again" : "Record silence instead of \(what)")
+                .accessibilityLabel("\(muted ? "Unmute" : "Mute") \(what)")
         }
     }
 
@@ -559,10 +563,27 @@ struct LevelRow: View {
                 }
                 .frame(width: onToggleMute == nil ? 14 : 44, alignment: .trailing)
                 .accessibilityLabel(muted ? "Muted" : hasSignal ? "Signal present" : "No signal")
+                muteButton
             }
             if let detail = parts.detail {
                 Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2, reservesSpace: true).padding(.leading, 22) // dwa wiersze zawsze: rozmiar rozwiniętej pigułki nie zależy od nazwy mikrofonu
             }
         }
+    }
+}
+
+/// „Mute” / „Unmute” w wierszu toru: mała kapsuła o stałej szerokości (przełączanie nie przesuwa paska).
+/// Wyciszony tor: wypełnienie `warn` — stan widać z daleka, a słowo „Muted” obok mówi go nie tylko kolorem.
+private struct MuteButtonStyle: ButtonStyle {
+    let muted: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: muted ? .semibold : .medium)).lineLimit(1)
+            .foregroundStyle(muted ? Color.mnOnPrimary : Color.mnText)
+            .frame(width: 64, height: 24)
+            .background(muted ? Color.mnWarn : Color.mnCard, in: Capsule())
+            .overlay(Capsule().strokeBorder(.mnLine, lineWidth: 0.5).opacity(muted ? 0 : 1))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule())
     }
 }
