@@ -26,11 +26,24 @@ V=[("1","Granat, złoto i turkus","dokładnie kolory z twojego obrazu",dict(tile
    ("2","Ciepły tusz, złoto i mięta","te same kształty w palecie B (tło #22211E, mięta #7CC39C)",dict(tile="#22211E",f=GOLD,b="#7CC39C",edge="#FFFFFF1F")),
    ("3","Ciepły tusz, złoto i turkus","tylko tło zamienione na ciepły tusz",dict(tile="#22211E",f=GOLD,b="#2EC4B6",edge="#FFFFFF1F")),
    ("4","Zielone tło, złoto i krem","tło w kolorze akcentu #2F6B4F, słupki kremowe",dict(tile="#2F6B4F",f=GOLD,b="#F7F6F2",edge="#00000022"))]
+
+def icon_small(v,size,S2=2.25,keep=(1,3,4,6,7,8),bw=21):
+    """Wersja na 16–64 px: bez szpary, sześć grubszych słupków, pióro większe."""
+    T2=lambda p:((p[0]-cx)*S2+512,(p[1]-cy)*S2+512)
+    outer=max(loops,key=len)
+    fea="M"+" L".join(f"{T2(p)[0]:.1f},{T2(p)[1]:.1f}" for p in outer)+"Z"
+    w=bw*S2; o=""
+    for i in keep:
+        x0,y0,x1,y1=bars[i]
+        X=T2(((x0+x1)/2,0))[0]; Y0=T2((0,y0-0.2))[1]; Y1=T2((0,y1+0.2))[1]
+        o+=f'<rect x="{X-w/2:.1f}" y="{Y0:.1f}" width="{w:.1f}" height="{Y1-Y0:.1f}" rx="{w/2:.1f}" fill="{v["b"]}"/>'
+    return f'''<svg width="{size}" height="{size}" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg"><path d="{SQ}" fill="{v["tile"]}" stroke="{v["edge"]}" stroke-width="3"/><path d="{fea}" fill="{v["f"]}"/>{o}</svg>'''
+
 if __name__=="__main__":
     cards=""
     for k,n,dsc,v in V:
         cards+=f'<div class="card"><div class="h"><b>{k}. {n}</b><span>{dsc}</span></div><div class="row">{icon(v,300)}<div class="sm">{icon(v,128)}{icon(v,64)}{icon(v,32)}{icon(v,16)}</div></div></div>'
-        open(f"w{k}.svg","w").write(icon(v,1024))
+        open(f"w{k}.svg","w").write(icon(v,1024)); open(f"m{k}.svg","w").write(icon_small(v,1024))
     open("wersje.html","w").write(f'''<!doctype html><meta charset=utf-8><style>
 body{{margin:0;background:#EFEDE6;font:13px -apple-system,system-ui;color:#22211E;padding:28px}}
 .grid{{display:grid;grid-template-columns:1fr 1fr;gap:22px;width:1280px}}

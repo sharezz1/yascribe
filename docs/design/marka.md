@@ -1,9 +1,10 @@
 # Marka: nazwa, logo, ikona
 
-> Status: **w toku, 2026-10-19**. Zapadły: nazwa, motto, kompozycja znaku. **Tymczasowo zestaw 3**
-> (użytkownik: „na razie v3”, kolory można zmienić później; konsultuje z żoną). Ikona **jest
-> podpięta do paczki** (zgoda użytkownika 2026-10-19). Czeka: ikona na małe rozmiary, warstwy pod
-> macOS 27, logotyp.
+> Status: **w toku, 2026-10-19**. Zapadły: nazwa, motto, kompozycja znaku. **Zestaw 3 jest
+> ostateczny** (użytkownik 2026-10-19: „kolory zostają”; zmiana nadal możliwa jednym poleceniem). Ikona **jest
+> podpięta do paczki** (zgoda użytkownika 2026-10-19), z wersją na małe rozmiary. Logotyp **zaakceptowany**
+> (2026-10-19). Otwarte: warstwy pod macOS 27 (wniosek:
+> bez Xcode się nie da, zob. niżej), licencja kroju przed publicznym użyciem.
 > Sesja designu nie dotyka `Sources/` ani `Tests/`; `scripts/bundle.sh` i `Resources/Info.plist`
 > zmienione tylko za zgodą (sekcja „Ikona w paczce”).
 
@@ -56,7 +57,7 @@ obcego koloru, ale **nie mierzono jeszcze kontrastu** ikony w Docku jasnym i cie
 
 ## Ikona w paczce (2026-10-19)
 
-Zestaw 3 jest ikoną tymczasową. Zmiana koloru to: edycja tablicy `V` w `zloz-ikone.py`
+Zestaw 3 jest ostateczny (2026-10-19). Zmiana koloru to: edycja tablicy `V` w `zloz-ikone.py`
 (albo wybór innego `wN.svg`), potem `docs/design/marka/zrob-icns.sh wN.svg`.
 
 - `docs/design/marka/zrob-icns.sh`: SVG → Chrome headless (PNG 1024 z alfą) → `sips` (16…512 i @2x)
@@ -70,24 +71,62 @@ Zestaw 3 jest ikoną tymczasową. Zmiana koloru to: edycja tablicy `V` w `zloz-i
 - **Nie sprawdzone na żywo w Docku:** w chwili zmiany działała instancja użytkownika (PID 11254),
   której nie ruszano. Ikona pojawi się po przebudowie `scripts/run.sh` (LaunchServices może
   trzymać starą w pamięci podręcznej; pomaga `touch .build/MeetNotes.app` albo `killall Dock`).
-- **Ograniczenie CLT (bez Icon Composera):** to zwykłe `.icns`, a więc **jedna płaska warstwa**:
-  brak warstw pod Liquid Glass, brak wariantów ciemnego, Clear i Tinted. System może je
-  przetworzyć automatycznie (np. Tinted), ale jakości tego nie mierzono. Warstwowy format
-  `.icon` wymaga Icon Composera z Xcode. Zbadać, czy da się go złożyć ręcznie (to JSON plus SVG-i),
-  bo wtedy Xcode niepotrzebny; **niesprawdzone**.
-- Wersja na 16 i 32 pt jest ta sama co duża (słupki zlewają się). Uproszczona wersja jest
-  w „Do zrobienia”.
+- **Warstwy, Dark, Clear, Tinted (sprawdzone 2026-10-19):** ikona to zwykłe `.icns`, jedna płaska warstwa.
+  Format warstwowy to pakiet `.icon` (`icon.json` plus SVG-i), ale macOS 26+ czyta go dopiero po
+  skompilowaniu `actool`em do `Assets.car` (klucz `CFBundleIconName`). **`/usr/bin/actool` i `ictool`
+  na tej maszynie to tylko nakładki: odpowiadają „requires Xcode”** (sprawdzone). Nie znalazłem
+  udokumentowanego sposobu na złożenie `Assets.car` bez Xcode; ręczne budowanie go to inżynieria
+  wsteczna prywatnego formatu CoreUI, więc **nie robimy tego**. Schemat `icon.json` nie jest
+  oficjalnie opisany (źródła: opisy społeczności), a czy samodzielny Icon Composer da się pobrać
+  i czy eksportuje `Assets.car`, **nie sprawdzono**.
+- **Co system robi z samym `.icns` (zmierzone na macOS 27.0.1):** `NSWorkspace.icon(forFile:)` rysuje
+  naszą ikonę w pełnym squircle'u, **bez szarego tła i bez zmniejszenia**. Wariant pełny (opaque
+  kwadrat 1024, bez własnych przezroczystych rogów) wygląda identycznie, więc **zostaje obecny**.
+  Opis z internetu (artykuł o macOS 26) mówi, że ikony z przezroczystością dostają szare tło;
+  na 27.0.1 tego nie widać. Wariantów Dark, Clear i Tinted **nie zmierzono**: wymagałoby to
+  zmiany ustawień systemu (Wygląd → Styl ikon), czego sesja nie robi. Można to obejrzeć
+  samemu w Ustawieniach systemowych → Wygląd po uruchomieniu aplikacji.
+- **Jeśli kiedyś będzie potrzebne:** jednorazowo na maszynie z Xcode skompilować pakiet `.icon`
+  (warstwy: tło tuszu, pióro złote, fale turkusowe) do `Assets.car`, dodać go do repo, dopisać
+  `CFBundleIconName` w `Info.plist` i kopiowanie w `bundle.sh`. Przygotowanie pakietu `.icon`
+  (SVG-i warstw plus `icon.json`) można zrobić bez Xcode, ale go tu nie przetestowano.
+- **Wersja na małe rozmiary (2026-10-19):** `mN.svg`, rozmiary do 64 px w `.icns` (16, 32, 32@2x=64).
+  Pióro bez szpary i większe (skala 2,25 zamiast 2,0), sześć grubszych słupków zamiast dziesięciu.
+  Na podglądzie 1:1 przy 32 i 64 px wyraźnie czytelniejsza niż duża; przy 16 px to wciąż
+  rozpoznawalny kształt (pióro i dwie fale), ale bez detalu. Rozmiary od 128 px: wersja pełna.
+
+## Logotyp (zaakceptowany przez użytkownika 2026-10-19)
+
+Znak (squircle z piórem i falami) plus nazwa **Yascribe** w New York Regular (§11.2, jak tytuły
+stron), kerning −2 przy rozmiarze 200. Dwa układy, każdy w wersji na jasne (`#F7F6F2`, tekst
+`#22211E`) i ciemne tło (`#1C1C1B`, tekst `#ECEBE6`): **poziomy** (znak i nazwa obok siebie) oraz
+**pionowy** z mottem *What's it like to be a scribe?* kursywą New York w `text2`.
+Podgląd: `marka/podglad-logo.png`. Pliki: `marka/logo-poziome-{jasne,ciemne}.svg`,
+`marka/logo-pionowe-{jasne,ciemne}.svg`.
+
+- Litery są **konturami**, nie tekstem: `marka/napis-na-krzywe.swift` (CoreText) → `marka/logotyp-krzywe.json`
+  → `marka/zloz-logo.py`. SVG nie zależy więc od fontu w systemie.
+- **Dwa niezałatwione punkty.** (1) Licencja: New York to krój systemowy Apple. Sprawdzenie (sub-agent, 2026-10-19)
+  nie znalazło tekstu licencji samego New York (strona Apple podaje licencję tylko dla SF, który
+  wolno stosować „solely for creating mock-ups” i zakazuje osadzania w „artwork”); wniosek: do
+  prywatnej aplikacji **prawdopodobnie bez przeszkód**, do publicznego logo **raczej nie**, ale
+  nic nie jest potwierdzone w źródle pierwotnym. Decyzja użytkownika: **zostaje**. Gdyby aplikacja
+  miała kiedyś wyjść publicznie, krój do zamiany na otwarty (kandydaci z wiedzy, niesprawdzeni:
+  Source Serif, Newsreader, EB Garamond, wszystkie SIL OFL). Do tego czasu przed publicznym użyciem
+  sprawdź licencję New York (NY.dmg). (2) Na ciemnym
+  tle squircle ikony (`#22211E`) ledwo odcina się od tła `#1C1C1B` (trzyma go tylko cienka obwódka);
+  jeśli to przeszkadza, tło logotypu na ciemno może być głębsze (np. `#121211`).
+- Duże Y wynika z samego kroju (kapitalik przy małych literach); osobnego wyróżnienia koloru
+  Y nie robiono. Wariant ze złotym Y (jak pióro) jest możliwy, ale na jasnym tle złoto
+  `#F2BD55` ma kontrast ok. 1,6:1, więc wymagałby ciemniejszego odcienia.
 
 ## Do zrobienia
 
-1. **Wybór zestawu kolorów** (użytkownik; na razie 3).
-2. **Ikona na małe rozmiary (16, 32 pt):** mniej słupków, grubsze, bez nacięć pióra. Pomiar
-   czytelności na podglądzie 1:1.
-3. **macOS 27:** warstwy pod Liquid Glass (tło, pióro, fale jako osobne warstwy), wariant ciemny,
-   Clear, Tinted (ograniczenia CLT w sekcji „Ikona w paczce”). Zakaz SF Symbols w ikonie i logo
-   (macos.md §7).
-4. **Logotyp:** „Yascribe” w New York (§11.2), duże Y, ułożenie znaku i nazwy, wersja na jasne
-   i ciemne tło.
+1. ~~Wybór zestawu kolorów~~ zestaw 3, ostateczny.
+2. ~~Ikona na małe rozmiary~~ zrobione 2026-10-19 (zob. „Ikona w paczce”).
+3. ~~macOS 27: warstwy~~ zbadane 2026-10-19: bez Xcode niewykonalne (sekcja „Ikona w paczce”).
+   Zakaz SF Symbols w ikonie i logo spełniony (macos.md §7).
+4. ~~Logotyp~~ zaakceptowany 2026-10-19 (sekcja „Logotyp”). Otwarte tylko: licencja kroju.
 5. ~~Podpięcie ikony do paczki~~ zrobione 2026-10-19 (zob. wyżej).
 
 ## Odrzucone kierunki (historia)
