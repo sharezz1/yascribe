@@ -11,13 +11,15 @@
   język wizualny B ([macos.md §11](../design/macos.md)), trzy odbiory na żywo, ElevenLabs
   bezpośrednio, szablony z sekcjami, Recordings z retencją audio
   ([raport F15-T13 część B](reports/F15-T13-czesc-B.md)).
+- **Faza 1.5b, kamień milowy „wyciszanie torów”** — scalone do `faza15` 2026-10-19, tag `faza-1.5b-wyciszanie`
+  (345/345, odbiór na żywo zaliczony; [raport F15b-wyciszanie](reports/F15b-wyciszanie.md)). 1.5b trwa dalej.
 
 ## Faza 1.5b (w toku)
 
 | Pozycja | Źródło |
 |---|---|
-| **Wyciszanie torów w pigułce** (cisza zamiast przerwy, „Muted”, okresy w dzienniku, zakaz wyciszenia obu) — sesja w toku | [macos.md §11.5](../design/macos.md) |
-| Zdarzenie w dzienniku przy pierwszym dźwięku po `allZeros60s` (trwałe odróżnienie ciszy na początku od braku uprawnień) — razem z wyciszaniem | decyzja (b), [F15-T13 część B](reports/F15-T13-czesc-B.md) |
+| ✅ **Wyciszanie torów w pigułce** (cisza zamiast przerwy, „Muted”, okresy w dzienniku, zakaz wyciszenia obu) — zrobione 2026-10-19, [raport](reports/F15b-wyciszanie.md) | [macos.md §11.5](../design/macos.md) |
+| ✅ Zdarzenie w dzienniku przy pierwszym dźwięku po `allZeros60s` (trwałe odróżnienie ciszy na początku od braku uprawnień) — `track.audible`, razem z wyciszaniem | decyzja (b), [F15-T13 część B](reports/F15-T13-czesc-B.md) |
 | **Pomiar języka Auto i pary PL+EN (T11)** — czeka na nagranie mieszane i klucz w terminalu użytkownika; wynik decyduje o fazie 2 | [spec 1.5 §9 pkt 11, decyzja 8](specs/2026-10-14-faza15-design.md), [F15-T13 uwagi, C](reports/F15-T13-uwagi-uzytkownika.md) |
 | Przegląd całości przez Opusa, potem scalenie `faza15` → `master` | [spec 1.5 §9 pkt 13](specs/2026-10-14-faza15-design.md) |
 | Drobne z przeglądów T5/T6/T10 (tytuły z `\r`, `MarkdownBlocks` dla tabel, `latestRunID`, wyścig `updateMeta`, `AutoTitle.clean`, `ContextError`, wygaszanie poziomów…) — bez rundy poprawek, do sesji porządkowej | [BACKLOG](BACKLOG.md) |
