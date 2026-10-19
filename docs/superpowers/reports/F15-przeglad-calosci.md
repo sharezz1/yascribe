@@ -1,12 +1,13 @@
 # Faza 1.5 (+1.5b, 1.6, Coming up) — przegląd całości przed scaleniem do `master`
 
-2026-10-19, Opus. Zakres: `master..faza15` (`762c18d..02ca8ae`), 179 commitów, 203 pliki, w tym ~7,5 tys. linii
-w `Sources/` i ~3,7 tys. w `Tests/`. Pkt 13 speca 1.5 (§9) i pozycja 1.5b w `ROADMAP.md`. Przegląd tylko do odczytu;
+2026-10-19, Opus. Zakres: `master..faza15` (`762c18d..02ca8ae`), 179 commitów, 203 pliki, w tym `Sources/`
+80 plików (+7847/−386) i `Tests/` 46 plików (+3341/−3). Pkt 13 speca 1.5 (§9) i pozycja 1.5b w `ROADMAP.md`. Przegląd tylko do odczytu;
 poprawek w kodzie nie ma (mutacje cofnięte `git checkout`).
 
 `scripts/test.sh` na `02ca8ae` (ostatnia linia): `test.sh: 353/353 testów uruchomionych i zaliczonych.` (`check-bundle: OK`)
 
-**Wynik: 0 blokujących, 3 do poprawy, 8 do BACKLOG.**
+**Wynik: 0 blokujących, 4 do poprawy, 8 do BACKLOG.** W `BACKLOG.md` otwartych pozycji jest dziś 34 (`- [ ]`); 8 nowych
+z tego raportu jeszcze tam nie trafiło (P3).
 
 ## Co sprawdziłem
 
@@ -36,7 +37,7 @@ poprawek w kodzie nie ma (mutacje cofnięte `git checkout`).
 - **Wyciszanie w rdzeniu** (`SessionRecorder.setMuted` i ścieżka porcji): cyfrowa cisza tej samej długości. Wykrywacz zer
   i poziom pracują na surowym dźwięku, a próg ciszy na zapisanym (decyzja 4). Zdarzenia zapisują się pod tą samą blokadą,
   więc `frameIndex` trafia na granicę porcji.
-- **Klucze:** `checkedBody` maskuje klucz w treści błędu, `ProviderCheck.describe` nie dołącza treści. `print` jest tylko
+- **Klucze:** `ProviderError.http` powstaje tylko w `checkedBody` (`HTTPClient.swift:22`), który maskuje klucz w treści błędu; `ProviderCheck.describe` nie dołącza treści. `print` jest tylko
   w sondach i migawkach i nie wypisuje kluczy. Test połączenia przed zapisem nie dotyka pęku kluczy. Literały testowe
   nie wyglądają jak klucz.
 - **Bramki i mutacje:** w raportach są zapisane mutacje dla: warunku ukończonej transkrypcji, kasowania tylko `*.caf`,
@@ -47,7 +48,8 @@ poprawek w kodzie nie ma (mutacje cofnięte `git checkout`).
   - usunięty zapis znacznika `audio-deleted.json` → pada `retentionDeletesOnlyCafAndOnlyAfterTheTerm`.
 - **Hashe w raportach:** 27 plików (CLAUDE.md, BACKLOG, ROADMAP, 23 raporty, 1 spike), 85 unikalnych hashy. Wszystkie
   istnieją, są przodkami `faza15`, a opisy zgadzają się z tematami commitów. `faza-1.5a` → `b4f5804` jest poprawny
-  (commit zamykający T13-B). Sprawdzał Haiku.
+  (commit zamykający T13-B). Sprawdzał Haiku. Mimo polecenia „tylko odczyt” agent zostawił w katalogu worktree
+  25 pustych plików `docs_superpowers_*.md`, nieśledzonych. Usunąłem je; główny checkout jest czysty.
 - **Zgodność z §11.5 i decyzjami:** Keep audio 7/14/30/90/Forever z domyślnymi 30, R1 (potwierdzenie skrócenia z liczbą
   i rozmiarem, ta sama reguła `plan`), R2, R3, R4, decyzje wyciszania (1)–(4), `track.audible` jako decyzja (b),
   ElevenLabs bez `language_code` dla Auto, Coming up D1. Nie znalazłem rozjazdów.
@@ -93,6 +95,16 @@ aplikacji nie wygrywa. Mutacja: stary filtr.
 - `CLAUDE.md`, „Kod:”: brak modułów `MeetNotesNotes` (notatki, szablony, retencja i przenoszenie) i `MeetNotesMeetings`
   (kalendarz, wykrywanie, Coming up).
 - `CLAUDE.md`, „Stan”: po scaleniu `master` = faza 1.5 + 1.6. Wpisać tagi i raport.
+- `BACKLOG.md`: dopisać B1–B8 z tego raportu, P2 przenieść z sekcji T5 z dopiskiem o retencji.
+
+**P4. Testy „cisza przez godzinę” w `OfferDetectorTests` nie mogą paść (F16-przeglad #2, nadal otwarte).**
+`BACKLOG.md:99`; od `49c4980` plik testów się nie zmienił. Tiki co 5–60 s przy `maxTickGap = 3` zerują `micSince`
+w każdym kroku, więc oferta rozmowy nie powstaje w ogóle i asercje przechodzą nawet po usunięciu każdego wyciszenia.
+Liczą się do 353/353, a nie sprawdzają bramki (wyciszenie po Stop i po „Not a meeting”). Mutację (e) z planu T3 łapią
+dziś inne testy, ale luka „Stop w chwili krótkiego zwolnienia mikrofonu” zostaje bez strażnika. Tę bramkę trzeba
+traktować jako „bez testu”, nie jako drobiazg.
+**Propozycja (Sonnet):** tiki co 1 s w tych testach (jak `afterManualStopANewCallOffersAgain`). Mutacja: usunięcie
+`mutedFamilies.formUnion(lastInput.keys)` → co najmniej jeden z nich pada.
 
 ### BACKLOG (bez rundy poprawek)
 
@@ -121,14 +133,14 @@ aplikacji nie wygrywa. Mutacja: stary filtr.
 
 ## Dla użytkownika (decyzje i STOP)
 
-1. **Scalenie `faza15` → `master`.** Testy 353/353, 0 blokujących. Do wyboru:
+1. **Scalenie `faza15` → `master`.** Testy 353/353, 0 blokujących, 4 do poprawy. Do wyboru:
    - **`--no-ff`** z opisem faz (1.5a, 1.5b, 1.6, Coming up) — zalecane, bo `master` dostaje jeden czytelny commit na całą
      fazę 1.5;
    - **fast-forward** — możliwe, bo `faza15..master` = 0.
 
    `faza15` jest wyciągnięta w głównym checkoucie (`/Users/michalprzytulski/meetnotes`), a ten raport leży na gałęzi
    `claude/vigilant-austin-cd58d0` (`faza15` + raport). Wariant: scalić tę gałąź do `master` tutaj (`master` nie jest
-   nigdzie wyciągnięty), potem przesunąć `faza15` fast-forwardem w głównym checkoucie. P1–P3 przed scaleniem albo po:
+   nigdzie wyciągnięty), potem przesunąć `faza15` fast-forwardem w głównym checkoucie. P1, P2 i P4 przed scaleniem albo po:
    Twoja decyzja. Push też jest Twoją decyzją.
 2. **Tagi:** propozycja `faza-1.6` → `49c4980` (koniec 1.6 na `faza15` z przeglądem F16) i `faza-1.5` na commicie
    scalenia w `master`. Istnieją już `faza-1.5a` i `faza-1.5b-wyciszanie`.
