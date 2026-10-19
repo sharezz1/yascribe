@@ -22,6 +22,11 @@ final class RecordingController {
     /// Ostatni poziom (dBFS) każdej ścieżki i nazwa mikrofonu — dla rozwiniętej pigułki.
     private(set) var levels: [String: Double] = [:]
     private(set) var micName = ""
+    /// Tory wyciszone w pigułce (macos.md §11.5); każde nagranie startuje bez wyciszenia.
+    private(set) var muted: Set<String> = []
+    /// „Nothing is being recorded” po próbie wyciszenia ostatniego nagrywającego toru; znika po 4 s (decyzja 1).
+    private(set) var muteWarning = false
+    @ObservationIgnored private var warningTask: Task<Void, Never>?
     /// Katalog trwającej sesji — lista sesji go pomija (Hermes 4.5: nie „Recovered").
     private(set) var directory: URL?
     private var recorder: SessionRecorder?
@@ -54,6 +59,8 @@ final class RecordingController {
         self.eventTitle = eventTitle
         pill.mode = .recording // start zdejmuje ofertę/pytanie; to samo okno staje się pigułką nagrania
         isRecording = r.endReason == nil
+        muted = []
+        muteWarning = false
         micName = CoreAudioDevices.defaultInputName() ?? "Unknown microphone"
         started = Date()
         elapsed = 0
@@ -72,17 +79,34 @@ final class RecordingController {
 
     func stop() { recorder?.stop(reason: .button) }
 
+    /// Przełącza wyciszenie toru. Odmowę (oba tory naraz) zgłasza rdzeń — pigułka tylko ją pokazuje.
+    func toggleMute(_ trackID: String) {
+        guard let recorder else { return }
+        if recorder.setMuted(trackID, !muted.contains(trackID)) {
+            muted = recorder.mutedTracks()
+        } else {
+            muteWarning = true
+            warningTask?.cancel()
+            warningTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                if !Task.isCancelled { self?.muteWarning = false }
+            }
+        }
+    }
+
     /// Cisza trwającego nagrania (próg i `lastLoudAt` rekordera, jak `SilenceCondition`); 0 bez nagrania. Czyta ją `MeetingMonitor`.
     var silentSeconds: Double { recorder?.silentSeconds() ?? 0 }
 
     /// Migawki (`Snapshots.swift`): kontroler w stanie „trwa nagranie” bez rejestratora i czasomierzy.
-    static func snapshotPreview(elapsed: TimeInterval) -> RecordingController {
+    static func snapshotPreview(elapsed: TimeInterval, muted: Set<String> = [], muteWarning: Bool = false) -> RecordingController {
         let r = RecordingController()
         r.isRecording = true
         r.elapsed = elapsed
         r.presetLabel = "Polish · PL"
         r.micName = "MacBook Air Microphone"
         r.levels = ["system": -22, "mic_raw": -41]
+        r.muted = muted
+        r.muteWarning = muteWarning
         return r
     }
 
@@ -94,6 +118,9 @@ final class RecordingController {
         levelTimer?.invalidate()
         levelTimer = nil
         levels = [:]
+        muted = []
+        muteWarning = false
+        warningTask?.cancel()
         recorder = nil
         directory = nil
         hidePanel()
@@ -373,7 +400,7 @@ struct RecordingPanelView: View {
         let rec = recording ?? model.recording
         Group {
             if pill.expanded {
-                expandedBody(rec).padding(14).frame(width: 320).pillGlass(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                expandedBody(rec).padding(14).frame(width: 360).pillGlass(RoundedRectangle(cornerRadius: 20, style: .continuous))
             } else {
                 collapsedBody(rec).padding(6).padding(.leading, 8).frame(height: 44).pillGlass(Capsule())
             }
@@ -390,6 +417,11 @@ struct RecordingPanelView: View {
             Text("00:00:00").lineLimit(1).fixedSize().hidden().accessibilityHidden(true)
                 .overlay(alignment: .leading) { Text(Self.shortClock(rec.elapsed)).accessibilityLabel("Recording \(Self.shortClock(rec.elapsed))") }
                 .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundStyle(.mnText)
+            // Miejsce zarezerwowane zawsze (decyzja 2): szerokość zwiniętej pigułki nie zależy od wyciszenia.
+            let micMuted = rec.muted.contains("mic_raw")
+            Image(systemName: "mic.slash").font(.system(size: 12, weight: .semibold)).foregroundStyle(.mnText2)
+                .frame(width: 14).opacity(micMuted ? 1 : 0)
+                .help("Microphone muted").accessibilityLabel("Microphone muted").accessibilityHidden(!micMuted)
             Button("Stop") { rec.stop() }.buttonStyle(StopButtonStyle()).keyboardShortcut(".", modifiers: .command)
             PillIconButton(systemImage: "chevron.up", label: "Show details") { pill.expanded = true }
         }
@@ -399,7 +431,7 @@ struct RecordingPanelView: View {
         .fixedSize()
     }
 
-    /// Rozwinięta: tylko odczyt (nic tu nie przełącza nagrywania poza Stop).
+    /// Rozwinięta: Stop i wyciszanie torów (1.5b, zmienia spec decyzję 4 „tylko do odczytu”).
     private func expandedBody(_ rec: RecordingController) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
@@ -413,11 +445,16 @@ struct RecordingPanelView: View {
                 Spacer(minLength: 0)
                 PillIconButton(systemImage: "chevron.down", label: "Hide details", size: 24) { pill.expanded = false }
             }
+            // Ostrzeżenie w miejscu linii presetu, ta sama wysokość — okno nie zmienia rozmiaru (decyzja 1).
             Text(rec.eventTitle.map { "\($0) · \(rec.presetLabel)" } ?? rec.presetLabel).lineLimit(rec.eventTitle == nil ? nil : 1)
-                .font(.callout).foregroundStyle(.mnText2).padding(.leading, 16).padding(.top, 2).padding(.bottom, 14)
-            LevelRow(title: "System audio", db: rec.levels["system"], animated: !reduceMotion)
+                .font(.callout).foregroundStyle(.mnText2).opacity(rec.muteWarning ? 0 : 1)
+                .overlay(alignment: .leading) { if rec.muteWarning { WarnLabel("Nothing is being recorded").lineLimit(1).fixedSize() } }
+                .padding(.leading, 16).padding(.top, 2).padding(.bottom, 14)
+            LevelRow(title: "System audio", db: rec.levels["system"], animated: !reduceMotion,
+                     muted: rec.muted.contains("system")) { rec.toggleMute("system") }
             // Nazwa mikrofonu wyraźnie — żeby od razu było widać, gdy nagrywa nie ten (decyzja użytkownika).
-            LevelRow(title: "Microphone: \(rec.micName)", db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion)
+            LevelRow(title: "Microphone: \(rec.micName)", db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion,
+                     muted: rec.muted.contains("mic_raw")) { rec.toggleMute("mic_raw") }
                 .padding(.top, 10)
             HStack(spacing: 8) {
                 Button { openNote(rec) } label: { Text("Open note").lineLimit(1).fixedSize() }
@@ -436,9 +473,9 @@ struct RecordingPanelView: View {
         MainWindow.show(openWindow)
     }
 
-    /// Głośniejsza ze ścieżek, 0…1 (−60…0 dBFS).
+    /// Głośniejsza z nagrywanych ścieżek (wyciszona się nie liczy), 0…1 (−60…0 dBFS).
     static func fraction(_ rec: RecordingController) -> Double {
-        LevelRow.fraction(db: [rec.levels["system"], rec.levels["mic_raw"]].compactMap { $0 }.max())
+        LevelRow.fraction(db: ["system", "mic_raw"].filter { !rec.muted.contains($0) }.compactMap { rec.levels[$0] }.max())
     }
 
     static func clock(_ t: TimeInterval) -> String {
@@ -471,12 +508,17 @@ private struct LevelBars: View {
 }
 
 /// Poziom ścieżki (makieta `.meter`): ikona, nazwa, pasek 6 pt (`line` + wypełnienie `accent`) i ✓/— (stan nie tylko kolorem).
+/// Z `onToggleMute` po prawej przycisk „Mute” / „Unmute” (1.5b, odbiór 2026-10-19: ikona-przełącznik była nieczytelna);
+/// wyciszony tor ma ikonę `…slash`, szary pasek (rzeczywisty poziom — widać, że mówisz przy wyciszeniu, decyzja 3)
+/// i słowo „Muted” zamiast ✓, a „Unmute” jest wypełnione kolorem ostrzeżenia.
 /// Tytuł „Microphone: nazwa” dzieli się na etykietę w wierszu i nazwę pogrubioną pod spodem (nazwa nie może być ucięta).
 struct LevelRow: View {
     let title: String
     let db: Double?
     var emphasized = false
     var animated = true
+    var muted = false
+    var onToggleMute: (() -> Void)?
 
     static func fraction(db: Double?) -> Double { max(0, min(1, ((db ?? -60) + 60) / 60)) }
 
@@ -486,27 +528,62 @@ struct LevelRow: View {
     }
     private var hasSignal: Bool { (db ?? -160) > -60 }
 
+    private var isMic: Bool { parts.label.hasPrefix("Microphone") }
+
+    @ViewBuilder private var icon: some View {
+        let name = isMic ? (muted ? "mic.slash" : "mic") : (muted ? "speaker.slash" : "speaker.wave.2")
+        Image(systemName: name).font(.system(size: 12)).foregroundStyle(.mnText2).frame(width: 14).accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var muteButton: some View {
+        if let onToggleMute {
+            let what = isMic ? "microphone" : "system audio"
+            Button(muted ? "Unmute" : "Mute", action: onToggleMute)
+                .buttonStyle(MuteButtonStyle(muted: muted))
+                .help(muted ? "Record \(what) again" : "Record silence instead of \(what)")
+                .accessibilityLabel("\(muted ? "Unmute" : "Mute") \(what)")
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
-                Image(systemName: parts.label.hasPrefix("Microphone") ? "mic" : "speaker.wave.2")
-                    .font(.system(size: 12)).foregroundStyle(.mnText2).frame(width: 14).accessibilityHidden(true)
+                icon
                 Text(parts.label).font(.callout).foregroundStyle(.mnText).frame(width: 92, alignment: .leading)
                 ZStack(alignment: .leading) {
                     Capsule().fill(.mnLine)
-                    GeometryReader { g in Capsule().fill(.mnAccent).frame(width: g.size.width * Self.fraction(db: db)) }
+                    GeometryReader { g in Capsule().fill(muted ? Color.mnText3 : Color.mnAccent).frame(width: g.size.width * Self.fraction(db: db)) }
                 }
                 .frame(height: 6)
                 .animation(animated ? .easeOut(duration: 0.2) : nil, value: db)
                 Group {
-                    if hasSignal { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.mnAccent) }
+                    if muted { Text("Muted").font(.callout).foregroundStyle(.mnText2) }
+                    else if hasSignal { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(.mnAccent) }
                     else { Text("—").foregroundStyle(.mnText2) }
                 }
-                .frame(width: 14).accessibilityLabel(hasSignal ? "Signal present" : "No signal")
+                .frame(width: onToggleMute == nil ? 14 : 44, alignment: .trailing)
+                .accessibilityLabel(muted ? "Muted" : hasSignal ? "Signal present" : "No signal")
+                muteButton
             }
             if let detail = parts.detail {
                 Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2, reservesSpace: true).padding(.leading, 22) // dwa wiersze zawsze: rozmiar rozwiniętej pigułki nie zależy od nazwy mikrofonu
             }
         }
+    }
+}
+
+/// „Mute” / „Unmute” w wierszu toru: mała kapsuła o stałej szerokości (przełączanie nie przesuwa paska).
+/// Wyciszony tor: wypełnienie `warn` — stan widać z daleka, a słowo „Muted” obok mówi go nie tylko kolorem.
+private struct MuteButtonStyle: ButtonStyle {
+    let muted: Bool
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: muted ? .semibold : .medium)).lineLimit(1)
+            .foregroundStyle(muted ? Color.mnOnPrimary : Color.mnText)
+            .frame(width: 64, height: 24)
+            .background(muted ? Color.mnWarn : Color.mnCard, in: Capsule())
+            .overlay(Capsule().strokeBorder(.mnLine, lineWidth: 0.5).opacity(muted ? 0 : 1))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .contentShape(Capsule())
     }
 }
