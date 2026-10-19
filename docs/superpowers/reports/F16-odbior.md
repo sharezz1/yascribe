@@ -13,11 +13,18 @@ Odbiór robi użytkownik na sprzęcie: ✅/❌ + uwaga. Rozbieżności ze specem
 | # | Punkt | Wynik | Uwaga |
 |---|---|---|---|
 | 3a | Oferta z kalendarza minutę przed spotkaniem („The real InPost daily”, źródło Calendar, Start / Not a meeting) | ✅ | pojawiła się ≈60 s przed startem (offerLead), zrzut od użytkownika 2026-10-19 |
-| 4 | Teams + mikrofon ≈12 s → pigułka „Call in Teams" (Start / Not a meeting) | | |
-| 5 | Start, rozłączenie ≈20 s → „Meeting ended?" (Stop / Continue) | | |
-| 6 | Auto-start, Stop przy trwającej rozmowie, zmiana „Start after" → nagranie nie rusza od nowa | | |
-| 7 | Oferta przy zamkniętym oknie (App Nap, tryb `.common`) | | |
-| 8 | Zmiana wyboru kalendarzy działa od razu | | |
-| 9 | Tekst stanu w menu przy wyłączonym Detect calls / kalendarzu | | |
-| 10 | Quit w trakcie nagrywania: pytanie, Stop and Quit, brak „Recovered" | | |
-| 11 | Preset bez języka + auto-start → oferta zostaje jako ręczna | | |
+| 4 | Teams + mikrofon ≈12 s → pigułka „Call in Teams" (Start / Not a meeting) | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+| 5 | Start, rozłączenie ≈20 s → „Meeting ended?" (Stop / Continue) | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+| 6 | Auto-start, Stop przy trwającej rozmowie, zmiana „Start after" → nagranie nie rusza od nowa | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+| 7 | Oferta przy zamkniętym oknie (App Nap, tryb `.common`) | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+| 8 | Zmiana wyboru kalendarzy działa od razu | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+| 9 | Tekst stanu w menu przy wyłączonym Detect calls / kalendarzu | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+| 10 | Quit w trakcie nagrywania: pytanie, Stop and Quit, brak „Recovered" | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+| 11 | Preset bez języka + auto-start → oferta zostaje jako ręczna | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
+
+## Menu Preset w ofercie (e3fb58a, 631a812)
+
+| Punkt | Wynik | Uwaga |
+|---|---|---|
+| Menu Preset w pigułce-ofercie otwiera się i zmienia preset | ✅ | 2026-10-19 |
+| Przeciąganie pigułki po użyciu menu | ❌ → ✅ | Po użyciu menu pigułka nie dawała się przesunąć (okno kluczowe, pozycja bez zmian). Poprawka 631a812: po `NSMenu.didEndTrackingNotification` w trybie oferty zmiana `.id` treści. Użytkownik: „działa". Przyczyna to hipoteza z objawów. |
