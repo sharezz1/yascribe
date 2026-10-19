@@ -65,7 +65,7 @@ Wymaga spike'a na sprzęcie (lista procesów audio, Teams, OOO w Exchange) przed
 | Lokalny ASR w procesie (FluidAudio, Parakeet v3 już na dysku; Cohere Transcribe lokalnie) | [wymagania §0, §2](../wymagania.md) |
 | Diaryzacja lokalna z nastawialnym progiem, edycja rozmówców, automatyczne nazwiska; tożsamość mówcy aż do zadań | [wymagania §4, §5](../wymagania.md) |
 | Słownik i word boosting (format aliasów = `replacements.tsv`), klik na słowo → poprawka → alias (zakładka Dictionary) | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
-| Kalendarz Apple: „Coming up” / oś nadchodzących spotkań (sam EventKit i wykrywanie → faza 1.6; koniec sesji z kalendarza **uchylony**) | [wymagania §5](../wymagania.md), [spec 1.6](specs/2026-10-16-faza16-kalendarz-design.md) |
+| Kalendarz Apple: „Coming up” na stronie głównej — **design gotowy 2026-10-19** (wariant B: karta najbliższego spotkania ≤ 60 min + mały Record ad hoc w nagłówku, [macos.md §11.5](../design/macos.md)); wdrożenie bez przydziału (sam EventKit i wykrywanie → faza 1.6; koniec sesji z kalendarza **uchylony**) | [wymagania §5](../wymagania.md), [spec 1.6](specs/2026-10-16-faza16-kalendarz-design.md) |
 | Chat nad spotkaniem i nad archiwum (RAG, „Ask anything”) | [wymagania §4](../wymagania.md), [spec 1.5 §2](specs/2026-10-14-faza15-design.md) |
 | Zakładka zadań (zależna od tożsamości mówcy) | [wymagania §4](../wymagania.md) |
 | Dyktowanie na żywo (osobny tryb) | [wymagania §1](../wymagania.md) |
