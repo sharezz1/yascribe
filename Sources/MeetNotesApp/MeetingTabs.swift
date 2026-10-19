@@ -206,9 +206,12 @@ struct TranscriptTab: View {
                         .padding(.bottom, 8)
                 }
                 Rectangle().fill(.mnLine2).frame(height: 0.5)
-                ForEach(Array(t.utterances.enumerated()), id: \.offset) { i, u in
+                ForEach(Array(lines(t).enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
-                    UtteranceRow(utterance: u, isAuto: isAuto) { onJump(u) }
+                    switch line {
+                    case .utterance(let u): UtteranceRow(utterance: u, isAuto: isAuto) { onJump(u) }
+                    case .mute(let m): MuteRow(note: m)
+                    }
                 }
                 if !t.failedChunks.isEmpty {
                     Text("Gaps").font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
@@ -241,9 +244,27 @@ struct TranscriptTab: View {
         }
     }
 
+    private enum Line { case utterance(Utterance), mute(MuteNote) }
+
+    /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12”, macos.md §11.5) w kolejności czasu.
+    private func lines(_ t: Transcript) -> [Line] {
+        var mutes = MuteNote.of(summary: item.summary)[...]
+        var out: [Line] = []
+        for u in t.utterances {
+            while let m = mutes.first, m.start <= u.start { out.append(.mute(m)); mutes = mutes.dropFirst() }
+            out.append(.utterance(u))
+        }
+        return out + mutes.map(Line.mute)
+    }
+
     private func copy() {
         guard let t = shown else { return }
-        let text = t.utterances.map { "[\(MeetingDetailView.time($0.start))] \($0.speaker == .me ? "Me" : "Them"): \($0.text)" }.joined(separator: "\n")
+        let text = lines(t).map { line in
+            switch line {
+            case .utterance(let u): "[\(MeetingDetailView.time(u.start))] \(u.speaker == .me ? "Me" : "Them"): \(u.text)"
+            case .mute(let m): "[\(MeetingDetailView.time(m.start))] \(m.line)"
+            }
+        }.joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
@@ -402,5 +423,19 @@ struct SummaryTab: View {
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+/// Linia wyciszenia toru w transkrypcie: czas w kolumnie czasu, opis w `text2` (informacja, nie ostrzeżenie).
+private struct MuteRow: View {
+    let note: MuteNote
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text(MeetingDetailView.time(note.start)).monospacedDigit().frame(width: 72, alignment: .leading)
+            Label(note.line, systemImage: note.trackID == "system" ? "speaker.slash" : "mic.slash")
+        }
+        .font(.system(size: 13)).foregroundStyle(.mnText2)
+        .padding(.vertical, 11)
+        .accessibilityElement(children: .combine)
     }
 }

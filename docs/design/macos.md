@@ -417,8 +417,11 @@ w dolnym pasku, jak na `b-add.png`.
     1.6). Wtedy „● Record” w nagłówku jest drugorzędny (jeden primary na ekranie, §11.4);
   - pod kartą jedna linia `text2` „Later today: 11:30 … · 14:00 Dentist (in person) · …”;
   - **bez najbliższego spotkania** (nic w 60 min, koniec dnia, kalendarz niepodłączony): karty nie
-    ma; linia „No more meetings today · Open Calendar” albo „Connect Apple Calendar…” (→ Settings
-    → Integrations), a „● Record” w nagłówku staje się `.primary`;
+    ma, a „● Record” w nagłówku staje się `.primary`. Linia pod nagłówkiem (D1, decyzja użytkownika
+    2026-10-19): gdy później tego dnia są wydarzenia — „Later today: 14:00 Dentist (in person) ·
+    16:00 1:1 Adrian · Open Calendar”; „No more meetings today · Open Calendar” **tylko** gdy do
+    końca dnia nic nie ma; „Connect Apple Calendar…” (→ Settings → Integrations), gdy kalendarz
+    niepodłączony;
   - lista zdarzeń: tylko wydarzenia z godziną (całodniowe i OOO ukryte jak w filtrze 1.6);
     wydarzenie bez linku pokazane, ale bez oferty pigułki (decyzja 11 speca 1.6);
   - niżej archiwum po dniach bez zmian.
@@ -531,6 +534,10 @@ w dolnym pasku, jak na `b-add.png`.
   - nie da się wyciszyć obu torów naraz — przy próbie ostrzeżenie „Nothing is being recorded”;
   - zmiana w rdzeniu (`MeetNotesRecording`): testy + mutacja (cisza w wyciszonym zakresie, wyrównanie
     długości torów, zakaz wyciszenia obu).
+  - **Wdrożone 2026-10-19** (raport `docs/superpowers/reports/F15b-wyciszanie.md`), decyzje użytkownika:
+    (1) ostrzeżenie zastępuje linię presetu na 4 s; (2) miejsce na `mic.slash` w zwiniętej pigułce zarezerwowane na
+    stałe; (3) szary pasek pokazuje rzeczywisty poziom; (4) wyciszony tor liczy się jako cichy dla autostopu i
+    „Meeting ended?”. Przy okazji `track.audible`: cisza na początku odróżniona od braku uprawnienia bez transkryptu.
 - **Drugi odbiór 2026-10-16 (do poprawki):** w zwiniętej pigułce „Stop” łamie się na dwie linie —
   etykiety w jednej linii, szerokość stanu zwiniętego liczona z treści przy najszerszym liczniku;
   rozwinięta pigułka na pierwszym planie nadal ma prostokątne rogi okna — panel `borderless` +

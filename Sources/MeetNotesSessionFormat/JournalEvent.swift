@@ -14,6 +14,11 @@ public struct JournalEvent: Codable, Equatable, Sendable {
         case trackFailed = "track.failed"
         /// Tor oznaczony `stalled…` znów dostarcza porcje.
         case trackRecovered = "track.recovered"
+        /// Użytkownik wyciszył / odciszył tor w pigułce; od `frameIndex` tor zapisuje cyfrową ciszę (macos.md §11.5).
+        case trackMuted = "track.muted"
+        case trackUnmuted = "track.unmuted"
+        /// Pierwsze niezerowe próbki po `allZerosNs`: cisza na początku, nie brak uprawnienia.
+        case trackAudible = "track.audible"
         case trackClosed = "track.closed"
         case sessionEnded = "session.ended"
     }
@@ -104,6 +109,21 @@ public extension JournalEvent {
     static func trackRecovered(_ trackID: String, hostTime: UInt64) -> JournalEvent {
         var e = JournalEvent(type: .trackRecovered, hostTime: hostTime)
         e.trackID = trackID
+        return e
+    }
+
+    /// `muted == false` → `track.unmuted`.
+    static func trackMute(_ trackID: String, muted: Bool, frameIndex: Int, hostTime: UInt64) -> JournalEvent {
+        var e = JournalEvent(type: muted ? .trackMuted : .trackUnmuted, hostTime: hostTime)
+        e.trackID = trackID
+        e.frameIndex = frameIndex
+        return e
+    }
+
+    static func trackAudible(_ trackID: String, frameIndex: Int, hostTime: UInt64) -> JournalEvent {
+        var e = JournalEvent(type: .trackAudible, hostTime: hostTime)
+        e.trackID = trackID
+        e.frameIndex = frameIndex
         return e
     }
 

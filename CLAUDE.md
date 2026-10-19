@@ -31,8 +31,10 @@ spec `docs/superpowers/specs/2026-10-14-faza15-design.md`, plan
 `docs/superpowers/plans/2026-10-14-faza15-*.md` (przydział modeli Haiku/Sonnet/Opus w pliku 00).
 **Faza 1.5a zamknięta 2026-10-16** (tag `faza-1.5a` → `b4f5804`, 236/236): język wizualny B
 (`docs/design/macos.md` §11), trzy odbiory na żywo, ElevenLabs bezpośrednio, szablony z sekcjami,
-Recordings z retencją audio; raport `docs/superpowers/reports/F15-T13-czesc-B.md`. Dalej 1.5b:
-wyciszanie torów w pigułce (§11.5).
+Recordings z retencją audio; raport `docs/superpowers/reports/F15-T13-czesc-B.md`.
+**Faza 1.5b „Wyciszanie torów" scalona do `faza15` 2026-10-19** (345/345, odbiór na żywo zaliczony): przycisk
+Mute/Unmute w pigułce, cyfrowa cisza zamiast przerwy, zdarzenia `track.muted/unmuted/audible` w dzienniku (nowy format —
+starszy build ich nie przeczyta); raport `docs/superpowers/reports/F15b-wyciszanie.md`.
 **Faza 1.6 „Kalendarz i wykrywanie spotkań" scalona do `faza15` 2026-10-19** (334/334, bez tagu):
 spec `docs/superpowers/specs/2026-10-16-faza16-kalendarz-design.md`, plan `…/plans/2026-10-16-faza16-kalendarz.md`,
 odbiór `…/reports/F16-odbior.md`, przegląd `…/reports/F16-przeglad.md` (0 blokujących, 8 uwag w BACKLOG).
