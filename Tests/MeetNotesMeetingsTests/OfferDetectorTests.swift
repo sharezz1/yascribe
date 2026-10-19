@@ -215,7 +215,12 @@ private struct Rig {
     guard case .show? = r.run(t0, t0 + 12).last else { Issue.record("no offer"); return }
     r.d.dismiss()
     // dwie godziny ciągłego użycia (tiki co 1 s: przerwa > maxTickGap zerowałaby ciągłość i test nic by nie sprawdzał)
-    #expect(!r.run(t0 + 13, t0 + 7200).contains(where: isOffering))
+    #expect(!r.run(t0 + 13, t0 + 3600).contains(where: isOffering))
+    // blip mikrofonu < releaseSeconds: oferta znika (.hide) i wróciłaby po startSeconds, gdyby wyciszenie rodziny zniknęło
+    r.procs = []
+    #expect(!r.run(t0 + 3601, t0 + 3610).contains(where: isOffering))
+    r.procs = [.teams]
+    #expect(!r.run(t0 + 3611, t0 + 7200).contains(where: isOffering))
 }
 
 @Test func dismissedOfferReturnsForANewMicSession() {
@@ -247,6 +252,11 @@ private struct Rig {
     #expect(!r.run(t0 + 13, t0 + 30).contains(where: isOffering))
     r.procs = [.teamsHelper]   // inny pid i inny bundle ID tej samej rodziny
     #expect(!r.run(t0 + 31, t0 + 3600).contains(where: isOffering))
+    // blip < releaseSeconds, potem wraca inny proces tej samej rodziny: nadal ta sama sesja mikrofonu
+    r.procs = []
+    #expect(!r.run(t0 + 3601, t0 + 3610).contains(where: isOffering))
+    r.procs = [.teams]
+    #expect(!r.run(t0 + 3611, t0 + 3700).contains(where: isOffering))
 }
 
 @Test func dismissedEventStaysQuietForTheSameEvent() {
