@@ -76,3 +76,11 @@ func snapshot(language: LanguageCode = .polish) throws -> RunSnapshot {
 func client(_ http: any HTTPClient) -> OpenAICompatibleClient {
     OpenAICompatibleClient(provider: Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!), key: "k", http: http)
 }
+
+func autoSnapshot() throws -> RunSnapshot {
+    let provider = Provider(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, name: "OpenRouter",
+                            baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    let preset = Preset(id: UUID(uuidString: "00000000-0000-0000-0000-000000000003")!, name: "Mixed", language: nil,
+                        asr: RoleAssignment(providerID: provider.id, model: "microsoft/mai-transcribe-2"), languageAuto: true)
+    return try RunSnapshot(preset: preset, provider: provider, probe: nil)
+}

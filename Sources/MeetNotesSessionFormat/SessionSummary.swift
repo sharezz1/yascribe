@@ -11,6 +11,17 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         public var frames: Int
     }
 
+    /// Okres wyciszenia toru w ramkach tego toru; `endFrame == nil` = do końca toru, którego długości nie znamy (awaria).
+    public struct Mute: Codable, Equatable, Sendable {
+        public var frameIndex: Int
+        public var endFrame: Int?
+
+        public init(frameIndex: Int, endFrame: Int? = nil) {
+            self.frameIndex = frameIndex
+            self.endFrame = endFrame
+        }
+    }
+
     public struct ClockAnchor: Codable, Equatable, Sendable {
         public var frameIndex: Int
         public var hostTime: UInt64
@@ -34,6 +45,10 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         /// Rzeczywista częstotliwość z kotwic zegara — różni się od nominalnej
         /// o dryf zegara urządzenia.
         public var effectiveSampleRate: Double?
+        /// Okresy wyciszenia z pigułki. Opcjonalne — stare `summary.json` go nie mają.
+        public var mutes: [Mute]?
+        /// Ramka pierwszych niezerowych próbek po `allZerosNs` (`track.audible`); `nil` = brak zdarzenia.
+        public var audibleFrame: Int?
 
         public init(id: String, sampleRate: Double, channels: Int, deviceUIDs: [String] = [],
                     firstSampleHostTime: UInt64? = nil, offsetSeconds: Double? = nil, frames: Int? = nil,
@@ -118,6 +133,18 @@ public struct SessionSummary: Codable, Equatable, Sendable {
                 if let i = e.trackID.flatMap({ index[$0] }) { summary.tracks[i].failure = e.reason }
             case .trackRecovered:
                 if let i = e.trackID.flatMap({ index[$0] }) { summary.tracks[i].failure = nil }
+            case .trackMuted:
+                if let i = e.trackID.flatMap({ index[$0] }), let f = e.frameIndex,
+                   summary.tracks[i].mutes?.last.map({ $0.endFrame != nil }) ?? true {
+                    summary.tracks[i].mutes = (summary.tracks[i].mutes ?? []) + [Mute(frameIndex: f)]
+                }
+            case .trackUnmuted:
+                if let i = e.trackID.flatMap({ index[$0] }), let f = e.frameIndex, let last = summary.tracks[i].mutes?.indices.last,
+                   summary.tracks[i].mutes?[last].endFrame == nil {
+                    summary.tracks[i].mutes?[last].endFrame = f
+                }
+            case .trackAudible:
+                if let i = e.trackID.flatMap({ index[$0] }) { summary.tracks[i].audibleFrame = e.frameIndex }
             case .trackClosed:
                 if let i = e.trackID.flatMap({ index[$0] }) { summary.tracks[i].frames = e.frames }
             case .sessionEnded:
@@ -131,6 +158,11 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         let anchor = summary.tracks.first(where: { $0.id == timelineTrackID })?.firstSampleHostTime
             ?? summary.startedHostTime
         for i in summary.tracks.indices {
+            // Wyciszenie trwające przy Stop kończy się na ostatniej ramce toru; po awarii (tor niezamknięty) zostaje otwarte.
+            if var m = summary.tracks[i].mutes, let last = m.indices.last, m[last].endFrame == nil {
+                m[last].endFrame = summary.tracks[i].frames
+                summary.tracks[i].mutes = m
+            }
             if let first = summary.tracks[i].firstSampleHostTime {
                 summary.tracks[i].offsetSeconds = timebase.secondsBetween(first, anchor)
             }

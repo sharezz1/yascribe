@@ -30,3 +30,12 @@ func confabulatedEnglishInPolishMeetingIsFlagged(_ text: String) {
     #expect(LanguageGuard.mismatch("Wczoraj mieliśmy spotkanie i nie było czasu, żeby to omówić.", expected: .english) == .polish)
     #expect(LanguageGuard.mismatch("I think there is a problem with the production of the products.", expected: .english) == nil)
 }
+
+@Test func nonLatinScriptIsDetectedByMajority() throws {
+    #expect(LanguageGuard.nonLatinScript("Привет, это проверка связи") == (try LanguageCode("ru")))
+    #expect(LanguageGuard.nonLatinScript("これは日本語のテストです") == (try LanguageCode("ja")))
+    #expect(LanguageGuard.nonLatinScript("To jest zwykłe polskie zdanie z ąę") == nil)
+    #expect(LanguageGuard.nonLatinScript("Spotkanie o Москва i Київ jutro rano") == nil) // większość łacińska — jeden cudzy wyraz to nie bełkot
+    #expect(LanguageGuard.nonLatinScript("Да") == nil) // za mało liter, żeby orzekać
+    #expect(LanguageGuard.nonLatinScript("Prognoza na sobotę, 9 000 kontaktów") == nil)
+}

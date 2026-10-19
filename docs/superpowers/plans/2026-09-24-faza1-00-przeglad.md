@@ -103,7 +103,7 @@ decyduje, który porzucić. Plan wtedy się zatrzymuje.
 - Zero zależności zewnętrznych w fazie 1.
 - Interfejs po angielsku (`docs/design/macos.md`), komentarze i dokumenty po polsku.
 - `MeetNotesRecording` **nie zależy** od `MeetNotesProviders` ani `MeetNotesTranscription` (spec rdzenia §3).
-- Pliki sesji: `system.caf` (częstotliwość i kanały tapu, Int16), `mic_raw.caf` i `mic_aec.caf` (16 kHz mono Int16), `journal.jsonl`, `session.json`, `runs/<id>/`.
+- Pliki sesji: `system.caf` (częstotliwość i kanały tapu, Int16), `mic_raw.caf` (16 kHz mono Int16; `mic_aec.caf` tylko w sesjach z AEC — build aplikacji nagrywa `system` + `mic_raw`, decyzja S5), `journal.jsonl`, `session.json`, `runs/<id>/`.
 - 🔴 Nigdy `auto` przy języku: `LanguageCode` nie powstaje z `"auto"` ani z pustego napisu.
 - Dane w trakcie prac: `.devdata/` przez `MEETNOTES_DATA_DIR` (już w `.gitignore`).
 - Bez sandboxa, bez ScreenCaptureKit, bez prośby o nagrywanie ekranu.

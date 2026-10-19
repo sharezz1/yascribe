@@ -12,7 +12,8 @@ final class StubHTTP: HTTPClient, @unchecked Sendable {
     init(_ respond: @escaping @Sendable (String, [String: Any]) -> (Int, Any)) { self.respond = respond }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let path = request.url!.path
+        let url = request.url!
+        let path = url.path + (url.query.map { "?\($0)" } ?? "") // zapytanie jest częścią „ścieżki" w testach
         let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
         lock.withLock { calls.append(Call(path: path, body: body, headers: request.allHTTPHeaderFields ?? [:])) }
         let (status, obj) = respond(path, body)

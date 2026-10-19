@@ -25,8 +25,11 @@ public struct Utterance: Codable, Equatable, Sendable {
     /// Wynik strażnika języka (P11).
     public var languageMismatch: LanguageCode?
 
-    /// Oznaczona wypowiedź nie trafia do notatki jako fakt.
-    public var excludedFromNotes: Bool { languageMismatch != nil }
+    /// Echo z głośników: ta sama wypowiedź jest też w ścieżce „Them" (`EchoFilter`). Opcjonalne — stare pliki go nie mają.
+    public var echoOfThem: Bool?
+
+    /// Oznaczona wypowiedź (zły język albo echo) nie trafia do notatki jako fakt.
+    public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true }
 }
 
 public struct ChunkFailure: Codable, Equatable, Sendable {
@@ -42,7 +45,8 @@ public struct Transcript: Codable, Equatable, Sendable {
     /// Jawne luki: okna, których nie udało się przetranskrybować (§6.4).
     public var failedChunks: [ChunkFailure]
 
-    public var languageFlagCount: Int { utterances.filter(\.excludedFromNotes).count }
+    public var languageFlagCount: Int { utterances.filter { $0.languageMismatch != nil }.count }
+    public var echoCount: Int { utterances.filter { $0.echoOfThem == true }.count }
 }
 
 /// Migawka presetu w chwili przebiegu — nie odwołanie (spec fazy 1, §8, P12).
@@ -60,7 +64,7 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
     public var providerBaseURL: URL
     public var model: String
     public var shape: ASRShape
-    public var language: LanguageCode
+    public var language: LanguageCode?
     public var languageHandling: LanguageHandling
     public var dictionaryVersion: String
 
@@ -70,7 +74,7 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
         // a klikalna linia czasu kłamie (ChatGPT #7). Kształt czatowy — tylko dyktowanie.
         if probe?.shape == .chatAudio { throw RunSnapshotError.chatShapeNotForMeetings }
         self.preset = preset
-        guard let asr = preset.asr, let language = preset.language else { throw PresetError.missingASR }
+        guard let asr = preset.asr else { throw PresetError.missingASR }
         presetID = preset.id
         presetName = preset.name
         providerID = provider.id
@@ -78,7 +82,7 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
         providerBaseURL = provider.baseURL
         model = asr.model
         shape = probe?.shape ?? .audioTranscriptions
-        self.language = language
+        self.language = preset.language
         languageHandling = probe?.languageHandling ?? .unknown
         self.dictionaryVersion = dictionaryVersion
     }

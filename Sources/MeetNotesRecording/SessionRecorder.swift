@@ -27,6 +27,10 @@ public final class SessionRecorder: @unchecked Sendable {
     private var finishing = false
     private var zeroFirstChunk: [String: UInt64] = [:]
     private var zeroResolved: Set<String> = []
+    /// Tory po `allZerosNs`, na których czekamy na pierwsze niezerowe próbki (`track.audible`).
+    private var awaitingSound: Set<String> = []
+    /// Tory wyciszone w pigułce — zapisują cyfrową ciszę (macos.md §11.5).
+    private var muted: Set<String> = []
     private let trackStallSeconds: Double
     private var lastChunkByTrack: [String: UInt64] = [:]
     private var stalledTracks: Set<String> = []
@@ -34,8 +38,44 @@ public final class SessionRecorder: @unchecked Sendable {
     /// nadpisuje swoim `stalled30s` (P2).
     private var failedTracks: Set<String> = []
     public private(set) var endReason: EndReason?
+    private var levels: [String: Double] = [:]
 
     public var onEnded: (@Sendable (EndReason) -> Void)?
+
+    /// Ostatni poziom (dBFS RMS) każdej ścieżki — dla wskaźnika na pigułce. Czyta pod tą samą blokadą co zapis.
+    public func currentLevels() -> [String: Double] {
+        lock.lock(); defer { lock.unlock() }
+        return levels
+    }
+
+    /// Sekundy od ostatniej głośnej porcji (ten sam próg i ten sam `lastLoudAt` co `SilenceCondition`) — dla pytania "Meeting ended?".
+    public func silentSeconds() -> Double {
+        let now = clock.now()
+        lock.lock(); defer { lock.unlock() }
+        return timebase.secondsBetween(now, lastLoudAt)
+    }
+
+    /// Wycisza albo odcisza tor (pigułka, macos.md §11.5). Od następnej porcji wyciszony tor zapisuje cyfrową ciszę
+    /// tej samej długości, nie przerwę — tory zostają wyrównane w czasie. `false` = odmowa: po wyciszeniu nie zostałby
+    /// żaden nagrywający tor („Nothing is being recorded”). Odciszenie zawsze się udaje.
+    @discardableResult
+    public func setMuted(_ trackID: String, _ mute: Bool) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard let writer = writers[trackID], !finishing else { return !mute }
+        guard muted.contains(trackID) != mute else { return true }
+        if mute && !started.contains(where: { $0.trackID != trackID && !muted.contains($0.trackID) && !ended.contains($0.trackID) }) {
+            return false
+        }
+        // Wyciszenie to prywatność: obowiązuje także wtedy, gdy zdarzenia nie udało się zapisać.
+        if mute { muted.insert(trackID) } else { muted.remove(trackID) }
+        try? journal?.append(.trackMute(trackID, muted: mute, frameIndex: writer.framesWritten, hostTime: clock.now()))
+        return true
+    }
+
+    public func mutedTracks() -> Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        return muted
+    }
 
     public init(directory: URL, sources: [any AudioSource], conditions: [any EndCondition] = .standard,
                 clock: any HostClock = MachHostClock(), timebase: Timebase = .current,
@@ -145,8 +185,15 @@ public final class SessionRecorder: @unchecked Sendable {
             switch event {
             case .chunk(let chunk):
                 do {
-                    try writers[trackID]?.write(chunk)
-                    watchZerosLocked(trackID: trackID, chunk: chunk, journal: journal)
+                    guard let writer = writers[trackID] else { break }
+                    let isMuted = muted.contains(trackID)
+                    let written = isMuted
+                        ? AudioChunk(samples: [Int16](repeating: 0, count: chunk.samples.count), hostTime: chunk.hostTime) : chunk
+                    try writer.write(written)
+                    // Wykrywacz zer i poziom patrzą na surowy dźwięk (czy przechwytywanie działa, czy mówisz przy wyciszeniu);
+                    // próg ciszy (`lastLoudAt`) — na zapisany: wyciszony tor nic nie nagrywa (decyzja użytkownika 2026-10-19).
+                    let firstFrame = writer.framesWritten - chunk.samples.count / writer.format.channels
+                    watchZerosLocked(trackID: trackID, chunk: chunk, firstFrame: firstFrame, channels: writer.format.channels, journal: journal)
                     lastChunkAt = max(lastChunkAt, chunk.hostTime)
                     lastChunkByTrack[trackID] = chunk.hostTime
                     // Tor ożył — podsumowanie nie może dalej mówić „stalled" (P6). Tylko gdy stall był
@@ -158,7 +205,9 @@ public final class SessionRecorder: @unchecked Sendable {
                             stalledTracks.remove(trackID)
                         } catch {}
                     }
-                    if Levels.rmsDBFS(chunk.samples) > silenceThreshold { lastLoudAt = max(lastLoudAt, chunk.hostTime) }
+                    let db = Levels.rmsDBFS(chunk.samples)
+                    levels[trackID] = db
+                    if db > silenceThreshold && !isMuted { lastLoudAt = max(lastLoudAt, chunk.hostTime) }
                     reason = evaluateLocked(now: chunk.hostTime)
                 } catch {
                     reason = Self.isDiskFull(error) ? .diskFull : .writeError
@@ -185,7 +234,18 @@ public final class SessionRecorder: @unchecked Sendable {
     /// sekund to najpewniej odmowa uprawnienia, a nie cisza — zapisujemy to jawnie,
     /// zamiast oddać „nagranie" pełne zer. Sesji nie przerywamy: prawdziwa cisza
     /// na starcie spotkania też się zdarza.
-    private func watchZerosLocked(trackID: String, chunk: AudioChunk, journal: SessionJournal) {
+    ///
+    /// Po fladze czeka na pierwsze niezerowe próbki i zapisuje `track.audible` — wtedy cisza na początku jest trwale
+    /// odróżniona od braku uprawnienia, bez czekania na transkrypt (decyzja (b) z raportu F15-T13 część B).
+    private func watchZerosLocked(trackID: String, chunk: AudioChunk, firstFrame: Int, channels: Int, journal: SessionJournal) {
+        if awaitingSound.contains(trackID) {
+            guard let k = chunk.samples.firstIndex(where: { $0 != 0 }) else { return }
+            do { // niezapisane = spróbuj przy następnej porcji (jak P3)
+                try journal.append(.trackAudible(trackID, frameIndex: firstFrame + k / channels, hostTime: chunk.hostTime))
+                awaitingSound.remove(trackID)
+            } catch {}
+            return
+        }
         guard let window = zeroWatch[trackID], !zeroResolved.contains(trackID) else { return }
         if chunk.samples.contains(where: { $0 != 0 }) {
             zeroResolved.insert(trackID)
@@ -198,6 +258,7 @@ public final class SessionRecorder: @unchecked Sendable {
             do {
                 try journal.append(.trackFailed(trackID, reason: "allZeros\(Int(window))s", hostTime: chunk.hostTime))
                 failedTracks.insert(trackID)
+                awaitingSound.insert(trackID)
             } catch {}
         }
     }

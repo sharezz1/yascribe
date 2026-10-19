@@ -30,5 +30,7 @@
     <string>MeetNotes records your side of the meeting from the microphone.</string>
     <key>NSAudioCaptureUsageDescription</key>
     <string>MeetNotes records the other side of the meeting from system audio. It never records your screen.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>MeetNotes reads your calendar to recognise meetings and name your notes. It never changes your events.</string>
 </dict>
 </plist>

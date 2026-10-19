@@ -12,3 +12,14 @@ public struct URLSessionHTTPClient: HTTPClient {
         return (d, h)
     }
 }
+
+/// Ciało odpowiedzi 2xx albo `ProviderError.http` z treścią bez klucza. Najpierw usuń klucz z całej treści,
+/// dopiero potem przytnij — inaczej przycięcie w połowie klucza zostawiłoby jego fragment (ChatGPT #11).
+func checkedBody(_ data: Data, _ resp: HTTPURLResponse, key: String?) throws -> Data {
+    guard (200..<300).contains(resp.statusCode) else {
+        var body = String(decoding: data, as: UTF8.self)
+        if let key, !key.isEmpty { body = body.replacingOccurrences(of: key, with: "••••") }
+        throw ProviderError.http(resp.statusCode, String(body.prefix(300)))
+    }
+    return data
+}

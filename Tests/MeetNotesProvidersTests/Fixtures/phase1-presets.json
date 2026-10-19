@@ -1,0 +1,31 @@
+{
+  "presets" : [
+    {
+      "asr" : {
+        "model" : "microsoft/mai-transcribe-2",
+        "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98"
+      },
+      "correction" : {
+        "model" : "deepseek/deepseek-v4.1-flash",
+        "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98"
+      },
+      "id" : "99F7A85A-5CAF-436A-AF27-E732A587751A",
+      "language" : "pl",
+      "name" : "Polski",
+      "notesLanguage" : "pl",
+      "summary" : {
+        "model" : "deepseek/deepseek-v4.1-flash",
+        "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98"
+      }
+    },
+    {
+      "asr" : {
+        "model" : "microsoft/mai-transcribe-2",
+        "providerID" : "D424E7FA-BB22-4B32-9F9F-EDB81FCBAE98"
+      },
+      "id" : "0093B02E-285C-42CB-8BEB-ED185DE29560",
+      "language" : "en",
+      "name" : "English"
+    }
+  ]
+}
