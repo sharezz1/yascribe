@@ -195,16 +195,16 @@ enum Snapshots {
                 let collapsed = RecordingPanelView(model: model, recording: widest, pill: PillState())
                 try render("pill-collapsed", size: NSHostingView(rootView: collapsed.environment(model)).fittingSize, dark: dark, model: model) { collapsed }
                 let open = PillState(); open.expanded = true
-                try render("pill-expanded", size: CGSize(width: 360, height: 270), dark: dark, model: model) { RecordingPanelView(model: model, recording: live, pill: open) }
+                try render("pill-expanded", size: CGSize(width: 400, height: 270), dark: dark, model: model) { RecordingPanelView(model: model, recording: live, pill: open) }
                 // 1.5b: wyciszony mikrofon (zwinięta: ikona przy liczniku w zarezerwowanym miejscu; rozwinięta: „Muted”, szary pasek)
                 // i próba wyciszenia drugiego toru („Nothing is being recorded” w miejscu linii presetu).
                 let widestMuted = RecordingController.snapshotPreview(elapsed: 35999, muted: ["mic_raw"])
                 let collapsedMuted = RecordingPanelView(model: model, recording: widestMuted, pill: PillState())
                 try render("pill-collapsed-muted", size: NSHostingView(rootView: collapsedMuted.environment(model)).fittingSize, dark: dark, model: model) { collapsedMuted }
-                try render("pill-expanded-muted", size: CGSize(width: 360, height: 270), dark: dark, model: model) {
+                try render("pill-expanded-muted", size: CGSize(width: 400, height: 270), dark: dark, model: model) {
                     RecordingPanelView(model: model, recording: RecordingController.snapshotPreview(elapsed: 754, muted: ["mic_raw"]), pill: open)
                 }
-                try render("pill-expanded-warning", size: CGSize(width: 360, height: 270), dark: dark, model: model) {
+                try render("pill-expanded-warning", size: CGSize(width: 400, height: 270), dark: dark, model: model) {
                     RecordingPanelView(model: model, recording: RecordingController.snapshotPreview(elapsed: 754, muted: ["system"], muteWarning: true), pill: open)
                 }
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
