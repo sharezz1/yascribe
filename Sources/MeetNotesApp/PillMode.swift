@@ -14,13 +14,16 @@ struct PillContentView: View {
     @ObservedObject var pill: PillState
 
     var body: some View {
-        switch pill.mode {
-        case .recording:
-            RecordingPanelView(model: model, pill: pill)
-        case .offer(let offer):
-            PillOfferView(offer: offer, pill: pill).environment(model)
-        case .endPrompt:
-            PillEndPromptView(pill: pill).environment(model)
+        Group {
+            switch pill.mode {
+            case .recording:
+                RecordingPanelView(model: model, pill: pill)
+            case .offer(let offer):
+                PillOfferView(offer: offer, pill: pill).environment(model)
+            case .endPrompt:
+                PillEndPromptView(pill: pill).environment(model)
+            }
         }
+        .id(pill.rev)
     }
 }

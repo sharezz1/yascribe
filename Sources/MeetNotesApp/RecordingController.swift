@@ -156,6 +156,8 @@ final class RecordingController {
 final class PillState: ObservableObject {
     @Published var expanded = false
     @Published var mode: PillMode = .recording
+    /// Zmiana tożsamości treści: po zamknięciu menu (Preset w ofercie) SwiftUI zostaje z gestem przeciągania w złym stanie, a nowe drzewo go zeruje.
+    @Published var rev = 0
     /// Akcje przycisków oferty (Start / Not a meeting) i pytania (Stop / Continue); ustawia `RecordingController`.
     var onPrimary: () -> Void = {}
     var onSecondary: () -> Void = {}
@@ -178,12 +180,20 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
     private var fitScheduled = false
     private var fitting = false
     private var moveObserver: NSObjectProtocol?
+    private var menuObserver: NSObjectProtocol?
 
     init(rootView: Content, pill: PillState) {
         self.pill = pill
         super.init(rootView: rootView)
         // Bez automatycznego rozmiaru okna z min/max treści (kotwiczy górną krawędź); rozmiar ustawia tylko `fit`.
         sizingOptions = [.intrinsicContentSize]
+        // Menu w ofercie (wybór presetu) zostawiało pigułkę nieprzesuwalną: po śledzeniu menu stan gestu `WindowDragGesture` się zacinał.
+        menuObserver = NotificationCenter.default.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, case .offer = self.pill.mode else { return }
+                DispatchQueue.main.async { self.pill.rev += 1 }
+            }
+        }
     }
     @available(*, unavailable) required init(rootView: Content) { fatalError() }
     @available(*, unavailable) @MainActor required dynamic init?(coder: NSCoder) { fatalError() }
