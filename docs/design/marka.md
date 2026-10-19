@@ -2,8 +2,8 @@
 
 > Status: **w toku, 2026-10-19**. Zapadły: nazwa, motto, kompozycja znaku. **Tymczasowo zestaw 3**
 > (użytkownik: „na razie v3”, kolory można zmienić później; konsultuje z żoną). Ikona **jest
-> podpięta do paczki** (zgoda użytkownika 2026-10-19). Czeka: ikona na małe rozmiary, warstwy pod
-> macOS 27, logotyp.
+> podpięta do paczki** (zgoda użytkownika 2026-10-19), z wersją na małe rozmiary. Logotyp: propozycja
+> do akceptacji. Czeka: warstwy pod macOS 27.
 > Sesja designu nie dotyka `Sources/` ani `Tests/`; `scripts/bundle.sh` i `Resources/Info.plist`
 > zmienione tylko za zgodą (sekcja „Ikona w paczce”).
 
@@ -75,19 +75,39 @@ Zestaw 3 jest ikoną tymczasową. Zmiana koloru to: edycja tablicy `V` w `zloz-i
   przetworzyć automatycznie (np. Tinted), ale jakości tego nie mierzono. Warstwowy format
   `.icon` wymaga Icon Composera z Xcode. Zbadać, czy da się go złożyć ręcznie (to JSON plus SVG-i),
   bo wtedy Xcode niepotrzebny; **niesprawdzone**.
-- Wersja na 16 i 32 pt jest ta sama co duża (słupki zlewają się). Uproszczona wersja jest
-  w „Do zrobienia”.
+- **Wersja na małe rozmiary (2026-10-19):** `mN.svg`, rozmiary do 64 px w `.icns` (16, 32, 32@2x=64).
+  Pióro bez szpary i większe (skala 2,25 zamiast 2,0), sześć grubszych słupków zamiast dziesięciu.
+  Na podglądzie 1:1 przy 32 i 64 px wyraźnie czytelniejsza niż duża; przy 16 px to wciąż
+  rozpoznawalny kształt (pióro i dwie fale), ale bez detalu. Rozmiary od 128 px: wersja pełna.
+
+## Logotyp (propozycja 2026-10-19, do akceptacji)
+
+Znak (squircle z piórem i falami) plus nazwa **Yascribe** w New York Regular (§11.2, jak tytuły
+stron), kerning −2 przy rozmiarze 200. Dwa układy, każdy w wersji na jasne (`#F7F6F2`, tekst
+`#22211E`) i ciemne tło (`#1C1C1B`, tekst `#ECEBE6`): **poziomy** (znak i nazwa obok siebie) oraz
+**pionowy** z mottem *What's it like to be a scribe?* kursywą New York w `text2`.
+Podgląd: `marka/podglad-logo.png`. Pliki: `marka/logo-poziome-{jasne,ciemne}.svg`,
+`marka/logo-pionowe-{jasne,ciemne}.svg`.
+
+- Litery są **konturami**, nie tekstem: `marka/napis-na-krzywe.swift` (CoreText) → `marka/logotyp-krzywe.json`
+  → `marka/zloz-logo.py`. SVG nie zależy więc od fontu w systemie.
+- **Dwa niezałatwione punkty.** (1) Licencja: New York to krój systemowy Apple; **nie sprawdzono**,
+  czy jego kontury wolno stosować jako logo (aplikacja jest prywatna, dla jednego użytkownika, ale
+  przed jakimkolwiek publicznym użyciem trzeba to rozstrzygnąć albo wziąć inny krój). (2) Na ciemnym
+  tle squircle ikony (`#22211E`) ledwo odcina się od tła `#1C1C1B` (trzyma go tylko cienka obwódka);
+  jeśli to przeszkadza, tło logotypu na ciemno może być głębsze (np. `#121211`).
+- Duże Y wynika z samego kroju (kapitalik przy małych literach); osobnego wyróżnienia koloru
+  Y nie robiono. Wariant ze złotym Y (jak pióro) jest możliwy, ale na jasnym tle złoto
+  `#F2BD55` ma kontrast ok. 1,6:1, więc wymagałby ciemniejszego odcienia.
 
 ## Do zrobienia
 
 1. **Wybór zestawu kolorów** (użytkownik; na razie 3).
-2. **Ikona na małe rozmiary (16, 32 pt):** mniej słupków, grubsze, bez nacięć pióra. Pomiar
-   czytelności na podglądzie 1:1.
+2. ~~Ikona na małe rozmiary~~ zrobione 2026-10-19 (zob. „Ikona w paczce”).
 3. **macOS 27:** warstwy pod Liquid Glass (tło, pióro, fale jako osobne warstwy), wariant ciemny,
    Clear, Tinted (ograniczenia CLT w sekcji „Ikona w paczce”). Zakaz SF Symbols w ikonie i logo
    (macos.md §7).
-4. **Logotyp:** „Yascribe” w New York (§11.2), duże Y, ułożenie znaku i nazwy, wersja na jasne
-   i ciemne tło.
+4. **Logotyp:** propozycja gotowa (sekcja „Logotyp”), czeka na akceptację użytkownika.
 5. ~~Podpięcie ikony do paczki~~ zrobione 2026-10-19 (zob. wyżej).
 
 ## Odrzucone kierunki (historia)
