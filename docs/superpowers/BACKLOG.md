@@ -104,6 +104,13 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] VoiceOver czyta tytuł okna pigułki „Meeting detected"/„Meeting ended?" w trakcie nagrywania. *(uwaga 7)*
 - [ ] Potwierdzenie Quit działa tylko z paska menu; Cmd-Q, Dock i wylogowanie w trakcie nagrania dają „Recovered" (sprzed 1.6, auto-start w tle ułatwia trafienie). *(uwaga 8)*
 
+## Z wdrożenia „Coming up” (2026-10-19, `reports/F16-coming-up.md`)
+
+- [ ] Decyzje D1–D9 z raportu do potwierdzenia (D1 zmienia tekst speca: „Later today: …” zamiast „No more meetings today”, gdy coś jest później).
+- [ ] Strona główna odświeża się po `EKEventStoreChanged` najpóźniej po minucie (`TimelineView(.everyMinute)`); od razu = podpiąć `calendarSource.changes`.
+- [ ] Nieaktualny wybór kalendarzy (`calendarSelectionStale`) na stronie głównej wygląda jak „No more meetings today”.
+- [ ] Brak migawki linii ostrzeżenia Auto pod nagłówkiem (preset Auto).
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.
