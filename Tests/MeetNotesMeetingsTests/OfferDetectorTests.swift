@@ -107,7 +107,7 @@ private struct Rig {
     var r = Rig()
     r.autoStart = true
     r.procs = [.speech, .wispr]
-    #expect(r.run(t0, t0 + 3600, every: 5).isEmpty)
+    #expect(r.run(t0, t0 + 3600).isEmpty)
 }
 
 @Test func ignoredAppsHoldingTheMicDoNotBlockOrTriggerAnything() {
@@ -130,7 +130,7 @@ private struct Rig {
     var r = Rig()
     r.autoStart = true
     r.procs = [.zoom, .lookalike]   // `com.microsoft.teams2extra` nie jest rodziną `com.microsoft.teams2`
-    #expect(r.run(t0, t0 + 3600, every: 5).isEmpty)
+    #expect(r.run(t0, t0 + 3600).isEmpty)
 }
 
 @Test func calendarPlusTeamsMakesOneOfferWithTheEvent() {
@@ -214,8 +214,8 @@ private struct Rig {
     r.procs = [.teams]
     guard case .show? = r.run(t0, t0 + 12).last else { Issue.record("no offer"); return }
     r.d.dismiss()
-    // dwie godziny ciągłego użycia (tiki co minutę)
-    #expect(!r.run(t0 + 13, t0 + 7200, every: 60).contains(where: isOffering))
+    // dwie godziny ciągłego użycia (tiki co 1 s: przerwa > maxTickGap zerowałaby ciągłość i test nic by nie sprawdzał)
+    #expect(!r.run(t0 + 13, t0 + 7200).contains(where: isOffering))
 }
 
 @Test func dismissedOfferReturnsForANewMicSession() {
@@ -246,7 +246,7 @@ private struct Rig {
     r.procs = [.teams, .teamsHelper]
     #expect(!r.run(t0 + 13, t0 + 30).contains(where: isOffering))
     r.procs = [.teamsHelper]   // inny pid i inny bundle ID tej samej rodziny
-    #expect(!r.run(t0 + 31, t0 + 3600, every: 5).contains(where: isOffering))
+    #expect(!r.run(t0 + 31, t0 + 3600).contains(where: isOffering))
 }
 
 @Test func dismissedEventStaysQuietForTheSameEvent() {
@@ -269,9 +269,9 @@ private struct Rig {
     r.procs = [.teams]
     guard case .startRecording? = r.run(t0, t0 + 12).last else { Issue.record("no auto-start"); return }
     r.recording = true
-    _ = r.run(t0 + 13, t0 + 600, every: 10)
+    _ = r.run(t0 + 13, t0 + 600)
     r.recording = false   // ręczny Stop; Teams dalej trzyma mikrofon
-    #expect(!r.run(t0 + 601, t0 + 601 + 7200, every: 10).contains(where: isOffering))
+    #expect(!r.run(t0 + 601, t0 + 601 + 7200).contains(where: isOffering))
 }
 
 @Test func manualStopDuringAMicBlipStaysQuiet() {
@@ -285,7 +285,7 @@ private struct Rig {
     r.procs = []   // Stop w chwili krótkiego zwolnienia (< releaseSeconds)
     #expect(!r.run(t0 + 31, t0 + 35).contains(where: isOffering))
     r.procs = [.teams]
-    #expect(!r.run(t0 + 36, t0 + 3600, every: 5).contains(where: isOffering))
+    #expect(!r.run(t0 + 36, t0 + 3600).contains(where: isOffering))
 }
 
 @Test func afterManualStopANewCallOffersAgain() {
