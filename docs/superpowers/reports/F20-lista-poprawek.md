@@ -141,7 +141,7 @@ Preset, który już wskazuje nieobsługującego dostawcę, zachowuje go w menu j
 
 ## P5 — Meetings → wybór spotkania zmienia szerokość bocznego paska
 
-**Stan: zgłoszone, przyczyna nieustalona, nie zrobione.** Zgłoszenie użytkownika: po wejściu w Meetings i wybraniu spotkania zmienia się szerokość sidebaru.
+**Stan: zamknięte 2026-10-20 — nie odtworzono, użytkownik sprawdził i „jest ok" (bez poprawki w kodzie).** Zgłoszenie użytkownika: po wejściu w Meetings i wybraniu spotkania zmienia się szerokość sidebaru.
 
 **Pomiar 2026-10-20 (wieczór): NIE odtworzono.** Druga instancja (surowy plik binarny `MeetNotesApp` na tymczasowych danych z jednym spotkaniem, wykrywanie rozmów, auto-start i kalendarz wyłączone;
 tymczasowa instrumentacja, cofnięta, nigdzie niezacommitowana). Przejście: lista Meetings → otwarte spotkanie → lista → spotkanie → zakładka Presets, przez zmianę stanu modelu (nie prawdziwe kliknięcia).
