@@ -307,8 +307,7 @@ final class AppModel {
         do { key = try secrets.get(p.id) } catch {
             return .failure(ClientProblem(message: "Couldn't read the API key for \(p.name) from Keychain: \(error)"))
         }
-        // ponytail: „lokalny = bez klucza" po nazwie hosta; jawna flaga w Provider, gdy zdalny dostawca obejdzie się bez klucza.
-        guard key != nil || (p.api == .openAICompatible && ["localhost", "127.0.0.1", "::1"].contains(p.baseURL.host() ?? "")) else {
+        guard key != nil || !p.requiresKey else {
             return .failure(ClientProblem(message: "No API key for \(p.name). Remove the provider and add it again with a key."))
         }
         return .success((p, key))
