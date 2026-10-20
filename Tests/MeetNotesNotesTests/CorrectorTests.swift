@@ -47,9 +47,10 @@ private func capitalizing(_ user: String) -> String {
 @Test func oneFailedBatchDoesNotAffectTheOthers() async {
     // Review Focus #5: długie spotkanie = wiele partii; jedna pada, reszta zostaje poprawiona, nic nie ginie.
     let t = transcript((0..<12).map { utt("wypowiedź numer \($0) o prognozie", at: Double($0) * 5) })
-    // ~30 znaków na linię, partie po ~90 znaków → kilka partii po 3 linie
+    // ~30 znaków na linię, partie po ~90 znaków → kilka partii po 3 linie. Numeracja jest 1…N w każdej partii,
+    // więc porażkę wywołuje treść wypowiedzi, nie jej numer.
     let stub = ChatStub { call in
-        if call.user.contains("[4]") { throw StubHTTPError(status: 500, body: "{}") } // partia z linią 4 pada
+        if call.user.contains("numer 4 ") { throw StubHTTPError(status: 500, body: "{}") } // partia z wypowiedzią 4 pada
         return capitalizing(call.user)
     }
     let r = await corrector(stub, maxBatchChars: 95).correct(t, language: .polish)
@@ -128,4 +129,77 @@ private func capitalizing(_ user: String) -> String {
     let c = Corrector(client: chatClient(stub), assignment: assignment, batchTimeout: 300, chatTimeout: 330, temperature: 0.2)
     _ = await c.correct(t, language: .polish)
     #expect(stub.calls[0].timeout == 330 && stub.calls[0].temperature == 0.2 && stub.calls[0].maxTokens == nil)
+}
+
+// MARK: Budżet kontekstu i numeracja 1…N (F20 T12)
+
+private func longTranscript(_ n: Int = 100) -> Transcript {
+    transcript((0..<n).map { utt(String(repeating: "x", count: 100), at: Double($0) * 5) })
+}
+
+/// Suma długości tekstów w partii (bez prefiksów `[n] ` i znaków nowej linii) — to liczy `CorrectionBatches.split`.
+private func textChars(_ user: String) -> Int {
+    user.components(separatedBy: "\n").reduce(0) { $0 + $1.drop(while: { $0 != "]" }).dropFirst(2).count }
+}
+
+@Test func correctorBatchSizeFollowsTheBudget() async {
+    let api = ChatStub { capitalizing($0.user) }
+    _ = await corrector(api).correct(longTranscript(), language: .polish)
+    let local = ChatStub { capitalizing($0.user) }
+    let c = Corrector(client: chatClient(local), assignment: assignment, budget: ContextBudget(tokens: 4_096))
+    _ = await c.correct(longTranscript(), language: .polish)
+    let limit = c.batchLimit(language: .polish)
+    #expect(limit > 0 && limit < 4_000)
+    #expect(local.calls.count > api.calls.count)
+    #expect(local.calls.allSatisfy { textChars($0.user) <= limit })
+}
+
+@Test func localBatchesAreCappedAt4000EvenWithAHugeContext() async {
+    let stub = ChatStub { capitalizing($0.user) }
+    let c = Corrector(client: chatClient(stub), assignment: assignment, budget: ContextBudget(tokens: 1_048_576))
+    _ = await c.correct(longTranscript(), language: .polish)
+    #expect(stub.calls.count >= 3 && stub.calls.allSatisfy { textChars($0.user) <= ContextBudget.correctionBatchCap })
+}
+
+@Test func localBatchSendsMaxTokensAndApiDoesNot() async {
+    let t = transcript([utt("no to jest test"), utt("tak dokładnie tak", at: 5)])
+    let local = ChatStub { capitalizing($0.user) }
+    _ = await Corrector(client: chatClient(local), assignment: assignment, budget: ContextBudget(tokens: 4_096)).correct(t, language: .polish)
+    #expect(local.calls[0].maxTokens == ContextBudget.maxTokens(inputChars: local.calls[0].user.count, replyFactor: ContextBudget.correctionReplyFactor))
+    let api = ChatStub { capitalizing($0.user) }
+    _ = await corrector(api).correct(t, language: .polish)
+    #expect(api.calls[0].maxTokens == nil)
+}
+
+@Test func batchIsNumberedWithoutGapsAndMapsBack() async {
+    // Wypowiedź b jest zaflagowana → pominięta; model dostaje [1] [2] [3] bez dziury i odpowiada tymi samymi numerami.
+    let t = transcript([utt("aaa aaa"), utt("GIBBERISH", at: 3, flagged: true), utt("ccc ccc", at: 6), utt("ddd ddd", at: 9)])
+    let stub = ChatStub { capitalizing($0.user) }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(stub.calls[0].user == "[1] aaa aaa\n[2] ccc ccc\n[3] ddd ddd")
+    #expect(r.transcript.utterances.map(\.text) == ["Aaa aaa.", "GIBBERISH", "Ccc ccc.", "Ddd ddd."])
+    #expect(r.failedBatches == 0 && r.rejectedLines == 0)
+}
+
+@Test func everyBatchStartsAtOne() async {
+    let t = transcript((0..<12).map { utt("wypowiedź numer \($0) o prognozie", at: Double($0) * 5) })
+    let stub = ChatStub { capitalizing($0.user) }
+    let r = await corrector(stub, maxBatchChars: 95).correct(t, language: .polish)
+    #expect(stub.calls.count >= 3 && stub.calls.allSatisfy { $0.user.hasPrefix("[1] ") })
+    #expect(r.failedBatches == 0 && r.transcript.utterances.allSatisfy { $0.text.hasSuffix(".") })
+    // Każda odpowiedź trafiła we właściwą wypowiedź (numer lokalny → oryginalna pozycja).
+    #expect(r.transcript.utterances.enumerated().allSatisfy { $0.element.text.contains("numer \($0.offset) ") })
+}
+
+@Test func tooSmallBudgetFailsWithoutCallingTheModel() async {
+    let stub = ChatStub { capitalizing($0.user) }
+    let c = Corrector(client: chatClient(stub), assignment: assignment, budget: ContextBudget(tokens: 300))
+    let t = transcript([utt("no to jest test")])
+    let r = await c.correct(t, language: .polish)
+    #expect(stub.calls.isEmpty)
+    #expect(r.batches == 1 && r.failedBatches == 1 && r.failedCompletely)
+    #expect(r.firstError == "fix-model's Context window (300 tokens) is too small for correction.")
+    #expect(r.transcript.utterances[0].text == "no to jest test")
+    let empty = await c.correct(transcript([]), language: .polish)
+    #expect(empty.batches == 0 && stub.calls.isEmpty)
 }

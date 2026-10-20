@@ -88,9 +88,12 @@ public struct Corrector: Sendable {
     /// Limit transportowy żądania (`ChatLimits.transport`) i `temperature` (tylko lokalnie; `nil` = bez pola).
     public var chatTimeout: Double
     public var temperature: Double?
+    /// Budżet kontekstu lokalnego modelu (`nil` = API: partia `maxBatchChars`, bez `max_tokens`).
+    public var budget: ContextBudget?
 
     public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120,
-                chatTimeout: Double = 120, temperature: Double? = nil) {
+                chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil) {
+        self.budget = budget
         self.client = client
         self.assignment = assignment
         self.maxBatchChars = maxBatchChars
@@ -113,13 +116,26 @@ public struct Corrector: Sendable {
         return s
     }
 
+    /// Limit znaków tekstu w jednej partii: z budżetu (dwie reguły z `ContextBudget`, plus limit czasowy) albo `maxBatchChars`.
+    public func batchLimit(language: LanguageCode?) -> Int {
+        guard let budget else { return maxBatchChars }
+        return min(ContextBudget.correctionBatchCap,
+                   budget.pairedInputChars(fixedChars: system(language: language).count, replyFactor: ContextBudget.correctionReplyFactor))
+    }
+
     public func correct(_ original: Transcript, language: LanguageCode?) async -> CorrectedTranscript {
         var out = original
         // Numer linii = indeks wypowiedzi + 1; tylko niepuste i niezaflagowane.
         let lines: [(n: Int, text: String)] = original.utterances.enumerated().compactMap { i, u in
             u.excludedFromNotes || u.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : (i + 1, u.text)
         }
-        let batches = CorrectionBatches.split(lines, maxChars: maxBatchChars)
+        let limit = batchLimit(language: language)
+        if limit <= 0, !lines.isEmpty, let budget {
+            // Kontekst za mały nawet na prompt: jawny błąd, nigdy wysyłka.
+            return CorrectedTranscript(transcript: out, model: assignment.model, batches: 1, failedBatches: 1, rejectedLines: 0,
+                                       firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction.")
+        }
+        let batches = CorrectionBatches.split(lines, maxChars: limit)
         let system = system(language: language)
         var failed = 0
         var rejected = 0
@@ -128,18 +144,23 @@ public struct Corrector: Sendable {
             if Task.isCancelled { break }
             do {
                 let model = assignment.model
-                let user = CorrectionBatches.render(batch)
+                // Numeracja 1…N w każdej partii (spec §14 pkt 3): dziury po pominiętych liniach model wypełniał i cała partia
+                // przepadała. Numer lokalny `k` wraca na wypowiedź `batch[k − 1]`.
+                let numbered = batch.enumerated().map { (n: $0.offset + 1, text: $0.element.text) }
+                let user = CorrectionBatches.render(numbered)
+                let maxTokens = budget.map { _ in ContextBudget.maxTokens(inputChars: user.count, replyFactor: ContextBudget.correctionReplyFactor) }
                 let client = client, chatTimeout = chatTimeout, temperature = temperature
                 let reply = try await withDeadline(batchTimeout) {
-                    try await client.chat(model: model, system: system, user: user, timeout: chatTimeout, temperature: temperature)
+                    try await client.chat(model: model, system: system, user: user, timeout: chatTimeout, maxTokens: maxTokens,
+                                          temperature: temperature)
                 }
-                guard let fixed = CorrectionBatches.parse(reply, expected: batch.map(\.n)) else {
+                guard let fixed = CorrectionBatches.parse(reply, expected: numbered.map(\.n)) else {
                     failed += 1
                     if firstError == nil { firstError = "The model's answer didn't match the numbered lines." }
                     continue
                 }
-                for l in batch {
-                    guard let new = fixed[l.n], CorrectionRules.accepts(original: l.text, corrected: new) else { rejected += 1; continue }
+                for (k, l) in batch.enumerated() {
+                    guard let new = fixed[k + 1], CorrectionRules.accepts(original: l.text, corrected: new) else { rejected += 1; continue }
                     out.utterances[l.n - 1].text = new
                 }
             } catch {

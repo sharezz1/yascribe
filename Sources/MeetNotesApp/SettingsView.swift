@@ -22,6 +22,8 @@ final class ProviderSheetState: ObservableObject {
     @Published var name = ""
     @Published var url = ""
     @Published var key = ""
+    /// „Context window (tokens)" dla lokalnego serwera: puste = domyślne 4096.
+    @Published var context = ""
     @Published var error: String?
     @Published var result: ProviderCheck?
     @Published var note: String?
@@ -34,11 +36,12 @@ final class ProviderSheetState: ObservableObject {
     func editKey(_ provider: Provider) {
         let match = ProviderPreset.matching(provider)
         open(preset: match ?? .custom, logo: match, editing: provider, name: provider.name, url: provider.baseURL.absoluteString)
+        context = provider.contextTokens.map(String.init) ?? ""
     }
 
     private func open(preset: ProviderPreset, logo: ProviderPreset?, editing: Provider?, name: String, url: String) {
         self.preset = preset; self.logo = logo; self.editing = editing; self.name = name; self.url = url
-        key = ""; error = nil; result = nil; note = nil; testing = false; showing = true
+        key = ""; context = ""; error = nil; result = nil; note = nil; testing = false; showing = true
     }
 }
 
@@ -237,6 +240,11 @@ private struct ProviderRowView: View {
                 }
                 if let e = rowState.enableError { Text(e).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
                 if let failure { Text(failure).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
+                if let p = provider, p.isLocal, p.api == .openAICompatible {
+                    // Ustawione przez użytkownika i/lub wykryte przy „Test again" (ten sam komunikat, który widzi budżet).
+                    let parts = [p.contextTokens.map { "Context window: \($0) tokens" }, model.detectedContexts[p.id]].compactMap { $0 }
+                    if !parts.isEmpty { Text(parts.joined(separator: " · ")).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(2) }
+                }
             }
             Spacer(minLength: 8)
             trailing
@@ -261,6 +269,7 @@ private struct ProviderRowView: View {
             }
             Menu {
                 if preset.map({ $0.needsKey || $0.keyOptional }) ?? true { Button("Edit key…") { sheet.editKey(p) } }
+                if p.isLocal && p.api == .openAICompatible { Button("Context window…") { sheet.editKey(p) } }
                 Button("Test again") { Task { await model.verifyProvider(p.id) } }
                 Button("Refresh Models") { Task { await model.refreshModels(p.id) } }
                 Divider()
@@ -308,13 +317,19 @@ struct ProviderSetupSheet: View {
     private var preset: ProviderPreset { state.preset }
     private var editing: Bool { state.editing != nil }
     private var title: String {
-        if let p = state.editing { return "Edit key for \(p.name)" }
+        if let p = state.editing { return showsKeyField ? "Edit key for \(p.name)" : "Edit \(p.name)" }
         return preset == .custom ? "Set up custom endpoint" : "Set up \(preset.name)"
     }
     /// „Paste your key first." dotyczy tylko `needsKey`; klucz opcjonalny (oMLX) ma pole, ale można je zostawić puste.
     private var needsKey: Bool { preset.needsKey }
     private var showsKeyField: Bool { preset.needsKey || preset.keyOptional }
     private var editableAddress: Bool { preset == .custom && !editing }
+    /// Pole kontekstu tylko dla lokalnego serwera OpenAI-compatible (Ollama, llama.cpp, oMLX, własny na loopbacku).
+    private var showsContext: Bool {
+        guard let url = state.editing?.baseURL ?? URL(string: state.url.trimmingCharacters(in: .whitespaces)) else { return false }
+        let p = Provider(name: "", baseURL: url, kind: state.editing?.kind ?? preset.kind)
+        return p.isLocal && p.api == .openAICompatible
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -343,6 +358,15 @@ struct ProviderSetupSheet: View {
                     }
                 }
             }
+            if showsContext {
+                FormRow(label: "Context", labelWidth: 70) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        TextField("Context window (tokens) — default 4096", text: $state.context).textFieldStyle(.plain).fieldBox()
+                        Text("Ollama uses 4096 unless you raise it (OLLAMA_CONTEXT_LENGTH or Ollama's Context length setting). Enter the server's value here.")
+                            .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
             testLine.padding(.leading, 98).padding(.trailing, 8).padding(.top, 4)
             HStack(spacing: 8) {
                 Spacer()
@@ -355,6 +379,7 @@ struct ProviderSetupSheet: View {
         .frame(width: 480)
         .background(.mnCard)
         .onChange(of: state.key) { _, _ in state.result = nil; state.note = nil; state.error = nil }
+        .onChange(of: state.context) { _, _ in state.error = nil }
     }
 
     private func keyLink(_ page: URL) -> some View {
@@ -428,17 +453,34 @@ struct ProviderSetupSheet: View {
         }
     }
 
+    /// Pole „Context window": puste = `nil` (4096); poza zakresem albo nie liczba = błąd w arkuszu.
+    private func contextTokens() -> Result<Int?, ContextFieldError> {
+        let text = state.context.trimmingCharacters(in: .whitespaces)
+        guard showsContext, !text.isEmpty else { return .success(nil) }
+        guard let n = Int(text), ContextBudget.userRange.contains(n) else { return .failure(ContextFieldError()) }
+        return .success(n)
+    }
+
+    private struct ContextFieldError: Error {}
+
     private func save() {
         state.error = nil
         let key = trimmedKey()
         if needsKey && key.isEmpty { state.error = "Paste your key first."; return }
+        guard case .success(let context) = contextTokens() else {
+            state.error = "Context window: enter a number from \(ContextBudget.userRange.lowerBound) to \(ContextBudget.userRange.upperBound), or leave it empty for \(ContextBudget.defaultTokens)."
+            return
+        }
         if let p = state.editing {
             // Podmiana klucza istniejącego dostawcy (adres i nazwa bez zmian): zapis i ponowna weryfikacja.
-            if let e = model.replaceKey(p.id, key: key) { state.error = e } else { state.showing = false }
+            if let e = model.replaceKey(p.id, key: key) { state.error = e } else {
+                if showsContext { model.setContextTokens(p.id, context) }
+                state.showing = false
+            }
             return
         }
         guard let url = address() else { return }
-        if let e = model.addProvider(name: preset == .custom ? state.name : preset.name, baseURL: url, key: key, kind: preset.kind) {
+        if let e = model.addProvider(name: preset == .custom ? state.name : preset.name, baseURL: url, key: key, kind: preset.kind, contextTokens: context) {
             state.error = e // duplikat nazwy albo błąd pęku kluczy; arkusz zostaje otwarty
         } else {
             state.showing = false
