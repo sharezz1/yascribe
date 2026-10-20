@@ -260,7 +260,7 @@ private struct ProviderRowView: View {
                     .buttonStyle(.pillSmall).help("Test the connection again")
             }
             Menu {
-                if preset?.needsKey ?? true { Button("Edit key…") { sheet.editKey(p) } }
+                if preset.map({ $0.needsKey || $0.keyOptional }) ?? true { Button("Edit key…") { sheet.editKey(p) } }
                 Button("Test again") { Task { await model.verifyProvider(p.id) } }
                 Button("Refresh Models") { Task { await model.refreshModels(p.id) } }
                 Divider()
@@ -311,7 +311,9 @@ struct ProviderSetupSheet: View {
         if let p = state.editing { return "Edit key for \(p.name)" }
         return preset == .custom ? "Set up custom endpoint" : "Set up \(preset.name)"
     }
+    /// „Paste your key first." dotyczy tylko `needsKey`; klucz opcjonalny (oMLX) ma pole, ale można je zostawić puste.
     private var needsKey: Bool { preset.needsKey }
+    private var showsKeyField: Bool { preset.needsKey || preset.keyOptional }
     private var editableAddress: Bool { preset == .custom && !editing }
 
     var body: some View {
@@ -330,10 +332,13 @@ struct ProviderSetupSheet: View {
             } else {
                 FormRow(label: "Address", labelWidth: 70) { Text(state.url).foregroundStyle(.mnText).textSelection(.enabled) }
             }
-            if needsKey {
+            if showsKeyField {
                 FormRow(label: "API key", labelWidth: 70) {
                     VStack(alignment: .leading, spacing: 6) {
-                        SecureField("Paste your key", text: $state.key).textFieldStyle(.plain).fieldBox()
+                        SecureField(preset.keyOptional ? "Optional" : "Paste your key", text: $state.key).textFieldStyle(.plain).fieldBox()
+                        if preset.keyOptional {
+                            Text("Optional — only if you set a key in \(preset.name).").font(.system(size: 11)).foregroundStyle(.mnText2)
+                        }
                         if let page = preset.keyPage { keyLink(page) }
                     }
                 }
@@ -381,11 +386,11 @@ struct ProviderSetupSheet: View {
         if state.testing {
             StateLabel(.progress(nil), "Testing…")
         } else if let e = state.error {
-            StateLabel(.bad, e)
+            StateLabel(.bad, e).wrapping()
         } else if let r = state.result {
             switch r {
             case .verified(let n): StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s") available")
-            case .failed(let why): StateLabel(.bad, why)
+            case .failed(let why): StateLabel(.bad, why).wrapping()
             case .limited(let why): WarnLabel(why)
             }
         } else if let n = state.note {
@@ -418,7 +423,8 @@ struct ProviderSetupSheet: View {
             await model.verifyProvider(id)
             state.result = model.providerChecks[id]
         } else {
-            state.result = await AppModel.testConnection(baseURL: url, kind: kind, key: key)
+            state.result = await AppModel.testConnection(baseURL: url, kind: kind, key: key,
+                                                             name: preset == .custom ? (state.name.isEmpty ? "The server" : state.name) : preset.name)
         }
     }
 

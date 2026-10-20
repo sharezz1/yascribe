@@ -3,7 +3,7 @@ import Testing
 @testable import MeetNotesProviders
 
 @Test func presetsComeWithReadyAddressesAndRoles() {
-    #expect(ProviderPreset.all.map(\.name) == ["OpenRouter", "ElevenLabs", "Ollama", "Custom endpoint"])
+    #expect(ProviderPreset.all.map(\.name) == ["OpenRouter", "ElevenLabs", "Ollama", "llama.cpp", "oMLX", "Custom endpoint"])
     #expect(ProviderPreset.openRouter.baseURL == "https://openrouter.ai/api/v1" && ProviderPreset.openRouter.needsKey)
     #expect(ProviderPreset.elevenLabs.baseURL == "https://api.elevenlabs.io/v1" && ProviderPreset.elevenLabs.kind == .elevenLabs)
     #expect(ProviderPreset.elevenLabs.role == "Scribe v2 transcription · direct API")
@@ -22,7 +22,7 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
     #expect(ProviderPreset.matching(prov("https://OpenRouter.ai/api/v1/", "Mine")) == .openRouter) // wielkość liter hosta i końcowy „/”
     #expect(ProviderPreset.matching(prov("https://openrouter.ai/api/v2")) == nil)
     #expect(ProviderPreset.matching(prov("http://localhost:11434/v1")) == .ollama)
-    #expect(ProviderPreset.matching(prov("http://localhost:8080/v1")) == nil) // inny port
+    #expect(ProviderPreset.matching(prov("http://localhost:9090/v1")) == nil) // inny port
     #expect(ProviderPreset.matching(prov("https://api.elevenlabs.io", kind: .elevenLabs)) == .elevenLabs)
     #expect(ProviderPreset.matching(prov("https://example.com/v1")) == nil)
     #expect(ProviderPreset.matching(URL(string: "http://localhost:11434/v1")!) == .ollama)
@@ -31,14 +31,14 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
 
 @Test func listShowsEveryPresetThenCustomProvidersThenAddCustom() {
     let empty = ProviderListRow.rows(for: [])
-    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-on-this-mac", "add-custom"])
+    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx", "preset-on-this-mac", "add-custom"])
     #expect(empty.allSatisfy { if case .preset(_, let p) = $0 { p == nil } else { true } })
 
     let or = prov("https://openrouter.ai/api/v1", "OpenRouter")
     let or2 = prov("https://openrouter.ai/api/v1", "OpenRouter 2") // dostawca to instancja: drugi trafia do własnych
     let own = prov("https://llm.example.com/v1", "Work")
     let rows = ProviderListRow.rows(for: [own, or, or2])
-    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-on-this-mac",
+    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx", "preset-on-this-mac",
                                "custom-\(own.id.uuidString)", "custom-\(or2.id.uuidString)", "add-custom"])
     #expect(rows.first == .preset(.openRouter, or))
 }
@@ -50,7 +50,7 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
     let p = ProviderPreset.onThisMac
     #expect(p.id == "on-this-mac" && p.name == "On this Mac · Parakeet" && !p.needsKey && p.kind == .fluidAudio)
     #expect(p.baseURL == "local://fluidaudio" && p.role == "Speech-to-text on this Mac · no network")
-    #expect(ProviderPreset.ready == [.openRouter, .elevenLabs, .ollama, .onThisMac])
+    #expect(ProviderPreset.ready == [.openRouter, .elevenLabs, .ollama, .llamaCpp, .omlx, .onThisMac])
 }
 
 @Test func savedFluidAudioProviderIsNotShownAsCustomRow() {
@@ -91,4 +91,33 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
 
 private extension ProviderCheck {
     var failureText: String { if case .failed(let t) = self { t } else { "" } }
+}
+
+@Test func llamaCppAndOmlxAreReadyProvidersWithoutKeys() {
+    let l = ProviderPreset.llamaCpp, o = ProviderPreset.omlx
+    #expect(l.id == "llamacpp" && l.name == "llama.cpp" && l.baseURL == "http://localhost:8080/v1" && !l.needsKey && l.kind == nil)
+    #expect(o.id == "omlx" && o.name == "oMLX" && o.baseURL == "http://localhost:8000/v1" && !o.needsKey && o.kind == nil)
+    #expect(l.role == "Runs on this Mac · correction and summary" && o.role == l.role)
+    #expect(ProviderPreset.ready.contains(l) && ProviderPreset.ready.contains(o))
+}
+
+@Test func matchingFindsThemByAddress() {
+    #expect(ProviderPreset.matching(prov("http://localhost:8080/v1")) == .llamaCpp)
+    #expect(ProviderPreset.matching(prov("http://LocalHost:8000/v1/")) == .omlx)
+    #expect(ProviderPreset.matching(URL(string: "http://localhost:8000/v1")!) == .omlx)
+    #expect(ProviderPreset.matching(prov("http://192.168.1.5:8000/v1")) == nil) // LAN to nie oMLX „na tym Macu”
+}
+
+@Test func omlxKeyIsOptionalNotRequired() {
+    #expect(!ProviderPreset.omlx.needsKey && ProviderPreset.omlx.keyOptional)
+    for p in ProviderPreset.all + [.onThisMac] where p != .omlx { #expect(!p.keyOptional, "\(p.name)") }
+}
+
+@Test func storedProvidersAreUnaffectedByKeyOptional() throws {
+    // E6: `keyOptional` żyje tylko w presecie (kodzie), nie w `providers.json`; stary plik dalej się wczytuje i pasuje do presetu.
+    let json = String(decoding: try JSONEncoder().encode(prov("http://localhost:8000/v1", "oMLX")), as: UTF8.self)
+    #expect(!json.lowercased().contains("optional"))
+    let old = #"[{"id":"\#(UUID().uuidString)","name":"Old","baseURL":"http://localhost:8000/v1"}]"#
+    let loaded = try JSONDecoder().decode([Provider].self, from: Data(old.utf8))
+    #expect(loaded.first.flatMap(ProviderPreset.matching) == .omlx)
 }

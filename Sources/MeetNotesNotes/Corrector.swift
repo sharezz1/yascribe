@@ -144,7 +144,11 @@ public struct Corrector: Sendable {
                 }
             } catch {
                 failed += 1
-                if firstError == nil { firstError = ContextError.isCutOff(error) ? ContextError.describe(model: assignment.model, error) : "\(error)" }
+                if firstError == nil {
+                    let hinted = ContextError.localHint(provider: client.provider, error, transport: chatTimeout) != nil
+                    firstError = ContextError.isCutOff(error) || hinted
+                        ? ContextError.describe(model: assignment.model, error, provider: client.provider, transport: chatTimeout) : "\(error)"
+                }
             }
         }
         return CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
