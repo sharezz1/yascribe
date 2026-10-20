@@ -6,13 +6,8 @@ import MeetNotesLocalASR
 /// Model pobiera się wyłącznie przez `download()` (akcja użytkownika), nigdy w tle.
 @MainActor
 final class LocalASRSupport: ObservableObject {
-    enum Phase: Equatable {
-        case idle
-        /// `nil` = postęp nieokreślony („Preparing model…" po pobraniu); wartość nie maleje w trakcie jednego pobrania.
-        case downloading(Double?)
-        /// Pierwsze ładowanie modelu przy starcie przebiegu (kompilacja ANE).
-        case preparing
-    }
+    /// `.idle` / `.downloading(Double?)` (nil = nieokreślony, wartość nie maleje) / `.preparing` (pierwsze ładowanie, kompilacja ANE).
+    typealias Phase = ModelActivity
 
     let store: ModelStore
     @Published private(set) var phase: Phase = .idle
@@ -27,6 +22,9 @@ final class LocalASRSupport: ObservableObject {
     }
 
     func refresh() { status = store.status() }
+
+    /// Teksty i akcja karty modelu (czysta logika w `ModelCardState`).
+    var card: ModelCardState { ModelCardState(status: status, activity: phase) }
 
     /// Pobranie po kliknięciu. `force` (naprawa uszkodzonego) liczy sam `ModelStore.download` — wołający nie dostaje argumentu.
     func download() async {

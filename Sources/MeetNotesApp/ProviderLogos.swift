@@ -47,6 +47,8 @@ struct ProviderLogo: View {
         case "openrouter": mark(image(scheme == .dark ? LogoSVG.openRouterCloud : LogoSVG.openRouterInk, template: false), template: false, scale: 0.5)
         case "elevenlabs": mark(image(LogoSVG.elevenLabs, template: true), template: true, scale: 0.56)
         case "ollama": mark(image(LogoSVG.ollama, template: true), template: true, scale: 0.56)
+        // Parakeet w procesie nie ma logo dostawcy: ikona układu (fallback), jak „server.rack" dla własnego adresu.
+        case "on-this-mac": Image(systemName: "cpu").font(.system(size: size * 0.42)).foregroundStyle(.mnText2)
         case "custom": Image(systemName: "plus").font(.system(size: size * 0.4)).foregroundStyle(.mnText2)
         default: Image(systemName: "server.rack").font(.system(size: size * 0.4)).foregroundStyle(.mnText2)
         }

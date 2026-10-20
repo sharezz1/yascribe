@@ -309,6 +309,9 @@ struct RoleSection<Extra: View>: View {
                 ModelPicker(providerID: a.providerID, role: role,
                             selection: Binding(get: { assignment?.model ?? "" }, set: { assignment?.model = $0 }))
             }
+            if role == .asr, providers.first(where: { $0.id == a.providerID })?.api == .fluidAudio {
+                OnThisMacRoleRow(support: model.localASR)
+            }
             if extraBeforeProbe && hasExtra { RowDivider(); extra }
             probeRow(a)
             if !extraBeforeProbe && hasExtra { RowDivider(); extra }
