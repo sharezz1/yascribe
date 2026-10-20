@@ -6,6 +6,7 @@ public extension Provider {
         switch api {
         case .openAICompatible: OpenAICompatibleClient(provider: self, key: key, http: http)
         case .elevenLabs: ElevenLabsClient(provider: self, key: key, http: http)
+        case .fluidAudio: UnlinkedLocalClient(provider: self)
         }
     }
 
@@ -13,6 +14,7 @@ public extension Provider {
         switch api {
         case .openAICompatible: await OpenAICompatibleClient(provider: self, key: key, http: http).verify()
         case .elevenLabs: await ElevenLabsClient(provider: self, key: key, http: http).verify()
+        case .fluidAudio: .failed("Checked inside the app.")
         }
     }
 }
