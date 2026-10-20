@@ -511,3 +511,17 @@ private func waitForFirstCall(_ stub: ChatStub) async throws {
     #expect(s.title == "T" && s.markdown == "body" && s.condensedParts == nil)
     #expect(store.problems().isEmpty)
 }
+
+// MARK: ciche obcięcie wejścia przez serwer (odbiór 2.0b, pkt 2c)
+
+@Test func truncatedInputInAMapPartFailsThePartAndWritesNothing() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub(promptTokens: { c in c.system.contains("part 2 of 3") ? 50 : nil }) { c in
+        isMap(c) ? condense(c.user) : "# T\nbody"
+    }
+    let message = try #require(await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500)))
+    #expect(message.hasPrefix("Part 2 of 3 failed: local-model's server cut off the start of the input"))
+    #expect(!stub.calls.contains(where: isReduce))
+    #expect(summaryFiles(session).isEmpty)
+}

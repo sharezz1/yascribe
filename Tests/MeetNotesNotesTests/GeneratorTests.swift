@@ -91,3 +91,20 @@ private let now = Date(timeIntervalSince1970: 5_000)
                              context: "", notesLanguage: .polish, now: now)
     #expect(stub.calls[0].timeout == 660 && stub.calls[0].maxTokens == 2048 && stub.calls[0].temperature == nil)
 }
+
+@Test func truncatedInputNoteFailsClearlyAndWritesNothing() async throws {
+    // Odbiór 2.0b, pkt 2c: lokalny serwer obciął prompt (HTTP 200, "stop") — wcześniej zapisywała się "udana" notatka bez tytułu.
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub(finishReason: "stop", promptTokens: { _ in 40 }) { _ in "Tylko ogon notatki." }
+    let long = transcript([utt(String(repeating: "Prognoza na sobotę jest wyższa. ", count: 150))])
+    let gen = NoteGenerator(client: localChatClient(stub), model: "notes-model")
+    do {
+        _ = try await gen.generate(session: session, template: .standard, transcript: long, context: "", notesLanguage: .polish, now: now)
+        Issue.record("oczekiwano błędu")
+    } catch NoteGenerationError.failed(let message) {
+        #expect(message.contains("notes-model's server cut off the start of the input"))
+        #expect(message.contains("Context window") && message.contains("OLLAMA_CONTEXT_LENGTH=16384"))
+    }
+    #expect(try NotesStore(session: session).readSummary() == nil)
+}

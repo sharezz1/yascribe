@@ -81,3 +81,13 @@ import MeetNotesProviders
         #expect(msg.contains("cut off") && msg.contains("Context window") && msg.contains("server's context length"))
     }
 }
+
+@Test func truncatedInputMessageNamesTheModelAndTheFix() {
+    let error = ProviderError.inputTruncated(sentChars: 7_500, readTokens: 100)
+    #expect(ContextError.isInputTruncated(error) && !ContextError.isCutOff(error))
+    let want = "vendor/m's server cut off the start of the input — the Context window setting is higher than what the server really uses. "
+        + "Lower the field or raise the server's context (e.g. OLLAMA_CONTEXT_LENGTH=16384)."
+    #expect(ContextError.describe(model: "vendor/m", error) == want)
+    let local = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+    #expect(ContextError.describe(model: "vendor/m", error, provider: local) == want)
+}

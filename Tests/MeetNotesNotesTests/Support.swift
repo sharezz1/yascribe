@@ -30,13 +30,17 @@ final class ChatStub: HTTPClient, @unchecked Sendable {
     let finishReason: String?
     /// `finish_reason` zależny od wywołania (np. ucięta tylko jedna część mapy); ma pierwszeństwo przed `finishReason`.
     let finishReasonFor: (@Sendable (Call) -> String?)?
+    /// `usage.prompt_tokens` w odpowiedzi (np. małe = serwer obciął wejście); `nil` = brak pola `usage`.
+    let promptTokens: (@Sendable (Call) -> Int?)?
     var calls: [Call] { lock.withLock { _calls } }
 
     init(delay: Duration? = nil, finishReason: String? = nil, finishReasonFor: (@Sendable (Call) -> String?)? = nil,
+         promptTokens: (@Sendable (Call) -> Int?)? = nil,
          _ handler: @escaping @Sendable (Call) throws -> String) {
         self.delay = delay
         self.finishReason = finishReason
         self.finishReasonFor = finishReasonFor
+        self.promptTokens = promptTokens
         self.handler = handler
     }
 
@@ -52,7 +56,9 @@ final class ChatStub: HTTPClient, @unchecked Sendable {
             let text = try handler(call)
             var choice: [String: Any] = ["message": ["content": text]]
             if let reason = finishReasonFor?(call) ?? finishReason { choice["finish_reason"] = reason }
-            let data = try JSONSerialization.data(withJSONObject: ["choices": [choice]])
+            var reply: [String: Any] = ["choices": [choice]]
+            if let tokens = promptTokens?(call) { reply["usage"] = ["prompt_tokens": tokens] }
+            let data = try JSONSerialization.data(withJSONObject: reply)
             return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
         } catch let e as StubHTTPError {
             return (Data(e.body.utf8), HTTPURLResponse(url: url, statusCode: e.status, httpVersion: nil, headerFields: nil)!)
