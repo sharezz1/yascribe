@@ -68,4 +68,6 @@ public enum ProviderError: Error, Equatable {
     case http(Int, String)
     case badResponse(String)
     case missingKey
+    /// `finish_reason: "length"` — serwer uciął wyjście (limit tokenów albo kontekstu); odpowiedź nie jest pełna.
+    case replyCutOff
 }

@@ -94,6 +94,10 @@ public struct ProbeRunner: Sendable {
                 let reply = try await client.chat(model: model, system: "You are a connectivity probe. Reply with OK.", user: "ping")
                 r.works = !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 if !r.works { r.failure = "empty reply" }
+            } catch ProviderError.badResponse("empty reply") {
+                r.failure = "empty reply"
+            } catch ProviderError.replyCutOff {
+                r.failure = ProviderCheck.describe(ProviderError.replyCutOff)
             } catch { r.failure = "\(error)" }
         case .embedding:
             guard let client = textClient else { r.failure = asrOnly; break }

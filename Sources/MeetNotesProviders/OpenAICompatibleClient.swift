@@ -129,10 +129,32 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         }
     }
 
-    public func chat(model: String, system: String, user: String) async throws -> String {
-        let body: [String: Any] = ["model": model, "messages": [["role": "system", "content": system],
+    /// `timeout` = limit transportowy żądania (bezczynność łącza; bez streamu serwer milczy do końca generacji).
+    /// Lokalny serwer dostaje `reasoning_effort: "none"` (model „thinking" zjada kontekst — S2); gdy go odrzuci
+    /// (400/422 z „reasoning"), jedno ponowienie bez pola. `finish_reason == "length"` = błąd (wyjście ucięte),
+    /// nigdy sukces. Wspólny `chatContent` (ASR przez czat) zostaje bez zmian.
+    public func chat(model: String, system: String, user: String, timeout: Double = 120, maxTokens: Int? = nil,
+                     temperature: Double? = nil) async throws -> String {
+        var body: [String: Any] = ["model": model, "messages": [["role": "system", "content": system],
                                                                 ["role": "user", "content": user]]]
-        return try Self.chatContent(try await json(try request("chat/completions", body: body)))
+        if let maxTokens { body["max_tokens"] = maxTokens }
+        if let temperature { body["temperature"] = temperature }
+        let obj: [String: Any]
+        if provider.isLocal {
+            body["reasoning_effort"] = "none"
+            do {
+                obj = try await json(try request("chat/completions", body: body, timeout: timeout))
+            } catch ProviderError.http(let status, let text) where (status == 400 || status == 422) && text.lowercased().contains("reasoning") {
+                body["reasoning_effort"] = nil
+                obj = try await json(try request("chat/completions", body: body, timeout: timeout))
+            }
+        } else {
+            obj = try await json(try request("chat/completions", body: body, timeout: timeout))
+        }
+        if ((obj["choices"] as? [[String: Any]])?.first?["finish_reason"] as? String) == "length" { throw ProviderError.replyCutOff }
+        let reply = ThinkingStripper.clean(try Self.chatContent(obj))
+        guard !reply.isEmpty else { throw ProviderError.badResponse("empty reply") }
+        return reply
     }
 
     public func embed(model: String, text: String) async throws -> [Double] {

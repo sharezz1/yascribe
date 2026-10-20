@@ -89,3 +89,22 @@ import MeetNotesProviders
     #expect(r == nil && ContinuousClock.now - started < .seconds(3))
     #expect(store.readMeta().autoTitle == nil) // brak tytułu zamiast wiszącego „Naming…"
 }
+
+@Test func cutOffTitleStaysUntitledSilently() async {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let store = NotesStore(session: session)
+    let stub = ChatStub(finishReason: "length") { _ in "Forecast gap" }
+    let r = await AutoTitle.generate(client: chatClient(stub), model: "m", transcript: transcript([utt("Prognoza na sobotę.")]),
+                                     notesLanguage: .polish, store: store)
+    #expect(r == nil && store.readMeta().autoTitle == nil)
+}
+
+@Test func autoTitlePassesItsLimitsToTheChatCall() async {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "Forecast gap" }
+    _ = await AutoTitle.generate(client: chatClient(stub), model: "m", transcript: transcript([utt("Prognoza na sobotę.")]),
+                                 notesLanguage: .polish, store: NotesStore(session: session), timeout: 120, chatTimeout: 150, maxTokens: 64)
+    #expect(stub.calls[0].timeout == 150 && stub.calls[0].maxTokens == 64)
+}

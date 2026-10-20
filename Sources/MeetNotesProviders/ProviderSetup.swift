@@ -144,6 +144,7 @@ public enum ProviderCheck: Equatable, Sendable {
             case .http(let status, _): return "The server answered with error \(status)."
             case .badResponse: return "The answer wasn't a model list. Is this an OpenAI-compatible address?"
             case .missingKey: return "No API key."
+            case .replyCutOff: return "The reply was cut off before the end."
             }
         }
         if let u = error as? URLError {

@@ -16,3 +16,10 @@ import MeetNotesProviders
     let msg = ContextError.describe(model: "vendor/m", e)
     #expect(!msg.contains("longer context") && msg.contains("vendor/m") && msg.contains("500"))
 }
+
+@Test func cutOffNamesTheModelAndTheFix() {
+    #expect(ContextError.isCutOff(ProviderError.replyCutOff))
+    #expect(!ContextError.isCutOff(ProviderError.http(500, "boom")))
+    let msg = ContextError.describe(model: "vendor/m", ProviderError.replyCutOff)
+    #expect(msg.contains("vendor/m") && msg.contains("cut off") && msg.contains("longer context"))
+}

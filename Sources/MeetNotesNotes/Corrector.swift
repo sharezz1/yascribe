@@ -85,12 +85,18 @@ public struct Corrector: Sendable {
     public var maxBatchChars: Int
     /// Całkowity limit czasu na jedną partię (sekundy). Po nim partia zostaje oryginalna i liczy się jako nieudana.
     public var batchTimeout: Double
+    /// Limit transportowy żądania (`ChatLimits.transport`) i `temperature` (tylko lokalnie; `nil` = bez pola).
+    public var chatTimeout: Double
+    public var temperature: Double?
 
-    public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120) {
+    public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120,
+                chatTimeout: Double = 120, temperature: Double? = nil) {
         self.client = client
         self.assignment = assignment
         self.maxBatchChars = maxBatchChars
         self.batchTimeout = batchTimeout
+        self.chatTimeout = chatTimeout
+        self.temperature = temperature
     }
 
     public func system(language: LanguageCode?) -> String {
@@ -123,8 +129,10 @@ public struct Corrector: Sendable {
             do {
                 let model = assignment.model
                 let user = CorrectionBatches.render(batch)
-                let client = client
-                let reply = try await withDeadline(batchTimeout) { try await client.chat(model: model, system: system, user: user) }
+                let client = client, chatTimeout = chatTimeout, temperature = temperature
+                let reply = try await withDeadline(batchTimeout) {
+                    try await client.chat(model: model, system: system, user: user, timeout: chatTimeout, temperature: temperature)
+                }
                 guard let fixed = CorrectionBatches.parse(reply, expected: batch.map(\.n)) else {
                     failed += 1
                     if firstError == nil { firstError = "The model's answer didn't match the numbered lines." }
@@ -136,7 +144,7 @@ public struct Corrector: Sendable {
                 }
             } catch {
                 failed += 1
-                if firstError == nil { firstError = "\(error)" }
+                if firstError == nil { firstError = ContextError.isCutOff(error) ? ContextError.describe(model: assignment.model, error) : "\(error)" }
             }
         }
         return CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
