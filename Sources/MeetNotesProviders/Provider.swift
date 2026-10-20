@@ -47,6 +47,26 @@ public struct Provider: Codable, Equatable, Identifiable, Sendable {
 
     /// Jedyna bramka klucza (`AppModel.providerWithKey`): lokalny dostawca obejdzie się bez niego.
     public var requiresKey: Bool { !isLocal }
+
+    /// Czy dostawca może obsłużyć rolę (F20 P4). Poprawa, podsumowanie i embedding to czat/embeddingi OpenAI-compatible;
+    /// ElevenLabs (sam ASR) i Yascribe (Parakeet, sam ASR) ich nie mają. ASR: wszyscy (o wyniku decyduje sonda).
+    public func supports(_ role: Role) -> Bool {
+        switch role {
+        case .asr: true
+        case .correction, .summary, .embedding: api == .openAICompatible
+        }
+    }
+
+    /// Nazwa w menu dostawcy roli: model w procesie to „Yascribe", a nie dostawca. Zapisany rekord i jego nazwa zostają bez zmian.
+    public var roleLabel: String { api == .fluidAudio ? "Yascribe" : name }
+}
+
+public enum RoleProviders {
+    /// Dostawcy do wyboru w roli presetu: ci, którzy ją obsługują, plus bieżący wybór, gdy zapisany preset już wskazuje
+    /// nieobsługującego — menu nie pokaże „None" przy istniejącym przypisaniu i nic nie ginie po cichu.
+    public static func choices(_ providers: [Provider], role: Role, current: UUID?) -> [Provider] {
+        providers.filter { $0.supports(role) || $0.id == current }
+    }
 }
 
 /// Rodzaj API: OpenAI-compatible (OpenRouter, Ollama, własny serwer) albo ElevenLabs bezpośrednio

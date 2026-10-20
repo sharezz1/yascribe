@@ -38,7 +38,7 @@ struct ModelPicker: View {
         } label: {
             // `ModelField` (macos.md §11.4): popup „Dostawca · id ⌄”, dostawca w `text2`.
             HStack(spacing: 6) {
-                if let name = model.providers.providers.first(where: { $0.id == providerID })?.name {
+                if let name = model.providers.providers.first(where: { $0.id == providerID })?.roleLabel {
                     Text("\(name)  ·").foregroundStyle(.mnText2).fixedSize()
                 }
                 Text(selection.isEmpty ? "Choose model" : selection).lineLimit(1).truncationMode(.middle)

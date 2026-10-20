@@ -131,6 +131,14 @@ private func capitalizing(_ user: String) -> String {
     #expect(stub.calls[0].timeout == 330 && stub.calls[0].temperature == 0.2 && stub.calls[0].maxTokens == nil)
 }
 
+@Test func correctorNeverLetsTheModelThink() async {
+    // F20 P1: model hybrydowy z myśleniem milczał ponad 120 s; korekta zawsze prosi o odpowiedź bez rozumowania.
+    let t = transcript([utt("no to jest test")])
+    let stub = ChatStub { capitalizing($0.user) }
+    _ = await corrector(stub).correct(t, language: .polish)
+    #expect(stub.calls.count == 1 && stub.calls[0].reasoningEnabled == false)
+}
+
 // MARK: Budżet kontekstu i numeracja 1…N (F20 T12)
 
 private func longTranscript(_ n: Int = 100) -> Transcript {

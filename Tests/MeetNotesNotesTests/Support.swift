@@ -20,7 +20,11 @@ struct StubHTTPError: Error { let status: Int; let body: String }
 
 /// Klient HTTP odpowiadający na czat z ręki; zapisuje, co poszło w sieć. Błąd HTTP: rzuć `StubHTTPError`.
 final class ChatStub: HTTPClient, @unchecked Sendable {
-    struct Call { let system: String; let user: String; var timeout: Double = 0; var maxTokens: Int?; var temperature: Double? }
+    struct Call {
+        let system: String; let user: String; var timeout: Double = 0; var maxTokens: Int?; var temperature: Double?
+        /// `reasoning.enabled` z treści żądania (F20 P1); `nil` = pole nieobecne.
+        var reasoningEnabled: Bool?
+    }
     private let lock = NSLock()
     private var _calls: [Call] = []
     let handler: @Sendable (Call) throws -> String
@@ -48,7 +52,8 @@ final class ChatStub: HTTPClient, @unchecked Sendable {
         let body = (try? JSONSerialization.jsonObject(with: request.httpBody ?? Data())) as? [String: Any] ?? [:]
         let msgs = body["messages"] as? [[String: Any]] ?? []
         let call = Call(system: msgs.first?["content"] as? String ?? "", user: msgs.last?["content"] as? String ?? "",
-                        timeout: request.timeoutInterval, maxTokens: body["max_tokens"] as? Int, temperature: body["temperature"] as? Double)
+                        timeout: request.timeoutInterval, maxTokens: body["max_tokens"] as? Int, temperature: body["temperature"] as? Double,
+                        reasoningEnabled: (body["reasoning"] as? [String: Any])?["enabled"] as? Bool)
         lock.withLock { _calls.append(call) }
         if let delay { try await Task.sleep(for: delay) }
         let url = request.url!

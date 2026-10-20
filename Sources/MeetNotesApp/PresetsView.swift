@@ -272,7 +272,8 @@ struct RoleSection<Extra: View>: View {
 
     private var hasExtra: Bool { Extra.self != EmptyView.self }
     private var optional: Bool { role == .correction }
-    private var providers: [Provider] { model.providers.providers }
+    /// Tylko dostawcy obsługujący rolę (F20 P4) plus bieżący wybór zapisanego presetu (`RoleProviders.choices`).
+    private var providers: [Provider] { RoleProviders.choices(model.providers.providers, role: role, current: assignment?.providerID) }
 
     private var enabled: Binding<Bool> {
         Binding(get: { assignment != nil }, set: { on in
@@ -297,12 +298,12 @@ struct RoleSection<Extra: View>: View {
         let showProvider = providers.count > 1 || assignment == nil
         if showProvider {
             FormRow(label: "Provider") {
-                FieldMenu(label: "Provider", value: providers.first { $0.id == assignment?.providerID }?.name ?? "None", width: 180) {
+                FieldMenu(label: "Provider", value: providers.first { $0.id == assignment?.providerID }?.roleLabel ?? "None", width: 180) {
                     Picker("Provider", selection: Binding(get: { assignment?.providerID }, set: { id in
                         assignment = id.map { RoleAssignment(providerID: $0, model: assignment?.model ?? "", prompt: assignment?.prompt) }
                     })) {
                         Text("None").tag(UUID?.none)
-                        ForEach(providers) { p in Text(p.name).tag(Optional(p.id)) }
+                        ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
                     }
                     .pickerStyle(.inline).labelsHidden()
                 }
