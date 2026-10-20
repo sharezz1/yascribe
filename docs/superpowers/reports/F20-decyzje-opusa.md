@@ -36,3 +36,40 @@
 6. **3.7 jako cel, nie bramka** — potwierdź albo zażądaj większych okien dla lokalnego ASR.
 7. **T8:** wyłączenie Wi-Fi i obserwacja ruchu robisz Ty; **Ollama** do S2 instalujesz Ty.
 8. **Scalenie `faza20` → `master`** — wyłącznie Twoja decyzja.
+
+---
+
+# F20 — decyzje Opusa po S2 (2026-10-20, noc, delegowane przez użytkownika)
+
+> Wejście: raport S2 `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (commit `38ac47f`), spec §5, §11, §13, plan T9–T14, kod
+> `OpenAICompatibleClient` (`chat`, `chatContent`, `request`), `Corrector`, `NoteGenerator`, `NotePrompt`, `AutoTitle`, `ContextError`, `NotesModel`.
+> **Sprawdzone samodzielnie w surowych wynikach S2 (scratchpad sesji, tylko odczyt):** (1) `ollama4k-bonsai-think.log` — tytuł: HTTP 200,
+> `finish: length`, `total_tokens` 4096, `content_chars` 0, `reasoning_chars` 5907 (wyjście ucięte bez błędu); (2) treść 400 przy przepełnieniu
+> („exceeds the available context size (8192 tokens), try increasing it”) w logu llama.cpp; (3) korekta B1 partia 1: wyjście Ollamy numerowane
+> 1…49 ciągle, wyjście llama.cpp z dziurami (18, 22, 32) jak wejście — potwierdza przesunięcie numeracji; (4) `quiet.sh`: przebiegi „bez myślenia”
+> z `EXTRA={"reasoning_effort":"none"}`, przebiegi ministrala **bez** tego pola — zachowanie pola na modelu bez myślenia jest niezmierzone.
+> Pozostałe liczby (czasy, znaki/token, wyjście mapy) przyjmuję z raportu. Zapis w specu: **§14**; zmiany zadań: plan T10–T14 („[po S2]”).
+> Ścieżka API zostaje bez zmian poza pkt 1 i 3. Nic tu nie zmienia kodu (`Sources/`, `Tests/`).
+
+| # | Decyzja | Dlaczego | Odwracalność |
+|---|---|---|---|
+| 8 | **`finish_reason == "length"` = błąd w `chat` dla wszystkich dostawców** (`ProviderError.replyCutOff`, sprawdzane przed oczyszczaniem i „empty reply”); brak/`null`/inne wartości przechodzą. Wspólny `chatContent` (także `transcribe(.chatAudio)`) **bez zmian** — ASR z API nietknięty, pozycja do BACKLOG. Notatka i część mapy padają z komunikatem, partia korekty jest nieudana, tytuł cicho „Untitled”. | S2: ciche obcięcie jest po stronie wyjścia (200 + `length`), a nie wejścia (400). Ucięta notatka z API też nie może udawać całej — reguła w jednym miejscu, które przechodzą wszystkie wywołania czatu. Odcięcie ścieżki `chatAudio` trzyma zmianę z dala od działającego ASR. | Pełna: jedna gałąź w `chat`. |
+| 9 | **`reasoning_effort: "none"` wysyłane przez `chat` zawsze, gdy `provider.isLocal`** (notatka, reduce, mapa, korekta, tytuł, sonda); nigdy do nielokalnych. Odrzucenie (400/422 z „reasoning” w treści) → jedno ponowienie bez pola; przepełnienie nie jest ponawiane. `ThinkingStripper` zostaje (`<think>` i `[THINK]`). | S2: z myśleniem bonsai-2 jest bezużyteczny w każdej roli (465 s i ucięcie; tytuł 126 s i pusto). Pole działa na Ollamie i llama.cpp; na modelu bez myślenia niezmierzone — stąd ponowienie zamiast założenia. Jedna reguła po `isLocal` zamiast przełącznika per rola. | Pełna. |
+| 10 | **Numeracja partii korekty 1…N od nowa w każdej partii**, mapowanie z powrotem na wypowiedź; sygnatury `CorrectionBatches` bez zmian; w T12. Istniejący test `oneFailedBatchDoesNotAffectTheOthers` trzeba przełączyć z „[4]” na treść. | S2 §3.2: modele wypełniają dziury po pominiętych liniach echa i cała partia przepada; to własność formatu wejścia, więc naprawa u źródła (dotyczy też API). | Pełna. |
+| 11 | **Budżet: dwie reguły na całym prompcie** (spec §14 pkt 4): `charsPerToken` 2,4; margines 256; notatka/reduce `promptChars = (tokens − 256 − 2048) × 2,4` (cały prompt z My notes i kontekstem); korekta/mapa `pairedInputChars = ((tokens − 256) × 2,4 − system) / (1 + factor)`, factor 1,3 / 0,5; limity czasowe rozmiaru 4000 / 8000 znaków. Domyślnie 4096; pole „Context window (tokens)”; wykrycie `/props` → `/api/ps` w chwili użycia, **tylko obniża**; `/api/show` odpada; „Check” pokazuje wykryty kontekst. | S2: wyjście korekty ≈ wejściu, więc jedna rezerwa nie działa (partia 6000 przy 4096 → urwana); `/api/show` = maksimum modelu; `/api/ps` zna tylko model załadowany, więc pamięć podręczna z chwili ładowania listy byłaby zawsze pusta. Liczenie całego promptu zamyka My notes i kontekst bez osobnych rezerw. Domyślne 4096 = to, co ma Ollama bez zmian; wyższe dawałoby 400 u domyślnej Ollamy. Obniżanie zostaje zgodnie ze specem. | Pełna: stałe w jednym typie. |
+| 12 | **Limity (`ChatLimits.for(_:call:)`, `ChatCall` = note/correctionBatch/title/mapPart):** lokalne 600/660, 300/330, 120/150, 300/330 s; `max_tokens` 2048 / 1,3× wejścia / 64 / 0,5× wejścia; `temperature` 0,2 dla korekty i mapy. API bez zmian (bez `max_tokens`, bez `temperature`). Prompt mapy z celem „at most 40%”. | Wartości S2 (pomiary pod obciążeniem 1,5–3×, więc z zapasem). `Role` nie odróżnia tytułu ani mapy. `max_tokens` dla tytułu jest konieczny (S2: ministral bez EOS > 27 min). Temperatura 1 z Modelfile Ollamy zmieniała daty (S2 §3.3) — 0,2 to środek pasma 0–0,2 z S2, bez ryzyka pętli przy 0. | Pełna: tabela w jednym pliku. |
+| 13 | **oMLX: `needsKey: false` + nowe `keyOptional: true`** (pole klucza opcjonalne, pusty klucz nie trafia do pęku, klucz wpisuje tylko użytkownik); komunikaty dla lokalnego 401 i 507. **Aplikacja nie rekomenduje modeli**; przy lokalnej roli korekty podpis ostrzegający o zmianie nazw/liczb/dat. | S2 §6: oMLX użytkownika wymaga klucza (401), więc `needsKey: false` bez pola nie zadziała; wymaganie klucza zepsułoby oMLX bez klucza. Rekomendacja z n=1–2 na jednej maszynie pod obciążeniem byłaby twierdzeniem bez pokrycia; bonsai-2 (Q2_0) zmienił datę w korekcie, a bramka `accepts` tego nie łapie. | Pełna (tekst i jedno pole presetu). |
+| 14 | **Kolejność i zakres:** T10 rośnie (pkt 8, 9, 12), T11 (pkt 13), T12 (pkt 10, 11; bez cache i bez `contextFor`), T13 korzysta z formuł. Kolejność T10→T11→T12→T13→T14 bez zmian; T10–T13 nie czekają na kroki użytkownika z T8, T14 czeka. T14 sprawdza to, czego S2 nie zmierzył (oMLX, baseline API, `reasoning_effort` bez myślenia, czasy na cichej maszynie, wymuszone przepełnienie z niezaładowanym modelem) albo pisze „niezmierzone”. | 2.0b nie zależy technicznie od 2.0a (spec §11.2); T8 czeka wyłącznie na ręce użytkownika (Wi-Fi, pobranie, nagranie). | Pełna. |
+
+## Do potwierdzenia rano (dopisane po S2)
+
+9. **Lokalna korekta w 2.0b:** zostaje (z podpisem ostrzegawczym), czy wyłączyć ją do czasu mocniejszego modelu albo dodatkowej bramki liczb/dat?
+   S2: bonsai-2 zmienił „pierwszego grudnia” na „pierwszy stycznia”, a `CorrectionRules.accepts` to przepuścił. Dodatkowa bramka — Twoja decyzja, poza T10–T13.
+10. **Kontekst serwera:** z domyślnym 4096 notatka powyżej ~3,5 min mowy idzie przez map-reduce, a 60 min może nie zmieścić się nawet w trzech
+    poziomach (jawny błąd). Podniesienie kontekstu Ollamy (`OLLAMA_CONTEXT_LENGTH=16384` albo suwak w aplikacji Ollamy) i wpisanie tej wartości w
+    „Context window” robisz Ty — nie zmieniam ustawień serwera ani systemu.
+11. **Wykrycie tylko obniża** (zgodnie ze specem). Alternatywa z S2: gdy pole jest puste, użyć wykrytego **efektywnego** kontekstu (`/props`, `/api/ps`);
+    bezpieczne, bo przepełnienie i ucięcie są teraz jawne. Dziś „Check” tylko go pokazuje.
+12. **oMLX:** niezmierzony (507). Model mieszczący się w pamięci (np. ≤ 4B 4-bit) i klucz oMLX w aplikacji — po Twojej stronie; bez tego T14 pisze „niezmierzone”.
+13. **Baseline API dla 2.0b** (ta sama notatka i korekta przez API) — tylko na Twoje polecenie (klucz, koszt, wysyłka nagrania do chmury).
+14. **`temperature` 0,2** dla lokalnej korekty i mapy oraz brak rekomendacji modeli w UI — potwierdź albo wskaż model/temperaturę.

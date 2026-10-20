@@ -6,6 +6,8 @@
 > **Kodu aplikacji nie piszemy do akceptacji speca i planu.** Spiki S0–S2 (§7) to pomiary, nie kod produktu.
 > **2026-10-20: S0 wykonany — GO dla 2.0a** (`docs/superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md`); §13 rozstrzygnięty przez Opusa z delegacji
 > użytkownika (`docs/superpowers/reports/F20-decyzje-opusa.md`), a §3.5, §4.2, §4.3, §7, §11.6, §11.7, §11.10 poprawione według faktów z S0.
+> **2026-10-20: S2 wykonany** (`docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md`, commit `38ac47f`); wartości i kształt 2.0b rozstrzygnął Opus
+> z delegacji użytkownika — **§14** (zastępuje „jeden `inputChars`” z §11.9 i wykrywanie przez `/api/show` z §5.2/§11.1).
 >
 > Wejścia: `docs/wymagania.md` §0, §2, §4; `docs/superpowers/ROADMAP.md` (sekcje „Faza 2", „Nieprzypisane");
 > spec 1.5 (decyzja 20, §10); kod: `Sources/MeetNotesProviders/{Provider,Preset,Probe,ProviderSetup,OpenAICompatibleClient}.swift`,
@@ -177,6 +179,9 @@ nie na nowym transporcie.
   partię) wyprowadzany z tego samego limitu co podział notatki; (2) dla Ollamy budżet = `num_ctx` ustawiony przez użytkownika, bo `/api/show` zwraca
   maksymalny kontekst **modelu**, nie efektywny; (3) wykrywanie może budżet tylko **obniżyć**, nigdy podnieść ponad domyślny; (4) `/api/show` i `/props`
   leżą poza `/v1`, a `Provider.baseURL` zawiera `…/v1` — plan musi to uwzględnić. Czy Ollama obcina wejście po cichu — dziś założenie, rozstrzyga S2.
+  **[po S2 — §14]** Ollama **nie** obcina wejścia (HTTP 400 „exceeds the available context size”); ciche obcięcie jest po stronie **wyjścia**
+  (HTTP 200, `finish_reason: "length"`). `/api/show` zwraca maksimum modelu, więc odpada; źródła efektywnego kontekstu: Ollama `/api/ps`, llama.cpp `/props`.
+  Zasada (1) „jeden mechanizm” zostaje, ale z dwiema regułami rezerwy (§14 pkt 4).
   Bez map-reduce dla API.
 - **Jakość:** `CorrectionRules.accepts` (bramka numerów i zmian) i generowanie notatki zostają bez zmian; małe modele będą częściej
   odrzucane — licznik odrzuceń widoczny jak dziś, bez „łatania ślepo".
@@ -228,7 +233,8 @@ Licencje obu: MIT (wolno czerpać kod z uwzględnieniem noty); FluidVoice (GPL-3
    wspólny mechanizm**: wartość nastawialna u dostawcy z konserwatywnym domyślnym, a wykrywanie (Ollama `/api/show`, llama.cpp `/props`) jest
    dodatkiem „best effort", nie warunkiem. Oba złe kierunki są widoczne: zbyt mały budżet = więcej części (wolniej, ostrzeżenie w notatce o podziale),
    zbyt duży = błąd kontekstu z nazwą modelu (istniejący `ContextError`), nigdy ciche obcięcie, o ile serwer zwraca błąd; wykrycie cichego
-   obcinania (Ollama) to jedno z pytań S2.
+   obcinania (Ollama) to jedno z pytań S2. **[po S2 — §14 pkt 1, 4]** wejście: jawny błąd 400 (Ollama, llama.cpp); wyjście: `finish_reason: "length"`
+   traktowane jako błąd; wykrywanie: `/props` i `/api/ps`, nie `/api/show`.
 2. **S0 i pierwsza zależność zewnętrzna:** FluidAudio byłby pierwszą zależnością SwiftPM w `Package.swift`. S0 sprawdza wpływ na budowanie
    samymi CLT, `scripts/test.sh` (plugin makr, liczenie `@Test`), `scripts/bundle.sh` i próg macOS 15. **No-go = STOP:** wracam do użytkownika
    z opcjami (vendoring, bezpośrednie CoreML, sidecar w rodzaju `parakeet-mlx-server`, rezygnacja z 2.0a). Kolejność jest jedna (§7): S0 → 2.0a → S2 → 2.0b; 2.0b technicznie nie zależy od S0, ale nie zmieniamy harmonogramu.
@@ -260,6 +266,8 @@ Licencje obu: MIT (wolno czerpać kod z uwzględnieniem noty); FluidVoice (GPL-3
 9. **Budżet kontekstu egzekwowany end-to-end (P2, P5):** jeden `inputChars` (tokeny × znaki/token z pomiaru S2 minus rezerwa na prompt i odpowiedź) dla korekty
    i dla map-reduce; wyjście mapy ma limit (`max_tokens`), a suma wyjść mapy musi mieścić się w `inputChars` — inaczej reduce hierarchiczny albo jawny błąd, nigdy
    wysyłka ponad budżet; zbyt długa linia jest dzielona na granicy słowa; limit czasu liczony **na wywołanie**; wykryty kontekst wymaga nazwy modelu (`/api/show`).
+   **[zastąpione §14 pkt 4]** zamiast jednego `inputChars` — dwie reguły (stała odpowiedź: notatka/reduce; odpowiedź proporcjonalna do wejścia: korekta/mapa),
+   liczone na **całym** prompcie; wykrywanie z `/api/ps` (Ollama, model załadowany) i `/props` (llama.cpp), wołane w chwili użycia.
 10. **Model ASR w magazynie (P3, P4, P8):** manifest rozmiarów pochodzi ze świeżego pobrania tym samym pinem (wersja + precyzja enkodera), nie z cudzego magazynu;
     wariant o innych nazwach plików to `unknownVariant`, nie `invalid`; w buildzie DEBUG `MEETNOTES_MODEL_STORE` wskazuje kopię magazynu do odbioru; stan
     „Preparing model…” ma właściciela (`LocalASRPhase`). `Package.resolved` jest commitowany (pin). **Wykonane w S0:** manifest = §5 raportu S0
@@ -305,3 +313,68 @@ Techniczny `baseURL` dostawcy lokalnego; okna ≤59 s; cykl życia modelu ASR (�
 6. ✅ *(nowe, z S0 §7.3)* **Postęp pobierania** liczy adapter (przeskalowanie fazy pobierania, monotoniczność, kompilacja nieokreślona).
 7. ✅ *(nowe)* **Kopia modelu do testów i odbioru:** świeże pobranie z S0 skopiowane do `.devdata/model-store/` (DEBUG `MEETNOTES_MODEL_STORE`) — bez nowego
    pobierania i bez zapisu do wspólnego magazynu. `.int8V2` (568 MB) nie jest porównywany bez zgody użytkownika na pobranie.
+
+## 14. Decyzje Opusa po S2 (delegowane przez użytkownika)
+
+> 2026-10-20, noc. Wejście: raport S2 `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (commit `38ac47f`). Fakty, na których opieram
+> decyzje, sprawdzone w surowych wynikach S2 (scratchpad sesji, tylko odczyt): `ollama4k-bonsai-think.log` — tytuł, HTTP 200, `finish: length`,
+> `total_tokens` 4096, `content_chars` 0; korekta B1 partia 1 na Ollamie — numery wyjścia 1…49 ciągłe, a wejście miało dziury (18, 22, 32 — llama.cpp
+> zachował je i partia przeszła); przebiegi „bez myślenia” wołane z `reasoning_effort: "none"`, a przebiegi ministrala **bez** tego pola (zachowanie pola na
+> modelu bez myślenia niezmierzone). Uzasadnienia i odwracalność: `docs/superpowers/reports/F20-decyzje-opusa.md` (część „po S2”); tam też „Do potwierdzenia rano”.
+> Wszystkie wartości poniżej dotyczą **wyłącznie dostawców lokalnych** (`Provider.isLocal`); ścieżka API zostaje bez zmian, z wyjątkami — pkt 1 (`finish_reason`) i pkt 3 (numeracja partii).
+
+1. **Ciche obcięcie po stronie wyjścia = błąd.** `OpenAICompatibleClient.chat` czyta `choices[0].finish_reason`; **dokładnie** `"length"` →
+   `throw ProviderError.replyCutOff` (nowy przypadek; brak pola, `null` i każda inna wartość przechodzą — API często pola nie podaje). Sprawdzenie stoi
+   **przed** oczyszczaniem „thinking” i sprawdzeniem pustej odpowiedzi (rozumowanie, które zjadło kontekst, ma dać „cut off”, nie „empty reply”). Dotyczy
+   `chat` dla **wszystkich** dostawców (ucięta notatka z API też nie może udawać całej); **nie** dotyczy wspólnego `chatContent` używanego przez
+   `transcribe(.chatAudio)` — ścieżka ASR z API zostaje bez zmian (pozycja do BACKLOG). Skutki: notatka/reduce — `NoteGenerationError.failed` z komunikatem
+   `ContextError.describe`; partia korekty — nieudana (zostaje oryginał), `firstError` z tym samym komunikatem; część mapy — nieudana, cała notatka pada
+   („Part n of m failed: …”); autotytuł — cicho „Untitled” (jak dziś przy błędzie); sonda — porażka z komunikatem. Komunikat (T10, angielski):
+   „<model>'s reply was cut off before the end: it ran out of context or token room. Use a model with a longer context or raise the server's context length.”;
+   od T13 wariant lokalny wskazuje pole „Context window” w Settings.
+2. **Myślenie wyłączone dla lokalnych.** `chat` dodaje `"reasoning_effort": "none"` do ciała **zawsze, gdy `provider.isLocal`** — dla notatki, reduce, mapy,
+   korekty, tytułu i sondy (S2: z myśleniem bonsai-2 jest bezużyteczny w każdej roli). Nigdy dla dostawcy nielokalnego (także LAN/tunel). Gdy serwer
+   odrzuci pole — HTTP 400/422, a treść błędu (małe litery) zawiera `reasoning` — **jedno** ponowienie bez pola; przepełnienie kontekstu (treść bez
+   `reasoning`) nie jest ponawiane. `ThinkingStripper` zostaje jako obrona (usuwa `<think>…</think>` i `[THINK]…[/THINK]`; niedomknięty blok do końca
+   odpowiedzi usuwa w całości); stosowany w `chat`, nie w `chatContent`; pola `reasoning`/`reasoning_content` są ignorowane.
+3. **Numeracja korekty ciągła w partii.** `Corrector` numeruje linie każdej partii `1…N` (od nowa w każdej partii) i mapuje numer lokalny `k` z powrotem
+   na wypowiedź `batch[k−1]`; `CorrectionBatches.split/render/parse` bez zmian sygnatur. Usuwa klasę błędu „model wypełnił dziury po zaflagowanych
+   liniach” (S2 §3.2). Zmiana dotyczy też API (to błąd formatu, nie lokalności).
+4. **Budżet kontekstu (`ContextBudget`) — dwie reguły na całym prompcie.**
+   - Stałe: `charsPerToken = 2.4` (S2: 2,65 Mistral, 2,9 Qwen; ~10 % zapasu), `defaultTokens = 4096` (domyślna Ollama), `marginTokens = 256`,
+     `noteReplyTokens = 2048` (S2: notatki do ~1300 tokenów), `correctionReplyFactor = 1.3`, `mapReplyFactor = 0.5`, limity czasowe rozmiaru:
+     `correctionBatchCap = 4000` znaków, `mapPartCap = 8000` znaków (przy dużym kontekście partia/część nie może trwać dłużej niż limit miękki).
+   - **Stała odpowiedź (notatka, reduce):** `promptChars(replyTokens:) = Int(Double(tokens − 256 − replyTokens) × 2.4)` — limit znaków **całego**
+     promptu (`system.count + user.count`, więc „My notes” i kontekst użytkownika liczą się same). Notatka jednym przebiegiem, gdy prompt ≤
+     `promptChars(replyTokens: 2048)`; inaczej map-reduce.
+   - **Odpowiedź proporcjonalna (korekta, mapa):** `pairedInputChars(fixedChars:replyFactor:) = Int((Double(tokens − 256) × 2.4 − Double(fixedChars)) / (1 + replyFactor))`
+     — limit znaków treści `user`, gdzie `fixedChars` = `system.count`. Partia korekty: `min(4000, pairedInputChars(fixedChars: system.count, replyFactor: 1.3))`;
+     część mapy: `min(8000, pairedInputChars(fixedChars: mapSystem.count, replyFactor: 0.5))`. Dla API (`budget == nil`) partia korekty zostaje 6000.
+   - `maxTokens(inputChars:replyFactor:) = Int((Double(inputChars) / 2.4 × replyFactor).rounded(.up))`.
+   - Wynik ≤ 0 (kontekst za mały nawet na prompt) → jawny błąd „<model>'s Context window (N tokens) is too small for …”, nigdy wysyłka.
+   - Przykład 4096: notatka ≈ 4300 znaków promptu (≈ 2,7 tys. znaków transkryptu, ~3,5 min mowy); partia korekty ≈ 3,8 tys.; część mapy ≈ 5,5 tys.
+     Przy 16384: prompt notatki ≈ 33,8 tys.; partia 4000; część 8000.
+   - **Wybór kontekstu:** `ContextBudget.resolve(provider:detected:)` → `nil` dla nielokalnych i dla `.fluidAudio`; `base = provider.contextTokens ?? 4096`;
+     `tokens = min(base, detected ?? base)` — **wykrycie tylko obniża** (zasada speca zostaje). `Provider.contextTokens: Int?` (opcjonalne, E6) wpisuje
+     użytkownik w polu „Context window (tokens)” dostawcy lokalnego (zakres 2048…1 048 576, puste = 4096).
+   - **Wykrywanie (best effort, w chwili użycia, bez pamięci podręcznej):** adres bez końcowego `/v1` (inny kształt adresu → brak wykrycia);
+     najpierw `GET /props` → `default_generation_settings.n_ctx` (llama.cpp, efektywny na slot), potem `GET /api/ps` → `models[]` z nazwą równą modelowi
+     (porównanie bez sufiksu `:latest`) → `context_length` (Ollama, tylko model załadowany). `/api/show` **odpada** (maksimum modelu, nigdy nie obniży).
+     Limit 5 s, nagłówek klucza, jeśli dostawca go ma; każdy błąd → `nil`. Wołane raz przed przebiegiem korekty i raz przed notatką. „Check” w Settings
+     pokazuje wykryty efektywny kontekst („Detected context: N tokens”), żeby użytkownik mógł go przepisać do pola.
+5. **Limity (`ChatLimits.for(_ provider:, call: ChatCall)`, `ChatCall` = `note`, `correctionBatch`, `title`, `mapPart`).** Lokalne (miękki/transportowy, s):
+   notatka i reduce 600/660, partia korekty 300/330, tytuł 120/150, część mapy 300/330 — transport zawsze ≥ miękki + 30 (bez streamu nagłówki przychodzą
+   po całej generacji). API: wartości dzisiejsze bez zmian (notatka 180/120, partia 120/120, tytuł 60/120, mapa 120/120 — nieużywane, API nie dzieli);
+   niespójność API „miękki 180 > transport 120” idzie do BACKLOG, nie do tej fazy. `max_tokens` (tylko lokalne; API — brak pola): notatka/reduce 2048,
+   partia korekty `maxTokens(inputChars: user.count, replyFactor: 1.3)`, część mapy `maxTokens(inputChars: user.count, replyFactor: 0.5)`, tytuł 64.
+   `temperature` (tylko lokalne): korekta i mapa 0.2; notatka i tytuł — domyślna serwera. Prompt mapy zawiera cel długości „at most 40% of the input”.
+6. **oMLX i modele.** Preset `omlx` (`http://localhost:8000/v1`) ma `needsKey: false` i nowe pole `ProviderPreset.keyOptional: true`: pole „API key
+   (optional)” w arkuszu, puste = bez klucza (pusty klucz nigdy nie trafia do pęku — istniejące `addProvider`/`replaceKey`); klucz wpisuje wyłącznie
+   użytkownik. `LocalServerHint`: lokalny + HTTP 401 → prośba o klucz ustawiony w serwerze; lokalny + HTTP 507 → „not enough free memory”. **Aplikacja nie
+   rekomenduje żadnego modelu** (brak listy, brak domyślnego): S2 to n=1–2 na komórkę, jedna maszyna pod obciążeniem. W edytorze presetu, gdy rola korekty
+   jest lokalna, podpis: „Small local models can change names, numbers or dates while correcting. Compare with the original transcript.” Dokumenty (T14)
+   podają wynik S2 jako pomiar, nie rekomendację: bonsai-2 (Q2_0) bez myślenia — poprawny format notatki; lokalna korekta — bez rekomendacji.
+7. **Zadania.** T10 rośnie o pkt 1, 2 i `temperature`; T11 o pkt 6; T12 o pkt 3 i dwie reguły z pkt 4 (bez pamięci podręcznej wykrycia i bez closure
+   `contextFor`); T13 korzysta z formuł pkt 4–5. Kolejność T10 → T11 → T12 → T13 → T14 bez zmian; T10–T13 nie czekają na kroki użytkownika z T8
+   (2.0b technicznie niezależna, §11.2), T14 — czeka na T8. Odbiór T14 sprawdza to, czego S2 nie zmierzył (oMLX, baseline API, `reasoning_effort` na modelu
+   bez myślenia, czasy na cichej maszynie) albo zapisuje „niezmierzone” — szczegóły w planie, T14.
