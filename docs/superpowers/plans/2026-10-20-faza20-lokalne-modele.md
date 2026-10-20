@@ -369,7 +369,7 @@ Najpierw najbardziej prawdopodobne; każda linia ma test w zadaniu, które posia
     - `public static func detect(client: OpenAICompatibleClient, model: String) async -> Int?` = `m["*"] ?? m[model bez ":latest"]` z `effectiveContexts`.
   - `Corrector.init(…, budget: ContextBudget? = nil)` (dopisane do parametrów z T10). W `correct`:
     - limit partii = `budget.map { min(ContextBudget.correctionBatchCap, $0.pairedInputChars(fixedChars: system.count, replyFactor: ContextBudget.correctionReplyFactor)) } ?? maxBatchChars` (API: dzisiejsze 6 000);
-    - limit ≤ 0 → bez wywołań modelu, wynik `batches: 1, failedBatches: 1, firstError: "\(model)'s Context window (\(tokens) tokens) is too small for correction."`;
+    - limit ≤ 0 (i są linie do poprawy; pusty/w całości zaflagowany transkrypt nadal daje `batches: 0`) → bez wywołań modelu, wynik `batches: 1, failedBatches: 1, firstError: "\(model)'s Context window (\(tokens) tokens) is too small for correction."`;
     - **numeracja:** każda partia renderowana jako `1…N` (`batch.enumerated().map { (n: $0.offset + 1, text: $0.element.text) }`), `parse(reply, expected: Array(1...batch.count))`, linia lokalna `k` → `out.utterances[batch[k − 1].n − 1]`; `CorrectionBatches.split/render/parse` bez zmian sygnatur;
     - `maxTokens` = `budget.map { ContextBudget.maxTokens(inputChars: user.count, replyFactor: ContextBudget.correctionReplyFactor) }` (API: `nil`); `temperature` z T10.
     - Linia dłuższa niż limit nie jest dzielona (jak dziś) — jej partia może dostać 400/„cut off” i liczy się jako nieudana (jawnie).
