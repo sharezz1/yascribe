@@ -104,6 +104,11 @@ final class AppModel {
         notes.presetFor = { [weak self] in self?.presetFor(sessionURL: $0) }
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
+        notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }
+        notes.fillerWords = { [weak self] in
+            guard let s = self?.settings, s.removeFillersEnabled else { return [] }
+            return s.fillerWords ?? FillerWords.defaults
+        }
         notes.onChange = { [weak self] in self?.reloadSessions() }
         notes.isMoving = { [weak self] in self?.recordingsMove != nil }
         applyRetention()
@@ -134,6 +139,10 @@ final class AppModel {
             }
         }
         providers = read(paths.providers, ProvidersFile())
+        // Model Yascribe nie jest wierszem listy Providers, ale presety trzymają jego rekord — nie może go zabraknąć (F20 P3).
+        if providers.ensureOnDeviceProvider() {
+            do { try JSONFile.save(providers, to: paths.providers) } catch { errors.append("Couldn't save providers.json: \(error)") }
+        }
         presets = read(paths.presets, PresetsFile())
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())

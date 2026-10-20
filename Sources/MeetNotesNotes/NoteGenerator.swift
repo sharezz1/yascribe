@@ -35,6 +35,8 @@ public struct NoteGenerator: Sendable {
     public let maxTokens: Int?
     /// Limity jednej części mapy; `nil` = `ChatLimits.for(client.provider, call: .mapPart)`. Ustawiane w testach.
     public var mapLimits: ChatLimits?
+    /// Czy model API może „myśleć" przed odpowiedzią (ustawienie Settings; `GlobalSettings.summaryThinkingEnabled`). Lokalnych nie dotyczy.
+    public var thinking = true
 
     /// Poziomy kondensacji (pierwsza mapa + hierarchia), po których zbyt długie wejście reduce jest jawnym błędem.
     static let maxMapLevels = 3
@@ -87,9 +89,10 @@ public struct NoteGenerator: Sendable {
     /// Wywołanie notatki/reduce: limity notatki (`timeout`, `chatTimeout`, `maxTokens`).
     private func complete(_ prompt: NotePrompt) async throws -> String {
         do {
-            let client = client, model = model, chatTimeout = chatTimeout, maxTokens = maxTokens
+            let client = client, model = model, chatTimeout = chatTimeout, maxTokens = maxTokens, thinking = thinking
             return try await withDeadline(timeout) {
-                try await client.chat(model: model, system: prompt.system, user: prompt.user, timeout: chatTimeout, maxTokens: maxTokens)
+                try await client.chat(model: model, system: prompt.system, user: prompt.user, timeout: chatTimeout, maxTokens: maxTokens,
+                                      thinking: thinking)
             }
         } catch {
             if Task.isCancelled || error is CancellationError { throw CancellationError() } // anulowanie to nie błąd modelu
@@ -183,10 +186,10 @@ public struct NoteGenerator: Sendable {
             let room = budget.tokens - ContextBudget.marginTokens - Int((Double(prompt.chars) / ContextBudget.charsPerToken).rounded(.up))
             let replyTokens = max(1, min(room, ContextBudget.maxTokens(inputChars: prompt.user.count, replyFactor: 1.0)))
             do {
-                let client = client, model = model
+                let client = client, model = model, thinking = thinking
                 let reply = try await withDeadline(limits.soft) {
                     try await client.chat(model: model, system: prompt.system, user: prompt.user, timeout: limits.transport,
-                                          maxTokens: replyTokens, temperature: limits.temperature)
+                                          maxTokens: replyTokens, temperature: limits.temperature, thinking: thinking)
                 }
                 guard let kept = Self.transcriptLines(inReply: reply) else {
                     throw NoteGenerationError.failed("Part \(i + 1) of \(parts.count) failed: the model didn't keep the transcript format")

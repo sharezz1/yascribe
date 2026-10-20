@@ -82,7 +82,7 @@ struct ModelCardSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("On-device speech model")
+            SectionHeader("Yascribe model")
             ModelCardContent(card: support.card, location: location, error: ui.removeError ?? support.downloadError) { action in
                 if action.needsConfirmation { ui.confirming = action } else { run(action) }
             }

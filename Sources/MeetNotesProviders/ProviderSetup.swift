@@ -49,8 +49,9 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                               role: "Any OpenAI-compatible API · address and key",
                                               kind: nil, keyPage: nil)
     public static let all: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx, custom]
-    /// Gotowi (z wpisanym adresem), w kolejności listy.
-    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx, onThisMac]
+    /// Gotowi (z wpisanym adresem), w kolejności listy. `onThisMac` (model Yascribe) to nie dostawca: ma własną kartę
+    /// „Yascribe model" w Settings, więc na liście Providers go nie ma (F20 P3).
+    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx]
 
     /// Adres bez schematu: host[:port] + ścieżka bez końcowego „/” („openrouter.ai/api/v1"). Służy też do porównań.
     public static func displayAddress(_ url: URL) -> String {
@@ -103,8 +104,9 @@ public enum ProviderListRow: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, On this Mac,
+    /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, llama.cpp, oMLX,
     /// potem zapisani własni (także drugi OpenRouter — dostawca to instancja), na końcu „Custom endpoint".
+    /// Rekord modelu Yascribe (`.fluidAudio`) nie jest wierszem: ani presetem, ani „własnym" (F20 P3).
     public static func rows(for providers: [Provider]) -> [ProviderListRow] {
         var used = Set<UUID>()
         var rows: [ProviderListRow] = ProviderPreset.ready.map { preset in
@@ -112,7 +114,7 @@ public enum ProviderListRow: Identifiable, Equatable, Sendable {
             if let match { used.insert(match.id) }
             return .preset(preset, match)
         }
-        rows += providers.filter { !used.contains($0.id) }.map { .custom($0) }
+        rows += providers.filter { !used.contains($0.id) && $0.api != .fluidAudio }.map { .custom($0) }
         rows.append(.addCustom)
         return rows
     }

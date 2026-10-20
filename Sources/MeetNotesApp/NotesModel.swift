@@ -29,6 +29,10 @@ final class NotesModel {
     var clientFor: (UUID) -> OpenAICompatibleClient? = { _ in nil }
     var presetFor: (URL) -> Preset? = { _ in nil }
     var presetsInfo: () -> (presets: [Preset], defaultID: UUID?) = { ([], nil) }
+    /// `GlobalSettings.summaryThinkingEnabled`: czy model API może „myśleć" przy notatce.
+    var summaryThinking: () -> Bool = { true }
+    /// Przerywniki do usunięcia z poprawionego tekstu (F20 P2); pusta lista = nic nie usuwamy.
+    var fillerWords: () -> [String] = { [] }
     var onChange: () -> Void = {}
     /// Komunikaty dla użytkownika (np. nieczytelny plik notatek odłożony na bok) — podłączane do `AppModel.lastError`.
     var report: (String) -> Void = { _ in }
@@ -88,7 +92,8 @@ final class NotesModel {
         let budget = client.provider.isLocal
             ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: assignment.model)) : nil
         let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
-                                     temperature: limits.temperature, budget: budget).correct(transcript, language: language)
+                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords())
+            .correct(transcript, language: language)
         correcting.remove(id)
         defer { onChange() }
         if result.failedCompletely {
@@ -124,8 +129,9 @@ final class NotesModel {
         }
         generation[id] = .generating
         let limits = ChatLimits.for(client.provider, call: .note)
-        let generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
+        var generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
                                       chatTimeout: limits.transport, maxTokens: limits.maxTokens)
+        generator.thinking = summaryThinking()
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url

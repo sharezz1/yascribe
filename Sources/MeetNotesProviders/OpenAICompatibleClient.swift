@@ -140,8 +140,13 @@ public struct OpenAICompatibleClient: TranscriptionClient {
     /// Lokalny serwer dostaje `reasoning_effort: "none"` (model „thinking" zjada kontekst — S2); gdy go odrzuci
     /// (400/422 z „reasoning" albo „think"), jedno ponowienie bez pola. `finish_reason == "length"` = błąd (wyjście ucięte),
     /// nigdy sukces. Wspólny `chatContent` (ASR przez czat) zostaje bez zmian.
+    ///
+    /// `thinking: false` — dla API (nie lokalnych) wysyła `reasoning: {"enabled": false}` (OpenRouter): model „hybrydowy"
+    /// (np. DeepSeek V4.1 Flash) myśli domyślnie i potrafi milczeć ponad 120 s, a keep-alive odświeża `timeoutInterval`.
+    /// Dostawca, który tego pola nie przyjmuje (400/422 z „reasoning" albo „think"), dostaje jedno ponowienie bez niego.
+    /// Lokalny serwer ma `reasoning_effort: "none"` zawsze (S2), więc `thinking` go nie dotyczy.
     public func chat(model: String, system: String, user: String, timeout: Double = 120, maxTokens: Int? = nil,
-                     temperature: Double? = nil) async throws -> String {
+                     temperature: Double? = nil, thinking: Bool = true) async throws -> String {
         var body: [String: Any] = ["model": model, "messages": [["role": "system", "content": system],
                                                                 ["role": "user", "content": user]]]
         if let maxTokens { body["max_tokens"] = maxTokens }
@@ -153,6 +158,14 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                 obj = try await json(try request("chat/completions", body: body, timeout: timeout))
             } catch ProviderError.http(let status, let text) where (status == 400 || status == 422) && ["reasoning", "think"].contains(where: text.lowercased().contains) {
                 body["reasoning_effort"] = nil
+                obj = try await json(try request("chat/completions", body: body, timeout: timeout))
+            }
+        } else if !thinking {
+            body["reasoning"] = ["enabled": false]
+            do {
+                obj = try await json(try request("chat/completions", body: body, timeout: timeout))
+            } catch ProviderError.http(let status, let text) where (status == 400 || status == 422) && ["reasoning", "think"].contains(where: text.lowercased().contains) {
+                body["reasoning"] = nil
                 obj = try await json(try request("chat/completions", body: body, timeout: timeout))
             }
         } else {
