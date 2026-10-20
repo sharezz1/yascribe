@@ -101,3 +101,30 @@ final class Counter: @unchecked Sendable {
     let h = await runner(http).classifyLanguage(model: "x", language: .polish)
     #expect(h == LanguageHandling.unknown)
 }
+
+/// Atrapa lokalnego klienta: liczy wywołania (`classifyLanguage` dołożyłaby ich co najmniej trzy).
+private final class LocalStub: TranscriptionClient, @unchecked Sendable {
+    let provider = Provider(name: "On this Mac", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+    private let lock = NSLock()
+    private var _total = 0
+    var total: Int { lock.withLock { _total } }
+    func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
+        lock.withLock { _total += 1 }
+        return TranscriptionResult(text: "Raz, dwa, trzy.", words: [])
+    }
+}
+
+@Test func fluidAudioProbeReportsFilteredLanguageHandling() async {
+    let stub = LocalStub()
+    let r = await ProbeRunner(client: stub).probe(model: LocalASRModels.parakeetV3, role: .asr, language: .polish)
+    #expect(r.works)
+    #expect(r.shape == ASRShape.audioTranscriptions)
+    #expect(r.languageHandling == LanguageHandling.filtered)
+    #expect(stub.total == 1) // tylko wywołanie sondy; klasyfikacja woła dodatkowo `language: nil` dwa razy i więcej
+}
+
+@Test func fluidAudioProbeForCorrectionRoleSaysSpeechToTextOnly() async {
+    let r = await ProbeRunner(client: LocalStub()).probe(model: "x", role: .correction, language: nil)
+    #expect(!r.works)
+    #expect(r.failure == "On this Mac does only speech-to-text.")
+}

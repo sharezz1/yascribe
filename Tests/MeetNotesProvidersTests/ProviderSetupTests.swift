@@ -31,16 +31,33 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
 
 @Test func listShowsEveryPresetThenCustomProvidersThenAddCustom() {
     let empty = ProviderListRow.rows(for: [])
-    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "add-custom"])
+    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-on-this-mac", "add-custom"])
     #expect(empty.allSatisfy { if case .preset(_, let p) = $0 { p == nil } else { true } })
 
     let or = prov("https://openrouter.ai/api/v1", "OpenRouter")
     let or2 = prov("https://openrouter.ai/api/v1", "OpenRouter 2") // dostawca to instancja: drugi trafia do własnych
     let own = prov("https://llm.example.com/v1", "Work")
     let rows = ProviderListRow.rows(for: [own, or, or2])
-    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama",
+    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-on-this-mac",
                                "custom-\(own.id.uuidString)", "custom-\(or2.id.uuidString)", "add-custom"])
     #expect(rows.first == .preset(.openRouter, or))
+}
+
+@Test func fluidAudioProviderIsMatchedByKindNotAddress() {
+    let local = prov(Provider.fluidAudioBaseURL.absoluteString, "Parakeet", kind: .fluidAudio)
+    #expect(ProviderPreset.matching(local) == .onThisMac)
+    #expect(ProviderPreset.matching(prov("local://fluidaudio")) == nil) // ten sam adres bez rodzaju nie jest „On this Mac”
+    let p = ProviderPreset.onThisMac
+    #expect(p.id == "on-this-mac" && p.name == "On this Mac · Parakeet" && !p.needsKey && p.kind == .fluidAudio)
+    #expect(p.baseURL == "local://fluidaudio" && p.role == "Speech-to-text on this Mac · no network")
+    #expect(ProviderPreset.ready == [.openRouter, .elevenLabs, .ollama, .onThisMac])
+}
+
+@Test func savedFluidAudioProviderIsNotShownAsCustomRow() {
+    let local = prov(Provider.fluidAudioBaseURL.absoluteString, "Parakeet", kind: .fluidAudio)
+    let rows = ProviderListRow.rows(for: [local])
+    #expect(rows.contains(.preset(.onThisMac, local)))
+    #expect(!rows.contains { if case .custom = $0 { true } else { false } })
 }
 
 @Test func archiveSearchOffersOnlyOpenAICompatibleProvidersAndClearsModelOnSwitch() {
