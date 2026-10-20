@@ -316,6 +316,42 @@ enum Snapshots {
                 try render("preset-form-on-this-mac", size: CGSize(width: 700, height: 420), dark: dark, model: model) { PresetForm(state: localEditor).contentBackground() }
                 model.providers.providers.removeAll { $0.id == onDevice.id }
                 model.providerChecks[onDevice.id] = nil
+                // F20 T11: lokalne serwery tekstowe. Komunikaty błędów pochodzą z `LocalServerHint` (nie z palca), stany są wymyślone.
+                let ollamaLocal = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!)
+                let llamaLocal = Provider(name: ProviderPreset.llamaCpp.name, baseURL: URL(string: ProviderPreset.llamaCpp.baseURL)!)
+                let omlxLocal = Provider(name: ProviderPreset.omlx.name, baseURL: URL(string: ProviderPreset.omlx.baseURL)!)
+                let parakeetLocal = Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+                let localServers = [ollamaLocal, llamaLocal, omlxLocal]
+                model.providers.providers.append(contentsOf: localServers + [parakeetLocal])
+                model.providerChecks[ollamaLocal.id] = .verified(models: 3)
+                model.providerChecks[llamaLocal.id] = .failed(LocalServerHint.message(for: llamaLocal, error: URLError(.cannotConnectToHost))!)
+                model.providerChecks[omlxLocal.id] = .failed(LocalServerHint.message(for: omlxLocal, error: ProviderError.http(401, "API key required"))!)
+                model.providerChecks[parakeetLocal.id] = .verified(models: 1)
+                try render("settings-local-servers", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
+                let sheetOmlx = ProviderSheetState(); sheetOmlx.setUp(.omlx)
+                try render("settings-sheet-omlx", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetOmlx) }
+                let sheetOmlxDown = ProviderSheetState(); sheetOmlxDown.setUp(.omlx)
+                sheetOmlxDown.result = .failed(LocalServerHint.message(for: omlxLocal, error: URLError(.cannotConnectToHost))!)
+                try render("settings-sheet-omlx-down", size: CGSize(width: 520, height: 390), dark: dark, model: model) { ProviderSetupSheet(state: sheetOmlxDown) }
+                // Preset w pełni lokalny (znaczniki „On this Mac" przy rolach, ostrzeżenie przy korekcie, plakietka „Fully local") i mieszany (chmura = bez plakietki).
+                let fullyLocal = Preset(name: "Polish, fully local", language: .polish,
+                                        asr: RoleAssignment(providerID: parakeetLocal.id, model: LocalASRModels.parakeetV3),
+                                        correction: RoleAssignment(providerID: ollamaLocal.id, model: "qwen3:8b"),
+                                        summary: RoleAssignment(providerID: ollamaLocal.id, model: "qwen3:8b"))
+                var mixed = fullyLocal
+                mixed.id = UUID(); mixed.name = "Polish, local notes only"
+                if let cloud = model.providers.providers.first(where: { $0.id != parakeetLocal.id && !$0.isLocal }) {
+                    mixed.asr = RoleAssignment(providerID: cloud.id, model: "microsoft/mai-transcribe-2")
+                }
+                let presetsBefore = model.presets
+                model.presets.presets.append(contentsOf: [fullyLocal, mixed])
+                let localEditing = PresetEditorState(); localEditing.select(fullyLocal)
+                try render("presets-fully-local", size: CGSize(width: 900, height: 900), dark: dark, model: model) { PresetsView(state: localEditing) }
+                let mixedEditing = PresetEditorState(); mixedEditing.select(mixed)
+                try render("presets-local-notes-only", size: CGSize(width: 900, height: 900), dark: dark, model: model) { PresetsView(state: mixedEditing) }
+                model.presets = presetsBefore
+                model.providers.providers.removeAll { p in (localServers + [parakeetLocal]).contains { $0.id == p.id } }
+                for p in localServers + [parakeetLocal] { model.providerChecks[p.id] = nil }
                 // Faza 1.6 T7: Integrations + Meeting detection (kalendarz połączony, trzy kalendarze, jeden odznaczony; Advanced rozwinięte).
                 let meetingState = MeetingSettingsState()
                 meetingState.authorization = .granted

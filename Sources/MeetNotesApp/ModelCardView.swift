@@ -134,11 +134,7 @@ struct OnThisMacRoleContent: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "cpu").font(.system(size: 11)).accessibilityHidden(true)
-                Text("On this Mac")
-            }
-            .font(.callout).foregroundStyle(.mnText2)
+            OnThisMacTag()
             if let warning = card.roleWarning { WarnLabel(warning) }
             if case .progress(let f) = card.tone { StateLabel(f == nil ? .progress(nil) : .neutral, card.title) }
             Spacer(minLength: 0)

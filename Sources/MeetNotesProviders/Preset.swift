@@ -74,6 +74,13 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
 
     public var effectiveNotesLanguage: LanguageCode? { notesLanguage ?? language }
 
+    /// „Fully local": każda **przypisana** rola (ASR, korekta, podsumowanie) ma dostawcę lokalnego (`Provider.isLocal`). Pusta rola
+    /// się nie liczy; nieznany dostawca psuje wynik; preset bez żadnej roli nie jest „fully local". Embedding jest globalny, poza presetem.
+    public func isFullyLocal(providers: [Provider]) -> Bool {
+        let assigned = [asr, correction, summary].compactMap { $0 }
+        return !assigned.isEmpty && assigned.allSatisfy { a in providers.first { $0.id == a.providerID }?.isLocal ?? false }
+    }
+
     public func validate() throws {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingName }
         guard language != nil || isAutoLanguage else { throw PresetError.missingLanguage }
