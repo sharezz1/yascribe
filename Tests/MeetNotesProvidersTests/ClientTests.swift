@@ -227,6 +227,13 @@ private func chat(_ provider: Provider, _ http: StubHTTP, timeout: Double = 120,
     #expect(try await chat(ollamaLocal, http) == "[1] Tak.")
 }
 
+@Test func apiNoteQuotingAClosingThinkTagStaysIntact() async throws {
+    // Przegląd T13: reguła „zamknięcie bez otwarcia" (szablon czatu lokalnego modelu) nie może kasować notatki z API.
+    let note = "# Notatka\n- Dodać tag </think> do filtra odpowiedzi\n- Reszta"
+    #expect(try await chat(openRouter, StubHTTP { _, _ in chatReply(note) }) == note)
+    #expect(try await chat(ollamaLocal, StubHTTP { _, _ in chatReply("rozumuję\n</think>\n# T\nTreść") }) == "# T\nTreść")
+}
+
 @Test func chatReplyWithOnlyAThinkBlockThrowsEmptyReply() async {
     for text in ["<think>zaczynam", "<think>x</think>", "   "] {
         let http = StubHTTP { _, _ in chatReply(text) }

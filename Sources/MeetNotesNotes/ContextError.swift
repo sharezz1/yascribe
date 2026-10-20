@@ -25,12 +25,16 @@ public enum ContextError {
 
     /// Z `provider` błędy lokalnego serwera dostają `LocalServerHint` zamiast surowego `URLError` (spec fazy 2.0 §5.2).
     /// Rada przy ucięciu zależy od miejsca: lokalny serwer ma pokrętło kontekstu, API ma limit wyjścia. Lokalność wynika
-    /// z `provider` albo z `isLocal` (plan T13: parametr `isLocal: Bool = false`).
+    /// z `provider` albo z `isLocal` (plan T13: parametr `isLocal: Bool = false`). `maxTokens` = limit wyjścia, który SAMI wysłaliśmy:
+    /// ucięcie przy nim to „odpowiedź trafiła w limit wyjścia", nie rada o oknie kontekstu (przegląd T13).
     public static func describe(model: String, _ error: Error, provider: Provider? = nil, transport: Double? = nil,
-                                isLocal: Bool = false) -> String {
+                                isLocal: Bool = false, maxTokens: Int? = nil) -> String {
         if let provider, let hint = localHint(provider: provider, error, transport: transport) { return hint }
         let local = isLocal || provider?.isLocal == true
         if isCutOff(error) {
+            if let maxTokens {
+                return "\(model)'s reply hit the output limit (\(maxTokens) tokens) before the end. Try a shorter template or another model."
+            }
             return local
                 ? "\(model)'s reply was cut off before the end: it ran out of context or token room. Raise the Context window "
                     + "for this provider in Settings and the server's context length, or use a model with a longer context."

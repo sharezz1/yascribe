@@ -6,7 +6,8 @@ import Foundation
 /// - Zamknięty blok znika wszędzie.
 /// - Niedomknięty otwierający tag to rozumowanie ucięte limitem tokenów (znika razem z resztą) TYLKO gdy przed nim nie
 ///   ma żadnej treści; w środku odpowiedzi (np. punkt notatki z literalnym `<think>`) zostaje nietknięty.
-/// - Zamykający tag bez otwarcia (szablon czatu wstrzyknął otwarcie — DeepSeek-R1-Distill) usuwa wszystko przed sobą.
+/// - Zamykający tag bez otwarcia (szablon czatu wstrzyknął otwarcie — DeepSeek-R1-Distill) usuwa wszystko przed sobą, ale
+///   TYLKO z `orphanClosers: true` (lokalny serwer, gdzie to się zdarza); od dostawcy API notatka cytująca `</think>` zostaje cała.
 /// Pusty wynik to błąd wołającego, nie wyciek rozumowania do notatki.
 public enum ThinkingStripper {
     private static let pairs = [("<think>", "</think>"), ("<thinking>", "</thinking>"), ("[THINK]", "[/THINK]")]
@@ -17,12 +18,12 @@ public enum ThinkingStripper {
             .min { $0.0.lowerBound < $1.0.lowerBound }
     }
 
-    public static func clean(_ reply: String) -> String {
+    public static func clean(_ reply: String, orphanClosers: Bool = false) -> String {
         var out = ""
         var pos = reply.startIndex
         while true {
             let open = earliest(pairs.map(\.0), in: reply, from: pos)
-            if let close = earliest(pairs.map(\.1), in: reply, from: pos), open.map({ close.range.lowerBound < $0.range.lowerBound }) ?? true {
+            if orphanClosers, let close = earliest(pairs.map(\.1), in: reply, from: pos), open.map({ close.range.lowerBound < $0.range.lowerBound }) ?? true {
                 out = ""
                 pos = close.range.upperBound
                 continue

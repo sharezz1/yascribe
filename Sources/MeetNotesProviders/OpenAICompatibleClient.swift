@@ -152,7 +152,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             obj = try await json(try request("chat/completions", body: body, timeout: timeout))
         }
         if ((obj["choices"] as? [[String: Any]])?.first?["finish_reason"] as? String) == "length" { throw ProviderError.replyCutOff }
-        let reply = ThinkingStripper.clean(try Self.chatContent(obj))
+        let reply = ThinkingStripper.clean(try Self.chatContent(obj), orphanClosers: provider.isLocal)
         guard !reply.isEmpty else { throw ProviderError.badResponse("empty reply") }
         return reply
     }

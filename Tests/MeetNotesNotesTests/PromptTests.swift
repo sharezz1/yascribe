@@ -29,6 +29,20 @@ private func build(_ t: Transcript, myNotes: String = "", context: String = "", 
     #expect(p.system.contains("own notes are priority"))
 }
 
+@Test func contextEqualToMyNotesIsNotRepeated() throws {
+    // Pole kontekstu jest wstępnie wypełnione My notes — ten sam tekst nie może iść do modelu dwa razy (przegląd T13).
+    let notes = "ask about Sunday staffing"
+    let t = transcript([utt("Dzień dobry.")])
+    for context in [notes, "  \(notes)\n"] {
+        let p = try #require(build(t, myNotes: notes, context: context))
+        #expect(p.user.components(separatedBy: notes).count == 2)
+        #expect(p.user.contains("Context from the user:\n(none)"))
+    }
+    // Inny kontekst zostaje, nawet gdy zawiera My notes.
+    let p = try #require(build(t, myNotes: notes, context: notes + " and the budget"))
+    #expect(p.user.components(separatedBy: notes).count == 3)
+}
+
 @Test func notesLanguageFollowsThePreset() throws {
     let p = try #require(build(transcript([utt("Dzień dobry.")]), language: .polish))
     #expect(p.system.contains("Write the notes in Polish."))
