@@ -1,4 +1,5 @@
 import AppKit
+import MeetNotesLocalASR
 import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesProviders
@@ -272,6 +273,49 @@ enum Snapshots {
                 let sheetCustom = ProviderSheetState(); sheetCustom.setUp(.custom); sheetCustom.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
                 try render("settings-sheet-custom", size: CGSize(width: 520, height: 400), dark: dark, model: model) { ProviderSetupSheet(state: sheetCustom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                // F20 T7: karta modelu lokalnego ASR w czterech stanach. Statusy są wymyślone (nic nie czyta magazynu, nic nie pobiera).
+                let cardFolder = "~/Library/Application Support/FluidAudio/Models/\(ModelCardState.folder)"
+                let cardScenes: [(String, ModelStatus, ModelActivity)] = [
+                    ("ready", .ready, .idle), ("downloading", .missing, .downloading(0.41)), ("missing", .missing, .idle),
+                    ("invalid", .invalid(reason: "Encoder.mlmodelc/weights/weight.bin has 218103808 bytes, expected 445187200"), .idle)]
+                for (name, status, activity) in cardScenes {
+                    try render("model-card-\(name)", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            SectionHeader("On-device speech model")
+                            ModelCardContent(card: ModelCardState(status: status, activity: activity), location: cardFolder)
+                        }
+                        .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                    }
+                }
+                // Błąd pobrania pod opisem i wiersze edytora presetu (ASR, „On this Mac"): brak modelu / pobieranie / gotowy.
+                try render("model-card-download-error", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionHeader("On-device speech model")
+                        ModelCardContent(card: ModelCardState(status: .missing, activity: .idle), location: cardFolder,
+                                         error: "The download didn't finish: The Internet connection appears to be offline.")
+                    }
+                    .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                }
+                try render("preset-on-this-mac-rows", size: CGSize(width: 700, height: 190), dark: dark, model: model) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach([("missing", ModelStatus.missing, ModelActivity.idle), ("downloading", .missing, .downloading(0.41)),
+                                 ("invalid", .invalid(reason: "x"), .idle), ("ready", .ready, .idle)], id: \.0) { _, status, activity in
+                            OnThisMacRoleContent(card: ModelCardState(status: status, activity: activity)).padding(.top, 10)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                }
+                // Dostawca „On this Mac" włączony (Settings) i preset z lokalnym ASR (edytor) — karta i wiersz pokazują stan magazynu TEGO
+                // komputera (tylko odczyt), więc ta para nie jest deterministyczna; wymyślone stany są w migawkach powyżej.
+                let onDevice = Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+                model.providers.providers.append(onDevice)
+                model.providerChecks[onDevice.id] = RunGate.check(status: model.localASR.status).map { .failed($0.message) } ?? .verified(models: 1)
+                try render("settings-on-this-mac", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
+                let localEditor = PresetEditorState(draft: Preset(name: "Polish, on this Mac", language: .polish,
+                                                                  asr: RoleAssignment(providerID: onDevice.id, model: LocalASRModels.parakeetV3)), original: nil)
+                try render("preset-form-on-this-mac", size: CGSize(width: 700, height: 420), dark: dark, model: model) { PresetForm(state: localEditor).contentBackground() }
+                model.providers.providers.removeAll { $0.id == onDevice.id }
+                model.providerChecks[onDevice.id] = nil
                 // Faza 1.6 T7: Integrations + Meeting detection (kalendarz połączony, trzy kalendarze, jeden odznaczony; Advanced rozwinięte).
                 let meetingState = MeetingSettingsState()
                 meetingState.authorization = .granted

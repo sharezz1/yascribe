@@ -64,6 +64,7 @@ struct SettingsView: View {
                             if i < rows.count - 1 { RowDivider() }
                         }
                     }
+                    ModelCardSection(support: model.localASR)
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     MeetingSettingsSections()
                     archiveSearch
@@ -176,6 +177,8 @@ struct SettingsView: View {
 
 final class ProviderRowState: ObservableObject {
     @Published var confirmingRemove = false
+    /// Powód odmowy „Enable" (np. zajęta nazwa).
+    @Published var enableError: String?
 }
 
 /// Wiersz karty Providers: logo, nazwa, opis roli; po prawej stan + Retry + „⋯" (skonfigurowany) albo „Set up…" / „Add…".
@@ -215,7 +218,9 @@ private struct ProviderRowView: View {
     }
     private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try model.secrets.get(p.id) }) } }
     private var failure: String? {
-        guard let p = provider, !model.providerVerifying.contains(p.id), case .failed(let why)? = model.providerChecks[p.id] else { return nil }
+        // „On this Mac": stan modelu opisuje karta poniżej, więc bez czerwonej linii i bez Retry (nic do ponowienia przez sieć).
+        guard let p = provider, p.api != .fluidAudio, !model.providerVerifying.contains(p.id),
+              case .failed(let why)? = model.providerChecks[p.id] else { return nil }
         return why
     }
 
@@ -230,6 +235,7 @@ private struct ProviderRowView: View {
                     Label("Couldn't read the key from Keychain", systemImage: "exclamationmark.triangle")
                         .font(.system(size: 11)).foregroundStyle(.mnWarn).help(why)
                 }
+                if let e = rowState.enableError { Text(e).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
                 if let failure { Text(failure).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
             }
             Spacer(minLength: 8)
@@ -240,7 +246,9 @@ private struct ProviderRowView: View {
             Button("Remove", role: .destructive) { if let p = provider { model.removeProvider(p.id) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The provider and its saved key are deleted. Presets that use it will need another provider.")
+            Text(provider?.api == .fluidAudio
+                 ? "The provider is removed from the list. The downloaded model stays; remove it from the on-device model card. Presets that use it will need another provider."
+                 : "The provider and its saved key are deleted. Presets that use it will need another provider.")
         }
     }
 
@@ -263,6 +271,10 @@ private struct ProviderRowView: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help("More actions for \(p.name)")
             .accessibilityLabel("More actions for \(p.name)")
+        } else if case .preset(let p, _) = row, p.kind == .fluidAudio {
+            // Bez klucza i bez adresu: jedno kliknięcie dodaje dostawcę (model pobiera się osobno, z karty).
+            Button("Enable") { rowState.enableError = model.addProvider(name: p.name, baseURL: Provider.fluidAudioBaseURL, key: "", kind: .fluidAudio) }
+                .buttonStyle(.pillSmall).help("Use speech-to-text that runs on this Mac")
         } else if case .preset(let p, _) = row {
             Button("Set up…") { sheet.setUp(p) }.buttonStyle(.pillSmall).help("Set up \(p.name)")
         } else {
@@ -275,7 +287,9 @@ private struct ProviderRowView: View {
             StateLabel(.progress(nil), "Verifying…")
         } else {
             switch model.providerChecks[p.id] {
+            case .verified? where p.api == .fluidAudio: StateLabel(.ok, "Ready")
             case .verified(let n)?: StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s")")
+            case .failed(let why)? where p.api == .fluidAudio: WarnLabel("Model not ready").help(why)
             case .failed(let why)?: StateLabel(.bad, "Failed").help(why)
             case .limited(let why)?: WarnLabel(why)
             case nil: StateLabel(.neutral, "Not verified")
