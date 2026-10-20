@@ -91,7 +91,9 @@ public struct ProbeRunner: Sendable {
         case .correction, .summary:
             guard let client = textClient else { r.failure = asrOnly; break }
             do {
-                let reply = try await client.chat(model: model, system: "You are a connectivity probe. Reply with OK.", user: "ping")
+                // Sonda korekty działa tak jak korekta (bez myślenia); inaczej „Test" wisiałby na modelu, który w korekcie działa (F20 P1).
+                let reply = try await client.chat(model: model, system: "You are a connectivity probe. Reply with OK.", user: "ping",
+                                                  thinking: role != .correction)
                 r.works = !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 if !r.works { r.failure = "empty reply" }
             } catch ProviderError.badResponse("empty reply") {

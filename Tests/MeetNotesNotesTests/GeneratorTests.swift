@@ -92,6 +92,32 @@ private let now = Date(timeIntervalSince1970: 5_000)
     #expect(stub.calls[0].timeout == 660 && stub.calls[0].maxTokens == 2048 && stub.calls[0].temperature == nil)
 }
 
+@Test func generatorThinkingFollowsTheSetting() async throws {
+    // F20 P1: domyślnie jak dotąd (nic nie wysyłamy); wyłączone w Settings = `reasoning.enabled: false`.
+    var results: [Bool?] = []
+    for thinking in [true, false] {
+        let session = tempDir()
+        defer { try? FileManager.default.removeItem(at: session) }
+        let stub = ChatStub { _ in "# T\nbody" }
+        var g = NoteGenerator(client: chatClient(stub), model: "notes-model")
+        g.thinking = thinking
+        _ = try await g.generate(session: session, template: .standard, transcript: transcript([utt("Prognoza na sobotę.")]),
+                                 context: "", notesLanguage: .polish, now: now)
+        results.append(stub.calls[0].reasoningEnabled)
+    }
+    #expect(results == [nil, false])
+}
+
+@Test func globalSettingsThinkingIsOptionalAndDefaultsToOn() throws {
+    // E6: stary settings.json bez pola nadal się czyta; brak = myślenie dozwolone (zachowanie sprzed poprawki).
+    let old = try JSONDecoder().decode(GlobalSettings.self, from: Data("{}".utf8))
+    #expect(old.summaryThinking == nil && old.summaryThinkingEnabled)
+    var s = GlobalSettings()
+    s.summaryThinking = false
+    #expect(!s.summaryThinkingEnabled)
+    #expect(try JSONDecoder().decode(GlobalSettings.self, from: JSONEncoder().encode(s)).summaryThinkingEnabled == false)
+}
+
 @Test func truncatedInputNoteFailsClearlyAndWritesNothing() async throws {
     // Odbiór 2.0b, pkt 2c: lokalny serwer obciął prompt (HTTP 200, "stop") — wcześniej zapisywała się "udana" notatka bez tytułu.
     let session = tempDir()

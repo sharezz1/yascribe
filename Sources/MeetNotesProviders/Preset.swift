@@ -142,11 +142,17 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var keepAudioForever: Bool?
     /// Ustawienia detekcji spotkań i kalendarza (opcjonalne, E6).
     public var meetings: MeetingSettings?
+    /// Czy model API może „myśleć" przy podsumowaniu (F20 P1). `nil` = tak, jak dotąd (nic nie wysyłamy). Czytaj przez `summaryThinkingEnabled`.
+    public var summaryThinking: Bool?
 
     public static let defaultKeepAudioDays = 30
 
+    public var summaryThinkingEnabled: Bool { summaryThinking ?? true }
+
     public init(embedding: RoleAssignment? = nil, defaultPresetID: UUID? = nil, recordingsPath: String? = nil,
-                keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil, meetings: MeetingSettings? = nil) {
+                keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil, meetings: MeetingSettings? = nil,
+                summaryThinking: Bool? = nil) {
+        self.summaryThinking = summaryThinking
         self.embedding = embedding
         self.defaultPresetID = defaultPresetID
         self.recordingsPath = recordingsPath

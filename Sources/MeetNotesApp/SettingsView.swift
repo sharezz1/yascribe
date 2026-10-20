@@ -70,6 +70,7 @@ struct SettingsView: View {
                     ModelCardSection(support: model.localASR)
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     MeetingSettingsSections()
+                    summarySection
                     archiveSearch
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Speech-to-text, correction and summary models are chosen in each preset.")
@@ -94,6 +95,22 @@ struct SettingsView: View {
             Button("Keep Current Model", role: .cancel) {}
         } message: {
             Text("Changing the embedding model means the whole archive will be re-indexed when archive search arrives. Change it?")
+        }
+    }
+
+    // MARK: Summary (F20 P1)
+
+    /// Zapisuje się od razu (poza Save / Cancel sekcji Archive). Korekta nigdy nie myśli — to nie jest ustawienie.
+    @ViewBuilder private var summarySection: some View {
+        SectionHeader("Summary")
+        Card {
+            FormRow(label: "Thinking",
+                    caption: "Lets API models reason before writing the notes. Off is faster and avoids timeouts; on may help with long or complex meetings. Local models always run without thinking, and corrections never think.") {
+                Toggle("Thinking", isOn: Binding(
+                    get: { model.settings.summaryThinkingEnabled },
+                    set: { model.settings.summaryThinking = $0; model.save() }))
+                    .labelsHidden().toggleStyle(.switch)
+            }
         }
     }
 

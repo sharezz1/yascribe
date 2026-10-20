@@ -104,6 +104,7 @@ final class AppModel {
         notes.presetFor = { [weak self] in self?.presetFor(sessionURL: $0) }
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
+        notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }
         notes.onChange = { [weak self] in self?.reloadSessions() }
         notes.isMoving = { [weak self] in self?.recordingsMove != nil }
         applyRetention()

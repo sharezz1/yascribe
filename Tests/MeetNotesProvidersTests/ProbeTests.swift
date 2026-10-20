@@ -45,6 +45,15 @@ private func runner(_ http: StubHTTP, provider: Provider = openRouter) -> ProbeR
     #expect(chat.works)
 }
 
+@Test func correctionProbeRunsWithoutThinkingLikeTheCorrectionItself() async {
+    // F20 P1: sonda korekty ma ten sam profil co korekta, inaczej „Test" wisi na modelu, który w korekcie działa. Podsumowanie: bez zmian.
+    let http = StubHTTP { _, _ in chatReply("OK") }
+    _ = await runner(http).probe(model: "m", role: .correction, language: nil)
+    _ = await runner(http).probe(model: "m", role: .summary, language: nil)
+    #expect((http.calls[0].body["reasoning"] as? [String: Any])?["enabled"] as? Bool == false)
+    #expect(http.calls[1].body["reasoning"] == nil)
+}
+
 @Test func modelThatIgnoresLanguageIsAutomatic() async {
     // P10: ta sama odpowiedź z językiem i bez — parametr nic nie robi (profil Parakeeta przez API).
     let http = StubHTTP { _, body in transcript(isPolishClip(body) ? "raz dwa trzy" : "one two three") }
