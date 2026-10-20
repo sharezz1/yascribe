@@ -13,6 +13,9 @@ private let list = FillerWords.defaults
     #expect(FillerWords.remove("Yyy, to jest test.", words: list) == "To jest test.") // wielka litera po usuniętym początku zdania
     #expect(FillerWords.remove("Jest. Mhm, nie wiem.", words: list) == "Jest. Nie wiem.")
     #expect(FillerWords.remove("To jest eee dobre pytanie", words: list) == "To jest dobre pytanie")
+    // Zdanie z prawdziwej odpowiedzi modelu (próba P1, wariant B): „yy" zostało po korekcie.
+    #expect(FillerWords.remove("Mleko kokosowe w Ciapcie kupisz teraz, yy, u Płaza kupisz mleko kokosowe, wszędzie jest",
+                               words: list) == "Mleko kokosowe w Ciapcie kupisz teraz, u Płaza kupisz mleko kokosowe, wszędzie jest")
 }
 
 @Test func stretchedFillersMatchButShortWordsAreNotHit() {
