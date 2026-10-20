@@ -48,8 +48,9 @@ private func matches(_ pattern: String, in text: String) -> [String] {
 @Test func onlyLocalASRImportsFluidAudio() throws {
     for (url, text) in try swiftSources(excludingLocalASR: true) {
         #expect(matches(#"import\s+(\w+\s+)?FluidAudio"#, in: text).isEmpty, "\(url.lastPathComponent) imports FluidAudio")
-        #expect(!text.contains("@_exported"), "\(url.lastPathComponent) re-exports a module")
     }
+    // Re-eksport z MeetNotesLocalASR udostępniłby FluidAudio aplikacji i CLI bez żadnego importu — zakazany wszędzie.
+    for (url, text) in try swiftSources() { #expect(!text.contains("@_exported"), "\(url.lastPathComponent) re-exports a module") }
 }
 
 @Test func theGuardRegexesCatchTheBypassVariants() {
