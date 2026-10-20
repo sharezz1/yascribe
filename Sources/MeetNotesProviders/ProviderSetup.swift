@@ -155,6 +155,7 @@ public enum ProviderCheck: Equatable, Sendable {
             case .badResponse: return "The answer wasn't a model list. Is this an OpenAI-compatible address?"
             case .missingKey: return "No API key."
             case .replyCutOff: return "The reply was cut off before the end."
+            case .inputTruncated: return "The server cut off the start of the input: the Context window setting is higher than what it really uses."
             }
         }
         if let u = error as? URLError {
