@@ -75,7 +75,8 @@ struct PresetsView: View {
                     guard !state.isDirty else { return } // nie gub niezapisanych zmian
                     state.select(p)
                 } label: {
-                    PresetRow(title: p.name, subtitle: meta(p), selected: state.draft?.id == p.id)
+                    PresetRow(title: p.name, subtitle: meta(p), selected: state.draft?.id == p.id,
+                              fullyLocal: p.isFullyLocal(providers: model.providers.providers))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(state.draft?.id == p.id ? .isSelected : [])
@@ -105,10 +106,13 @@ struct PresetRow: View {
     let subtitle: String
     var selected = false
     var dim = false
+    /// Plakietka „Fully local" pod metadanymi (wszystkie role presetu są lokalne).
+    var fullyLocal = false
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(dim ? .mnText2 : .mnText).lineLimit(1)
             Text(subtitle).font(.system(size: 11)).italic(dim).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
+            if fullyLocal { FullyLocalBadge().padding(.top, 3) }
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -192,6 +196,7 @@ struct PresetForm: View {
                 if state.draft?.id == model.settings.defaultPresetID {
                     Text("Default preset").font(.system(size: 12)).foregroundStyle(.mnText2)
                 }
+                if state.draft?.isFullyLocal(providers: model.providers.providers) == true { FullyLocalBadge() }
             }
             RoleSection(title: "Speech to text", role: .asr, assignment: draft.asr, language: draft.wrappedValue.language, extraBeforeProbe: true) {
                 // 🔴 Bez wartości domyślnej (P7). „Auto" to opcja awaryjna na końcu listy, z ostrzeżeniem.
@@ -309,8 +314,12 @@ struct RoleSection<Extra: View>: View {
                 ModelPicker(providerID: a.providerID, role: role,
                             selection: Binding(get: { assignment?.model ?? "" }, set: { assignment?.model = $0 }))
             }
-            if role == .asr, providers.first(where: { $0.id == a.providerID })?.api == .fluidAudio {
-                OnThisMacRoleRow(support: model.localASR)
+            if let p = providers.first(where: { $0.id == a.providerID }), p.isLocal {
+                if role == .asr, p.api == .fluidAudio {
+                    OnThisMacRoleRow(support: model.localASR)
+                } else {
+                    LocalRoleNote(warnsAboutCorrection: role == .correction)
+                }
             }
             if extraBeforeProbe && hasExtra { RowDivider(); extra }
             probeRow(a)
@@ -342,6 +351,48 @@ struct RoleSection<Extra: View>: View {
                 .disabled(a.model.isEmpty)
                 .help("Sends a short test request to check this model works in this role")
         }
+        .padding(.leading, 158).padding(.trailing, 16).padding(.bottom, 10)
+    }
+}
+
+/// Znacznik „On this Mac" (ikona układu + słowa): rola, której dostawca działa na tym komputerze (`Provider.isLocal`).
+struct OnThisMacTag: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "cpu").font(.system(size: 11)).accessibilityHidden(true)
+            Text("On this Mac")
+        }
+        .font(.callout).foregroundStyle(.mnText2)
+    }
+}
+
+/// Plakietka „Fully local" na presecie: wszystkie przypisane role są lokalne (`Preset.isFullyLocal`).
+struct FullyLocalBadge: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "cpu").font(.system(size: 10)).accessibilityHidden(true)
+            Text("Fully local").font(.system(size: 11, weight: .medium))
+        }
+        .foregroundStyle(.mnText2)
+        .padding(.horizontal, 8).padding(.vertical, 2)
+        .background(.mnField, in: Capsule())
+        .overlay(Capsule().strokeBorder(.mnLine, lineWidth: 0.5))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Rola z lokalnym serwerem tekstowym (Ollama, llama.cpp, oMLX, własny na loopbacku): znacznik „On this Mac"; przy korekcie ostrzeżenie,
+/// że mały model potrafi zmienić nazwy, liczby i daty. Aplikacja nie poleca żadnych modeli (spec fazy 2.0 §14 pkt 6).
+struct LocalRoleNote: View {
+    static let correctionWarning = "Small local models can change names, numbers or dates while correcting. Compare with the original transcript."
+    var warnsAboutCorrection = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            OnThisMacTag()
+            if warnsAboutCorrection { WarnLabel(Self.correctionWarning) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 158).padding(.trailing, 16).padding(.bottom, 10)
     }
 }

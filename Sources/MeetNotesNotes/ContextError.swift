@@ -16,10 +16,21 @@ public enum ContextError {
     /// Odpowiedź pusta po oczyszczeniu z rozumowania (`OpenAICompatibleClient.chat`).
     public static func isEmptyReply(_ error: Error) -> Bool { (error as? ProviderError) == .badResponse("empty reply") }
 
-    /// `isLocal` (domyślnie `false`) wybiera radę przy ucięciu: lokalny serwer ma pokrętło kontekstu, API ma limit wyjścia.
-    public static func describe(model: String, _ error: Error, isLocal: Bool = false) -> String {
+    /// Lokalny serwer: nazwa, adres i podpowiedź (`LocalServerHint`); także miękki limit (`DeadlineExceeded`) to „nie odpowiedział w czasie",
+    /// nie „serwer nie działa". `nil` dla dostawców nielokalnych i innych błędów. `transport` = limit żądania w sekundach, jeśli znany.
+    public static func localHint(provider: Provider, _ error: Error, transport: Double? = nil) -> String? {
+        if let d = error as? DeadlineExceeded { return LocalServerHint.message(for: provider, error: URLError(.timedOut), timeout: d.seconds) }
+        return LocalServerHint.message(for: provider, error: error, timeout: transport)
+    }
+
+    /// Z `provider` błędy lokalnego serwera dostają `LocalServerHint` zamiast surowego `URLError` (spec fazy 2.0 §5.2).
+    /// Rada przy ucięciu zależy od miejsca: lokalny serwer ma pokrętło kontekstu, API ma limit wyjścia. Lokalność wynika
+    /// z `provider` albo z `isLocal` (plan T13: parametr `isLocal: Bool = false`).
+    public static func describe(model: String, _ error: Error, provider: Provider? = nil, transport: Double? = nil,
+                                isLocal: Bool = false) -> String {
+        if let provider, let hint = localHint(provider: provider, error, transport: transport) { return hint }
         if isCutOff(error) {
-            return isLocal
+            return isLocal || provider?.isLocal == true
                 ? "\(model)'s reply was cut off before the end: it ran out of context or token room. "
                     + "Use a model with a longer context or raise the server's context length."
                 : "\(model)'s reply was cut off before the end. Try a model with a longer output limit."

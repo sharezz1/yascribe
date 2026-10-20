@@ -30,10 +30,29 @@ import MeetNotesProviders
     #expect(!msg.contains("server") && !msg.contains("context length"))
 }
 
+@Test func cutOffAdviceFollowsTheProvider() {
+    let local = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+    let cloud = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    #expect(ContextError.describe(model: "m", ProviderError.replyCutOff, provider: local).contains("server's context length"))
+    #expect(ContextError.describe(model: "m", ProviderError.replyCutOff, provider: cloud).contains("longer output limit"))
+    #expect(ContextError.describe(model: "m", ProviderError.badResponse("empty reply"), provider: local) == "m returned an empty reply.")
+}
+
 @Test func emptyReplyIsReadableForEveryProviderKind() {
     let e = ProviderError.badResponse("empty reply")
     #expect(ContextError.isEmptyReply(e) && !ContextError.isEmptyReply(ProviderError.badResponse("no text")))
     for local in [true, false] {
         #expect(ContextError.describe(model: "vendor/m", e, isLocal: local) == "vendor/m returned an empty reply.")
     }
+}
+
+@Test func localServerErrorsGetTheServerHintInsteadOfTheRawError() {
+    let ollama = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+    let down = ContextError.describe(model: "m", URLError(.cannotConnectToHost), provider: ollama)
+    #expect(down.contains("Ollama") && down.contains("Start it"))
+    // Miękki limit czasu (`withDeadline`) to „nie odpowiedział w czasie", nigdy „serwer nie działa".
+    let slow = ContextError.describe(model: "m", DeadlineExceeded(seconds: 300), provider: ollama)
+    #expect(slow.contains("300 s") && !slow.contains("Start it"))
+    let cloud = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    #expect(ContextError.describe(model: "m", URLError(.cannotConnectToHost), provider: cloud).contains("m failed"))
 }

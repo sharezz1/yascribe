@@ -41,7 +41,7 @@ public struct NoteGenerator: Sendable {
                 try await client.chat(model: model, system: prompt.system, user: prompt.user, timeout: chatTimeout, maxTokens: maxTokens)
             }
         } catch {
-            throw NoteGenerationError.failed(ContextError.describe(model: model, error, isLocal: client.provider.isLocal))
+            throw NoteGenerationError.failed(ContextError.describe(model: model, error, provider: client.provider, transport: chatTimeout))
         }
         let (title, body) = NoteTitle.parse(reply)
         guard !body.isEmpty else { throw NoteGenerationError.failed("\(model) returned an empty reply.") }
