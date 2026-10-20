@@ -32,7 +32,7 @@
 2. **`.int8` vs `.int8V2`** (upstream: `.int8V2` „naprawia zepsute tokeny”, 568 MB) — porównanie wymaga zgody na pobranie; do tego czasu `.int8`.
 3. **3.1** — nagranie na żywo (debata z głośników, mikrofon milczy) i **T11** (Auto, para PL+EN) — wymagają Twoich nagrań.
 4. **Przypięcie rewizji HF** (`ModelRegistry.revisionOverrides`) — wymaga odczytu metadanych HF; dziś niepinowane, rozbieżność kończy się widocznym błędem.
-5. **Przebiegi `mai-transcribe-2` na nagraniach służbowych z `~/GCX`** (dla zgodności na dłuższym materiale) — wysyłka do chmury i koszt; tylko na Twoje polecenie. Też: czy zgadzasz się, że S1 czyta te nagrania lokalnie (bez treści w raportach).
+5. **Przebiegi `mai-transcribe-2` na nagraniach służbowych z `~/GCX`** (dla zgodności na dłuższym materiale) — wysyłka do chmury i koszt; tylko na Twoje polecenie. Lokalny odczyt tych nagrań w S1 (tylko liczby w raportach, nic nie wychodzi z Maca) jest **już zdecydowany i wykonywany** — zgłoś, jeśli się nie zgadzasz.
 6. **3.7 jako cel, nie bramka** — potwierdź albo zażądaj większych okien dla lokalnego ASR.
 7. **T8:** wyłączenie Wi-Fi i obserwacja ruchu robisz Ty; **Ollama** do S2 instalujesz Ty.
 8. **Scalenie `faza20` → `master`** — wyłącznie Twoja decyzja.
