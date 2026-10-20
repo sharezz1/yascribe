@@ -60,6 +60,36 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
     #expect(!rows.contains { if case .custom = $0 { true } else { false } })
 }
 
+// MARK: dostawcy w rolach presetu (F20 P4)
+
+@Test func correctionAndSummaryAreOfferedOnlyToTextProviders() {
+    let or = prov("https://openrouter.ai/api/v1", "OpenRouter")
+    let ollama = prov("http://localhost:11434/v1", "Ollama")
+    let el = prov("https://api.elevenlabs.io", "ElevenLabs", kind: .elevenLabs)
+    let local = prov(Provider.fluidAudioBaseURL.absoluteString, "On this Mac · Parakeet", kind: .fluidAudio)
+    let all = [or, el, local, ollama]
+    for role in [Role.correction, .summary] {
+        #expect(RoleProviders.choices(all, role: role, current: nil).map(\.name) == ["OpenRouter", "Ollama"], "\(role)")
+    }
+    // ASR: wszyscy (Ollama bez ASR rozstrzyga sonda, nie lista).
+    #expect(RoleProviders.choices(all, role: .asr, current: nil).count == 4)
+}
+
+@Test func presetAlreadyPointingAtAnUnsupportedProviderKeepsItInTheMenu() {
+    // Zapisany preset z Parakeetem w korekcie: menu nie może pokazać „None" przy istniejącym przypisaniu i niczego nie kasujemy.
+    let or = prov("https://openrouter.ai/api/v1", "OpenRouter")
+    let local = prov(Provider.fluidAudioBaseURL.absoluteString, "On this Mac · Parakeet", kind: .fluidAudio)
+    #expect(RoleProviders.choices([or, local], role: .correction, current: local.id).map(\.id) == [or.id, local.id])
+    #expect(RoleProviders.choices([or, local], role: .correction, current: or.id).map(\.id) == [or.id])
+}
+
+@Test func onDeviceModelIsLabelledYascribeInRoleMenusWithoutRenamingTheRecord() {
+    let local = prov(Provider.fluidAudioBaseURL.absoluteString, "On this Mac · Parakeet", kind: .fluidAudio)
+    #expect(local.roleLabel == "Yascribe" && local.name == "On this Mac · Parakeet")
+    #expect(prov("https://openrouter.ai/api/v1", "OpenRouter").roleLabel == "OpenRouter")
+    #expect(prov("https://openrouter.ai/api/v1", "OpenRouter").supports(.embedding) && !local.supports(.embedding))
+}
+
 @Test func archiveSearchOffersOnlyOpenAICompatibleProvidersAndClearsModelOnSwitch() {
     let or = prov("https://openrouter.ai/api/v1", "OpenRouter")
     let ollama = prov("http://localhost:11434/v1", "Ollama")
