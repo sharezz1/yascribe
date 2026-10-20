@@ -8,10 +8,15 @@ let package = Package(
         .executable(name: "MeetNotesApp", targets: ["MeetNotesApp"]),
         .executable(name: "meetnotes-cli", targets: ["meetnotes-cli"]),
     ],
+    dependencies: [
+        // Jedyny pin zewnętrzny (F20 S0 §2); FluidAudio importuje wyłącznie MeetNotesLocalASR.
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7"),
+    ],
     targets: [
         .target(name: "MeetNotesSessionFormat"),
         .target(name: "MeetNotesRecording", dependencies: ["MeetNotesSessionFormat"]),
         .target(name: "MeetNotesProviders"),
+        .target(name: "MeetNotesLocalASR", dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]),
         .target(name: "MeetNotesTranscription", dependencies: ["MeetNotesSessionFormat", "MeetNotesProviders"]),
         .target(name: "MeetNotesMeetings"),
         .target(name: "MeetNotesNotes", dependencies: ["MeetNotesSessionFormat", "MeetNotesProviders", "MeetNotesTranscription",
@@ -25,6 +30,7 @@ let package = Package(
         .testTarget(name: "MeetNotesTranscriptionTests", dependencies: ["MeetNotesTranscription", "MeetNotesRecording"], exclude: ["Fixtures"]),
         .testTarget(name: "MeetNotesNotesTests", dependencies: ["MeetNotesNotes", "MeetNotesTranscription", "MeetNotesProviders",
                                                                 "MeetNotesSessionFormat", "MeetNotesRecording", "MeetNotesMeetings"]),
+        .testTarget(name: "MeetNotesLocalASRTests", dependencies: ["MeetNotesLocalASR", .product(name: "FluidAudio", package: "FluidAudio")]),
         .testTarget(name: "MeetNotesMeetingsTests", dependencies: ["MeetNotesMeetings"]),
     ]
 )

@@ -10,8 +10,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 CONFIG="${CONFIG:-debug}"
 # Logi budowy na stderr: stdout to wyłącznie ścieżka paczki (kontrakt z run.sh).
-swift build -c "$CONFIG" --product MeetNotesApp >&2
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/MeetNotesApp"
+swift build --disable-keychain -c "$CONFIG" --product MeetNotesApp >&2
+BIN="$(swift build --disable-keychain -c "$CONFIG" --show-bin-path)/MeetNotesApp"
 APP="${MEETNOTES_APP:-.build/MeetNotes.app}"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
