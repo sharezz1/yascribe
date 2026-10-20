@@ -16,7 +16,7 @@ let package = Package(
         .target(name: "MeetNotesSessionFormat"),
         .target(name: "MeetNotesRecording", dependencies: ["MeetNotesSessionFormat"]),
         .target(name: "MeetNotesProviders"),
-        .target(name: "MeetNotesLocalASR", dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]),
+        .target(name: "MeetNotesLocalASR", dependencies: ["MeetNotesProviders", .product(name: "FluidAudio", package: "FluidAudio")]),
         .target(name: "MeetNotesTranscription", dependencies: ["MeetNotesSessionFormat", "MeetNotesProviders"]),
         .target(name: "MeetNotesMeetings"),
         .target(name: "MeetNotesNotes", dependencies: ["MeetNotesSessionFormat", "MeetNotesProviders", "MeetNotesTranscription",
@@ -30,7 +30,7 @@ let package = Package(
         .testTarget(name: "MeetNotesTranscriptionTests", dependencies: ["MeetNotesTranscription", "MeetNotesRecording"], exclude: ["Fixtures"]),
         .testTarget(name: "MeetNotesNotesTests", dependencies: ["MeetNotesNotes", "MeetNotesTranscription", "MeetNotesProviders",
                                                                 "MeetNotesSessionFormat", "MeetNotesRecording", "MeetNotesMeetings"]),
-        .testTarget(name: "MeetNotesLocalASRTests", dependencies: ["MeetNotesLocalASR", .product(name: "FluidAudio", package: "FluidAudio")]),
+        .testTarget(name: "MeetNotesLocalASRTests", dependencies: ["MeetNotesLocalASR", "MeetNotesProviders", "MeetNotesTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
         .testTarget(name: "MeetNotesMeetingsTests", dependencies: ["MeetNotesMeetings"]),
     ]
 )

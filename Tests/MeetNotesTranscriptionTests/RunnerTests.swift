@@ -230,6 +230,24 @@ final class Recorder: @unchecked Sendable {
     #expect(throws: RunSnapshotError.chatShapeNotForMeetings) { _ = try RunSnapshot(preset: preset, provider: provider, probe: chat) }
 }
 
+@Test func snapshotsWithDifferentFingerprintsAreNotEqual() throws {
+    // F20: odcisk lokalnego modelu to część migawki; inny odcisk = inna migawka (równość w pamięci, nie tylko Codable).
+    let provider = Provider(name: "On this Mac", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+    let preset = Preset(name: "Polish", language: .polish, asr: RoleAssignment(providerID: provider.id, model: "parakeet-tdt-0.6b-v3"))
+    let a = try RunSnapshot(preset: preset, provider: provider, probe: nil, modelFingerprint: "aaa")
+    let b = try RunSnapshot(preset: preset, provider: provider, probe: nil, modelFingerprint: "bbb")
+    #expect(a != b)
+    #expect(a == (try RunSnapshot(preset: preset, provider: provider, probe: nil, modelFingerprint: "aaa")))
+    #expect(a.modelFingerprint == "aaa")
+    #expect(try JSONDecoder().decode(RunSnapshot.self, from: JSONEncoder().encode(a)) == a)
+    #expect(try RunSnapshot(preset: preset, provider: provider, probe: nil).modelFingerprint == nil)
+}
+
+@Test func oldInputJSONWithoutFingerprintStillLoads() throws {
+    let input = try JSONDecoder().decode(RunInput.self, from: try fixture("phase1-input.json"))
+    #expect(input.snapshot.modelFingerprint == nil)
+}
+
 @Test func failedEchoCancelledMicFallsBackToRaw() {
     // Hermes 4.2: martwy mic_aec nie może wypchnąć żywego mic_raw.
     let sum = SessionSummary(startedHostTime: 0, timebase: ns, tracks: [

@@ -104,7 +104,7 @@ public struct ModelStore: Sendable {
         try FileManager.default.removeItem(at: modelDirectory)
     }
 
-    /// `AsrModels.download(to:)` z pinem (v3, int8). Nie wołać `AsrModels.load(from:)`/`downloadAndLoad`/`isModelValid`.
+    /// `AsrModels.download(to:)` z pinem (v3, int8). Ładowanie modelu tylko przez `FluidAudioEngine` (`loadLocal`, bez sieci).
     public static let fluidAudioDownload: Download = { modelDirectory, force, progress in
         let mapper = LockedMapper()
         _ = try await AsrModels.download(
