@@ -1,4 +1,5 @@
 import AppKit
+import MeetNotesNotes
 import MeetNotesProviders
 import SwiftUI
 
@@ -7,8 +8,13 @@ final class SettingsDraft: ObservableObject {
     @Published var embedding: RoleAssignment?
     @Published var confirming = false
     @Published var saved = false
+    /// Pole „Words" sekcji Correction (zapisuje się Return, poza Save / Cancel).
+    @Published var fillers = ""
 
-    func load(_ s: GlobalSettings) { embedding = s.embedding; saved = false }
+    func load(_ s: GlobalSettings) {
+        embedding = s.embedding; saved = false
+        fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
+    }
 }
 
 /// Stan arkusza „Set up <dostawca>" (macos.md §11.5): nowy dostawca albo podmiana klucza istniejącego (`editing`).
@@ -71,6 +77,7 @@ struct SettingsView: View {
                     }
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     MeetingSettingsSections()
+                    correctionSection
                     summarySection
                     archiveSearch
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -97,6 +104,40 @@ struct SettingsView: View {
         } message: {
             Text("Changing the embedding model means the whole archive will be re-indexed when archive search arrives. Change it?")
         }
+    }
+
+    // MARK: Correction (F20 P2)
+
+    /// Zapisuje się od razu (Return w polu albo przełącznik). Lista idzie do polecenia dla modelu i do filtra po korekcie.
+    @ViewBuilder private var correctionSection: some View {
+        SectionHeader("Correction")
+        Card {
+            FormRow(label: "Filler sounds",
+                    caption: "Removes sounds like “yyy” and “mhm” from corrected transcripts: the model is asked to drop them and the app removes any that remain. The original transcript is kept.") {
+                Toggle("Filler sounds", isOn: Binding(
+                    get: { model.settings.removeFillersEnabled },
+                    set: { model.settings.removeFillers = $0; model.save() }))
+                    .labelsHidden().toggleStyle(.switch)
+            }
+            if model.settings.removeFillersEnabled {
+                RowDivider()
+                FormRow(label: "Words", caption: "Separate with commas. Press Return to save.") {
+                    HStack(spacing: 8) {
+                        TextField("yyy, eee, mhm", text: $draft.fillers).textFieldStyle(.roundedBorder)
+                            .onSubmit { commitFillers() }
+                        Button("Reset") { draft.fillers = FillerWords.format(FillerWords.defaults); commitFillers() }
+                            .buttonStyle(.pillSmall).help("Back to the default list")
+                    }
+                }
+            }
+        }
+    }
+
+    private func commitFillers() {
+        let words = FillerWords.parse(draft.fillers)
+        model.settings.fillerWords = words == FillerWords.defaults ? nil : words
+        model.save()
+        draft.fillers = FillerWords.format(words)
     }
 
     // MARK: Summary (F20 P1)
