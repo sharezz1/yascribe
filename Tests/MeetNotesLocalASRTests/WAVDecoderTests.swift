@@ -31,3 +31,17 @@ private func le16(_ v: UInt16) -> Data { withUnsafeBytes(of: v.littleEndian) { D
     wav += Data("data".utf8) + le32(6) + canonical.suffix(6)
     #expect(try WAVDecoder.samples(wav) == [100, -200, 300].map { Float($0) / 32_767 })
 }
+
+@Test func truncatedDataChunkIsToleratedAndStopsAtTheEndOfTheFile() throws {
+    var wav = WAVEncoder.wav([100, -200, 300, 400], rate: 16_000)
+    wav.removeLast(3) // data deklaruje 8 bajtów, w pliku jest 5: dwie pełne próbki (czwarty bajt próbki 3 odpada)
+    #expect(try WAVDecoder.samples(wav) == [100, -200].map { Float($0) / 32_767 })
+}
+
+@Test func dataChunkBeforeFmtIsRejected() {
+    let canonical = WAVEncoder.wav([1, 2, 3], rate: 16_000)
+    var wav = canonical.prefix(12)
+    wav += Data("data".utf8) + le32(6) + canonical.suffix(6)
+    wav += canonical.subdata(in: 12..<36) // fmt dopiero po data
+    #expect(throws: WAVDecodeError.self) { _ = try WAVDecoder.samples(wav) }
+}
