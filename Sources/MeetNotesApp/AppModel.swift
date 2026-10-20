@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import MeetNotesLocalASR
 import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesProviders
@@ -89,6 +90,8 @@ final class AppModel {
     /// Wykrywanie spotkań (faza 1.6); startuje `MeetNotesApp.init`, nie `AppModel.init` (migawki i testy go nie chcą).
     let monitor = MeetingMonitor()
     let notes = NotesModel()
+    /// Lokalny ASR (F20): magazyn modelu i faza pobierania/przygotowania; UI w T7.
+    let localASR = LocalASRSupport()
 
     init() {
         recording.model = self
@@ -325,7 +328,17 @@ final class AppModel {
     /// Klient transkrypcji wybrany po `Provider.api`; nil = powód w `lastError`.
     func transcriptionClient(for providerID: UUID) -> (any TranscriptionClient)? {
         switch providerWithKey(providerID) {
-        case .success(let (p, key)): return p.transcriptionClient(key: key)
+        case .success(let (p, key)):
+            // `.fluidAudio` nigdy nie przechodzi przez `Provider.transcriptionClient` (tam siedzi zaślepka). Odmowa = błąd i koniec:
+            // żadnego klienta, więc nic nie pójdzie do API.
+            guard p.api == .fluidAudio else { return p.transcriptionClient(key: key) }
+            let support = localASR
+            switch LocalASRFactory.client(provider: p, store: support.store, onPhase: { phase in Task { @MainActor in support.apply(phase) } }) {
+            case .success(let c): return c
+            case .failure(let refusal):
+                lastError = refusal.message
+                return nil
+            }
         case .failure(let problem):
             lastError = problem.message
             return nil
@@ -340,6 +353,9 @@ final class AppModel {
         defer { providerVerifying.remove(id) }
         switch providerWithKey(id) {
         case .failure(let problem): providerChecks[id] = .failed(problem.message)
+        case .success(let (p, _)) where p.api == .fluidAudio: // bez sieci: model jest w magazynie i zgadza się z manifestem
+            localASR.refresh()
+            providerChecks[id] = RunGate.check(status: localASR.store.status()).map { .failed($0.message) } ?? .verified(models: 1)
         case .success(let (p, key)): providerChecks[id] = await p.verify(key: key)
         }
     }
@@ -419,6 +435,7 @@ final class AppModel {
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
         guard let c = transcriptionClient(for: providerID) else { return }
+        defer { Task { await (c as? ReleasableClient)?.release() } } // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
         let r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
         probeCache.record(r)
         save()
@@ -563,7 +580,8 @@ final class AppModel {
         guard let c = transcriptionClient(for: asr.providerID) else { return } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
-            let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe)
+            let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
+                                           modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: localASR.store))
             run(sessionURL: sessionURL, runID: Self.sessionName(Date()), snapshot: snapshot, client: c)
         } catch RunSnapshotError.chatShapeNotForMeetings {
             lastError = "This model returns no word timings, so it can't be used for meetings."
@@ -581,6 +599,12 @@ final class AppModel {
             return
         }
         guard let c = transcriptionClient(for: input.snapshot.providerID) else { return } // powód już w lastError
+        // Zapisana migawka trafia do runnera bez zmian, więc zmianę modelu we wspólnym magazynie łapie tylko ta bramka (przed `run`).
+        if let p = provider(input.snapshot.providerID),
+           let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p, currentFingerprint: localASR.store.fingerprint()) {
+            lastError = refusal.message
+            return
+        }
         run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
     }
 
@@ -612,6 +636,9 @@ final class AppModel {
             } catch {
                 self.lastError = "Transcription failed: \(error)"
             }
+            // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
+            await (c as? ReleasableClient)?.release()
+            self.localASR.endRun()
             self.transcribing.remove(id)
             self.reloadSessions()
             if let finished {

@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import MeetNotesLocalASR
 import MeetNotesProviders
 import MeetNotesRecording
 import MeetNotesSessionFormat
@@ -18,13 +19,14 @@ struct CLI {
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
       models <baseURL>                                            lista modeli (klucz: MEETNOTES_API_KEY)
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
-      transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID]
+      transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
+                                                                  <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza)
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
     Czasy z transcribe są na osi sesji; czas w pliku ścieżki = czas na osi − przesunięcie z summarize.
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
-    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run"]
+    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store"]
     static let known = valued.union(["--aec", "--no-aec", "--no-system"])
 
     static func main() async {
@@ -183,7 +185,19 @@ struct CLI {
         if let s = value(args, "--shape"), s != ASRShape.audioTranscriptions.rawValue {
             FileHandle.standardError.write(Data("--shape \(s): w transcribe dozwolone tylko audioTranscriptions\n".utf8)); exit(64)
         }
-        let c = try client(try positional(args, 1))
+        let localStore = value(args, "--model-store").map { ModelStore(directory: URL(fileURLWithPath: $0, isDirectory: true)) } ?? ModelStore()
+        let c: any TranscriptionClient
+        if try positional(args, 1) == Provider.fluidAudioBaseURL.absoluteString {
+            // Lokalny ASR (F20 S1): ten sam runner co aplikacja. Odmowa = komunikat i kod 1, bez fallbacku do API.
+            // Magazyn: --model-store (korzeń); MEETNOTES_MODEL_STORE działa tylko w DEBUG, a S1 mierzy build release.
+            switch LocalASRFactory.client(provider: Provider(name: "cli", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio), store: localStore) {
+            case .success(let local): c = local
+            case .failure(let refusal):
+                FileHandle.standardError.write(Data("\(refusal.message)\n".utf8)); exit(1)
+            }
+        } else {
+            c = try client(try positional(args, 1))
+        }
         let preset = Preset(name: "cli", language: language,
                             asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)),
                             languageAuto: language == nil ? true : nil)
@@ -192,7 +206,8 @@ struct CLI {
                                 shape: shape, languageHandling: .unknown)
         let runID = runOption ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") // E3: runID bez ':'
         print("runID: \(runID)")
-        var snapshot = try RunSnapshot(preset: preset, provider: c.provider, probe: probe)
+        var snapshot = try RunSnapshot(preset: preset, provider: c.provider, probe: probe,
+                                       modelFingerprint: RunGate.fingerprintForSnapshot(provider: c.provider, store: localStore))
         // Wznowienie (check S11 #2): CLI tworzy preset i dostawcę z nowymi UUID przy każdym uruchomieniu,
         // więc przy tych samych parametrach bierzemy migawkę z pierwszego przebiegu. Inny model, język,
         // adres albo kształt → runner rzuci inputMismatch, tak jak powinien.
@@ -201,6 +216,9 @@ struct CLI {
            (saved.snapshot.model, saved.snapshot.language, saved.snapshot.providerBaseURL, saved.snapshot.shape)
                == (snapshot.model, snapshot.language, snapshot.providerBaseURL, snapshot.shape) {
             snapshot = saved.snapshot
+            if let refusal = RunGate.checkResume(snapshot: snapshot, provider: c.provider, currentFingerprint: localStore.fingerprint()) {
+                FileHandle.standardError.write(Data("\(refusal.message)\n".utf8)); exit(1)
+            }
         }
         let t = try await TranscriptionRunner(session: dir, runID: runID, snapshot: snapshot, client: c).run { p in
             // Licznik okien od razu: pierwsze okno trwa ~25 s, a samo „0%" wygląda na zawieszenie (S13).
@@ -208,6 +226,7 @@ struct CLI {
             fflush(stdout)
         }
         print()
+        await (c as? ReleasableClient)?.release()
         for u in t.utterances {
             let flag = u.languageMismatch.map { " [JĘZYK: \($0)]" } ?? ""
             print(String(format: "[%7.1f] %@: ", u.start, u.speaker == .me ? "Me" : "Them") + u.text + flag)
