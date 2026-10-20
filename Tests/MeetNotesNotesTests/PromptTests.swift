@@ -54,3 +54,37 @@ private func build(_ t: Transcript, myNotes: String = "", context: String = "", 
     #expect(p.user.components(separatedBy: "Prognoza na sobotę").count == 2) // raz, nie dwa razy
     #expect(!p.user.contains("Me:"))
 }
+
+@Test func condensedPromptAddsTheOneSentence() throws {
+    let sentence = "The transcript below is a condensed version of the full recording."
+    let t = transcript([utt("Dzień dobry.")])
+    let plain = try #require(build(t))
+    let condensed = try #require(NotePromptBuilder.build(template: .standard, transcript: t, myNotes: "", context: "",
+                                                         notesLanguage: .polish, condensed: true))
+    #expect(!plain.system.contains(sentence))
+    #expect(condensed.system.contains(sentence))
+    #expect(condensed.system.contains("Never invent")) // reszta promptu ta sama
+    #expect(condensed.user == plain.user)
+}
+
+@Test func mapPromptDemandsTheSameLineFormat() {
+    let p = NotePromptBuilder.mapPrompt(part: ["[0:05] Me: Cześć.", "[0:09] Them: Dzień dobry."], index: 2, count: 5, notesLanguage: .polish)
+    #expect(p.system.contains("part 2 of 5"))
+    #expect(p.system.contains("[m:ss] Me") && p.system.contains("Them"))
+    #expect(p.system.contains("same format"))
+    #expect(p.system.contains("names, numbers, dates, decisions and tasks"))
+    #expect(p.system.contains("Do not interpret"))
+    #expect(p.user == "[0:05] Me: Cześć.\n[0:09] Them: Dzień dobry.")
+}
+
+@Test func mapPromptAsksForAtMost40Percent() {
+    let p = NotePromptBuilder.mapPrompt(part: ["[0:05] Me: x"], index: 1, count: 2, notesLanguage: nil)
+    #expect(p.system.contains("Keep the result to at most 40% of the input length."))
+}
+
+@Test func mapPromptHasNoUserNotesNorContext() {
+    let p = NotePromptBuilder.mapPrompt(part: ["[0:05] Me: x"], index: 1, count: 2, notesLanguage: .polish)
+    #expect(!p.system.contains("Context from the user") && !p.user.contains("Context from the user"))
+    #expect(!p.system.contains("own notes") && !p.user.contains("own notes"))
+    #expect(!p.system.contains("Structure:")) // szablon notatki tylko w reduce
+}

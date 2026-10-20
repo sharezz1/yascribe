@@ -28,11 +28,15 @@ final class ChatStub: HTTPClient, @unchecked Sendable {
     let delay: Duration?
     /// `finish_reason` w każdej odpowiedzi (np. `"length"` = serwer uciął wyjście); `nil` = pole nieobecne.
     let finishReason: String?
+    /// `finish_reason` zależny od wywołania (np. ucięta tylko jedna część mapy); ma pierwszeństwo przed `finishReason`.
+    let finishReasonFor: (@Sendable (Call) -> String?)?
     var calls: [Call] { lock.withLock { _calls } }
 
-    init(delay: Duration? = nil, finishReason: String? = nil, _ handler: @escaping @Sendable (Call) throws -> String) {
+    init(delay: Duration? = nil, finishReason: String? = nil, finishReasonFor: (@Sendable (Call) -> String?)? = nil,
+         _ handler: @escaping @Sendable (Call) throws -> String) {
         self.delay = delay
         self.finishReason = finishReason
+        self.finishReasonFor = finishReasonFor
         self.handler = handler
     }
 
@@ -47,7 +51,7 @@ final class ChatStub: HTTPClient, @unchecked Sendable {
         do {
             let text = try handler(call)
             var choice: [String: Any] = ["message": ["content": text]]
-            if let finishReason { choice["finish_reason"] = finishReason }
+            if let reason = finishReasonFor?(call) ?? finishReason { choice["finish_reason"] = reason }
             let data = try JSONSerialization.data(withJSONObject: ["choices": [choice]])
             return (data, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
         } catch let e as StubHTTPError {
@@ -56,6 +60,14 @@ final class ChatStub: HTTPClient, @unchecked Sendable {
     }
 }
 
+let localTestProvider = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+
 func chatClient(_ http: any HTTPClient) -> OpenAICompatibleClient {
     OpenAICompatibleClient(provider: testProvider, key: "k", http: http)
+}
+
+
+/// Klient lokalnego dostawcy (loopback) — jedyny, który dostaje budżet i map-reduce.
+func localChatClient(_ http: any HTTPClient) -> OpenAICompatibleClient {
+    OpenAICompatibleClient(provider: localTestProvider, key: nil, http: http)
 }

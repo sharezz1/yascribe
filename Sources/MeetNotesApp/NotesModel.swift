@@ -125,8 +125,12 @@ final class NotesModel {
         let session = item.url
         Task {
             do {
+                // Lokalny serwer: kontekst sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); budżet włącza map-reduce.
+                // API nie dostaje budżetu, więc nigdy nie dzieli transkryptu.
+                let budget = client.provider.isLocal
+                    ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: choice.assignment.model)) : nil
                 _ = try await generator.generate(session: session, template: template, transcript: transcript,
-                                                 context: context, notesLanguage: language, onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
+                                                 context: context, notesLanguage: language, budget: budget, onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
                 self.generation[id] = .idle
             } catch NoteGenerationError.nothingToSummarize {
                 self.generation[id] = .failed("Nothing to summarize: the transcript has no usable text.")
