@@ -29,6 +29,8 @@ final class NotesModel {
     var clientFor: (UUID) -> OpenAICompatibleClient? = { _ in nil }
     var presetFor: (URL) -> Preset? = { _ in nil }
     var presetsInfo: () -> (presets: [Preset], defaultID: UUID?) = { ([], nil) }
+    /// `GlobalSettings.summaryThinkingEnabled`: czy model API może „myśleć" przy notatce.
+    var summaryThinking: () -> Bool = { true }
     var onChange: () -> Void = {}
     /// Komunikaty dla użytkownika (np. nieczytelny plik notatek odłożony na bok) — podłączane do `AppModel.lastError`.
     var report: (String) -> Void = { _ in }
@@ -124,8 +126,9 @@ final class NotesModel {
         }
         generation[id] = .generating
         let limits = ChatLimits.for(client.provider, call: .note)
-        let generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
+        var generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
                                       chatTimeout: limits.transport, maxTokens: limits.maxTokens)
+        generator.thinking = summaryThinking()
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url

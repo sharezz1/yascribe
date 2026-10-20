@@ -154,8 +154,9 @@ public struct Corrector: Sendable {
                 let maxTokens = budget.map { _ in ContextBudget.maxTokens(inputChars: user.count, replyFactor: ContextBudget.correctionReplyFactor) }
                 let client = client, chatTimeout = chatTimeout, temperature = temperature
                 let reply = try await withDeadline(batchTimeout) {
+                    // Korekta tekstu nie potrzebuje myślenia; z nim model hybrydowy potrafi milczeć ponad `batchTimeout` (F20 P1).
                     try await client.chat(model: model, system: system, user: user, timeout: chatTimeout, maxTokens: maxTokens,
-                                          temperature: temperature)
+                                          temperature: temperature, thinking: false)
                 }
                 guard let fixed = CorrectionBatches.parse(reply, expected: numbered.map(\.n)) else {
                     failed += 1

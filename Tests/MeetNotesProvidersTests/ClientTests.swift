@@ -169,6 +169,37 @@ private func chat(_ provider: Provider, _ http: StubHTTP, timeout: Double = 120,
     #expect(http.calls.count == 2 && http.calls[1].body["reasoning_effort"] == nil)
 }
 
+// MARK: chat bez myślenia na API (F20 P1)
+
+private func chatThinking(_ provider: Provider, _ http: StubHTTP, thinking: Bool) async throws -> String {
+    try await OpenAICompatibleClient(provider: provider, key: nil, http: http).chat(model: "m", system: "s", user: "u", thinking: thinking)
+}
+
+@Test func chatWithoutThinkingSendsReasoningDisabledToApiProvidersOnly() async throws {
+    let http = StubHTTP { _, _ in chatReply("OK") }
+    _ = try await chatThinking(openRouter, http, thinking: false)
+    _ = try await chatThinking(openRouter, http, thinking: true)
+    _ = try await chatThinking(ollamaLocal, http, thinking: false)
+    #expect((http.calls[0].body["reasoning"] as? [String: Any])?["enabled"] as? Bool == false)
+    #expect(http.calls[1].body["reasoning"] == nil) // domyślnie nic nie wysyłamy: zachowanie sprzed poprawki
+    #expect(http.calls[2].body["reasoning"] == nil && http.calls[2].body["reasoning_effort"] as? String == "none") // lokalnie: jak dotąd
+}
+
+@Test func apiProviderRejectingReasoningIsRetriedOnceWithoutItOnlyWhenThinkingIsOff() async throws {
+    let http = StubHTTP { _, body in
+        body["reasoning"] != nil ? fail(400, "{\"error\":\"Unrecognized request argument: reasoning\"}") : chatReply("OK")
+    }
+    #expect(try await chatThinking(openRouter, http, thinking: false) == "OK")
+    #expect(http.calls.count == 2 && http.calls[0].body["reasoning"] != nil && http.calls[1].body["reasoning"] == nil)
+    // Drugie żądanie też odrzucone: błąd wychodzi, bez trzeciej próby. Inny 400 (bez „reasoning"/„think") nie jest ponawiany.
+    let always = StubHTTP { _, _ in fail(422, "reasoning not allowed") }
+    await #expect(throws: ProviderError.http(422, "reasoning not allowed")) { _ = try await chatThinking(openRouter, always, thinking: false) }
+    #expect(always.calls.count == 2)
+    let other = StubHTTP { _, _ in fail(400, "{\"error\":\"bad model\"}") }
+    await #expect(throws: ProviderError.http(400, "{\"error\":\"bad model\"}")) { _ = try await chatThinking(openRouter, other, thinking: false) }
+    #expect(other.calls.count == 1)
+}
+
 @Test func chatStripsThinkBlocksOnApiProvidersToo() async throws {
     let http = StubHTTP { _, _ in chatReply("<think>hm</think>\n[1] Tak.") }
     #expect(try await chat(openRouter, http) == "[1] Tak.")
