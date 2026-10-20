@@ -298,7 +298,7 @@ enum Snapshots {
                 for (name, status, activity) in cardScenes {
                     try render("model-card-\(name)", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                         VStack(alignment: .leading, spacing: 0) {
-                            SectionHeader("On-device speech model")
+                            SectionHeader("Yascribe model")
                             ModelCardContent(card: ModelCardState(status: status, activity: activity), location: cardFolder)
                         }
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
@@ -307,7 +307,7 @@ enum Snapshots {
                 // Błąd pobrania pod opisem i wiersze edytora presetu (ASR, „On this Mac"): brak modelu / pobieranie / gotowy.
                 try render("model-card-download-error", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 0) {
-                        SectionHeader("On-device speech model")
+                        SectionHeader("Yascribe model")
                         ModelCardContent(card: ModelCardState(status: .missing, activity: .idle), location: cardFolder,
                                          error: "The download didn't finish: The Internet connection appears to be offline.")
                     }

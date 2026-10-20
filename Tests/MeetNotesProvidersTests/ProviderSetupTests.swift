@@ -31,14 +31,15 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
 
 @Test func listShowsEveryPresetThenCustomProvidersThenAddCustom() {
     let empty = ProviderListRow.rows(for: [])
-    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx", "preset-on-this-mac", "add-custom"])
+    // Model Yascribe (Parakeet) nie jest dostawcą: nie ma wiersza (F20 P3).
+    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx", "add-custom"])
     #expect(empty.allSatisfy { if case .preset(_, let p) = $0 { p == nil } else { true } })
 
     let or = prov("https://openrouter.ai/api/v1", "OpenRouter")
     let or2 = prov("https://openrouter.ai/api/v1", "OpenRouter 2") // dostawca to instancja: drugi trafia do własnych
     let own = prov("https://llm.example.com/v1", "Work")
     let rows = ProviderListRow.rows(for: [own, or, or2])
-    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx", "preset-on-this-mac",
+    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx",
                                "custom-\(own.id.uuidString)", "custom-\(or2.id.uuidString)", "add-custom"])
     #expect(rows.first == .preset(.openRouter, or))
 }
@@ -50,14 +51,33 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
     let p = ProviderPreset.onThisMac
     #expect(p.id == "on-this-mac" && p.name == "On this Mac · Parakeet" && !p.needsKey && p.kind == .fluidAudio)
     #expect(p.baseURL == "local://fluidaudio" && p.role == "Speech-to-text on this Mac · no network")
-    #expect(ProviderPreset.ready == [.openRouter, .elevenLabs, .ollama, .llamaCpp, .omlx, .onThisMac])
+    // Preset zostaje (dopasowanie, logo), ale nie jest na liście gotowych dostawców.
+    #expect(ProviderPreset.ready == [.openRouter, .elevenLabs, .ollama, .llamaCpp, .omlx])
 }
 
-@Test func savedFluidAudioProviderIsNotShownAsCustomRow() {
+@Test func savedFluidAudioProviderIsNotShownInTheProviderList() {
     let local = prov(Provider.fluidAudioBaseURL.absoluteString, "Parakeet", kind: .fluidAudio)
     let rows = ProviderListRow.rows(for: [local])
-    #expect(rows.contains(.preset(.onThisMac, local)))
+    #expect(rows == ProviderListRow.rows(for: []))
     #expect(!rows.contains { if case .custom = $0 { true } else { false } })
+    #expect(!rows.contains { if case .preset(_, let p) = $0 { p == local } else { false } })
+}
+
+@Test func onDeviceProviderRecordIsAddedOnceByKindNotByName() {
+    var file = ProvidersFile(providers: [prov("https://openrouter.ai/api/v1", "OpenRouter")])
+    let first = file.ensureOnDeviceProvider()
+    let added = file.providers.last
+    #expect(first && file.providers.count == 2 && added?.api == .fluidAudio && added?.baseURL == Provider.fluidAudioBaseURL)
+    let second = file.ensureOnDeviceProvider() // idempotentne
+    #expect(!second && file.providers.count == 2)
+    // Rekord o innej nazwie, ale tego samego rodzaju, też wystarcza (preset trzyma `providerID`, nie nazwę).
+    var renamed = ProvidersFile(providers: [prov(Provider.fluidAudioBaseURL.absoluteString, "Mine", kind: .fluidAudio)])
+    let kept = renamed.ensureOnDeviceProvider()
+    #expect(!kept && renamed.providers.count == 1)
+    // Ten sam adres bez rodzaju to nie jest model w procesie.
+    var plain = ProvidersFile(providers: [prov("local://fluidaudio")])
+    let added2 = plain.ensureOnDeviceProvider()
+    #expect(added2 && plain.providers.count == 2)
 }
 
 // MARK: dostawcy w rolach presetu (F20 P4)
