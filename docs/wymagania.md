@@ -37,7 +37,9 @@ Nasza aplikacja może z niego korzystać bez ponownego pobierania.
 - Integralność = lista plików i rozmiary z manifestu (ze świeżego pobrania tym samym pinem) oraz odcisk modelu w migawce
   przebiegu. Znany sufit: podmiana pliku wag o identycznym rozmiarze nie jest wykrywana; rewizja modelu na Hugging Face
   nie jest przypięta (`main`) — zmiana upstream kończy się komunikatem „differs from the version this build expects".
-- Jakość PL względem `mai-transcribe-2` (S1) **nie została zmierzona** — raportu S1 nie ma.
+- Jakość PL względem `mai-transcribe-2` (S1) — **zmierzona 2026-10-20** ([raport S1](superpowers/spikes/2026-10-20-f20-s1-jakosc-asr.md), commit `6f2da98`):
+  zgodność z `mai-transcribe-2` na 15 sesjach ~83 % słów (rozbieżność 0,174; mały korpus, nie WER), kompletność 102,7 % słów FluidVoice, mediana 32 słów na wypowiedź,
+  powtarzalność tekstu i czasów słów. Pomiar bez progu go/no-go; nie zmierzono: kryterium 3.1 (milczący mikrofon na żywo) i pary PL+EN (T11) — czekają na nagranie użytkownika.
 
 ---
 
@@ -111,8 +113,13 @@ Dwa **niezależne** wybory silnika: ASR i AI. Tu wymagania trzymają się w cał
   ASR lokalnie i notatka w API albo odwrotnie. Wynik pomiaru S2 (Apple M4, 16 GB; Ollama 0.40.6, `llama-server` 0.7.0, oMLX 0.7.0;
   [raport](superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md)) — **pomiar, nie rekomendacja** (n=1–2 na komórkę, maszyna obciążona,
   czasy pesymistyczne 1,5–3×); aplikacja **nie rekomenduje żadnego modelu**:
-  - **Wejście dłuższe niż kontekst:** Ollama i llama.cpp odpowiadają HTTP 400 („exceeds the available context size") — **nie** obcinają
-    wejścia po cichu.
+  - **Wejście dłuższe niż kontekst:** Ollama (model `genesys-ministral3`) i llama.cpp odpowiadają HTTP 400 („exceeds the available context size").
+    ⚠️ **Korekta 2026-10-20 (odbiór T14, [raport](superpowers/reports/F20-2.0b-odbior.md) §2.3):** dla Ollamy to **nie jest prawdą ogólną** — S2 zmierzył 400 tylko na
+    `genesys-ministral3`; `bonsai-2` (Ollama 0.40.6) **obcina wejście po cichu**: HTTP 200, `finish_reason: "stop"`, zachowane 4 pierwsze tokeny i koniec promptu
+    (zmierzone 3×: 9987 → 2050 i 4219 → 2050 tokenów, z `max_tokens` i bez), w logu serwera `truncating input prompt`. Na oMLX niewykrywalne (brak
+    wykrywania kontekstu). Aplikacja dochodzi do tego stanu, gdy pole „Context window" jest wyższe niż kontekst serwera, a model nie jest załadowany
+    (wykrycie `/api/ps` go nie obniży). Obrona: dla dostawców lokalnych sprawdzenie `usage.prompt_tokens` względem długości promptu (zmierzone normalnie 2,8–3,3 znaku
+    na token, przy obcięciu 6,6–14,8) — **planowana (T14b), jeszcze niewdrożona na `faza20`**; decyzja użytkownika w [przeglądzie całości](superpowers/reports/F20-przeglad-calosci.md) §5.
   - **Ciche obcięcie jest po stronie wyjścia:** HTTP 200 z `finish_reason: "length"`. Aplikacja traktuje to jako błąd w każdym wywołaniu
     czatu (także dla API); wyjątek: transkrypcja przez `chatAudio` nadal ignoruje to pole ([BACKLOG](superpowers/BACKLOG.md)).
   - **Domyślny kontekst Ollamy w aplikacji = 4096 tokenów** (`/api/ps`). `/v1` ignoruje `options.num_ctx`; działają `OLLAMA_CONTEXT_LENGTH`

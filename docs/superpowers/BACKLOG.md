@@ -139,10 +139,13 @@ nie są tu kopiowane.
 - [ ] **Sufit integralności:** podmiana pliku wag o tym samym rozmiarze nie jest wykrywana (wag, 480 MB, nie hashujemy; odcisk w migawce obejmuje treść małych plików — `6b32807`).
   Dokumenty (spec §4.2, §10, decyzja 7e) mówią jeszcze „hash `config.json`" — kod hashuje treść wszystkich plików poza `weight.bin`; do ujednolicenia.
 - [ ] **Większe okna dla lokalnego ASR** — tylko jeśli czas przeszkadza: okna zostają ≤ 59 s (ziarno wznawiania); kryterium 3.7 „85 min ≤ 60 s" jest celem mierzonym, nie bramką.
-  S0 daje jedynie ekstrapolację (62–106 s dla 85 min z jednego toru, najdłuższe nagranie w pomiarze 9,5 min); realny pomiar 60 min planowano w S1 (niewykonany).
-- [ ] **Niezmierzone (czeka na użytkownika lub S1/T8):** jakość PL vs `mai-transcribe-2` i kompletność wobec FluidVoice (S1), halucynacje na ciszy, para PL+EN (T11), 3.1 (milczący
-  mikrofon, nagranie na żywo), pierwsze „Preparing model…" w `.app` po pobraniu, przebieg przy wyłączonej sieci.
-
+  S0 dał ekstrapolację 62–106 s dla 85 min (jeden tor, najdłuższe nagranie 9,5 min); T8 ekstrapolował liniowo z 9,5 min **64–71 s** (powyżej celu; dwa tory, obciążona maszyna); S1 zmierzył 60 min i
+  ekstrapoluje **~31 s** (28–35 s) dla 85 min przy poprawnym offsecie toru mikrofonu, ale **55–83 s** gdy filtr przesłuchu nie trafia (offset 0 → 108 okien zamiast 54). Wszystkie trzy to ekstrapolacje,
+  nie pomiar 85 min; wartość zależy od przesłuchu/offsetu — patrz też pozycja o offsecie niżej.
+- [ ] **Niezmierzone (czeka na użytkownika):** para PL+EN (T11), 3.1 (milczący mikrofon, nagranie na żywo), pierwsze „Preparing model…" w `.app` po pobraniu, przebieg przy wyłączonej sieci
+  (S1 i T8 zmierzyły resztę: kompletność 102,7 %, zgodność z mai ~83 %, cisza — 1 słowo / 4,9 min szumu pokoju; szczegóły w raportach).
+- [ ] **Filtr przesłuchu działa tylko przy poprawnym offsecie toru mikrofonu** (S1 §7: z offsetem 0 „me" = 190 wypowiedzi, z poprawnym 0,38 s — 8; podwaja też czas przebiegu: 108 okien zamiast 54).
+  W aplikacji offset mierzy rejestrator; odbiór na żywo (3.1) musi go sprawdzić. Brak automatycznej kontroli sensowności offsetu.
 **Lokalny model tekstowy (2.0b)**
 - [ ] **Użytkownik nie może wyczyścić zapisanego klucza oMLX:** `AppModel.replaceKey` przy pustym polu niczego nie robi (pusty = „zostaw"/tylko weryfikuj), a `Edit key…` z pustym polem testuje
   zapisany klucz. Usunięcie klucza = usunięcie dostawcy. Potrzebny jawny „Remove key".
@@ -163,7 +166,24 @@ nie są tu kopiowane.
   i wysyłki nagrania do chmury, tylko na polecenie użytkownika), `reasoning_effort` na modelu bez „thinking" (ponowienie bez pola jest w kodzie, ale nie zmierzono, kiedy działa),
   czasy na cichej maszynie (S2 przy load do 107), n=1–2 na komórkę jakości, `temperature` 0,2 (wpływ), tokenizery Gemma/Llama (znaki na token).
 - [ ] **Przebiegi `mai-transcribe-2` na nagraniach służbowych z `~/GCX`** (zgodność na dłuższym materiale) — wysyłka do chmury i koszt; tylko na polecenie użytkownika.
-- [ ] **Plan fazy 2.0:** pola `- [ ]` przy T11 i T12 są nieodhaczone mimo commitów `fb12fe2` i `ffebac4`; T1, T8, T14 faktycznie niewykonane. Do uporządkowania przy odbiorze.
+- [ ] **Plan fazy 2.0:** pola `- [ ]` przy T11, T12 i T14 są nieodhaczone mimo commitów `fb12fe2`, `ffebac4` i `a8ad702`. Do uporządkowania przy scaleniu.
+
+**Z odbioru 2.0b i przeglądu całości (T14, 2026-10-20; [odbiór](reports/F20-2.0b-odbior.md), [przegląd](reports/F20-przeglad-calosci.md) §4–§5) — ryzyka bez decyzji**
+- [ ] **Tytuł z modelem, który potrzebuje > 64 tokenów, kończy się cicho jako „Untitled”:** `ChatLimits .title` wysyła `max_tokens` 64; `genesys-ministral3` na Ollamie nie kończy jednej linii w 64 tokenach
+  (`length` → `replyCutOff` → brak tytułu, 33 s), więc dla tego modelu na Ollamie tytuł nie powstaje nigdy (na llama.cpp: 24 tokeny, tytuł poprawny). Zgodne z decyzją 8, ale bez śladu w UI.
+- [ ] **Hook pre-commit ufa hashom z gałęzi `worktree-agent-*`:** `scripts/check-hashes.sh` uznaje hash istniejący na **jakiejkolwiek** gałęzi; po sprzątaniu worktree hash z niescalonej gałęzi przestanie
+  przechodzić dopiero przy następnym commicie. Zawęzić do przodków `HEAD`/`master`/`faza*` albo ostrzegać o hashach tylko z `worktree-agent-*`.
+- [ ] **Lokalna korekta może zmienić daty i liczby:** `CorrectionRules.accepts` to tylko pasmo długości; S2 — „pierwszego grudnia” → „pierwszy stycznia” (`bonsai-2`); w T14 liczby, nazwiska i miesiące w syntetycznej partii nietknięte (Ollama i llama.cpp),
+  ale to n = 1 na komórkę. Bramka liczb/dat jest **tylko tutaj** (nie w kodzie); decyzja użytkownika (pkt 9 „po S2”) — dziś wyłącznie podpis ostrzegawczy w edytorze presetu.
+- [ ] **Ponowienie bez `reasoning_effort` także po `think` w treści błędu** (`OpenAICompatibleClient.swift:147`: `reasoning` **albo** `think`) — szerzej niż spec §14 pkt 2 (`reasoning`); nieszkodliwe, do dopisania w specu.
+- [ ] **`isLocal` szerszy niż tekst speca i `wymagania.md`:** kod (po `a95096e`) uznaje całe `127.0.0.0/8` i `0.0.0.0` (z testami), dokumenty wymieniają `localhost`, `127.0.0.1`, `::1`, `*.localhost`. Od tego zależą
+  `requiresKey` i wysyłka `reasoning_effort`; do ujednolicenia w dokumentach (albo zawężenia kodu).
+- [ ] **Cel 3.7 „85 min ≤ 60 s” nie jest zmierzony:** T8 ekstrapoluje z 9,5 min **64–71 s** (powyżej celu), S1 z 60 min **~31 s** przy poprawnym offsecie i 55–83 s przy złym; dodatkowo przesłuch/zakłócenia
+  dwóch torów zmieniają liczbę okien. Szczyt pamięci rośnie z długością audio (1,17 GB przy 60 min dwóch torów; ok. 1,6 GB dla 85 min — ekstrapolacja). Patrz „Większe okna dla lokalnego ASR”.
+- [ ] **Końcowy map-reduce 60 min przy kontekście 16384 niezmierzony end-to-end** (limit czasu odbioru): przy 4096 i 8192 `bonsai-2` kończy jawnym błędem, szacunek dla 16384 to 25–30 min i dojście do 2. poziomu mapy i reduce
+  (zmierzona osobno tylko gęstość wejścia: 2,84 znaku/token). Jakość map-reduce wobec jednego przebiegu ocenia użytkownik.
+- [ ] **Ciche obcięcie wejścia przez Ollamę (`bonsai-2`) — obrona w toku (T14b):** porównanie `usage.prompt_tokens` z długością promptu dla dostawców lokalnych; do czasu wdrożenia dotyczy pola „Context window” wyższego niż kontekst serwera
+  przy niezaładowanym modelu oraz oMLX. Decyzja (a)/(b)/(c) z przeglądu §5 pkt 1 — użytkownika. Po wdrożeniu odhaczyć i dopisać hash.
 
 ## Zapisane (dla kroniki)
 

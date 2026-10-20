@@ -179,8 +179,8 @@ nie na nowym transporcie.
   partię) wyprowadzany z tego samego limitu co podział notatki; (2) dla Ollamy budżet = `num_ctx` ustawiony przez użytkownika, bo `/api/show` zwraca
   maksymalny kontekst **modelu**, nie efektywny; (3) wykrywanie może budżet tylko **obniżyć**, nigdy podnieść ponad domyślny; (4) `/api/show` i `/props`
   leżą poza `/v1`, a `Provider.baseURL` zawiera `…/v1` — plan musi to uwzględnić. Czy Ollama obcina wejście po cichu — dziś założenie, rozstrzyga S2.
-  **[po S2 — §14]** Ollama **nie** obcina wejścia (HTTP 400 „exceeds the available context size”); ciche obcięcie jest po stronie **wyjścia**
-  (HTTP 200, `finish_reason: "length"`). `/api/show` zwraca maksimum modelu, więc odpada; źródła efektywnego kontekstu: Ollama `/api/ps`, llama.cpp `/props`.
+  **[po S2 — §14]** Ollama **nie** obcina wejścia (HTTP 400 „exceeds the available context size”) **[korekta 2026-10-20, T14 — §14 „Korekta po T14”: fałsz dla `bonsai-2`]**;
+  ciche obcięcie jest po stronie **wyjścia** (HTTP 200, `finish_reason: "length"`). `/api/show` zwraca maksimum modelu, więc odpada; źródła efektywnego kontekstu: Ollama `/api/ps`, llama.cpp `/props`.
   Zasada (1) „jeden mechanizm” zostaje, ale z dwiema regułami rezerwy (§14 pkt 4).
   Bez map-reduce dla API.
 - **Jakość:** `CorrectionRules.accepts` (bramka numerów i zmian) i generowanie notatki zostają bez zmian; małe modele będą częściej
@@ -233,7 +233,7 @@ Licencje obu: MIT (wolno czerpać kod z uwzględnieniem noty); FluidVoice (GPL-3
    wspólny mechanizm**: wartość nastawialna u dostawcy z konserwatywnym domyślnym, a wykrywanie (Ollama `/api/show`, llama.cpp `/props`) jest
    dodatkiem „best effort", nie warunkiem. Oba złe kierunki są widoczne: zbyt mały budżet = więcej części (wolniej, ostrzeżenie w notatce o podziale),
    zbyt duży = błąd kontekstu z nazwą modelu (istniejący `ContextError`), nigdy ciche obcięcie, o ile serwer zwraca błąd; wykrycie cichego
-   obcinania (Ollama) to jedno z pytań S2. **[po S2 — §14 pkt 1, 4]** wejście: jawny błąd 400 (Ollama, llama.cpp); wyjście: `finish_reason: "length"`
+   obcinania (Ollama) to jedno z pytań S2. **[po S2 — §14 pkt 1, 4]** wejście: jawny błąd 400 (Ollama, llama.cpp) **[korekta 2026-10-20: Ollama + `bonsai-2` obcina po cichu — §14 „Korekta po T14”]**; wyjście: `finish_reason: "length"`
    traktowane jako błąd; wykrywanie: `/props` i `/api/ps`, nie `/api/show`.
 2. **S0 i pierwsza zależność zewnętrzna:** FluidAudio byłby pierwszą zależnością SwiftPM w `Package.swift`. S0 sprawdza wpływ na budowanie
    samymi CLT, `scripts/test.sh` (plugin makr, liczenie `@Test`), `scripts/bundle.sh` i próg macOS 15. **No-go = STOP:** wracam do użytkownika
@@ -378,3 +378,24 @@ Techniczny `baseURL` dostawcy lokalnego; okna ≤59 s; cykl życia modelu ASR (�
    `contextFor`); T13 korzysta z formuł pkt 4–5. Kolejność T10 → T11 → T12 → T13 → T14 bez zmian; T10–T13 nie czekają na kroki użytkownika z T8
    (2.0b technicznie niezależna, §11.2), T14 — czeka na T8. Odbiór T14 sprawdza to, czego S2 nie zmierzył (oMLX, baseline API, `reasoning_effort` na modelu
    bez myślenia, czasy na cichej maszynie) albo zapisuje „niezmierzone” — szczegóły w planie, T14.
+
+### Korekta po T14 (2026-10-20, odbiór 2.0b na sprzęcie — `docs/superpowers/reports/F20-2.0b-odbior.md` §2.3, `F20-przeglad-calosci.md` §0, §4 pkt 4, §5)
+
+Twierdzenie z pkt 1 i z §5.2/§11.1 („Ollama **nie** obcina wejścia, HTTP 400”) było prawdziwe dla `genesys-ministral3` (jedyny model, na którym S2 mierzył wejście; S2 sam zapisał,
+że wejścia na `bonsai-2` nie testował) i zostało błędnie uogólnione na Ollamę. **Pomiar T14 (Ollama 0.40.6, serwer 4096):**
+- `bonsai-2` (qwen35): HTTP **200**, `finish_reason: "stop"`, `usage.prompt_tokens` = 2050 przy prompcie 4219 albo 9987 tokenów; w logu serwera `truncating input prompt` —
+  zachowane są **4 pierwsze tokeny i koniec** promptu (instrukcje szablonu i początek spotkania znikają); powtórzone 3×, z `max_tokens` i bez. Notatka (1091 znaków, bez tytułu i sekcji) zapisała się jako sukces.
+- `genesys-ministral3` (Ollama): HTTP 400 „exceeds the available context size” (jak w S2); llama.cpp (`bonsai-2`): HTTP 400 `exceed_context_size_error`.
+- oMLX: nie do wykrycia (brak `/props` i `/api/ps`; czatu nie wysyłano — HTTP 507 w S2).
+
+Skutek dla założeń: „ciche obcięcie wejścia” **jest możliwe** na Ollamie, zależnie od modelu/silnika. Aplikacja dochodzi do tego stanu tylko przy polu „Context window” wyższym niż kontekst serwera
+**i** niezaładowanym modelu w chwili użycia (wykrycie `/api/ps` zna tylko model załadowany) albo na serwerze bez wykrywania. Przy pustym polu (4096) i domyślnej Ollamie nie grozi.
+Anty-cel „ciche obcięcie transkryptu” (§2) pozostaje częściowo otwarty dla wejścia do czasu wdrożenia obrony.
+
+**Obrona (propozycja (a) z przeglądu całości §5, rekomendowana przez Opusa): drugi poziom kontroli w `chat` dla dostawców lokalnych** — porównanie `usage.prompt_tokens` z długością
+promptu (`(system + user).count / prompt_tokens`; zmierzone normalnie 2,8–3,3 znaku na token, przy obcięciu 6,6–14,8; próg rzędu 5 z przeglądu — dokładną stałą ustala kod) i błąd „the server cut the input”
+zamiast zapisu notatki. Jedna gałąź, test na atrapie, działa też na oMLX (gdzie wykrycia kontekstu nie ma). **Stan na `a8ad702`: planowana (T14b), niewdrożona na `faza20`**
+— po wdrożeniu zmienić to zdanie na „wdrożona” z hashem commitu.
+
+Pozostałe rozjazdy kod ↔ spec stwierdzone w przeglądzie (§4 pkt 2, 3, 5), niepoprawiane tutaj: `isLocal` uznaje też całe `127.0.0.0/8` i `0.0.0.0` (§11.5 wymienia `localhost`, `127.0.0.1`, `::1`, `*.localhost`);
+ponowienie bez `reasoning_effort` także dla `think` w treści błędu (pkt 2 mówi o `reasoning`); `max_tokens` części mapy to miejsce po prompcie, najwyżej 1,0 × wejścia (pkt 5: 0,5 ×; zmiana po przeglądzie T13, `4ff727b`).

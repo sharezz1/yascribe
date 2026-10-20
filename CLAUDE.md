@@ -41,21 +41,35 @@ Raporty: 1.5a `docs/superpowers/reports/F15-T13-czesc-B.md`; 1.5b `docs/superpow
 **Niezamknięta:** poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji; lekarz/urodziny/OOO tylko z testów;
 pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
 
-**Faza 2.0 „Lokalne modele"** — na gałęzi `faza20` (stan na `e36b8bd`), **nie scalona do `master`, bez tagu**; scalenie to wyłącznie decyzja użytkownika.
+**Faza 2.0 „Lokalne modele"** — na gałęzi `faza20` (stan na `a8ad702`; przebieg testów po poprawce U1, commit `11fb41d`: **548/548**),
+**nie scalona do `master`, bez tagu**; scalenie to wyłącznie decyzja użytkownika.
 Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/superpowers/reports/F20-decyzje-opusa.md` (w tym lista „Do potwierdzenia rano").
 - **2.0a — lokalny ASR** (Parakeet TDT v3 w procesie przez FluidAudio, pin `exact: "0.17.7"`, `.v3`/`.int8`): kod T2–T7 jest na gałęzi
   (`ProviderKind.fluidAudio`, `MeetNotesLocalASR`, odmowa bez modelu i bez cichego fallbacku do API, karta modelu w Settings).
   Model pobiera wyłącznie użytkownik przyciskiem; ładowanie tylko `AsrModels.loadLocal`.
+  **S1 wykonany** (`6f2da98`): kompletność 102,7 % słów FluidVoice, mediana 32 słów/wypowiedź, powtarzalność tekstu i czasów, 0 flag języka na PL,
+  RTF ~0,006; wynik to pomiar bez progu go/no-go. **Odbiór T8 wykonany bez kroków użytkownika** (`cec0263`, `aca4260`): wszystko, co agent mógł zrobić, przeszło.
+  Wykryta **U1** (słowa rozciągnięte przez wyciętą ciszę na sklejeniach okien) **naprawiona** w `11fb41d` (`Chunk.sourceSpan`: słowo przycinane do fragmentu,
+  w którym się zaczyna; dotyczy też ścieżki API, zmienia czasy słów, nie tekst).
 - **2.0b — lokalny model tekstowy** przez Ollamę, llama.cpp albo oMLX (zwykły `Provider` na loopbacku): kod T10–T13 jest na gałęzi
   (`finish_reason: "length"` = błąd, `reasoning_effort: "none"` tylko dla lokalnych, limity czatu, budżet kontekstu z polem „Context window",
-  numeracja partii korekty 1…N, map-reduce dla podsumowania). Aplikacja nie rekomenduje modeli.
-- **Niezamknięte w 2.0:** S1 (jakość Parakeet vs `mai-transcribe-2`; T1) — brak raportu w `docs/superpowers/spikes/`; odbiór 2.0a na sprzęcie (T8:
-  sieć off, pierwsze „Download", nagranie na żywo) — brak raportu; odbiór 2.0b i przegląd całości (T14, STOP) — niewykonane; oMLX niezmierzony (HTTP 507);
-  baseline API niezmierzony (wymaga klucza użytkownika). Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.
-- Spec: `docs/superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md` (§13 decyzje po S0, §14 po S2); plan: `docs/superpowers/plans/2026-10-20-faza20-lokalne-modele.md`.
+  numeracja partii korekty 1…N, map-reduce dla podsumowania). Aplikacja nie rekomenduje modeli. **Odbiór sprzętowy T14 wykonany** (`a8ad702`):
+  korekta, notatka jednym przebiegiem przy 16384, `reasoning_effort`, anulowanie, awarie serwera i wykrywanie kontekstu zaliczone; map-reduce 60 min przy 4096 i 8192
+  kończy się jawnym błędem (notatka z 60 min powstaje dopiero przy kontekście serwera ≥ 16384 — end-to-end niezmierzone).
+  **Znalezisko sprzętowe:** Ollama 0.40.6 z `bonsai-2` **obcina wejście po cichu** (HTTP 200, `finish_reason: "stop"`), gdy prompt jest dłuższy niż kontekst serwera,
+  a pole „Context window" jest wyższe niż serwer i model nie jest załadowany (wykrycie `/api/ps` go nie obniży); nie do wykrycia także na oMLX. Spec §14 i `wymagania.md`
+  mówiły inaczej (prawda tylko dla `genesys-ministral3`) — poprawione notą „korekta". **Obrona w toku (T14b):** w `chat` dla dostawców lokalnych porównanie
+  `usage.prompt_tokens` z długością promptu; **jeszcze nie na `faza20`** (stan na `a8ad702`) — po wdrożeniu zaktualizować to zdanie i liczbę testów.
+- **Niezamknięte w 2.0 (kroki użytkownika i klucze):** powtórzenie T8 przy wyłączonym Wi-Fi, klik „Download (483 MB)" i „Preparing…" w `.app`, nagranie na żywo
+  dla kryterium 3.1 i para PL+EN (T11); oMLX (model mieszczący się w pamięci + własny klucz) niezmierzony; baseline API (klucz, koszt) niezmierzony; decyzja o scaleniu
+  `faza20` → `master`. Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.
+- Spec: `docs/superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md` (§13 decyzje po S0, §14 po S2, nota „korekta po T14" na końcu §14); plan: `docs/superpowers/plans/2026-10-20-faza20-lokalne-modele.md`.
   Recenzje: `docs/superpowers/reports/F20-recenzja-design.md`, `docs/superpowers/reports/F20-recenzja-planu.md`; przeglądy Opusa po T4, T10 i T13 zostały
-  tylko w komunikatach commitów `6b32807`, `a95096e`, `4ff727b` (brak osobnych raportów). Spiki: `docs/superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md` (S0, GO),
-  `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (S2, commit `38ac47f`); pliku S1 nie ma.
+  tylko w komunikatach commitów `6b32807`, `a95096e`, `4ff727b` (brak osobnych raportów).
+  Spiki: `docs/superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md` (S0, GO), `docs/superpowers/spikes/2026-10-20-f20-s1-jakosc-asr.md` (S1),
+  `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (S2, commit `38ac47f`).
+  Odbiory i przegląd: `docs/superpowers/reports/F20-2.0a-odbior.md` (T8), `docs/superpowers/reports/F20-2.0b-odbior.md` (T14, sprzęt),
+  `docs/superpowers/reports/F20-przeglad-calosci.md` (T14, przegląd całości gałęzi: spójna ze specem, jeden wyjątek — ciche obcięcie wejścia).
 
 ## Twarde zasady
 
