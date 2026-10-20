@@ -64,7 +64,17 @@ słów z listy (um, uh, er, ah, hmm, mm…), bez modelu, natychmiast. Lista Flui
 2. Dodatkowo można mieć filtr **w backendzie** (deterministyczny, jak w FluidVoice).
 3. Otwarte: czy lista jest edytowalna w Settings, jaka jest domyślna lista polska (yyy, eee, mhm…) i czy filtr backendowy jest domyślnie włączony.
 
-**Stan: bez kodu, do decyzji.** Opcje (asystent), od najmniejszej:
+**Stan: zrobione w `2765a9b` (opcje A i B, decyzja użytkownika 2026-10-20: „rób A i B z domyślną polską listą").**
+
+**Co zrobiono.** Jedno ustawienie steruje obiema częściami: Settings → Correction → Filler sounds (przełącznik, domyślnie włączony) i pole Words (lista po przecinku, Return zapisuje, Reset wraca do domyślnej).
+**A:** lista (pierwsze 8 słów) trafia do polecenia systemowego korektora („Exception: remove filler sounds and hesitations…"). **B:** `FillerWords.remove` po odpowiedzi modelu, także dla linii z nieudanych
+partii; całkowita porażka korekty bez zmian. Interpunkcja i wielka litera po usuniętym początku zdania zachowane; rozciągnięte „yyyyy" pasują, pojedyncze „m" nie; wypowiedź złożona wyłącznie z przerywników zostaje (bez pustych).
+Lista domyślna: `yyy, eee, ehm, yhm, mhm, mmm, hmm, ym, um, uh, er, erm, uhm` (bez słów z znaczeniem: no, tak, wiesz, znaczy). Filtr działa na tekście poprawionym; surowy transkrypt i `words` nietknięte.
+**Zweryfikowane.** 9 testów (filtr, interpunkcja, brzegi, korektor A i B, zgodność starego `settings.json`, prawdziwe zdanie z próby P1), trzy mutacje wywróciły testy, pliki przywrócone.
+**Niezweryfikowane.** Wygląd sekcji Correction w Settings (migawki nie sięgają tak nisko), prawdziwa korekta z modelem po zmianie. Filtr nie dotyczy korekt zrobionych wcześniej (są zapisane w `corrected.json`): „Retry" je przeliczy.
+**Poza zakresem (świadomie).** Pauzy; edycja listy per preset; czyszczenie surowego transkryptu (opcja C odradzana).
+
+Opcje przedstawione użytkownikowi (dla historii), od najmniejszej:
 - **A. Tylko polecenia dla modelu.** Gotowy tekst do pola „Extra instructions" korekty (np. „Remove filler sounds such as yyy, eee, mhm; do not remove words that carry meaning"). Zero kodu,
   ale model bywa niekonsekwentny (próba B zostawiła „yy"), a pole jest per preset.
 - **B. Filtr deterministyczny na wyniku korekty** (po modelu, przed zapisem `corrected.json`). Korekta i tak podmienia tylko `text` (czas i mówca z oryginału), więc czasy słów nie cierpią.
