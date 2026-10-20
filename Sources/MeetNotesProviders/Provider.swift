@@ -80,4 +80,7 @@ public enum ProviderError: Error, Equatable {
     case missingKey
     /// `finish_reason: "length"` — serwer uciął wyjście (limit tokenów albo kontekstu); odpowiedź nie jest pełna.
     case replyCutOff
+    /// Lokalny serwer po cichu obciął wejście (HTTP 200, `finish_reason: "stop"`): przeczytał `readTokens` tokenów z `sentChars`
+    /// znaków promptu (`OpenAICompatibleClient.truncationRatio`). Odpowiedź dotyczy ogona promptu, więc nie jest wynikiem.
+    case inputTruncated(sentChars: Int, readTokens: Int)
 }

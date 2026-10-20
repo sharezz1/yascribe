@@ -129,6 +129,13 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         }
     }
 
+    /// Obrona przed cichym obcięciem wejścia przez lokalny serwer (Ollama + bonsai-2: prompt dłuższy niż kontekst → HTTP 200,
+    /// zostaje 4 pierwsze tokeny i ogon). Znaki promptu na token zwrócony w `usage.prompt_tokens`: zmierzone normalnie 2,8–3,3,
+    /// przy obcięciu 6,6–14,8. Powyżej tej granicy `chat` rzuca `.inputTruncated`.
+    static let truncationRatio = 5.0
+    /// Poniżej tylu znaków (system + user) nie sprawdzamy (np. sonda „ping"): stały narzut szablonu czatu zawyża iloraz.
+    static let truncationMinChars = 4_000
+
     /// `timeout` = limit transportowy żądania (bezczynność łącza; bez streamu serwer milczy do końca generacji).
     /// Lokalny serwer dostaje `reasoning_effort: "none"` (model „thinking" zjada kontekst — S2); gdy go odrzuci
     /// (400/422 z „reasoning" albo „think"), jedno ponowienie bez pola. `finish_reason == "length"` = błąd (wyjście ucięte),
@@ -150,6 +157,13 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             }
         } else {
             obj = try await json(try request("chat/completions", body: body, timeout: timeout))
+        }
+        // Tylko lokalnie i tylko gdy `usage.prompt_tokens` jest liczbą > 0 (brak/zero = nic nie wiemy, bez fałszywych alarmów).
+        if provider.isLocal, let read = ((obj["usage"] as? [String: Any])?["prompt_tokens"] as? NSNumber)?.intValue, read > 0 {
+            let sent = system.count + user.count
+            if sent >= Self.truncationMinChars, Double(sent) / Double(read) > Self.truncationRatio {
+                throw ProviderError.inputTruncated(sentChars: sent, readTokens: read)
+            }
         }
         if ((obj["choices"] as? [[String: Any]])?.first?["finish_reason"] as? String) == "length" { throw ProviderError.replyCutOff }
         let reply = ThinkingStripper.clean(try Self.chatContent(obj), orphanClosers: provider.isLocal)
