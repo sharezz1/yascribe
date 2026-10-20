@@ -26,7 +26,7 @@ fi
 find -E "${TMPDIR:-/tmp}" -maxdepth 1 -regex '.*/mn-((fit|session|tr)-)?[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}' -mmin +60 -exec rm -rf {} + 2>/dev/null
 OUT="$(mktemp)"
 trap 'rm -f "$OUT"' EXIT
-swift test -Xswiftc -load-plugin-library -Xswiftc "$PLUGIN" "$@" 2>&1 | tee "$OUT"
+swift test --disable-keychain -Xswiftc -load-plugin-library -Xswiftc "$PLUGIN" "$@" 2>&1 | tee "$OUT"
 STATUS=${PIPESTATUS[0]}
 
 if grep -q "TestingMacros' not found" "$OUT"; then
@@ -41,7 +41,7 @@ for arg in "$@"; do
     case "$arg" in --filter|--skip) echo "test.sh: filtr — liczby testów nie sprawdzam"; exit 0 ;; esac
 done
 
-RAN=$(grep -oE 'Test run with [0-9]+ tests' "$OUT" | grep -oE '[0-9]+' | paste -sd+ - | bc)
+RAN=$(grep -oE 'Test run with [0-9]+ tests?' "$OUT" | grep -oE '[0-9]+' | paste -sd+ - | bc)
 EXPECTED=$(grep -rhE '^[[:space:]]*@Test' Tests | wc -l | tr -d ' ')
 if [ "${RAN:-0}" -ne "$EXPECTED" ]; then
     echo "test.sh: uruchomiono $RAN testów, a w Tests/ jest $EXPECTED deklaracji @Test. Wynik NIEWAŻNY." >&2
