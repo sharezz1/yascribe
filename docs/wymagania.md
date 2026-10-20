@@ -119,7 +119,7 @@ Dwa **niezależne** wybory silnika: ASR i AI. Tu wymagania trzymają się w cał
     (zmierzone 3×: 9987 → 2050 i 4219 → 2050 tokenów, z `max_tokens` i bez), w logu serwera `truncating input prompt`. Na oMLX niewykrywalne (brak
     wykrywania kontekstu). Aplikacja dochodzi do tego stanu, gdy pole „Context window" jest wyższe niż kontekst serwera, a model nie jest załadowany
     (wykrycie `/api/ps` go nie obniży). Obrona: dla dostawców lokalnych sprawdzenie `usage.prompt_tokens` względem długości promptu (zmierzone normalnie 2,8–3,3 znaku
-    na token, przy obcięciu 6,6–14,8) — **planowana (T14b), jeszcze niewdrożona na `faza20`**; decyzja użytkownika w [przeglądzie całości](superpowers/reports/F20-przeglad-calosci.md) §5.
+    na token, przy obcięciu 6,6–14,8) — **wdrożona (T14b, `606ee39`)**; decyzja użytkownika w [przeglądzie całości](superpowers/reports/F20-przeglad-calosci.md) §5.
   - **Ciche obcięcie jest po stronie wyjścia:** HTTP 200 z `finish_reason: "length"`. Aplikacja traktuje to jako błąd w każdym wywołaniu
     czatu (także dla API); wyjątek: transkrypcja przez `chatAudio` nadal ignoruje to pole ([BACKLOG](superpowers/BACKLOG.md)).
   - **Domyślny kontekst Ollamy w aplikacji = 4096 tokenów** (`/api/ps`). `/v1` ignoruje `options.num_ctx`; działają `OLLAMA_CONTEXT_LENGTH`

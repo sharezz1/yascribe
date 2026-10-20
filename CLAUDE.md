@@ -41,7 +41,7 @@ Raporty: 1.5a `docs/superpowers/reports/F15-T13-czesc-B.md`; 1.5b `docs/superpow
 **Niezamknięta:** poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji; lekarz/urodziny/OOO tylko z testów;
 pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
 
-**Faza 2.0 „Lokalne modele"** — na gałęzi `faza20` (stan na `a8ad702`; przebieg testów po poprawce U1, commit `11fb41d`: **548/548**),
+**Faza 2.0 „Lokalne modele"** — na gałęzi `faza20` (stan na `606ee39` + scalenie `9059aeb`; pełny przebieg `scripts/test.sh`: **561/561**),
 **nie scalona do `master`, bez tagu**; scalenie to wyłącznie decyzja użytkownika.
 Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/superpowers/reports/F20-decyzje-opusa.md` (w tym lista „Do potwierdzenia rano").
 - **2.0a — lokalny ASR** (Parakeet TDT v3 w procesie przez FluidAudio, pin `exact: "0.17.7"`, `.v3`/`.int8`): kod T2–T7 jest na gałęzi
@@ -58,8 +58,8 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
   kończy się jawnym błędem (notatka z 60 min powstaje dopiero przy kontekście serwera ≥ 16384 — end-to-end niezmierzone).
   **Znalezisko sprzętowe:** Ollama 0.40.6 z `bonsai-2` **obcina wejście po cichu** (HTTP 200, `finish_reason: "stop"`), gdy prompt jest dłuższy niż kontekst serwera,
   a pole „Context window" jest wyższe niż serwer i model nie jest załadowany (wykrycie `/api/ps` go nie obniży); nie do wykrycia także na oMLX. Spec §14 i `wymagania.md`
-  mówiły inaczej (prawda tylko dla `genesys-ministral3`) — poprawione notą „korekta". **Obrona w toku (T14b):** w `chat` dla dostawców lokalnych porównanie
-  `usage.prompt_tokens` z długością promptu; **jeszcze nie na `faza20`** (stan na `a8ad702`) — po wdrożeniu zaktualizować to zdanie i liczbę testów.
+  mówiły inaczej (prawda tylko dla `genesys-ministral3`) — poprawione notą „korekta". **Obrona wdrożona (T14b, `606ee39`):** w `chat` dla dostawców lokalnych porównanie
+  `usage.prompt_tokens` z długością promptu (prompt ≥ 4000 znaków i > 5,0 znaku na token → `ProviderError.inputTruncated`, jawny błąd zamiast notatki); działa też na oMLX.
 - **Niezamknięte w 2.0 (kroki użytkownika i klucze):** powtórzenie T8 przy wyłączonym Wi-Fi, klik „Download (483 MB)" i „Preparing…" w `.app`, nagranie na żywo
   dla kryterium 3.1 i para PL+EN (T11); oMLX (model mieszczący się w pamięci + własny klucz) niezmierzony; baseline API (klucz, koszt) niezmierzony; decyzja o scaleniu
   `faza20` → `master`. Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.

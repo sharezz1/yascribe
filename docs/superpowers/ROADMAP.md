@@ -43,10 +43,10 @@ Wymaga spike'a na sprzęcie (lista procesów audio, Teams, OOO w Exchange) przed
 ## Faza 2.0 „Lokalne modele" (zrealizowana i odebrana na sprzęcie na gałęzi `faza20`, do scalenia przez użytkownika)
 
 Lokalna ścieżka **obok API**, nie zamiast niego (decyzja użytkownika 2026-10-19, [spec §3](specs/2026-10-19-faza20-lokalne-modele-design.md)).
-**Stan (gałąź `faza20` na `a8ad702`, 548/548 po poprawce U1 `11fb41d`):** **niescalona do `master`, bez tagu** — scalenie to wyłącznie decyzja użytkownika. Zrobione jest to, co
+**Stan (gałąź `faza20` na `9059aeb`, 561/561):** **niescalona do `master`, bez tagu** — scalenie to wyłącznie decyzja użytkownika. Zrobione jest to, co
 dało się bez rąk użytkownika: **S1** ([raport](spikes/2026-10-20-f20-s1-jakosc-asr.md), `6f2da98`), **odbiór 2.0a** ([T8](reports/F20-2.0a-odbior.md), `cec0263`/`aca4260`; wykryta U1 naprawiona w `11fb41d`),
 **odbiór 2.0b i przegląd całości** ([T14](reports/F20-2.0b-odbior.md), [przegląd](reports/F20-przeglad-calosci.md), `a8ad702`). **Znalezisko przed scaleniem:** Ollama + `bonsai-2` obcina wejście po cichu
-(obrona `usage.prompt_tokens` vs długość promptu — T14b, jeszcze nie na `faza20`; [spec §14 „Korekta po T14”](specs/2026-10-19-faza20-lokalne-modele-design.md)).
+(obrona `usage.prompt_tokens` vs długość promptu — wdrożona w T14b, `606ee39`; [spec §14 „Korekta po T14”](specs/2026-10-19-faza20-lokalne-modele-design.md)).
 **Tylko użytkownik:** powtórzenie T8 przy wyłączonym Wi-Fi, klik „Download (483 MB)” (albo przeniesienie kopii z `.devdata/model-store`) i „Preparing…” w `.app`, nagranie na żywo dla kryterium 3.1 i pary PL+EN (T11),
 oMLX z modelem mieszczącym się w pamięci i własnym kluczem, baseline API (klucz, koszt, wysyłka do chmury), decyzje z przeglądu §5. Decyzje: [F20-decyzje-opusa](reports/F20-decyzje-opusa.md) (z listą „Do potwierdzenia rano").
 

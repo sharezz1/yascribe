@@ -182,7 +182,7 @@ nie są tu kopiowane.
   dwóch torów zmieniają liczbę okien. Szczyt pamięci rośnie z długością audio (1,17 GB przy 60 min dwóch torów; ok. 1,6 GB dla 85 min — ekstrapolacja). Patrz „Większe okna dla lokalnego ASR”.
 - [ ] **Końcowy map-reduce 60 min przy kontekście 16384 niezmierzony end-to-end** (limit czasu odbioru): przy 4096 i 8192 `bonsai-2` kończy jawnym błędem, szacunek dla 16384 to 25–30 min i dojście do 2. poziomu mapy i reduce
   (zmierzona osobno tylko gęstość wejścia: 2,84 znaku/token). Jakość map-reduce wobec jednego przebiegu ocenia użytkownik.
-- [ ] **Ciche obcięcie wejścia przez Ollamę (`bonsai-2`) — obrona w toku (T14b):** porównanie `usage.prompt_tokens` z długością promptu dla dostawców lokalnych; do czasu wdrożenia dotyczy pola „Context window” wyższego niż kontekst serwera
+- [x] **Ciche obcięcie wejścia przez Ollamę (`bonsai-2`) — obrona wdrożona (T14b, `606ee39`):** porównanie `usage.prompt_tokens` z długością promptu dla dostawców lokalnych; do czasu wdrożenia dotyczy pola „Context window” wyższego niż kontekst serwera
   przy niezaładowanym modelu oraz oMLX. Decyzja (a)/(b)/(c) z przeglądu §5 pkt 1 — użytkownika. Po wdrożeniu odhaczyć i dopisać hash.
 
 ## Zapisane (dla kroniki)

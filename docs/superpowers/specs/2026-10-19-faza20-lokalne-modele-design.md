@@ -390,12 +390,11 @@ Twierdzenie z pkt 1 i z §5.2/§11.1 („Ollama **nie** obcina wejścia, HTTP 40
 
 Skutek dla założeń: „ciche obcięcie wejścia” **jest możliwe** na Ollamie, zależnie od modelu/silnika. Aplikacja dochodzi do tego stanu tylko przy polu „Context window” wyższym niż kontekst serwera
 **i** niezaładowanym modelu w chwili użycia (wykrycie `/api/ps` zna tylko model załadowany) albo na serwerze bez wykrywania. Przy pustym polu (4096) i domyślnej Ollamie nie grozi.
-Anty-cel „ciche obcięcie transkryptu” (§2) pozostaje częściowo otwarty dla wejścia do czasu wdrożenia obrony.
+Anty-cel „ciche obcięcie transkryptu” (§2) dla wejścia domyka obrona z T14b (`606ee39`, stałe `truncationRatio = 5,0`, `truncationMinChars = 4000`).
 
 **Obrona (propozycja (a) z przeglądu całości §5, rekomendowana przez Opusa): drugi poziom kontroli w `chat` dla dostawców lokalnych** — porównanie `usage.prompt_tokens` z długością
 promptu (`(system + user).count / prompt_tokens`; zmierzone normalnie 2,8–3,3 znaku na token, przy obcięciu 6,6–14,8; próg rzędu 5 z przeglądu — dokładną stałą ustala kod) i błąd „the server cut the input”
-zamiast zapisu notatki. Jedna gałąź, test na atrapie, działa też na oMLX (gdzie wykrycia kontekstu nie ma). **Stan na `a8ad702`: planowana (T14b), niewdrożona na `faza20`**
-— po wdrożeniu zmienić to zdanie na „wdrożona” z hashem commitu.
+zamiast zapisu notatki. Jedna gałąź, test na atrapie, działa też na oMLX (gdzie wykrycia kontekstu nie ma). **Stan: wdrożona (T14b, `606ee39`, 561/561)** — `ProviderError.inputTruncated`, tylko dostawcy lokalni, prompt ≥ 4000 znaków, > 5,0 znaku na token.
 
 Pozostałe rozjazdy kod ↔ spec stwierdzone w przeglądzie (§4 pkt 2, 3, 5), niepoprawiane tutaj: `isLocal` uznaje też całe `127.0.0.0/8` i `0.0.0.0` (§11.5 wymienia `localhost`, `127.0.0.1`, `::1`, `*.localhost`);
 ponowienie bez `reasoning_effort` także dla `think` w treści błędu (pkt 2 mówi o `reasoning`); `max_tokens` części mapy to miejsce po prompcie, najwyżej 1,0 × wejścia (pkt 5: 0,5 ×; zmiana po przeglądzie T13, `4ff727b`).
