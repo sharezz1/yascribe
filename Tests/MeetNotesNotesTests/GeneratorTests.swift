@@ -67,3 +67,27 @@ private let now = Date(timeIntervalSince1970: 5_000)
     }
     #expect(try NotesStore(session: session).readSummary() == nil)
 }
+
+@Test func cutOffNoteFailsClearlyAndWritesNothing() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub(finishReason: "length") { _ in "# T\nbody urwane" }
+    do {
+        _ = try await generator(stub).generate(session: session, template: .standard,
+                                               transcript: transcript([utt("Prognoza na sobotę.")]), context: "", notesLanguage: .polish, now: now)
+        Issue.record("oczekiwano błędu")
+    } catch NoteGenerationError.failed(let message) {
+        #expect(message.contains("notes-model") && message.contains("cut off"))
+    }
+    #expect(try NotesStore(session: session).readSummary() == nil)
+}
+
+@Test func generatorPassesItsLimitsToTheChatCall() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "# T\nbody" }
+    let g = NoteGenerator(client: chatClient(stub), model: "notes-model", timeout: 600, chatTimeout: 660, maxTokens: 2048)
+    _ = try await g.generate(session: session, template: .standard, transcript: transcript([utt("Prognoza na sobotę.")]),
+                             context: "", notesLanguage: .polish, now: now)
+    #expect(stub.calls[0].timeout == 660 && stub.calls[0].maxTokens == 2048 && stub.calls[0].temperature == nil)
+}

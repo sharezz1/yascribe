@@ -79,7 +79,9 @@ final class NotesModel {
         correctionFailure[id] = nil
         correcting.insert(id)
         onChange()
-        let result = await Corrector(client: client, assignment: assignment).correct(transcript, language: language)
+        let limits = ChatLimits.for(client.provider, call: .correctionBatch)
+        let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
+                                     temperature: limits.temperature).correct(transcript, language: language)
         correcting.remove(id)
         defer { onChange() }
         if result.failedCompletely {
@@ -112,7 +114,9 @@ final class NotesModel {
             return
         }
         generation[id] = .generating
-        let generator = NoteGenerator(client: client, model: choice.assignment.model)
+        let limits = ChatLimits.for(client.provider, call: .note)
+        let generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
+                                      chatTimeout: limits.transport, maxTokens: limits.maxTokens)
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url
@@ -147,9 +151,11 @@ final class NotesModel {
            let client = clientFor(choice.assignment.providerID) {
             titling.insert(id)
             onChange()
+            let limits = ChatLimits.for(client.provider, call: .title)
             _ = await AutoTitle.generate(client: client, model: choice.assignment.model, transcript: working,
                                          notesLanguage: snapshot.preset.effectiveNotesLanguage,
-                                         store: NotesStore(session: sessionURL), onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
+                                         store: NotesStore(session: sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
+                                         maxTokens: limits.maxTokens, onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
             titling.remove(id)
             onChange()
         }

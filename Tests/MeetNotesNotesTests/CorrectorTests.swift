@@ -105,3 +105,20 @@ private func capitalizing(_ user: String) -> String {
     #expect(r.failedBatches == 1 && r.failedCompletely)
     #expect(r.firstError?.contains("didn't answer") == true)
 }
+
+@Test func cutOffBatchFailsWithAReadableReason() async {
+    let t = transcript([utt("no to jest test")])
+    let stub = ChatStub(finishReason: "length") { capitalizing($0.user) }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(r.failedBatches == 1 && r.failedCompletely)
+    #expect(r.firstError?.contains("cut off") == true && r.firstError?.contains("fix-model") == true)
+    #expect(r.transcript.utterances[0].text == "no to jest test")
+}
+
+@Test func correctorPassesItsLimitsToTheChatCall() async {
+    let t = transcript([utt("no to jest test")])
+    let stub = ChatStub { capitalizing($0.user) }
+    let c = Corrector(client: chatClient(stub), assignment: assignment, batchTimeout: 300, chatTimeout: 330, temperature: 0.2)
+    _ = await c.correct(t, language: .polish)
+    #expect(stub.calls[0].timeout == 330 && stub.calls[0].temperature == 0.2 && stub.calls[0].maxTokens == nil)
+}

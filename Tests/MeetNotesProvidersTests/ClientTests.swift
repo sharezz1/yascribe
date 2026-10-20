@@ -106,3 +106,117 @@ import Testing
     }
     #expect(http.calls.count == 2)
 }
+
+// MARK: chat — limity, finish_reason, reasoning_effort (F20 T10)
+
+private let ollamaLocal = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+private let lanBox = Provider(name: "Box", baseURL: URL(string: "http://192.168.1.5:11434/v1")!)
+
+private func chat(_ provider: Provider, _ http: StubHTTP, timeout: Double = 120, maxTokens: Int? = nil,
+                  temperature: Double? = nil) async throws -> String {
+    try await OpenAICompatibleClient(provider: provider, key: nil, http: http)
+        .chat(model: "m", system: "s", user: "u", timeout: timeout, maxTokens: maxTokens, temperature: temperature)
+}
+
+@Test func chatUsesTheGivenTransportTimeout() async throws {
+    let http = StubHTTP { _, _ in chatReply("OK") }
+    _ = try await chat(ollamaLocal, http, timeout: 600)
+    #expect(http.calls[0].timeout == 600)
+    _ = try await chat(openRouter, http)
+    #expect(http.calls[1].timeout == 120)
+}
+
+@Test func chatSendsMaxTokensAndTemperatureOnlyWhenGiven() async throws {
+    let http = StubHTTP { _, _ in chatReply("OK") }
+    _ = try await chat(openRouter, http)
+    #expect(http.calls[0].body["max_tokens"] == nil && http.calls[0].body["temperature"] == nil)
+    _ = try await chat(openRouter, http, maxTokens: 64, temperature: 0.2)
+    #expect(http.calls[1].body["max_tokens"] as? Int == 64)
+    #expect(http.calls[1].body["temperature"] as? Double == 0.2)
+}
+
+@Test func chatSendsReasoningEffortNoneOnlyToLocalProviders() async throws {
+    let http = StubHTTP { _, _ in chatReply("OK") }
+    _ = try await chat(ollamaLocal, http)
+    _ = try await chat(openRouter, http)
+    _ = try await chat(lanBox, http)
+    #expect(http.calls[0].body["reasoning_effort"] as? String == "none")
+    #expect(http.calls[1].body["reasoning_effort"] == nil)
+    #expect(http.calls[2].body["reasoning_effort"] == nil)
+}
+
+@Test func localServerRejectingReasoningEffortIsRetriedOnceWithoutIt() async throws {
+    let http = StubHTTP { _, body in
+        body["reasoning_effort"] != nil ? fail(400, "{\"error\":\"unknown field: reasoning_effort\"}") : chatReply("OK")
+    }
+    let reply = try await chat(ollamaLocal, http, maxTokens: 64, temperature: 0.2)
+    #expect(reply == "OK")
+    #expect(http.calls.count == 2)
+    #expect(http.calls[0].body["reasoning_effort"] as? String == "none")
+    #expect(http.calls[1].body["reasoning_effort"] == nil)
+    #expect(http.calls[1].body["max_tokens"] as? Int == 64 && http.calls[1].body["temperature"] as? Double == 0.2)
+    // 422 też; a gdy odrzuca także drugie żądanie, błąd wychodzi (bez trzeciej próby).
+    let always = StubHTTP { _, _ in fail(422, "Reasoning is not supported") }
+    await #expect(throws: ProviderError.http(422, "Reasoning is not supported")) { _ = try await chat(ollamaLocal, always) }
+    #expect(always.calls.count == 2)
+}
+
+@Test func nonLocalProviderRejectingReasoningIsNotRetried() async {
+    let http = StubHTTP { _, _ in fail(400, "{\"error\":\"reasoning\"}") }
+    await #expect(throws: ProviderError.http(400, "{\"error\":\"reasoning\"}")) { _ = try await chat(openRouter, http) }
+    #expect(http.calls.count == 1)
+}
+
+@Test func contextOverflowIsNotRetried() async {
+    let body = "{\"error\":{\"message\":\"request (6057 tokens) exceeds the available context size (4096 tokens), try increasing it\"}}"
+    let http = StubHTTP { _, _ in fail(400, body) }
+    await #expect(throws: ProviderError.http(400, body)) { _ = try await chat(ollamaLocal, http) }
+    #expect(http.calls.count == 1)
+}
+
+@Test func lengthFinishReasonIsAnError() async {
+    for p in [ollamaLocal, openRouter] {
+        let http = StubHTTP { _, _ in chatReply("Notatka urwana w pół", finish: "length") }
+        await #expect(throws: ProviderError.replyCutOff) { _ = try await chat(p, http) }
+    }
+}
+
+@Test func lengthWithEmptyContentIsCutOffNotEmptyReply() async {
+    let http = StubHTTP { _, _ in chatReply("", finish: "length", extra: ["reasoning": "myślę i myślę"]) }
+    await #expect(throws: ProviderError.replyCutOff) { _ = try await chat(ollamaLocal, http) }
+}
+
+@Test func missingOrNullFinishReasonPasses() async throws {
+    let none = StubHTTP { _, _ in chatReply("OK") }
+    #expect(try await chat(openRouter, none) == "OK")
+    let null = StubHTTP { _, _ in chatReply("OK", finish: nil) }
+    #expect(try await chat(openRouter, null) == "OK")
+    let stop = StubHTTP { _, _ in chatReply("OK", finish: "stop") }
+    #expect(try await chat(ollamaLocal, stop) == "OK")
+}
+
+@Test func chatIgnoresReasoningContentField() async throws {
+    let http = StubHTTP { _, _ in chatReply("OK", finish: "stop", extra: ["reasoning": "rozumowanie", "reasoning_content": "też rozumowanie"]) }
+    #expect(try await chat(ollamaLocal, http) == "OK")
+}
+
+@Test func chatStripsThinkBlocksFromTheReply() async throws {
+    let http = StubHTTP { _, _ in chatReply("<think>hm</think>\n[1] Tak.") }
+    #expect(try await chat(ollamaLocal, http) == "[1] Tak.")
+}
+
+@Test func chatReplyWithOnlyAThinkBlockThrowsEmptyReply() async {
+    for text in ["<think>zaczynam", "<think>x</think>", "   "] {
+        let http = StubHTTP { _, _ in chatReply(text) }
+        await #expect(throws: ProviderError.badResponse("empty reply")) { _ = try await chat(ollamaLocal, http) }
+    }
+}
+
+@Test func chatAudioTranscriptionIgnoresFinishReason() async throws {
+    // `chatContent` jest wspólny z ASR przez czat — ścieżka z API zostaje bez zmian.
+    let http = StubHTTP { _, _ in chatReply("raz, dwa, trzy", finish: "length") }
+    let r = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+        .transcribe(wav: ProbeClips.polish.wav, model: "google/gemini-3.8-flash", language: .polish, shape: .chatAudio)
+    #expect(r.text == "raz, dwa, trzy")
+    #expect(http.calls[0].body["reasoning_effort"] == nil)
+}
