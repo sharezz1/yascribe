@@ -23,3 +23,14 @@ import MeetNotesProviders
     let msg = ContextError.describe(model: "vendor/m", ProviderError.replyCutOff)
     #expect(msg.contains("vendor/m") && msg.contains("cut off") && msg.contains("longer context"))
 }
+
+@Test func localServerErrorsGetTheServerHintInsteadOfTheRawError() {
+    let ollama = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+    let down = ContextError.describe(model: "m", URLError(.cannotConnectToHost), provider: ollama)
+    #expect(down.contains("Ollama") && down.contains("Start it"))
+    // Miękki limit czasu (`withDeadline`) to „nie odpowiedział w czasie", nigdy „serwer nie działa".
+    let slow = ContextError.describe(model: "m", DeadlineExceeded(seconds: 300), provider: ollama)
+    #expect(slow.contains("300 s") && !slow.contains("Start it"))
+    let cloud = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    #expect(ContextError.describe(model: "m", URLError(.cannotConnectToHost), provider: cloud).contains("m failed"))
+}

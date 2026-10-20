@@ -385,9 +385,10 @@ final class AppModel {
 
     /// „Test connection" w arkuszu PRZED zapisem: klient z kluczem z pola (w pamięci, nic nie trafia do pęku kluczy).
     /// ElevenLabs: klienta tworzy `makeClient` z zapisanego klucza, więc przed zapisem testu nie ma (`nil`) — arkusz weryfikuje po Save.
-    nonisolated static func testConnection(baseURL: URL, kind: ProviderKind?, key: String) async -> ProviderCheck {
+    nonisolated static func testConnection(baseURL: URL, kind: ProviderKind?, key: String, name: String = "test") async -> ProviderCheck {
         // Klucz z pola, w pamięci — bez zapisu do pęku (Cancel nie zostawia klucza). Klient wg rodzaju API.
-        await Provider(name: "test", baseURL: baseURL, kind: kind).verify(key: key.isEmpty ? nil : key)
+        // `name` trafia do komunikatów o lokalnym serwerze („Can't reach Ollama at …").
+        await Provider(name: name, baseURL: baseURL, kind: kind).verify(key: key.isEmpty ? nil : key)
     }
 
     func removeProvider(_ id: UUID) {

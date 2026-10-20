@@ -197,6 +197,7 @@ struct StateLabel: View {
     enum Kind: Equatable { case ok, bad, live, neutral, progress(Double?) }
     let kind: Kind
     let text: String
+    private var lines: Int? = 1
     init(_ kind: Kind, _ text: String) { self.kind = kind; self.text = text }
 
     var body: some View {
@@ -220,9 +221,13 @@ struct StateLabel: View {
         }
         .font(.callout)
         .foregroundStyle(color)
-        .lineLimit(1)
+        .lineLimit(lines)
+        .fixedSize(horizontal: false, vertical: lines == nil)
         .accessibilityElement(children: .combine)
     }
+
+    /// Domyślnie jedna linia; długi komunikat błędu (np. podpowiedź lokalnego serwera) ma się zawinąć, nie uciąć.
+    func wrapping() -> StateLabel { var copy = self; copy.lines = nil; return copy }
 
     private var color: Color {
         switch kind {
