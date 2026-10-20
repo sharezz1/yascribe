@@ -27,8 +27,9 @@ private func writeAll(into model: URL, skipping skipped: Set<String> = []) throw
     }
 }
 
-private func store(_ root: URL, download: @escaping ModelStore.Download = { _, _, _ in }) -> ModelStore {
-    ModelStore(directory: root, download: download)
+private func store(_ root: URL, download: @escaping ModelStore.Download = { _, _, _ in },
+                   modelsExist: @escaping ModelStore.ModelsExist = { _ in false }) -> ModelStore {
+    ModelStore(directory: root, download: download, modelsExist: modelsExist)
 }
 
 private func installedStore(skipping skipped: Set<String> = []) throws -> ModelStore {
@@ -93,6 +94,23 @@ private final class Calls: @unchecked Sendable {
         #expect(second != first)
     }
 
+    @Test func fingerprintChangesWhenASmallModelFileChangesWithTheSameSize() throws {
+        let s = try installedStore()
+        let first = try #require(s.fingerprint())
+        let graph = "Encoder.mlmodelc/model.mil"
+        let size = Int(ModelManifest.parakeetV3.files[graph]!)
+        try write(graph, size: Int64(size), in: s.modelDirectory, content: Data(repeating: 0x7a, count: size))
+        #expect(s.status() == .ready)
+        #expect(try #require(s.fingerprint()) != first)
+    }
+
+    @Test func fingerprintIncludesThePin() throws {
+        let s = try installedStore()
+        #expect(s.fingerprint(pin: "fluidaudio-0.17.8/v3/int8") != s.fingerprint())
+        #expect(s.fingerprint() == s.fingerprint(pin: ModelManifest.pin))
+        #expect(ModelManifest.pin == "fluidaudio-0.17.7/v3/int8")
+    }
+
     @Test func removeDeletesOnlyTheModelDirectoryNotItsSiblings() throws {
         let s = try installedStore()
         let siblings = ["parakeet-tdt-0.6b-v3-coreml", "parakeet-tdt-0.6b-v2-coreml"].map { s.directory.appendingPathComponent($0) }
@@ -149,20 +167,43 @@ private final class Calls: @unchecked Sendable {
         #expect(calls.forces.isEmpty)
     }
 
-    @Test func invalidStatusDownloadsWithForce() async throws {
-        let calls = Calls()
-        let fixer: ModelStore.Download = { dir, force, _ in
+    /// Fałszywy downloader: zapisuje force i dopełnia model (jak FluidAudio po udanym pobraniu).
+    private func fixer(_ calls: Calls) -> ModelStore.Download {
+        { dir, force, _ in
             calls.add(force)
             try writeAll(into: dir)
         }
-        // przy .missing flaga false
-        try await store(try makeRoot(), download: fixer).download(progress: { _ in })
+    }
+
+    @Test func missingModelDownloadsWithoutForce() async throws {
+        let calls = Calls()
+        try await store(try makeRoot(), download: fixer(calls)).download(progress: { _ in })
         #expect(calls.forces == [false])
-        // przy .invalid flaga true
+    }
+
+    @Test func wrongSizeFileDownloadsWithForce() async throws {
+        let calls = Calls()
         let s = try installedStore()
         try write("Decoder.mlmodelc/model.mil", size: 3, in: s.modelDirectory)
-        try await store(s.directory, download: fixer).download(progress: { _ in })
-        #expect(calls.forces == [false, true])
+        try await store(s.directory, download: fixer(calls)).download(progress: { _ in })
+        #expect(calls.forces == [true])
+    }
+
+    @Test func interruptedDownloadWithMissingFilesKeepsItsPartialFilesByNotForcing() async throws {
+        // Brakuje plików (reszta ma dobry rozmiar), a FluidAudio nie uważa modelu za kompletny: wznawia, nie kasuje.
+        let calls = Calls()
+        let s = try installedStore(skipping: ["Encoder.mlmodelc/weights/weight.bin", "config.json"])
+        try write("Encoder.mlmodelc/weights/weight.bin.partial", size: 1000, in: s.modelDirectory)
+        try await store(s.directory, download: fixer(calls), modelsExist: { _ in false }).download(progress: { _ in })
+        #expect(calls.forces == [false])
+    }
+
+    @Test func missingFileThatFluidAudioDoesNotRequireDownloadsWithForce() async throws {
+        // `modelsExist` (sama obecność wymaganych plików) mówi „jest", a manifest wykrywa brak `config.json` — bez force nic by się nie naprawiło.
+        let calls = Calls()
+        let s = try installedStore(skipping: ["config.json"])
+        try await store(s.directory, download: fixer(calls), modelsExist: { _ in true }).download(progress: { _ in })
+        #expect(calls.forces == [true])
     }
 
     @Test func downloadValidatesTheManifestAfterwards() async throws {
