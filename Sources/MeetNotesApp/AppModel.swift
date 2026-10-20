@@ -135,6 +135,10 @@ final class AppModel {
             }
         }
         providers = read(paths.providers, ProvidersFile())
+        // Model Yascribe nie jest wierszem listy Providers, ale presety trzymają jego rekord — nie może go zabraknąć (F20 P3).
+        if providers.ensureOnDeviceProvider() {
+            do { try JSONFile.save(providers, to: paths.providers) } catch { errors.append("Couldn't save providers.json: \(error)") }
+        }
         presets = read(paths.presets, PresetsFile())
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())

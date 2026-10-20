@@ -59,6 +59,8 @@ struct SettingsView: View {
             ScrollPage(640) {
                 VStack(alignment: .leading, spacing: 0) {
                     PageTitle("Settings").padding(.bottom, 4)
+                    // Model Yascribe (Parakeet) nie jest dostawcą: własna karta na górze, nad listą Providers (F20 P3).
+                    ModelCardSection(support: model.localASR)
                     SectionHeader("Providers")
                     Card {
                         let rows = ProviderListRow.rows(for: model.providers.providers)
@@ -67,7 +69,6 @@ struct SettingsView: View {
                             if i < rows.count - 1 { RowDivider() }
                         }
                     }
-                    ModelCardSection(support: model.localASR)
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     MeetingSettingsSections()
                     summarySection
@@ -197,8 +198,6 @@ struct SettingsView: View {
 
 final class ProviderRowState: ObservableObject {
     @Published var confirmingRemove = false
-    /// Powód odmowy „Enable" (np. zajęta nazwa).
-    @Published var enableError: String?
 }
 
 /// Wiersz karty Providers: logo, nazwa, opis roli; po prawej stan + Retry + „⋯" (skonfigurowany) albo „Set up…" / „Add…".
@@ -255,7 +254,6 @@ private struct ProviderRowView: View {
                     Label("Couldn't read the key from Keychain", systemImage: "exclamationmark.triangle")
                         .font(.system(size: 11)).foregroundStyle(.mnWarn).help(why)
                 }
-                if let e = rowState.enableError { Text(e).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
                 if let failure { Text(failure).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
                 if let p = provider, p.isLocal, p.api == .openAICompatible {
                     // Ustawione przez użytkownika i/lub wykryte przy „Test again" (ten sam komunikat, który widzi budżet).
@@ -271,9 +269,7 @@ private struct ProviderRowView: View {
             Button("Remove", role: .destructive) { if let p = provider { model.removeProvider(p.id) } }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(provider?.api == .fluidAudio
-                 ? "The provider is removed from the list. The downloaded model stays; remove it from the on-device model card. Presets that use it will need another provider."
-                 : "The provider and its saved key are deleted. Presets that use it will need another provider.")
+            Text("The provider and its saved key are deleted. Presets that use it will need another provider.")
         }
     }
 
@@ -297,10 +293,6 @@ private struct ProviderRowView: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .help("More actions for \(p.name)")
             .accessibilityLabel("More actions for \(p.name)")
-        } else if case .preset(let p, _) = row, p.kind == .fluidAudio {
-            // Bez klucza i bez adresu: jedno kliknięcie dodaje dostawcę (model pobiera się osobno, z karty).
-            Button("Enable") { rowState.enableError = model.addProvider(name: p.name, baseURL: Provider.fluidAudioBaseURL, key: "", kind: .fluidAudio) }
-                .buttonStyle(.pillSmall).help("Use speech-to-text that runs on this Mac")
         } else if case .preset(let p, _) = row {
             Button("Set up…") { sheet.setUp(p) }.buttonStyle(.pillSmall).help("Set up \(p.name)")
         } else {
