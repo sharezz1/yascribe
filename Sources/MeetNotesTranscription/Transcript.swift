@@ -67,8 +67,11 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
     public var language: LanguageCode?
     public var languageHandling: LanguageHandling
     public var dictionaryVersion: String
+    /// Odcisk lokalnego modelu ASR z chwili przebiegu (F20); `nil` dla API i dla starych `input.json`.
+    public var modelFingerprint: String?
 
-    public init(preset: Preset, provider: Provider, probe: ProbeResult?, dictionaryVersion: String = "none") throws {
+    public init(preset: Preset, provider: Provider, probe: ProbeResult?, dictionaryVersion: String = "none",
+                modelFingerprint: String? = nil) throws {
         try preset.validate()
         // Bez znaczników słów pakowane okno rozciąga jedno „zdanie" na minuty ciszy,
         // a klikalna linia czasu kłamie (ChatGPT #7). Kształt czatowy — tylko dyktowanie.
@@ -85,6 +88,7 @@ public struct RunSnapshot: Codable, Equatable, Sendable {
         self.language = preset.language
         languageHandling = probe?.languageHandling ?? .unknown
         self.dictionaryVersion = dictionaryVersion
+        self.modelFingerprint = modelFingerprint
     }
 }
 

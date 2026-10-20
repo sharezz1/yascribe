@@ -18,12 +18,23 @@ public struct TranscribedWord: Codable, Equatable, Sendable {
     public var word: String
     public var start: Double
     public var end: Double
+
+    public init(word: String, start: Double, end: Double) {
+        self.word = word
+        self.start = start
+        self.end = end
+    }
 }
 
 public struct TranscriptionResult: Codable, Equatable, Sendable {
     public var text: String
     /// `nil`, gdy kształt nie daje znaczników słów (czat).
     public var words: [TranscribedWord]?
+
+    public init(text: String, words: [TranscribedWord]?) {
+        self.text = text
+        self.words = words
+    }
 }
 
 /// Granica ścieżki transkrypcji (runner, sonda ASR): tyle potrzebują od dostawcy. Klienta wybiera się po
