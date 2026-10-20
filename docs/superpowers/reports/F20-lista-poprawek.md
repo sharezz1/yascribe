@@ -157,3 +157,16 @@ sprawdzić, czy to samo dzieje się przy samych przyciskach paska (bez wypychani
 6. **P2:** którą opcję (A/B/C) i jaka lista domyślna?
 7. **P5:** pasek się zwęża czy poszerza i czy wraca po „Meetings"? Pomiar zrobię na żywej aplikacji, gdy pozwolisz.
 8. **Scalanie:** gałąź `faza20-poprawki` leży obok `faza20`, nic nie scalałem ani nie pushowałem.
+
+## Odpowiedzi użytkownika (2026-10-20, wieczór)
+
+1. **ElevenLabs znika z Correction i Summary** — potwierdzone.
+2. **Podsumowanie: przełącznik on/off, porównamy różnicę** — to jest już w kodzie (Settings → Summary → Thinking, `9602466`); test jakości jeszcze przed nami.
+3. **Rekord Yascribe wraca przy starcie** — „jest ok".
+4. **Ikona llama.cpp jednobarwna** — potwierdzone, zostaje.
+5. **Embedding (P3):** „nie pojawiają się". Stan `.devdata/providers.json` (zmieniony ostatnio 14:09) to tylko OpenRouter i rekord Yascribe, więc nie ma jeszcze nikogo innego do pokazania.
+   Kod (`EmbeddingChoice.providers`) pokazuje każdego skonfigurowanego dostawcę OpenAI-compatible. **Do wyjaśnienia z użytkownikiem**, czy dostawcy zostali skonfigurowani i nie widać ich w menu (wtedy to błąd), czy oczekiwana jest lista także nieskonfigurowanych,
+   albo wiersz „Provider" widoczny zawsze (dziś ukryty przy jednym dostawcy: `EmbeddingChoice.showsProviderRow`).
+6. **P2:** użytkownik nie zrozumiał opcji A/B/C — do wyjaśnienia prostszym językiem.
+7. **P5 zawężone:** inny rozmiar paska ma **tylko widok otwartego spotkania**; po kliknięciu innej zakładki pasek wraca do normalnego. Nie podano, czy się zwęża, czy poszerza.
+   To wspiera hipotezę, że winny jest widok spotkania (pasek okna z własnym przyciskiem „Meetings" w `ToolbarItem(placement: .navigation)` albo szerokość treści), a nie sam `NavigationSplitView`.
