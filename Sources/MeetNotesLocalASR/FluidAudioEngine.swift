@@ -3,7 +3,7 @@ import Foundation
 import MeetNotesProviders
 
 /// Silnik Parakeet v3 (FluidAudio 0.17.7, API wg S0 §8). Ładuje WYŁĄCZNIE przez `loadLocal` — pozostałe warianty ładowania
-/// idą przez ModelHub i potrafią dociągać pliki z HF bez zgody użytkownika (decyzja 7a; pilnuje tego `LocalASRNetworkGuardTests`).
+/// idą przez centrum pobierań FluidAudio i potrafią dociągać pliki z HF bez zgody użytkownika (decyzja 7a; pilnuje tego `LocalASRNetworkGuardTests`).
 /// Brak pliku = lokalny `modelNotFound`.
 public actor FluidAudioEngine: LocalASREngine {
     private let store: ModelStore
@@ -11,13 +11,12 @@ public actor FluidAudioEngine: LocalASREngine {
 
     public init(store: ModelStore) { self.store = store }
 
-    /// Synchroniczne ładowanie (~19 s na zimno) idzie na aktorze silnika, nigdy na MainActor.
+    /// Ładowanie (~19 s na zimno) idzie na aktorze silnika, nigdy na MainActor. `loadLocal` jest synchroniczne i NIE da się go
+    /// anulować; między jego początkiem a zapisem `manager` nie ma żadnego `await`, więc aktor nie wpuści drugiego `load()` ani
+    /// `unload()` w środku (bez okna reentrancji). `AsrModels` nie wychodzi poza to wyrażenie — inaczej `cleanup()` nie zwolni pamięci.
     public func load() async throws {
         if manager != nil { return }
-        let m = AsrManager(config: .default)
-        // `AsrModels` nie wychodzi poza to wyrażenie — inaczej `cleanup()` nie zwolni pamięci.
-        try await m.loadModels(try AsrModels.loadLocal(from: store.modelDirectory, version: .v3, encoderPrecision: .int8))
-        manager = m
+        manager = AsrManager(config: .default, models: try AsrModels.loadLocal(from: store.modelDirectory, version: .v3, encoderPrecision: .int8))
     }
 
     public func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) {
