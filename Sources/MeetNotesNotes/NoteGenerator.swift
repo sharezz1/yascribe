@@ -7,8 +7,23 @@ public enum NoteGenerationError: Error, Equatable {
     case failed(String)
 }
 
+/// Postęp „Generate notes" dla interfejsu: kolejny krok kondensacji (numeracja części zaczyna się od 1 w każdym przebiegu)
+/// albo ostatnie wywołanie, które pisze notatkę (jedyny krok bez map-reduce).
+public enum NoteProgress: Equatable, Sendable {
+    case condensing(pass: Int, part: Int, of: Int)
+    case writing
+
+    public var text: String {
+        switch self {
+        case .condensing(let pass, let part, let count): "Condensing part \(part) of \(count) (pass \(pass))…"
+        case .writing: "Writing the notes…"
+        }
+    }
+}
+
 /// „Generate notes": prompt → model → tytuł i treść → zapis. Nic nie jest zapisywane, gdy model zawiedzie.
 /// Z budżetem kontekstu (lokalny model) zbyt długi prompt idzie przez map-reduce (spec fazy 2.0 §11.4, §14 pkt 4).
+/// Anulowanie zadania przerywa kolejne wywołania i kończy się `CancellationError` — bez zapisu notatki.
 public struct NoteGenerator: Sendable {
     public let client: OpenAICompatibleClient
     public let model: String
@@ -36,22 +51,30 @@ public struct NoteGenerator: Sendable {
     /// się w `promptChars(replyTokens: noteReplyTokens)`; inaczej map każdej części, potem reduce (hierarchiczny, gdy trzeba).
     public func generate(session: URL, template: Template, transcript: Transcript, context: String,
                          notesLanguage: LanguageCode?, budget: ContextBudget? = nil, now: Date = Date(),
-                         onProblem: @Sendable (String) -> Void = { _ in }) async throws -> NoteSummary {
+                         onProblem: @Sendable (String) -> Void = { _ in },
+                         progress: (@Sendable (NoteProgress) -> Void)? = nil) async throws -> NoteSummary {
         let store = NotesStore(session: session)
         let myNotes = store.readMyNotes()
         guard var prompt = NotePromptBuilder.build(template: template, transcript: transcript, myNotes: myNotes,
                                                    context: context, notesLanguage: notesLanguage) else {
             throw NoteGenerationError.nothingToSummarize
         }
+        var condensedParts: Int?
         if let budget, prompt.chars > budget.promptChars(replyTokens: ContextBudget.noteReplyTokens) {
-            prompt = try await reducePrompt(template: template, lines: NotePromptBuilder.transcriptLines(transcript), myNotes: myNotes,
-                                            context: context, notesLanguage: notesLanguage, budget: budget)
+            let reduced = try await reducePrompt(template: template, lines: NotePromptBuilder.transcriptLines(transcript),
+                                                 myNotes: myNotes, context: context, notesLanguage: notesLanguage,
+                                                 budget: budget, progress: progress)
+            prompt = reduced.0
+            condensedParts = reduced.1
         }
+        progress?(.writing)
         let reply = try await complete(prompt)
+        // Odpowiedź mogła dojść w chwili anulowania: anulowane generowanie nie zostawia notatki na dysku.
+        try Task.checkCancellation()
         let (title, body) = NoteTitle.parse(reply)
         guard !body.isEmpty else { throw NoteGenerationError.failed("\(model) returned an empty reply.") }
         let summary = NoteSummary(title: title, markdown: body, templateID: template.id, model: model,
-                                  context: context, generatedAt: now)
+                                  context: context, generatedAt: now, condensedParts: condensedParts)
         do {
             // Nieczytelny stary summary.json został odłożony na bok przed zapisem — powiedz to użytkownikowi.
             if let problem = try store.writeSummary(summary, now: now) { onProblem(problem) }
@@ -69,6 +92,7 @@ public struct NoteGenerator: Sendable {
                 try await client.chat(model: model, system: prompt.system, user: prompt.user, timeout: chatTimeout, maxTokens: maxTokens)
             }
         } catch {
+            if Task.isCancelled || error is CancellationError { throw CancellationError() } // anulowanie to nie błąd modelu
             throw NoteGenerationError.failed(ContextError.describe(model: model, error, provider: client.provider, transport: chatTimeout,
                                                                 maxTokens: maxTokens))
         }
@@ -78,8 +102,9 @@ public struct NoteGenerator: Sendable {
 
     /// Prompt reduce, który MIEŚCI się w budżecie (nigdy nie wysyłamy więcej). Map wszystkich części, a gdy suma wyjść nie
     /// wchodzi — ponowna kondensacja wyjść (do `maxMapLevels` poziomów); inaczej jawny błąd.
+    /// Zwraca też liczbę części pierwszego przebiegu (znacznik „Long meeting" w notatce).
     private func reducePrompt(template: Template, lines: [String], myNotes: String, context: String, notesLanguage: LanguageCode?,
-                              budget: ContextBudget) async throws -> NotePrompt {
+                              budget: ContextBudget, progress: (@Sendable (NoteProgress) -> Void)?) async throws -> (NotePrompt, Int) {
         let limit = budget.promptChars(replyTokens: ContextBudget.noteReplyTokens)
         func reduce(_ lines: [String]) -> NotePrompt {
             NotePromptBuilder.prompt(template: template, lines: lines, myNotes: myNotes, context: context,
@@ -105,12 +130,16 @@ public struct NoteGenerator: Sendable {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.")
         }
         var current = lines
+        var firstPassParts = 0
         for level in 1...Self.maxMapLevels {
             let before = current.joined(separator: "\n").count
-            current = try await map(current, maxChars: partChars, notesLanguage: notesLanguage, budget: budget)
+            let (condensed, partCount) = try await map(current, maxChars: partChars, notesLanguage: notesLanguage, budget: budget,
+                                                       pass: level, progress: progress)
+            current = condensed
+            if level == 1 { firstPassParts = partCount }
             let prompt = reduce(current)
             // Warunek, na którym stoi cała gwarancja: reduce nigdy nie przekracza budżetu.
-            if prompt.chars <= limit { return prompt }
+            if prompt.chars <= limit { return (prompt, firstPassParts) }
             // Wczesne przerwanie: gdyby kolejne poziomy kondensowały TAK SAMO jak ten (optymistycznie — skondensowane
             // linie kurczą się słabiej), a i tak nie zmieszczą się w prompcie, to dalsze wywołania są stracone.
             let after = current.joined(separator: "\n").count
@@ -139,12 +168,15 @@ public struct NoteGenerator: Sendable {
     }
 
     /// Jeden poziom: podział na części, map każdej po kolei (limit czasu NA WYWOŁANIE). Błąd części = błąd całości („Part n of m failed").
-    private func map(_ lines: [String], maxChars: Int, notesLanguage: LanguageCode?, budget: ContextBudget) async throws -> [String] {
+    /// Zwraca też liczbę części tego poziomu.
+    private func map(_ lines: [String], maxChars: Int, notesLanguage: LanguageCode?, budget: ContextBudget, pass: Int,
+                     progress: (@Sendable (NoteProgress) -> Void)?) async throws -> ([String], Int) {
         let parts = try TranscriptSplitter.parts(lines, maxChars: maxChars)
         let limits = mapLimits ?? ChatLimits.for(client.provider, call: .mapPart)
         var out: [String] = []
         for (i, part) in parts.enumerated() {
             try Task.checkCancellation()
+            progress?(.condensing(pass: pass, part: i + 1, of: parts.count))
             let prompt = NotePromptBuilder.mapPrompt(part: part, index: i + 1, count: parts.count, notesLanguage: notesLanguage)
             // Odpowiedź dostaje całe miejsce, które po prompcie zostaje w oknie (nie ciasną połowę wejścia), ale nie więcej niż
             // długość wejścia: dłuższa „kondensacja" to ucieczka modelu. Część ≤ `pairedInputChars`, więc miejsce jest ≥ połowie wejścia.
@@ -160,8 +192,8 @@ public struct NoteGenerator: Sendable {
                     throw NoteGenerationError.failed("Part \(i + 1) of \(parts.count) failed: the model didn't keep the transcript format")
                 }
                 out += kept
-            } catch is CancellationError {
-                throw CancellationError()
+            } catch where Task.isCancelled || error is CancellationError {
+                throw CancellationError() // URLSession zgłasza anulowanie jako `URLError.cancelled`, nie `CancellationError`
             } catch let e as NoteGenerationError {
                 throw e
             } catch ProviderError.replyCutOff {
@@ -172,6 +204,6 @@ public struct NoteGenerator: Sendable {
                 throw NoteGenerationError.failed("Part \(i + 1) of \(parts.count) failed: \(why)")
             }
         }
-        return out
+        return (out, parts.count)
     }
 }

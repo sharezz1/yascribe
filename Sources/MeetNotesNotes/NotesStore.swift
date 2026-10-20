@@ -8,8 +8,13 @@ public struct NoteSummary: Codable, Equatable, Sendable {
     public var model: String
     public var context: String
     public var generatedAt: Date
+    /// Liczba części pierwszego przebiegu kondensacji, gdy transkrypt był dzielony (map-reduce, spec fazy 2.0 §11.1); `nil` = jeden przebieg.
+    /// Pole opcjonalne: stare `summary.json` go nie mają (lekcja E6).
+    public var condensedParts: Int?
 
-    public init(title: String?, markdown: String, templateID: String, model: String, context: String, generatedAt: Date) {
+    public init(title: String?, markdown: String, templateID: String, model: String, context: String, generatedAt: Date,
+                condensedParts: Int? = nil) {
+        self.condensedParts = condensedParts
         self.title = title
         self.markdown = markdown
         self.templateID = templateID
