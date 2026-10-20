@@ -386,3 +386,128 @@ private let tooLongMessage = "The transcript is too long for this model's Contex
     #expect(message.hasPrefix("Part 1 of 3 failed: ") && message.contains("didn't answer"))
     #expect(summaryFiles(session).isEmpty)
 }
+
+// MARK: anulowanie, postęp, znacznik podziału (UX po T13)
+
+/// Zbiera postęp z `generate` (wywoływany z puli wątków).
+private final class ProgressLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [NoteProgress] = []
+    var all: [NoteProgress] { lock.withLock { items } }
+    func add(_ p: NoteProgress) { lock.withLock { items.append(p) } }
+}
+
+private func waitForFirstCall(_ stub: ChatStub) async throws {
+    for _ in 0..<500 where stub.calls.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(!stub.calls.isEmpty)
+}
+
+@Test func cancelledGenerationWritesNoNote() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    // Serwer „wisi" na pierwszej części mapy; anulowanie ma zatrzymać kolejne wywołania i niczego nie zapisać.
+    let stub = ChatStub(delay: .seconds(30)) { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+    let task = Task { try await run(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500)) }
+    try await waitForFirstCall(stub)
+    task.cancel()
+    await #expect(throws: CancellationError.self) { _ = try await task.value }
+    #expect(stub.calls.count == 1)                               // części 2 i 3 ani reduce nie poszły do serwera
+    #expect(summaryFiles(session).isEmpty)
+    #expect(try NotesStore(session: session).readSummary() == nil)
+}
+
+@Test func cancelledSinglePassWritesNoNoteAndIsNotAnError() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub(delay: .seconds(30)) { _ in "# T\nbody" }
+    let task = Task { try await run(stub, session: session, transcript: transcript([utt("Prognoza na sobotę.")])) }
+    try await waitForFirstCall(stub)
+    task.cancel()
+    // Nie `NoteGenerationError.failed("…didn't answer…")`: UI nie pokaże baneru błędu po „Cancel".
+    await #expect(throws: CancellationError.self) { _ = try await task.value }
+    #expect(summaryFiles(session).isEmpty)
+}
+
+@Test func progressReportsEveryPartAndPass() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let log = ProgressLog()
+    let stub = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+    _ = try await NoteGenerator(client: localChatClient(stub), model: "local-model")
+        .generate(session: session, template: .standard, transcript: bigTranscript(count: 6, chars: 2_500), context: "",
+                  notesLanguage: .polish, budget: budget, now: now, progress: { log.add($0) })
+    #expect(log.all == [.condensing(pass: 1, part: 1, of: 3), .condensing(pass: 1, part: 2, of: 3),
+                        .condensing(pass: 1, part: 3, of: 3), .writing])
+    #expect(log.all[1].text == "Condensing part 2 of 3 (pass 1)…" && NoteProgress.writing.text == "Writing the notes…")
+}
+
+@Test func progressRestartsPartNumbersInTheSecondPass() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let log = ProgressLog()
+    let stub = ChatStub { c in isMap(c) ? halfSizeReply(c) : "# T\nbody" }
+    _ = try await NoteGenerator(client: localChatClient(stub), model: "local-model")
+        .generate(session: session, template: .standard, transcript: bigTranscript(count: 6, chars: 2_500), context: "",
+                  notesLanguage: .polish, budget: budget, now: now, progress: { log.add($0) })
+    let steps = log.all.compactMap { p -> (Int, Int, Int)? in
+        if case .condensing(let pass, let part, let count) = p { (pass, part, count) } else { nil }
+    }
+    #expect(steps.count == stub.calls.filter(isMap).count)       // jeden komunikat na każde wywołanie mapy
+    #expect(log.all.last == .writing && log.all.dropLast().allSatisfy { $0 != .writing })
+    let pass2 = steps.filter { $0.0 == 2 }
+    #expect(!pass2.isEmpty && pass2.first?.1 == 1)               // druga warstwa zaczyna od części 1
+    for pass in Set(steps.map(\.0)) {
+        let inPass = steps.filter { $0.0 == pass }
+        #expect(inPass.map(\.1) == Array(1...inPass.count) && inPass.allSatisfy { $0.2 == inPass.count })
+    }
+}
+
+@Test func singlePassReportsOnlyWriting() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let log = ProgressLog()
+    let stub = ChatStub { _ in "# T\nbody" }
+    _ = try await NoteGenerator(client: chatClient(stub), model: "m")
+        .generate(session: session, template: .standard, transcript: transcript([utt("Prognoza na sobotę.")]), context: "",
+                  notesLanguage: .polish, now: now, progress: { log.add($0) })
+    #expect(log.all == [.writing])
+}
+
+@Test func splitNoteRecordsTheFirstPassPartCount() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+    let s = try await run(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500))
+    #expect(s.condensedParts == 3)
+    #expect(try NotesStore(session: session).readSummary()?.condensedParts == 3)
+    // Hierarchia: liczy się PIERWSZY przebieg (podział transkryptu), nie suma wywołań.
+    let session2 = tempDir()
+    defer { try? FileManager.default.removeItem(at: session2) }
+    let stub2 = ChatStub { c in isMap(c) ? halfSizeReply(c) : "# T\nbody" }
+    let s2 = try await run(stub2, session: session2, transcript: bigTranscript(count: 6, chars: 2_500))
+    #expect(s2.condensedParts == 3 && stub2.calls.filter(isMap).count > 3)
+}
+
+@Test func singlePassNoteHasNoSplitMarker() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "# T\nbody" }
+    let s = try await run(stub, session: session, transcript: transcript([utt("Prognoza na sobotę.")]))
+    #expect(s.condensedParts == nil)
+    let json = try String(contentsOf: NotesStore(session: session).directory.appendingPathComponent("summary.json"), encoding: .utf8)
+    #expect(!json.contains("condensedParts"))
+}
+
+@Test func oldNoteFileWithoutSplitMarkerStillLoads() throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let store = NotesStore(session: session)
+    try FileManager.default.createDirectory(at: store.directory, withIntermediateDirectories: true)
+    // Plik sprzed fazy 2.0b: bez `condensedParts`.
+    try """
+    {"context":"","generatedAt":"2026-10-01T10:00:00Z","markdown":"body","model":"m","templateID":"standard","title":"T"}
+    """.write(to: store.directory.appendingPathComponent("summary.json"), atomically: true, encoding: .utf8)
+    let s = try #require(try store.readSummary())
+    #expect(s.title == "T" && s.markdown == "body" && s.condensedParts == nil)
+    #expect(store.problems().isEmpty)
+}

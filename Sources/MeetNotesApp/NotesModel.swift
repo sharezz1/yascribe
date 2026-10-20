@@ -17,6 +17,8 @@ final class NotesModel {
 
     /// Klucz: id sesji (nazwa katalogu).
     var generation: [String: GenState] = [:]
+    /// Bieżący krok generowania (klucz: id sesji) — „Condensing part 2 of 6 (pass 1)…"; `nil` poza generowaniem.
+    private(set) var progress: [String: NoteProgress] = [:]
     private(set) var correcting: Set<String> = []
     private(set) var titling: Set<String> = []
     /// Powód ostatniego nieudanego przebiegu korekty (klucz: id sesji). Znika po udanym ponowieniu.
@@ -35,6 +37,8 @@ final class NotesModel {
     var isMoving: () -> Bool = { false }
     private static let movingMessage = "Meetings are being moved to a new folder. Try again when that finishes."
 
+    /// Trwające generowanie (klucz: id sesji); token odróżnia przebieg anulowany od nowego na tej samej sesji.
+    private var generationRuns: [String: (token: UUID, task: Task<Void, Never>)] = [:]
     private var saveTasks: [String: Task<Void, Never>] = [:]
     /// Treść My notes czekająca na autozapis (klucz: id sesji).
     private var pendingSaves: [String: (session: URL, text: String)] = [:]
@@ -54,7 +58,7 @@ final class NotesModel {
     /// „Improve transcript"/Retry: preset nagrania ma model korekty, jest transkrypt i nic nie trwa, a korekta
     /// albo padła, albo jej nie ma (np. aplikacja zamknięta w trakcie).
     func canRetryCorrection(_ item: SessionItem) -> Bool {
-        guard !correcting.contains(item.id), item.transcript != nil, item.runID != nil else { return false }
+        guard !correcting.contains(item.id), state(item.id) != .generating, item.transcript != nil, item.runID != nil else { return false }
         guard let c = presetFor(item.url)?.correction, !c.model.isEmpty else { return false }
         return correctionFailure[item.id] != nil || item.corrected == nil
     }
@@ -104,6 +108,8 @@ final class NotesModel {
         let id = item.id
         guard !isMoving() else { report(Self.movingMessage); return }
         guard state(id) != .generating else { return }
+        // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
+        guard !correcting.contains(id) else { return }
         guard let transcript = item.transcript(corrected: useCorrected) else {
             generation[id] = .failed("This meeting has no transcript yet.")
             return
@@ -123,24 +129,58 @@ final class NotesModel {
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url
-        Task {
+        let token = UUID()
+        let task = Task {
             do {
                 // Lokalny serwer: kontekst sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); budżet włącza map-reduce.
                 // API nie dostaje budżetu, więc nigdy nie dzieli transkryptu.
                 let budget = client.provider.isLocal
                     ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: choice.assignment.model)) : nil
                 _ = try await generator.generate(session: session, template: template, transcript: transcript,
-                                                 context: context, notesLanguage: language, budget: budget, onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
-                self.generation[id] = .idle
+                                                 context: context, notesLanguage: language, budget: budget,
+                                                 onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } },
+                                                 progress: { [weak self] p in
+                                                     Task { @MainActor in if self?.generationRuns[id]?.token == token { self?.progress[id] = p } }
+                                                 })
+                try Task.checkCancellation()
+                self.finishGeneration(id, token, .idle)
+            } catch is CancellationError {
+                self.finishGeneration(id, token, .idle) // anulowane: bez baneru błędu, żadnej notatki na dysku
             } catch NoteGenerationError.nothingToSummarize {
-                self.generation[id] = .failed("Nothing to summarize: the transcript has no usable text.")
+                self.finishGeneration(id, token, .failed("Nothing to summarize: the transcript has no usable text."))
             } catch NoteGenerationError.failed(let message) {
-                self.generation[id] = .failed(message)
+                self.finishGeneration(id, token, .failed(message))
             } catch {
-                self.generation[id] = .failed("\(error)")
+                self.finishGeneration(id, token, .failed("\(error)"))
             }
-            self.onChange()
         }
+        generationRuns[id] = (token, task)
+    }
+
+    /// Tylko migawki (`Snapshots.swift`): stan „w toku" bez uruchamiania pracy. Bez argumentów czyści stan.
+    func setPreview(_ id: String, generating: NoteProgress? = nil, correcting isCorrecting: Bool = false) {
+        generation[id] = generating == nil ? nil : .generating
+        progress[id] = generating
+        if isCorrecting { correcting.insert(id) } else { correcting.remove(id) }
+    }
+
+    /// „Cancel" przy generowaniu: zatrzymuje kolejne wywołania serwera i od razu zwalnia sesję (bez błędu, bez notatki).
+    func cancelGeneration(_ id: String) {
+        guard let run = generationRuns.removeValue(forKey: id) else { return }
+        run.task.cancel()
+        generation[id] = .idle
+        progress[id] = nil
+        onChange()
+    }
+
+    /// Kończy przebieg, o ile nie został anulowany (wtedy stan już ustawił `cancelGeneration`, a nowy przebieg może trwać).
+    private func finishGeneration(_ id: String, _ token: UUID, _ result: GenState) {
+        if generationRuns[id]?.token == token {
+            generationRuns[id] = nil
+            progress[id] = nil
+            generation[id] = result
+        }
+        onChange()
     }
 
     // MARK: Po transkrypcji: korekta (gdy preset ma model) i autotytuł (gdy ma model podsumowania)

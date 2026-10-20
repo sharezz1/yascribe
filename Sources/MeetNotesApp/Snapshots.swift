@@ -5,6 +5,7 @@ import MeetNotesNotes
 import MeetNotesProviders
 import MeetNotesRecording
 import MeetNotesSessionFormat
+import MeetNotesTranscription
 import SwiftUI
 
 /// Tryb migawek (macos.md §9): `MEETNOTES_SNAPSHOT_DIR=<katalog>` renderuje ekrany do PNG i kończy proces.
@@ -137,6 +138,22 @@ enum Snapshots {
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
                     let summaryTab = MeetingViewState(); summaryTab.tab = .summary
                     try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
+                    // UX po T13: notatka z podziału (linia „Long meeting"), generowanie z postępem i „Cancel", korekta blokuje generowanie.
+                    // Fixture nie ładuje transkryptu z dysku; bez niego „Generate notes" jest nieaktywne z innego powodu.
+                    var split = withNotes; split.notes.summary?.condensedParts = 4
+                    split.transcript = try JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8))
+                    try render("meeting-summary-split", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: split, state: summaryTab) }
+                    var unwritten = split; unwritten.notes.summary = nil
+                    model.notes.setPreview(unwritten.id, generating: .condensing(pass: 1, part: 3, of: 6))
+                    try render("meeting-summary-generating", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: unwritten, state: summaryTab) }
+                    model.notes.setPreview(unwritten.id, correcting: true)
+                    try render("meeting-summary-correcting", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: unwritten, state: summaryTab) }
+                    model.notes.setPreview(unwritten.id)
+                    model.notes.setPreview(split.id, generating: .condensing(pass: 2, part: 1, of: 2))
+                    try render("meeting-summary-regenerating", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: split, state: summaryTab) }
+                    model.notes.setPreview(split.id, generating: .writing)
+                    try render("meeting-summary-writing", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: split, state: summaryTab) }
+                    model.notes.setPreview(split.id)
                     // Uwaga 7: „Add context” rozwinięte w miejscu (pole rośnie z treścią).
                     let contextOpen = MeetingViewState(); contextOpen.tab = .summary; contextOpen.showContext = true
                     try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: contextOpen) }
