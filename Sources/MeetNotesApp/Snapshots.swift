@@ -317,13 +317,14 @@ enum Snapshots {
                 model.providers.providers.removeAll { $0.id == onDevice.id }
                 model.providerChecks[onDevice.id] = nil
                 // F20 T11: lokalne serwery tekstowe. Komunikaty błędów pochodzą z `LocalServerHint` (nie z palca), stany są wymyślone.
-                let ollamaLocal = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!)
+                let ollamaLocal = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!, contextTokens: 8_192)
                 let llamaLocal = Provider(name: ProviderPreset.llamaCpp.name, baseURL: URL(string: ProviderPreset.llamaCpp.baseURL)!)
                 let omlxLocal = Provider(name: ProviderPreset.omlx.name, baseURL: URL(string: ProviderPreset.omlx.baseURL)!)
                 let parakeetLocal = Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
                 let localServers = [ollamaLocal, llamaLocal, omlxLocal]
                 model.providers.providers.append(contentsOf: localServers + [parakeetLocal])
                 model.providerChecks[ollamaLocal.id] = .verified(models: 3)
+                model.detectedContexts[ollamaLocal.id] = ContextProbe.describe(["bonsai-2": 4_096])
                 model.providerChecks[llamaLocal.id] = .failed(LocalServerHint.message(for: llamaLocal, error: URLError(.cannotConnectToHost))!)
                 model.providerChecks[omlxLocal.id] = .failed(LocalServerHint.message(for: omlxLocal, error: ProviderError.http(401, "API key required"))!)
                 model.providerChecks[parakeetLocal.id] = .verified(models: 1)

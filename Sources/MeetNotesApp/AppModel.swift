@@ -349,6 +349,7 @@ final class AppModel {
     /// serwer wyłączony).
     func verifyProvider(_ id: UUID) async {
         providerChecks[id] = nil
+        detectedContexts[id] = nil
         providerVerifying.insert(id)
         defer { providerVerifying.remove(id) }
         switch providerWithKey(id) {
@@ -356,14 +357,29 @@ final class AppModel {
         case .success(let (p, _)) where p.api == .fluidAudio: // bez sieci: model jest w magazynie i zgadza się z manifestem
             localASR.refresh()
             providerChecks[id] = RunGate.check(status: localASR.store.status()).map { .failed($0.message) } ?? .verified(models: 1)
-        case .success(let (p, key)): providerChecks[id] = await p.verify(key: key)
+        case .success(let (p, key)):
+            providerChecks[id] = await p.verify(key: key)
+            // Lokalny serwer: pokaż efektywny kontekst (llama.cpp `/props`, Ollama `/api/ps`), żeby użytkownik mógł go wpisać w polu.
+            if case .verified? = providerChecks[id], p.isLocal, p.api == .openAICompatible {
+                detectedContexts[id] = ContextProbe.describe(await ContextProbe.effectiveContexts(client: OpenAICompatibleClient(provider: p, key: key)))
+            }
         }
     }
 
+    /// Wykryty kontekst lokalnego serwera z ostatniego „Check" (w pamięci); brak wpisu = nic wykrytego.
+    var detectedContexts: [UUID: String] = [:]
+
+    /// Pole „Context window (tokens)": `nil` = domyślne 4096. Zapis do `providers.json`.
+    func setContextTokens(_ id: UUID, _ value: Int?) {
+        guard let i = providers.providers.firstIndex(where: { $0.id == id }) else { return }
+        providers.providers[i].contextTokens = value
+        save()
+    }
+
     /// `nil` = dodano; tekst = powód odmowy (duplikat nazwy albo błąd pęku kluczy).
-    func addProvider(name: String, baseURL: URL, key: String, kind: ProviderKind? = nil) -> String? {
+    func addProvider(name: String, baseURL: URL, key: String, kind: ProviderKind? = nil, contextTokens: Int? = nil) -> String? {
         if let e = providers.nameError(name) { return e }
-        let p = Provider(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL, kind: kind)
+        let p = Provider(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL, kind: kind, contextTokens: contextTokens)
         do {
             if !key.isEmpty { try secrets.set(p.id, key) }
             providers.providers.append(p)

@@ -10,12 +10,15 @@ public struct Provider: Codable, Equatable, Identifiable, Sendable {
     public var baseURL: URL
     /// API dostawcy. Opcjonalne (E6): `nil` w starych `providers.json` = OpenAI-compatible.
     public var kind: ProviderKind?
+    /// Okno kontekstu serwera lokalnego (tokeny), wpisywane przez użytkownika. Opcjonalne (E6): `nil` = 4096 (`ContextBudget`).
+    public var contextTokens: Int?
 
-    public init(id: UUID = UUID(), name: String, baseURL: URL, kind: ProviderKind? = nil) {
+    public init(id: UUID = UUID(), name: String, baseURL: URL, kind: ProviderKind? = nil, contextTokens: Int? = nil) {
         self.id = id
         self.name = name
         self.baseURL = baseURL
         self.kind = kind
+        self.contextTokens = contextTokens
     }
 
     public var api: ProviderKind { kind ?? .openAICompatible }

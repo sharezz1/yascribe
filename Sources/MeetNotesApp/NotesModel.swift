@@ -80,8 +80,11 @@ final class NotesModel {
         correcting.insert(id)
         onChange()
         let limits = ChatLimits.for(client.provider, call: .correctionBatch)
+        // Kontekst lokalnego serwera sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); API: bez budżetu.
+        let budget = client.provider.isLocal
+            ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: assignment.model)) : nil
         let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
-                                     temperature: limits.temperature).correct(transcript, language: language)
+                                     temperature: limits.temperature, budget: budget).correct(transcript, language: language)
         correcting.remove(id)
         defer { onChange() }
         if result.failedCompletely {
