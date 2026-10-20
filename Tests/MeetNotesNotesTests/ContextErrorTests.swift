@@ -56,3 +56,28 @@ import MeetNotesProviders
     let cloud = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
     #expect(ContextError.describe(model: "m", URLError(.cannotConnectToHost), provider: cloud).contains("m failed"))
 }
+
+@Test func apiOverflowKeepsTheArrivesLaterSentence() {
+    let e = ProviderError.http(400, "{\"error\":\"This model's maximum context length is 128000 tokens\"}")
+    let cloud = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    for msg in [ContextError.describe(model: "m", e), ContextError.describe(model: "m", e, provider: cloud)] {
+        #expect(msg.contains("Splitting long transcripts arrives later") && !msg.contains("Context window"))
+    }
+}
+
+@Test func localOverflowPointsAtContextWindow() {
+    let e = ProviderError.http(400, "{\"error\":\"request (6057 tokens) exceeds the available context size (4096 tokens)\"}")
+    let local = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+    for msg in [ContextError.describe(model: "vendor/m", e, provider: local), ContextError.describe(model: "vendor/m", e, isLocal: true)] {
+        #expect(msg.contains("vendor/m") && msg.contains("Context window") && msg.contains("longer context"))
+        #expect(!msg.contains("arrives later"))
+    }
+}
+
+@Test func localCutOffPointsAtContextWindow() {
+    let local = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+    for msg in [ContextError.describe(model: "vendor/m", ProviderError.replyCutOff, provider: local),
+                ContextError.describe(model: "vendor/m", ProviderError.replyCutOff, isLocal: true)] {
+        #expect(msg.contains("cut off") && msg.contains("Context window") && msg.contains("server's context length"))
+    }
+}

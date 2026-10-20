@@ -29,15 +29,20 @@ public enum ContextError {
     public static func describe(model: String, _ error: Error, provider: Provider? = nil, transport: Double? = nil,
                                 isLocal: Bool = false) -> String {
         if let provider, let hint = localHint(provider: provider, error, transport: transport) { return hint }
+        let local = isLocal || provider?.isLocal == true
         if isCutOff(error) {
-            return isLocal || provider?.isLocal == true
-                ? "\(model)'s reply was cut off before the end: it ran out of context or token room. "
-                    + "Use a model with a longer context or raise the server's context length."
+            return local
+                ? "\(model)'s reply was cut off before the end: it ran out of context or token room. Raise the Context window "
+                    + "for this provider in Settings and the server's context length, or use a model with a longer context."
                 : "\(model)'s reply was cut off before the end. Try a model with a longer output limit."
         }
         if isEmptyReply(error) { return "\(model) returned an empty reply." }
         if isContextOverflow(error) {
-            return "\(model) can't take a transcript this long. Try a model with a longer context. (Splitting long transcripts arrives later.)"
+            // Lokalnie długie transkrypty są dzielone (map-reduce), więc przepełnienie znaczy: kontekst serwera < „Context window" w Settings.
+            return local
+                ? "\(model) can't take this much text: the server's context length is smaller than the Context window set in Settings. "
+                    + "Lower the Context window to the server's value, raise the server's context length, or use a model with a longer context."
+                : "\(model) can't take a transcript this long. Try a model with a longer context. (Splitting long transcripts arrives later.)"
         }
         return "\(model) failed: \(error)"
     }
