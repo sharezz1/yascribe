@@ -12,6 +12,10 @@ public enum LocalASRPhase: Equatable, Sendable {
     /// Pierwsze ładowanie modelu (kompilacja ANE bywa długa).
     case preparing
     case ready
+    /// Ładowanie się nie udało (tekst dla użytkownika); kolejne okna tego klienta dostają ten sam błąd bez ponownego ładowania.
+    case failed(String)
+    /// Po `release()` — model zwolniony, nic się nie dzieje.
+    case idle
 }
 
 /// Klient `TranscriptionClient` w procesie: leniwe, jednorazowe `load()`, `release()` zwalnia pamięć.
@@ -26,6 +30,10 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     private let onPhase: @Sendable (LocalASRPhase) -> Void
     private var loaded = false
     private var loading: Task<Void, Error>?
+    /// Pierwszy błąd ładowania: kolejne okna rzucają go od razu (zamiast ~20 s ładowania na każde okno); czyści go `release()`.
+    private var loadFailure: Error?
+    /// Rośnie przy `release()`; ładowanie rozpoczęte w starej generacji nie ma prawa nic ustawić w nowej.
+    private var generation = 0
 
     public init(provider: Provider, engine: any LocalASREngine, store: ModelStore,
                 onPhase: @escaping @Sendable (LocalASRPhase) -> Void = { _ in }) {
@@ -49,28 +57,55 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
         let samples = try WAVDecoder.samples(wav)
         if samples.count < Self.minimumSamples { return TranscriptionResult(text: "", words: []) }
         try await ensureLoaded()
+        try Task.checkCancellation()
         let r = try await engine.transcribe(samples: samples)
         return TranscriptionResult(text: r.text, words: r.words)
     }
 
+    /// Wołać, gdy żaden przebieg nie trwa (tak robi `AppModel`). Czeka na ładowanie w toku i dopiero potem zwalnia silnik, żeby
+    /// model nie został w pamięci; żądania, które czekały na to ładowanie, kończą się `CancellationError`.
     public func release() async {
-        loading?.cancel()
+        generation += 1
+        let pending = loading
         loading = nil
         loaded = false
+        loadFailure = nil
+        pending?.cancel() // `loadLocal` jest nieprzerywalne — to tylko prośba, ładowanie i tak się dokończy
+        _ = await pending?.result
         await engine.unload()
+        onPhase(.idle)
     }
 
     // Współbieżne żądania czekają na to samo ładowanie (aktor jest reentrantny na `await`).
     private func ensureLoaded() async throws {
+        if let loadFailure { throw loadFailure }
         if loaded { return }
-        if let loading { return try await loading.value }
-        onPhase(.preparing)
-        let engine = engine
-        let task = Task { try await engine.load() }
-        loading = task
-        do { try await task.value } catch { loading = nil; throw error }
-        loading = nil
-        loaded = true
-        onPhase(.ready)
+        let myGeneration = generation
+        let task: Task<Void, Error>
+        if let pending = loading {
+            task = pending
+        } else {
+            onPhase(.preparing)
+            let engine = engine
+            task = Task { try await engine.load() }
+            loading = task
+        }
+        do { try await task.value } catch {
+            // Po `release()` wynik starego ładowania nikogo nie obchodzi; pierwszy z oczekujących zapisuje porażkę, reszta ją powtarza.
+            guard generation == myGeneration else { throw CancellationError() }
+            if loading != nil {
+                loading = nil
+                loadFailure = error
+                onPhase(.failed(error.localizedDescription))
+            }
+            throw error
+        }
+        try Task.checkCancellation() // ładowanie zostaje w `loading`; następne żądanie dokończy rejestrację bez czekania
+        guard generation == myGeneration else { throw CancellationError() }
+        if loading != nil {
+            loading = nil
+            loaded = true
+            onPhase(.ready)
+        }
     }
 }

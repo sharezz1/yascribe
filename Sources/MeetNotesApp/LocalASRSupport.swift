@@ -15,6 +15,8 @@ final class LocalASRSupport: ObservableObject {
     /// Powód ostatniego nieudanego pobrania; czyszczony przy starcie następnego.
     @Published private(set) var downloadError: String?
     private var highest = 0.0
+    /// Od `.preparing` (pierwsze ładowanie przebiegu) do `endRun()` — wtedy model jest w użyciu i `remove()` odmawia.
+    private var runActive = false
 
     init(store: ModelStore = ModelStore()) {
         self.store = store
@@ -32,7 +34,9 @@ final class LocalASRSupport: ObservableObject {
         downloadError = nil
         phase = .downloading(nil)
         highest = 0
+        let throttle = ProgressThrottle() // ~7,5 tys. zdarzeń na pobranie; UI dostaje najwyżej ~10/s
         let report: @Sendable (Double?) -> Void = { [weak self] p in
+            guard throttle.admit() else { return }
             Task { @MainActor in
                 guard let self, case .downloading = self.phase else { return }
                 // Store daje postęp monotoniczny, ale skoki na MainActor nie muszą dotrzeć po kolei — pilnujemy też tutaj.
@@ -44,14 +48,37 @@ final class LocalASRSupport: ObservableObject {
         refresh()
     }
 
-    /// Z `onPhase` klienta (`.preparing` przy pierwszym ładowaniu, `.ready` po nim). Nie nadpisuje pobierania.
+    /// Usunięcie modelu po kliknięciu. Wyklucza się z pobieraniem (`phase` ≠ `.idle`) i z przebiegiem, który trzyma klienta
+    /// (`runActive`: od pierwszego ładowania do `endRun()`).
+    func remove() {
+        guard phase == .idle, !runActive else {
+            downloadError = "Can't remove the on-device model while it is downloading or in use."
+            return
+        }
+        downloadError = nil
+        do { try store.remove() } catch { downloadError = "\(error.localizedDescription)" }
+        refresh()
+    }
+
+    /// Z `onPhase` klienta. Nie nadpisuje pobierania. `.failed` wraca do `.idle` z komunikatem w `downloadError`.
     func apply(_ p: LocalASRPhase) {
         guard phase == .idle || phase == .preparing else { return }
-        phase = p == .preparing ? .preparing : .idle
+        switch p {
+        case .preparing:
+            runActive = true
+            downloadError = nil
+            phase = .preparing
+        case .ready, .idle:
+            phase = .idle
+        case .failed(let reason):
+            phase = .idle
+            downloadError = "Couldn't load the on-device model: \(reason)"
+        }
     }
 
     /// Po przebiegu: nieudane ładowanie nie wysyła `.ready`, więc „Preparing…" nie może zostać.
     func endRun() {
+        runActive = false
         if phase == .preparing { phase = .idle }
     }
 }

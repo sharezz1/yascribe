@@ -13,6 +13,9 @@ public struct ModelManifest: Codable, Equatable, Sendable {
         self.files = files
     }
 
+    /// Wersja biblioteki, wariant i precyzja, z których pochodzi wzorzec; wchodzi do odcisku modelu.
+    public static let pin = "fluidaudio-0.17.7/v3/int8"
+
     public static let parakeetV3 = ModelManifest(model: "parakeet-tdt-0.6b-v3", files: [
         "Decoder.mlmodelc/analytics/coremldata.bin": 243,
         "Decoder.mlmodelc/coremldata.bin": 554,

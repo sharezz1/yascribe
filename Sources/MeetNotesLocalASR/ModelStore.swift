@@ -25,12 +25,18 @@ public struct ModelStore: Sendable {
 
     /// KORZEŃ magazynu (domyślnie wspólny z FluidAudio); model leży w `modelDirectory`.
     public let directory: URL
+    /// Wstrzykiwane `AsrModels.modelsExist` (lokalne sprawdzenie obecności plików, bez sieci) dla katalogu modelu.
+    public typealias ModelsExist = @Sendable (URL) -> Bool
+
     private let downloader: Download
+    private let modelsExist: ModelsExist
     private let manifest = ModelManifest.parakeetV3
 
-    public init(directory: URL = ModelStore.defaultDirectory, download: @escaping Download = ModelStore.fluidAudioDownload) {
+    public init(directory: URL = ModelStore.defaultDirectory, download: @escaping Download = ModelStore.fluidAudioDownload,
+                modelsExist: @escaping ModelsExist = ModelStore.fluidAudioModelsExist) {
         self.directory = directory
         self.downloader = download
+        self.modelsExist = modelsExist
     }
 
     public static var defaultDirectory: URL { resolveDirectory(env: ProcessInfo.processInfo.environment) }
@@ -72,23 +78,33 @@ public struct ModelStore: Sendable {
         return .ready
     }
 
-    /// SHA-256 z listy (nazwa, rozmiar) manifestu i treści `config.json`; `nil`, gdy status ≠ `ready`. Pliki nadmiarowe nie wchodzą.
-    public func fingerprint() -> String? {
-        guard status() == .ready,
-              let config = try? Data(contentsOf: modelDirectory.appendingPathComponent("config.json")) else { return nil }
+    /// SHA-256 z pinu, listy (nazwa, rozmiar) manifestu i TREŚCI wszystkich małych plików (wszystko poza `weight.bin`, ok. 1,3 MB:
+    /// grafy `model.mil`, metadane, słowniki, `config.json`) — przeeksportowany lub dostrojony model o tych samych rozmiarach wag
+    /// zmienia odcisk. Same wagi nie są hashowane (480 MB); `nil`, gdy status ≠ `ready`. Pliki nadmiarowe nie wchodzą.
+    public func fingerprint() -> String? { fingerprint(pin: ModelManifest.pin) }
+
+    func fingerprint(pin: String) -> String? {
+        guard status() == .ready else { return nil }
         var hasher = SHA256()
-        for (file, size) in manifest.files.sorted(by: { $0.key < $1.key }) { hasher.update(data: Data("\(file)\t\(size)\n".utf8)) }
-        hasher.update(data: config)
+        hasher.update(data: Data("\(pin)\n".utf8))
+        for (file, size) in manifest.files.sorted(by: { $0.key < $1.key }) {
+            hasher.update(data: Data("\(file)\t\(size)\n".utf8))
+            if file.hasSuffix("/weights/weight.bin") { continue }
+            guard let content = try? Data(contentsOf: modelDirectory.appendingPathComponent(file)) else { return nil }
+            hasher.update(data: content)
+        }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    /// Pobranie wyłącznie po akcji użytkownika. `force` liczy sam magazyn: `modelsExist` FluidAudio sprawdza tylko obecność
-    /// plików, więc przy złym rozmiarze bez `force` pobranie wróciłoby od razu i nic by nie naprawiło. `force` kasuje folder modelu.
+    /// Pobranie wyłącznie po akcji użytkownika. FluidAudio wznawia pliki `.partial`, a `force` kasuje folder modelu — więc `force`
+    /// tylko wtedy, gdy bez niego nic by się nie naprawiło: (a) jakiś plik z manifestu ma ZŁY rozmiar albo (b) `modelsExist`
+    /// FluidAudio (sama obecność plików) mówi „jest", a nasz status jest `invalid` (np. brak `config.json`). Brakujące pliki
+    /// pobierane są bez `force`, czyli z wznowieniem przerwanego pobrania.
     public func download(progress: @escaping @Sendable (Double?) -> Void) async throws {
         let before = status()
         if before == .ready { return }
         var force = false
-        if case .invalid = before { force = true }
+        if case .invalid = before { force = hasWrongSizeFile() || modelsExist(modelDirectory) }
         try await downloader(modelDirectory, force, progress)
         switch status() {
         case .ready: return
@@ -98,11 +114,23 @@ public struct ModelStore: Sendable {
         }
     }
 
+    /// Czy istnieje plik z manifestu o rozmiarze innym niż w manifeście (brak pliku to nie zły rozmiar).
+    private func hasWrongSizeFile() -> Bool {
+        manifest.files.contains { file, size in
+            let attrs = try? FileManager.default.attributesOfItem(atPath: modelDirectory.appendingPathComponent(file).path)
+            guard let actual = (attrs?[.size] as? NSNumber)?.int64Value else { return false }
+            return actual != size
+        }
+    }
+
     /// Kasuje wyłącznie folder modelu — nie jego sąsiadów we wspólnym magazynie.
     public func remove() throws {
         guard FileManager.default.fileExists(atPath: modelDirectory.path) else { return }
         try FileManager.default.removeItem(at: modelDirectory)
     }
+
+    /// Lokalne sprawdzenie FluidAudio (obecność plików wariantu v3/int8); bez sieci.
+    public static let fluidAudioModelsExist: ModelsExist = { AsrModels.modelsExist(at: $0, version: .v3, encoderPrecision: .int8) }
 
     /// `AsrModels.download(to:)` z pinem (v3, int8). Ładowanie modelu tylko przez `FluidAudioEngine` (`loadLocal`, bez sieci).
     public static let fluidAudioDownload: Download = { modelDirectory, force, progress in
