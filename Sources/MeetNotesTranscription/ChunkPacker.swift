@@ -34,6 +34,22 @@ public struct Chunk: Codable, Equatable, Sendable {
         return Double(best.sourceStart + (clamped - best.chunkStart)) / rate
     }
 
+    /// Słowo [start, end] w czasie okna (s) → czas ścieżki (s), w obrębie JEDNEGO fragmentu (U1).
+    /// Granica słowa wg ASR może wypaść w sztucznej przerwie, więc mapowanie początku i końca osobno
+    /// rozciągałoby słowo przez wyciętą ciszę (do kilkudziesięciu sekund). Reguła: fragment słowa to ten,
+    /// w którym zaczyna się jego początek, a początek w przerwie przechodzi na następny fragment (po ostatnim —
+    /// na ostatni). Początek i koniec są przycinane do tego fragmentu: koniec poza nim → koniec fragmentu,
+    /// koniec jeszcze w przerwie przed fragmentem → czas zero. Słowa w całości w jednym fragmencie bez zmian.
+    public func sourceSpan(chunkStart: Double, chunkEnd: Double, rate: Double) -> (start: Double, end: Double) {
+        let ps = Int((chunkStart * rate).rounded())
+        let pe = Int((chunkEnd * rate).rounded())
+        let seg = segments.first { ps < $0.chunkStart + $0.length } ?? segments[segments.count - 1]
+        func map(_ p: Int) -> Double {
+            Double(seg.sourceStart + min(max(p, seg.chunkStart), seg.chunkStart + seg.length) - seg.chunkStart) / rate
+        }
+        return (map(ps), map(pe))
+    }
+
     public var sourceStartSeconds: Double { Double(segments.first?.sourceStart ?? 0) / Resampler.asrRate }
     public var sourceEndSeconds: Double { Double(segments.last?.sourceEnd ?? 0) / Resampler.asrRate }
 }
