@@ -105,6 +105,10 @@ final class AppModel {
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
         notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }
+        notes.fillerWords = { [weak self] in
+            guard let s = self?.settings, s.removeFillersEnabled else { return [] }
+            return s.fillerWords ?? FillerWords.defaults
+        }
         notes.onChange = { [weak self] in self?.reloadSessions() }
         notes.isMoving = { [weak self] in self?.recordingsMove != nil }
         applyRetention()

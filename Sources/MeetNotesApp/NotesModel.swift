@@ -31,6 +31,8 @@ final class NotesModel {
     var presetsInfo: () -> (presets: [Preset], defaultID: UUID?) = { ([], nil) }
     /// `GlobalSettings.summaryThinkingEnabled`: czy model API może „myśleć" przy notatce.
     var summaryThinking: () -> Bool = { true }
+    /// Przerywniki do usunięcia z poprawionego tekstu (F20 P2); pusta lista = nic nie usuwamy.
+    var fillerWords: () -> [String] = { [] }
     var onChange: () -> Void = {}
     /// Komunikaty dla użytkownika (np. nieczytelny plik notatek odłożony na bok) — podłączane do `AppModel.lastError`.
     var report: (String) -> Void = { _ in }
@@ -90,7 +92,8 @@ final class NotesModel {
         let budget = client.provider.isLocal
             ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: assignment.model)) : nil
         let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
-                                     temperature: limits.temperature, budget: budget).correct(transcript, language: language)
+                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords())
+            .correct(transcript, language: language)
         correcting.remove(id)
         defer { onChange() }
         if result.failedCompletely {

@@ -93,9 +93,12 @@ public struct Corrector: Sendable {
     public var temperature: Double?
     /// Budżet kontekstu lokalnego modelu (`nil` = API: partia `maxBatchChars`, bez `max_tokens`).
     public var budget: ContextBudget?
+    /// Przerywniki do usunięcia (F20 P2): lista idzie do polecenia dla modelu (A) i do filtra po korekcie (B). Pusta = nic nie usuwamy.
+    public var fillerWords: [String]
 
     public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120,
-                chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil) {
+                chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil, fillerWords: [String] = []) {
+        self.fillerWords = fillerWords
         self.budget = budget
         self.client = client
         self.assignment = assignment
@@ -112,6 +115,10 @@ public struct Corrector: Sendable {
         The input is numbered lines like "[12] text". Reply with exactly the same numbers, one corrected line per \
         input line, in the same order, and nothing else.
         """
+        if !fillerWords.isEmpty {
+            s += "\nException: remove filler sounds and hesitations (for example: \(fillerWords.prefix(8).joined(separator: ", "))). "
+                + "Keep every word that carries meaning."
+        }
         if let language { s += "\nThe transcript language is \(language.englishName)." }
         if let extra = assignment.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !extra.isEmpty {
             s += "\nExtra instructions from the user: \(extra)"
@@ -175,6 +182,11 @@ public struct Corrector: Sendable {
                         ? ContextError.describe(model: assignment.model, error, provider: client.provider, transport: chatTimeout) : "\(error)"
                 }
             }
+        }
+        // Filtr po modelu (F20 P2): działa też na liniach, których model nie poprawił (odrzucone, nieudana partia). Całkowita porażka
+        // zostaje bez zmian — `NotesModel` i tak wtedy zwraca oryginał.
+        if !fillerWords.isEmpty, failed < batches.count {
+            for l in lines { out.utterances[l.n - 1].text = FillerWords.remove(out.utterances[l.n - 1].text, words: fillerWords) }
         }
         return CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
                                    failedBatches: failed, rejectedLines: rejected, firstError: firstError)
