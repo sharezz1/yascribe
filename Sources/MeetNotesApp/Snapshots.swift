@@ -1,9 +1,11 @@
 import AppKit
+import MeetNotesLocalASR
 import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesProviders
 import MeetNotesRecording
 import MeetNotesSessionFormat
+import MeetNotesTranscription
 import SwiftUI
 
 /// Tryb migawek (macos.md §9): `MEETNOTES_SNAPSHOT_DIR=<katalog>` renderuje ekrany do PNG i kończy proces.
@@ -136,6 +138,22 @@ enum Snapshots {
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
                     let summaryTab = MeetingViewState(); summaryTab.tab = .summary
                     try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
+                    // UX po T13: notatka z podziału (linia „Long meeting"), generowanie z postępem i „Cancel", korekta blokuje generowanie.
+                    // Fixture nie ładuje transkryptu z dysku; bez niego „Generate notes" jest nieaktywne z innego powodu.
+                    var split = withNotes; split.notes.summary?.condensedParts = 4
+                    split.transcript = try JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8))
+                    try render("meeting-summary-split", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: split, state: summaryTab) }
+                    var unwritten = split; unwritten.notes.summary = nil
+                    model.notes.setPreview(unwritten.id, generating: .condensing(pass: 1, part: 3, of: 6))
+                    try render("meeting-summary-generating", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: unwritten, state: summaryTab) }
+                    model.notes.setPreview(unwritten.id, correcting: true)
+                    try render("meeting-summary-correcting", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: unwritten, state: summaryTab) }
+                    model.notes.setPreview(unwritten.id)
+                    model.notes.setPreview(split.id, generating: .condensing(pass: 2, part: 1, of: 2))
+                    try render("meeting-summary-regenerating", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: split, state: summaryTab) }
+                    model.notes.setPreview(split.id, generating: .writing)
+                    try render("meeting-summary-writing", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: split, state: summaryTab) }
+                    model.notes.setPreview(split.id)
                     // Uwaga 7: „Add context” rozwinięte w miejscu (pole rośnie z treścią).
                     let contextOpen = MeetingViewState(); contextOpen.tab = .summary; contextOpen.showContext = true
                     try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: contextOpen) }
@@ -272,6 +290,86 @@ enum Snapshots {
                 let sheetCustom = ProviderSheetState(); sheetCustom.setUp(.custom); sheetCustom.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
                 try render("settings-sheet-custom", size: CGSize(width: 520, height: 400), dark: dark, model: model) { ProviderSetupSheet(state: sheetCustom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
+                // F20 T7: karta modelu lokalnego ASR w czterech stanach. Statusy są wymyślone (nic nie czyta magazynu, nic nie pobiera).
+                let cardFolder = "~/Library/Application Support/FluidAudio/Models/\(ModelCardState.folder)"
+                let cardScenes: [(String, ModelStatus, ModelActivity)] = [
+                    ("ready", .ready, .idle), ("downloading", .missing, .downloading(0.41)), ("missing", .missing, .idle),
+                    ("invalid", .invalid(reason: "Encoder.mlmodelc/weights/weight.bin has 218103808 bytes, expected 445187200"), .idle)]
+                for (name, status, activity) in cardScenes {
+                    try render("model-card-\(name)", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            SectionHeader("Yascribe model")
+                            ModelCardContent(card: ModelCardState(status: status, activity: activity), location: cardFolder)
+                        }
+                        .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                    }
+                }
+                // Błąd pobrania pod opisem i wiersze edytora presetu (ASR, „On this Mac"): brak modelu / pobieranie / gotowy.
+                try render("model-card-download-error", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionHeader("Yascribe model")
+                        ModelCardContent(card: ModelCardState(status: .missing, activity: .idle), location: cardFolder,
+                                         error: "The download didn't finish: The Internet connection appears to be offline.")
+                    }
+                    .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                }
+                try render("preset-on-this-mac-rows", size: CGSize(width: 700, height: 190), dark: dark, model: model) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach([("missing", ModelStatus.missing, ModelActivity.idle), ("downloading", .missing, .downloading(0.41)),
+                                 ("invalid", .invalid(reason: "x"), .idle), ("ready", .ready, .idle)], id: \.0) { _, status, activity in
+                            OnThisMacRoleContent(card: ModelCardState(status: status, activity: activity)).padding(.top, 10)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                }
+                // Dostawca „On this Mac" włączony (Settings) i preset z lokalnym ASR (edytor) — karta i wiersz pokazują stan magazynu TEGO
+                // komputera (tylko odczyt), więc ta para nie jest deterministyczna; wymyślone stany są w migawkach powyżej.
+                let onDevice = Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+                model.providers.providers.append(onDevice)
+                model.providerChecks[onDevice.id] = RunGate.check(status: model.localASR.status).map { .failed($0.message) } ?? .verified(models: 1)
+                try render("settings-on-this-mac", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
+                let localEditor = PresetEditorState(draft: Preset(name: "Polish, on this Mac", language: .polish,
+                                                                  asr: RoleAssignment(providerID: onDevice.id, model: LocalASRModels.parakeetV3)), original: nil)
+                try render("preset-form-on-this-mac", size: CGSize(width: 700, height: 420), dark: dark, model: model) { PresetForm(state: localEditor).contentBackground() }
+                model.providers.providers.removeAll { $0.id == onDevice.id }
+                model.providerChecks[onDevice.id] = nil
+                // F20 T11: lokalne serwery tekstowe. Komunikaty błędów pochodzą z `LocalServerHint` (nie z palca), stany są wymyślone.
+                let ollamaLocal = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!, contextTokens: 8_192)
+                let llamaLocal = Provider(name: ProviderPreset.llamaCpp.name, baseURL: URL(string: ProviderPreset.llamaCpp.baseURL)!)
+                let omlxLocal = Provider(name: ProviderPreset.omlx.name, baseURL: URL(string: ProviderPreset.omlx.baseURL)!)
+                let parakeetLocal = Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+                let localServers = [ollamaLocal, llamaLocal, omlxLocal]
+                model.providers.providers.append(contentsOf: localServers + [parakeetLocal])
+                model.providerChecks[ollamaLocal.id] = .verified(models: 3)
+                model.detectedContexts[ollamaLocal.id] = ContextProbe.describe(["bonsai-2": 4_096])
+                model.providerChecks[llamaLocal.id] = .failed(LocalServerHint.message(for: llamaLocal, error: URLError(.cannotConnectToHost))!)
+                model.providerChecks[omlxLocal.id] = .failed(LocalServerHint.message(for: omlxLocal, error: ProviderError.http(401, "API key required"))!)
+                model.providerChecks[parakeetLocal.id] = .verified(models: 1)
+                try render("settings-local-servers", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
+                let sheetOmlx = ProviderSheetState(); sheetOmlx.setUp(.omlx)
+                try render("settings-sheet-omlx", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetOmlx) }
+                let sheetOmlxDown = ProviderSheetState(); sheetOmlxDown.setUp(.omlx)
+                sheetOmlxDown.result = .failed(LocalServerHint.message(for: omlxLocal, error: URLError(.cannotConnectToHost))!)
+                try render("settings-sheet-omlx-down", size: CGSize(width: 520, height: 390), dark: dark, model: model) { ProviderSetupSheet(state: sheetOmlxDown) }
+                // Preset w pełni lokalny (znaczniki „On this Mac" przy rolach, ostrzeżenie przy korekcie, plakietka „Fully local") i mieszany (chmura = bez plakietki).
+                let fullyLocal = Preset(name: "Polish, fully local", language: .polish,
+                                        asr: RoleAssignment(providerID: parakeetLocal.id, model: LocalASRModels.parakeetV3),
+                                        correction: RoleAssignment(providerID: ollamaLocal.id, model: "qwen3:8b"),
+                                        summary: RoleAssignment(providerID: ollamaLocal.id, model: "qwen3:8b"))
+                var mixed = fullyLocal
+                mixed.id = UUID(); mixed.name = "Polish, local notes only"
+                if let cloud = model.providers.providers.first(where: { $0.id != parakeetLocal.id && !$0.isLocal }) {
+                    mixed.asr = RoleAssignment(providerID: cloud.id, model: "microsoft/mai-transcribe-2")
+                }
+                let presetsBefore = model.presets
+                model.presets.presets.append(contentsOf: [fullyLocal, mixed])
+                let localEditing = PresetEditorState(); localEditing.select(fullyLocal)
+                try render("presets-fully-local", size: CGSize(width: 900, height: 900), dark: dark, model: model) { PresetsView(state: localEditing) }
+                let mixedEditing = PresetEditorState(); mixedEditing.select(mixed)
+                try render("presets-local-notes-only", size: CGSize(width: 900, height: 900), dark: dark, model: model) { PresetsView(state: mixedEditing) }
+                model.presets = presetsBefore
+                model.providers.providers.removeAll { p in (localServers + [parakeetLocal]).contains { $0.id == p.id } }
+                for p in localServers + [parakeetLocal] { model.providerChecks[p.id] = nil }
                 // Faza 1.6 T7: Integrations + Meeting detection (kalendarz połączony, trzy kalendarze, jeden odznaczony; Advanced rozwinięte).
                 let meetingState = MeetingSettingsState()
                 meetingState.authorization = .granted

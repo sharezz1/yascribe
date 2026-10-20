@@ -75,6 +75,8 @@ public struct ProbeRunner: Sendable {
                         r.shape = shape
                         if shape == .chatAudio {
                             r.languageHandling = .unknown
+                        } else if client.provider.kind == .fluidAudio {
+                            r.languageHandling = .filtered // Parakeet: język tylko skryptowy; classifyLanguage nigdy nie zwraca .filtered (spec §4.2)
                         } else if let language {
                             r.languageHandling = await classifyLanguage(model: model, language: language)
                         } // bez języka (CLI bez --language) nie klasyfikujemy — wynik byłby dla angielskiego, a klucz cache to nil
@@ -89,9 +91,17 @@ public struct ProbeRunner: Sendable {
         case .correction, .summary:
             guard let client = textClient else { r.failure = asrOnly; break }
             do {
-                let reply = try await client.chat(model: model, system: "You are a connectivity probe. Reply with OK.", user: "ping")
+                // Sonda korekty działa tak jak korekta (bez myślenia); inaczej „Test" wisiałby na modelu, który w korekcie działa (F20 P1).
+                let reply = try await client.chat(model: model, system: "You are a connectivity probe. Reply with OK.", user: "ping",
+                                                  thinking: role != .correction)
                 r.works = !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 if !r.works { r.failure = "empty reply" }
+            } catch ProviderError.badResponse("empty reply") {
+                r.failure = "empty reply"
+            } catch ProviderError.replyCutOff {
+                r.failure = ProviderCheck.describe(ProviderError.replyCutOff)
+            } catch ProviderError.inputTruncated(let chars, let tokens) {
+                r.failure = ProviderCheck.describe(ProviderError.inputTruncated(sentChars: chars, readTokens: tokens))
             } catch { r.failure = "\(error)" }
         case .embedding:
             guard let client = textClient else { r.failure = asrOnly; break }

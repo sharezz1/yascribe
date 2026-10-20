@@ -40,8 +40,9 @@ public enum Merger {
             for r in results.filter({ $0.track == track }).sorted(by: { $0.chunk.index < $1.chunk.index }) {
                 if let ws = r.result.words, !ws.isEmpty {
                     for w in ws {
-                        let s = clock.sessionSeconds(track: track, trackSeconds: r.chunk.sourceSeconds(chunkSeconds: w.start, rate: Resampler.asrRate))
-                        let e = clock.sessionSeconds(track: track, trackSeconds: r.chunk.sourceSeconds(chunkSeconds: w.end, rate: Resampler.asrRate))
+                        let span = r.chunk.sourceSpan(chunkStart: w.start, chunkEnd: w.end, rate: Resampler.asrRate)
+                        let s = clock.sessionSeconds(track: track, trackSeconds: span.start)
+                        let e = clock.sessionSeconds(track: track, trackSeconds: span.end)
                         words.append(Word(text: w.word.trimmingCharacters(in: .whitespaces), start: s, end: max(s, e)))
                     }
                 } else if !r.result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

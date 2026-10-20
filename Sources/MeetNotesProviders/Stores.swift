@@ -72,4 +72,13 @@ public struct ProvidersFile: Codable, Equatable, Sendable {
         }
         return nil
     }
+
+    /// Model Yascribe (Parakeet w procesie) to rekord techniczny, nie dostawca na liście: presety trzymają jego `providerID`,
+    /// a lista Providers go nie pokazuje (F20 P3). Dopisuje go, gdy brak — po rodzaju API, nie po nazwie. `true` = dopisano.
+    @discardableResult
+    public mutating func ensureOnDeviceProvider() -> Bool {
+        guard !providers.contains(where: { $0.api == .fluidAudio }) else { return false }
+        providers.append(Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio))
+        return true
+    }
 }

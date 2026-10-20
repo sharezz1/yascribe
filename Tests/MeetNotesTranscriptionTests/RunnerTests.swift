@@ -230,6 +230,24 @@ final class Recorder: @unchecked Sendable {
     #expect(throws: RunSnapshotError.chatShapeNotForMeetings) { _ = try RunSnapshot(preset: preset, provider: provider, probe: chat) }
 }
 
+@Test func snapshotsWithDifferentFingerprintsAreNotEqual() throws {
+    // F20: odcisk lokalnego modelu to część migawki; inny odcisk = inna migawka (równość w pamięci, nie tylko Codable).
+    let provider = Provider(name: "On this Mac", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+    let preset = Preset(name: "Polish", language: .polish, asr: RoleAssignment(providerID: provider.id, model: "parakeet-tdt-0.6b-v3"))
+    let a = try RunSnapshot(preset: preset, provider: provider, probe: nil, modelFingerprint: "aaa")
+    let b = try RunSnapshot(preset: preset, provider: provider, probe: nil, modelFingerprint: "bbb")
+    #expect(a != b)
+    #expect(a == (try RunSnapshot(preset: preset, provider: provider, probe: nil, modelFingerprint: "aaa")))
+    #expect(a.modelFingerprint == "aaa")
+    #expect(try JSONDecoder().decode(RunSnapshot.self, from: JSONEncoder().encode(a)) == a)
+    #expect(try RunSnapshot(preset: preset, provider: provider, probe: nil).modelFingerprint == nil)
+}
+
+@Test func oldInputJSONWithoutFingerprintStillLoads() throws {
+    let input = try JSONDecoder().decode(RunInput.self, from: try fixture("phase1-input.json"))
+    #expect(input.snapshot.modelFingerprint == nil)
+}
+
 @Test func failedEchoCancelledMicFallsBackToRaw() {
     // Hermes 4.2: martwy mic_aec nie może wypchnąć żywego mic_raw.
     let sum = SessionSummary(startedHostTime: 0, timebase: ns, tracks: [
@@ -289,6 +307,48 @@ final class Recorder: @unchecked Sendable {
                          clock: SessionClock(summary: SessionSummary(startedHostTime: 0, timebase: ns, tracks: [])),
                          language: .polish)
     #expect(t.utterances.map(\.text) == ["a b", "c"])
+}
+
+// U1 (odbiór 2.0a §1.1): słowo na sklejeniu okna nie może rozciągać się przez wyciętą ciszę.
+// Okno: fragment 1 = ścieżka 5,0–7,4 s (okno 0–2,4 s), przerwa 2,4–2,7 s, fragment 2 = ścieżka 15,0–17,4 s (okno 2,7–5,1 s).
+// Pusty `tracks` → czas sesji = czas ścieżki.
+private func mergeGlued(_ ws: [(String, Double, Double)]) -> Transcript {
+    let chunk = Chunk(index: 0, segments: [ChunkSegment(sourceStart: 80_000, sourceEnd: 118_400, chunkStart: 0),
+                                           ChunkSegment(sourceStart: 240_000, sourceEnd: 278_400, chunkStart: 43_200)], length: 81_600)
+    let result = TranscriptionResult(text: ws.map(\.0).joined(separator: " "),
+                                     words: ws.map { TranscribedWord(word: $0.0, start: $0.1, end: $0.2) })
+    return Merger.merge([ChunkResult(track: "system", chunk: chunk, result: result)], speakers: ["system": .them],
+                        clock: SessionClock(summary: SessionSummary(startedHostTime: 0, timebase: ns, tracks: [])),
+                        language: .polish)
+}
+
+@Test func wordStraddlingAGlueGapIsClippedToItsOwnFragment() {
+    // start 2,0 s okna (fragment 1), koniec 2,9 s (fragment 2): bez przycięcia słowo trwałoby 7,0 → 15,2 s
+    let w = mergeGlued([("tak", 2.0, 2.9)]).utterances[0].words[0]
+    #expect(abs(w.start - 7.0) < 1e-6)
+    #expect(abs(w.end - 7.4) < 1e-6)   // koniec fragmentu 1
+}
+
+@Test func wordFullyInsideAFragmentIsUnchanged() {
+    let ws = mergeGlued([("a", 0.5, 1.0), ("b", 3.0, 3.5)]).utterances.flatMap(\.words)
+    #expect(ws.count == 2)
+    #expect(abs(ws[0].start - 5.5) < 1e-6 && abs(ws[0].end - 6.0) < 1e-6)
+    #expect(abs(ws[1].start - 15.3) < 1e-6 && abs(ws[1].end - 15.8) < 1e-6)
+}
+
+@Test func wordStartingInTheGapSnapsToTheNextFragment() {
+    let ws = mergeGlued([("a", 2.5, 2.9), ("b", 2.5, 2.6)]).utterances.flatMap(\.words).sorted { $0.text < $1.text }
+    #expect(abs(ws[0].start - 15.0) < 1e-6 && abs(ws[0].end - 15.2) < 1e-6)   // koniec we fragmencie 2 → krótkie słowo
+    #expect(abs(ws[1].start - 15.0) < 1e-6 && abs(ws[1].end - 15.0) < 1e-6)   // całe w przerwie → czas zero
+}
+
+@Test func utteranceStartIsNotMovedEarlierByAStretchedWord() {
+    // „s" zaczyna się w przerwie bliżej fragmentu 1 (2,45 s; stare mapowanie dawało 7,4 s), „y" jest we fragmencie 2 (ścieżka 15,3 s):
+    // wypowiedź „s y" nie może zaczynać się o 7,4 s.
+    let t = mergeGlued([("x", 0.5, 1.0), ("s", 2.45, 2.9), ("y", 3.0, 3.5)])
+    #expect(t.utterances.map(\.text) == ["x", "s y"])
+    #expect(abs(t.utterances[1].start - 15.0) < 1e-6)
+    #expect(t.utterances.flatMap(\.words).allSatisfy { $0.end - $0.start < 1 })
 }
 
 @Test func autoLanguageSkipsTheLanguageGuard() async throws {

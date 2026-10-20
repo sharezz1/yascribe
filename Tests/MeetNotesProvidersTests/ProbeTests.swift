@@ -45,6 +45,15 @@ private func runner(_ http: StubHTTP, provider: Provider = openRouter) -> ProbeR
     #expect(chat.works)
 }
 
+@Test func correctionProbeRunsWithoutThinkingLikeTheCorrectionItself() async {
+    // F20 P1: sonda korekty ma ten sam profil co korekta, inaczej „Test" wisi na modelu, który w korekcie działa. Podsumowanie: bez zmian.
+    let http = StubHTTP { _, _ in chatReply("OK") }
+    _ = await runner(http).probe(model: "m", role: .correction, language: nil)
+    _ = await runner(http).probe(model: "m", role: .summary, language: nil)
+    #expect((http.calls[0].body["reasoning"] as? [String: Any])?["enabled"] as? Bool == false)
+    #expect(http.calls[1].body["reasoning"] == nil)
+}
+
 @Test func modelThatIgnoresLanguageIsAutomatic() async {
     // P10: ta sama odpowiedź z językiem i bez — parametr nic nie robi (profil Parakeeta przez API).
     let http = StubHTTP { _, body in transcript(isPolishClip(body) ? "raz dwa trzy" : "one two three") }
@@ -100,4 +109,31 @@ final class Counter: @unchecked Sendable {
     }
     let h = await runner(http).classifyLanguage(model: "x", language: .polish)
     #expect(h == LanguageHandling.unknown)
+}
+
+/// Atrapa lokalnego klienta: liczy wywołania (`classifyLanguage` dołożyłaby ich co najmniej trzy).
+private final class LocalStub: TranscriptionClient, @unchecked Sendable {
+    let provider = Provider(name: "On this Mac", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+    private let lock = NSLock()
+    private var _total = 0
+    var total: Int { lock.withLock { _total } }
+    func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
+        lock.withLock { _total += 1 }
+        return TranscriptionResult(text: "Raz, dwa, trzy.", words: [])
+    }
+}
+
+@Test func fluidAudioProbeReportsFilteredLanguageHandling() async {
+    let stub = LocalStub()
+    let r = await ProbeRunner(client: stub).probe(model: LocalASRModels.parakeetV3, role: .asr, language: .polish)
+    #expect(r.works)
+    #expect(r.shape == ASRShape.audioTranscriptions)
+    #expect(r.languageHandling == LanguageHandling.filtered)
+    #expect(stub.total == 1) // tylko wywołanie sondy; klasyfikacja woła dodatkowo `language: nil` dwa razy i więcej
+}
+
+@Test func fluidAudioProbeForCorrectionRoleSaysSpeechToTextOnly() async {
+    let r = await ProbeRunner(client: LocalStub()).probe(model: "x", role: .correction, language: nil)
+    #expect(!r.works)
+    #expect(r.failure == "On this Mac does only speech-to-text.")
 }

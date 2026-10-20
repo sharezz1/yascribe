@@ -25,6 +25,22 @@ Oznaczenia: ✅ potwierdzone pomiarem · ⚠️ ograniczenie · 🔴 zmienia wym
 Magazyn `FluidAudio/Models/` jest **wspólny** dla MacParakeet, Narady, FluidVoice i Spokenly.
 Nasza aplikacja może z niego korzystać bez ponownego pobierania.
 
+🆕 ⚠️ **Układ magazynu FluidAudio a ten pin (zmierzone w F20 S0, 2026-10-20;
+[raport](superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md) §5, §7.2)** — dopisek do powyższego, nie jego poprawka:
+- Aplikacja (FluidAudio przypięte do 0.17.7, Parakeet v3, enkoder `int8`) szuka folderu **`parakeet-tdt-0.6b-v3`**
+  z plikiem `JointDecisionv3.mlmodelc`. Na tej maszynie leży **`parakeet-tdt-0.6b-v3-coreml`** (starsza generacja biblioteki,
+  `JointDecision.mlmodelc`): wagi są bajt w bajt te same (SHA-256 czterech plików `weight.bin`), ale dla aplikacji model
+  **nie istnieje** (status „Not downloaded"). Pierwsze „Download" pobiera **drugą kopię, 483 257 242 B (483 MB = 461 MiB)**,
+  obok `-coreml`; ta ostatnia zostaje nietknięta i nieużywana.
+- Pobranie robi tylko użytkownik, przyciskiem na karcie modelu (rozmiar i źródło widoczne przed startem); „Remove…" kasuje
+  wyłącznie `parakeet-tdt-0.6b-v3`, nigdy `-coreml`, v2 ani `parakeet-eou-streaming` (te leżą w tym samym magazynie, spec 2.0 §3 pkt 5).
+- Integralność = lista plików i rozmiary z manifestu (ze świeżego pobrania tym samym pinem) oraz odcisk modelu w migawce
+  przebiegu. Znany sufit: podmiana pliku wag o identycznym rozmiarze nie jest wykrywana; rewizja modelu na Hugging Face
+  nie jest przypięta (`main`) — zmiana upstream kończy się komunikatem „differs from the version this build expects".
+- Jakość PL względem `mai-transcribe-2` (S1) — **zmierzona 2026-10-20** ([raport S1](superpowers/spikes/2026-10-20-f20-s1-jakosc-asr.md), commit `6f2da98`):
+  zgodność z `mai-transcribe-2` na 15 sesjach ~83 % słów (rozbieżność 0,174; mały korpus, nie WER), kompletność 102,7 % słów FluidVoice, mediana 32 słów na wypowiedź,
+  powtarzalność tekstu i czasów słów. Pomiar bez progu go/no-go; nie zmierzono: kryterium 3.1 (milczący mikrofon na żywo) i pary PL+EN (T11) — czekają na nagranie użytkownika.
+
 ---
 
 ## 1. Nagrywanie i transkrypcja
@@ -91,6 +107,38 @@ Dwa **niezależne** wybory silnika: ASR i AI. Tu wymagania trzymają się w cał
   - ⚠️ **Obecność modelu w rejestrze nie znaczy, że runtime umie go uruchomić w jego
     modalności.** To ta sama pułapka co katalog modeli OpenRoutera, który pomijał
     MAI-Transcribe-2 mimo że model tam jest — tylko w drugą stronę.
+- 🆕 **Lokalne role tekstowe (korekta, podsumowanie, tytuł) przez Ollamę, llama.cpp (`llama-server`) albo oMLX** (faza 2.0b,
+  [spec 2.0 §5, §14](superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md)): zwykły dostawca OpenAI-compatible na loopbacku
+  (`localhost`, `127.0.0.1`, `::1`, `*.localhost`; adres LAN albo tunel **nie** jest „lokalny"). Preset może mieszać role:
+  ASR lokalnie i notatka w API albo odwrotnie. Wynik pomiaru S2 (Apple M4, 16 GB; Ollama 0.40.6, `llama-server` 0.7.0, oMLX 0.7.0;
+  [raport](superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md)) — **pomiar, nie rekomendacja** (n=1–2 na komórkę, maszyna obciążona,
+  czasy pesymistyczne 1,5–3×); aplikacja **nie rekomenduje żadnego modelu**:
+  - **Wejście dłuższe niż kontekst:** Ollama (model `genesys-ministral3`) i llama.cpp odpowiadają HTTP 400 („exceeds the available context size").
+    ⚠️ **Korekta 2026-10-20 (odbiór T14, [raport](superpowers/reports/F20-2.0b-odbior.md) §2.3):** dla Ollamy to **nie jest prawdą ogólną** — S2 zmierzył 400 tylko na
+    `genesys-ministral3`; `bonsai-2` (Ollama 0.40.6) **obcina wejście po cichu**: HTTP 200, `finish_reason: "stop"`, zachowane 4 pierwsze tokeny i koniec promptu
+    (zmierzone 3×: 9987 → 2050 i 4219 → 2050 tokenów, z `max_tokens` i bez), w logu serwera `truncating input prompt`. Na oMLX niewykrywalne (brak
+    wykrywania kontekstu). Aplikacja dochodzi do tego stanu, gdy pole „Context window" jest wyższe niż kontekst serwera, a model nie jest załadowany
+    (wykrycie `/api/ps` go nie obniży). Obrona: dla dostawców lokalnych sprawdzenie `usage.prompt_tokens` względem długości promptu (zmierzone normalnie 2,8–3,3 znaku
+    na token, przy obcięciu 6,6–14,8) — **wdrożona (T14b, `606ee39`)**; decyzja użytkownika w [przeglądzie całości](superpowers/reports/F20-przeglad-calosci.md) §5.
+  - **Ciche obcięcie jest po stronie wyjścia:** HTTP 200 z `finish_reason: "length"`. Aplikacja traktuje to jako błąd w każdym wywołaniu
+    czatu (także dla API); wyjątek: transkrypcja przez `chatAudio` nadal ignoruje to pole ([BACKLOG](superpowers/BACKLOG.md)).
+  - **Domyślny kontekst Ollamy w aplikacji = 4096 tokenów** (`/api/ps`). `/v1` ignoruje `options.num_ctx`; działają `OLLAMA_CONTEXT_LENGTH`
+    (restart serwera) i `PARAMETER num_ctx` w Modelfile. llama.cpp: kontekst zależy od pamięci (45 824 przy 4 slotach na tej maszynie).
+    Pole „Context window (tokens)" u dostawcy lokalnego (puste = 4096); wykrycie (`/props` dla llama.cpp, `/api/ps` dla załadowanego
+    modelu w Ollamie) tylko **obniża** budżet; `/api/show` zwraca maksimum modelu, więc nie służy do wykrywania. Przy 4096 notatka powyżej
+    ok. 3,5 min mowy idzie przez map-reduce (tylko dla dostawców lokalnych), a 60 min może się nie zmieścić (jawny błąd, nie ucięta notatka).
+  - **„Thinking":** Ollama zwraca rozumowanie w polu `reasoning`, llama.cpp w `reasoning_content` — aplikacja czyta tylko `content`.
+    Dla dostawców lokalnych wysyła `reasoning_effort: "none"` (z jednym ponowieniem bez pola, gdy serwer je odrzuci); `ThinkingStripper`
+    (`<think>…</think>`, `[THINK]…[/THINK]`) zostaje jako obrona. Zachowanie pola na modelu bez „thinking" jest niezmierzone.
+    `bonsai-2` (Q2_0) z myśleniem był bezużyteczny (465 s i ucięcie przy notatce z 10 min); bez myślenia dał poprawny format notatki.
+  - **Korekta lokalnym modelem — bez rekomendacji:** `bonsai-2` (Q2_0, Ollama, temperatura 1 z Modelfile, materiał syntetyczny) zmienił datę
+    („pierwszego grudnia" → „pierwszy stycznia"), a bramka `CorrectionRules.accepts` (pasmo długości) tego nie łapie; w edytorze presetu
+    jest podpis ostrzegawczy. Aplikacja wysyła dla lokalnej korekty `temperature` 0,2 — jej wpływu na to nie zmierzono.
+  - **oMLX — niezmierzony:** jedyny kompletny model MLX na dysku nie zmieścił się w pamięci (HTTP 507). Port 8000 potwierdzony; serwer
+    użytkownika może wymagać klucza (401), więc klucz w presecie jest opcjonalny. Baseline (ta sama notatka i korekta przez API) też niezmierzony.
+- 🔴 **Awaria lokalnej roli nigdy nie przełącza po cichu na API** (anty-cel fazy 2.0): przebieg kończy się widocznym błędem albo jawną luką,
+  a ponowienie innym presetem wybiera użytkownik. Dla lokalnego ASR bramkuje to test `missingModelRefusesRunAndNeverFallsBack`
+  (brak modelu = brak przebiegu i brak ruchu do API).
 - 🆕 **Lokalny ASR musi być w procesie albo w dedykowanym sidecarze**, nie przez wspólny
   serwer modeli. Kandydaci: **FluidAudio** (Swift, w procesie, Parakeet v3 już na dysku),
   `parakeet-mlx-server` (OpenAI-kompatybilny FastAPI), `mlx-whisper`, WhisperKit.
