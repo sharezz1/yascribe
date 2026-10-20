@@ -115,6 +115,13 @@ private func capitalizing(_ user: String) -> String {
     #expect(r.transcript.utterances[0].text == "no to jest test")
 }
 
+@Test func emptyReplyBatchFailsWithAReadableReason() async {
+    let t = transcript([utt("no to jest test")])
+    let r = await corrector(ChatStub { _ in "<think>nic</think>" }).correct(t, language: .polish)
+    #expect(r.failedBatches == 1)
+    #expect(r.firstError == "fix-model returned an empty reply.")
+}
+
 @Test func correctorPassesItsLimitsToTheChatCall() async {
     let t = transcript([utt("no to jest test")])
     let stub = ChatStub { capitalizing($0.user) }

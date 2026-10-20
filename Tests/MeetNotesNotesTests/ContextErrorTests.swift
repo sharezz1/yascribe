@@ -20,6 +20,20 @@ import MeetNotesProviders
 @Test func cutOffNamesTheModelAndTheFix() {
     #expect(ContextError.isCutOff(ProviderError.replyCutOff))
     #expect(!ContextError.isCutOff(ProviderError.http(500, "boom")))
+    let msg = ContextError.describe(model: "vendor/m", ProviderError.replyCutOff, isLocal: true)
+    #expect(msg.contains("vendor/m") && msg.contains("cut off") && msg.contains("longer context") && msg.contains("server's context length"))
+}
+
+@Test func cutOffAdviceForRemoteProvidersDoesNotMentionTheServer() {
     let msg = ContextError.describe(model: "vendor/m", ProviderError.replyCutOff)
-    #expect(msg.contains("vendor/m") && msg.contains("cut off") && msg.contains("longer context"))
+    #expect(msg.contains("vendor/m") && msg.contains("cut off") && msg.contains("longer output limit"))
+    #expect(!msg.contains("server") && !msg.contains("context length"))
+}
+
+@Test func emptyReplyIsReadableForEveryProviderKind() {
+    let e = ProviderError.badResponse("empty reply")
+    #expect(ContextError.isEmptyReply(e) && !ContextError.isEmptyReply(ProviderError.badResponse("no text")))
+    for local in [true, false] {
+        #expect(ContextError.describe(model: "vendor/m", e, isLocal: local) == "vendor/m returned an empty reply.")
+    }
 }

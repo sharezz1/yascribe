@@ -131,7 +131,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
 
     /// `timeout` = limit transportowy żądania (bezczynność łącza; bez streamu serwer milczy do końca generacji).
     /// Lokalny serwer dostaje `reasoning_effort: "none"` (model „thinking" zjada kontekst — S2); gdy go odrzuci
-    /// (400/422 z „reasoning"), jedno ponowienie bez pola. `finish_reason == "length"` = błąd (wyjście ucięte),
+    /// (400/422 z „reasoning" albo „think"), jedno ponowienie bez pola. `finish_reason == "length"` = błąd (wyjście ucięte),
     /// nigdy sukces. Wspólny `chatContent` (ASR przez czat) zostaje bez zmian.
     public func chat(model: String, system: String, user: String, timeout: Double = 120, maxTokens: Int? = nil,
                      temperature: Double? = nil) async throws -> String {
@@ -144,7 +144,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             body["reasoning_effort"] = "none"
             do {
                 obj = try await json(try request("chat/completions", body: body, timeout: timeout))
-            } catch ProviderError.http(let status, let text) where (status == 400 || status == 422) && text.lowercased().contains("reasoning") {
+            } catch ProviderError.http(let status, let text) where (status == 400 || status == 422) && ["reasoning", "think"].contains(where: text.lowercased().contains) {
                 body["reasoning_effort"] = nil
                 obj = try await json(try request("chat/completions", body: body, timeout: timeout))
             }

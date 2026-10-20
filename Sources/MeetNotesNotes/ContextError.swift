@@ -13,11 +13,18 @@ public enum ContextError {
     /// Serwer uciął wyjście (`finish_reason: "length"`): brak miejsca na odpowiedź w kontekście albo w limicie tokenów.
     public static func isCutOff(_ error: Error) -> Bool { (error as? ProviderError) == .replyCutOff }
 
-    public static func describe(model: String, _ error: Error) -> String {
+    /// Odpowiedź pusta po oczyszczeniu z rozumowania (`OpenAICompatibleClient.chat`).
+    public static func isEmptyReply(_ error: Error) -> Bool { (error as? ProviderError) == .badResponse("empty reply") }
+
+    /// `isLocal` (domyślnie `false`) wybiera radę przy ucięciu: lokalny serwer ma pokrętło kontekstu, API ma limit wyjścia.
+    public static func describe(model: String, _ error: Error, isLocal: Bool = false) -> String {
         if isCutOff(error) {
-            return "\(model)'s reply was cut off before the end: it ran out of context or token room. "
-                + "Use a model with a longer context or raise the server's context length."
+            return isLocal
+                ? "\(model)'s reply was cut off before the end: it ran out of context or token room. "
+                    + "Use a model with a longer context or raise the server's context length."
+                : "\(model)'s reply was cut off before the end. Try a model with a longer output limit."
         }
+        if isEmptyReply(error) { return "\(model) returned an empty reply." }
         if isContextOverflow(error) {
             return "\(model) can't take a transcript this long. Try a model with a longer context. (Splitting long transcripts arrives later.)"
         }
