@@ -30,9 +30,16 @@ public struct Provider: Codable, Equatable, Identifiable, Sendable {
         case .fluidAudio: return true
         case .elevenLabs: return false
         case .openAICompatible:
-            let host = baseURL.host()?.lowercased() ?? ""
-            return ["localhost", "127.0.0.1", "::1"].contains(host) || host.hasSuffix(".localhost")
+            var host = baseURL.host()?.lowercased() ?? ""
+            if host.hasSuffix(".") { host.removeLast() } // FQDN: „localhost."
+            return host == "localhost" || host == "::1" || host == "0.0.0.0" || host.hasSuffix(".localhost") || Self.isLoopbackIPv4(host)
         }
+    }
+
+    /// `127.0.0.0/8`: cztery liczbowe oktety, pierwszy = 127 (nie „127.evil.com").
+    private static func isLoopbackIPv4(_ host: String) -> Bool {
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false)
+        return octets.count == 4 && octets[0] == "127" && octets.allSatisfy { Int($0).map { (0...255).contains($0) } ?? false }
     }
 
     /// Jedyna bramka klucza (`AppModel.providerWithKey`): lokalny dostawca obejdzie się bez niego.

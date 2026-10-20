@@ -161,6 +161,28 @@ private func chat(_ provider: Provider, _ http: StubHTTP, timeout: Double = 120,
     #expect(always.calls.count == 2)
 }
 
+@Test func rejectionMentioningThinkingIsRetriedToo() async throws {
+    let http = StubHTTP { _, body in
+        body["reasoning_effort"] != nil ? fail(400, "{\"error\":\"this model does not support thinking control\"}") : chatReply("OK")
+    }
+    #expect(try await chat(ollamaLocal, http) == "OK")
+    #expect(http.calls.count == 2 && http.calls[1].body["reasoning_effort"] == nil)
+}
+
+@Test func chatStripsThinkBlocksOnApiProvidersToo() async throws {
+    let http = StubHTTP { _, _ in chatReply("<think>hm</think>\n[1] Tak.") }
+    #expect(try await chat(openRouter, http) == "[1] Tak.")
+    let mid = StubHTTP { _, _ in chatReply("# T\n- tag <think> w treści\n- koniec") }
+    #expect(try await chat(openRouter, mid) == "# T\n- tag <think> w treści\n- koniec")
+}
+
+@Test func emptyApiReplyThrowsEmptyReplyToo() async {
+    for text in ["<think>x</think>", "  "] {
+        let http = StubHTTP { _, _ in chatReply(text) }
+        await #expect(throws: ProviderError.badResponse("empty reply")) { _ = try await chat(openRouter, http) }
+    }
+}
+
 @Test func nonLocalProviderRejectingReasoningIsNotRetried() async {
     let http = StubHTTP { _, _ in fail(400, "{\"error\":\"reasoning\"}") }
     await #expect(throws: ProviderError.http(400, "{\"error\":\"reasoning\"}")) { _ = try await chat(openRouter, http) }

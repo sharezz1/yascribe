@@ -7,13 +7,16 @@ private func prov(_ url: String, kind: ProviderKind? = nil) -> Provider {
 }
 
 @Test func loopbackHostsAreLocal() {
-    for url in ["http://localhost:11434/v1", "http://127.0.0.1:8080/v1", "http://[::1]:8000/v1", "http://llm.localhost/v1"] {
+    for url in ["http://localhost:11434/v1", "http://127.0.0.1:8080/v1", "http://[::1]:8000/v1", "http://llm.localhost/v1",
+                "http://127.0.0.2:8000/v1", "http://127.255.255.254/v1", "http://0.0.0.0:8080/v1", "http://localhost.:11434/v1",
+                "http://llm.localhost./v1"] {
         #expect(prov(url).isLocal, "\(url)")
     }
 }
 
 @Test func lanTunnelAndRemoteHostsAreNotLocal() {
-    for url in ["http://192.168.1.5:11434/v1", "http://my-mac.local:8000/v1", "https://openrouter.ai/api/v1"] {
+    for url in ["http://192.168.1.5:11434/v1", "http://my-mac.local:8000/v1", "https://openrouter.ai/api/v1",
+                "http://127.evil.com/v1", "http://0.0.0.1/v1", "http://128.0.0.1/v1", "http://notlocalhost/v1"] {
         #expect(!prov(url).isLocal, "\(url)")
     }
 }

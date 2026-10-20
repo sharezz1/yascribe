@@ -144,7 +144,8 @@ public struct Corrector: Sendable {
                 }
             } catch {
                 failed += 1
-                if firstError == nil { firstError = ContextError.isCutOff(error) ? ContextError.describe(model: assignment.model, error) : "\(error)" }
+                if firstError == nil { firstError = ContextError.isCutOff(error) || ContextError.isEmptyReply(error)
+                    ? ContextError.describe(model: assignment.model, error, isLocal: client.provider.isLocal) : "\(error)" }
             }
         }
         return CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
