@@ -29,13 +29,18 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                               note: "correction and summary only, no transcription",
                                               role: "Runs on this Mac · correction and summary only, no transcription",
                                               kind: nil, keyPage: nil)
+    /// Parakeet w procesie (FluidAudio): bez klucza i bez adresu sieciowego (`local://fluidaudio`), tylko transkrypcja.
+    public static let onThisMac = ProviderPreset(id: "on-this-mac", name: "On this Mac · Parakeet",
+                                                 baseURL: Provider.fluidAudioBaseURL.absoluteString, needsKey: false, note: nil,
+                                                 role: "Speech-to-text on this Mac · no network",
+                                                 kind: .fluidAudio, keyPage: nil)
     public static let custom = ProviderPreset(id: "custom", name: "Custom endpoint", baseURL: "", needsKey: true,
                                               note: "Any OpenAI-compatible server.",
                                               role: "Any OpenAI-compatible API · address and key",
                                               kind: nil, keyPage: nil)
     public static let all: [ProviderPreset] = [openRouter, elevenLabs, ollama, custom]
     /// Gotowi (z wpisanym adresem), w kolejności listy.
-    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama]
+    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama, onThisMac]
 
     /// Adres bez schematu: host[:port] + ścieżka bez końcowego „/” („openrouter.ai/api/v1"). Służy też do porównań.
     public static func displayAddress(_ url: URL) -> String {
@@ -54,12 +59,23 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     /// Gotowy dostawca pasujący do zapisanego dostawcy (rodzaj API, a dla OpenAI-compatible adres); Custom nigdy.
     public static func matching(_ provider: Provider) -> ProviderPreset? {
         if provider.api == .elevenLabs { return elevenLabs }
+        if provider.api == .fluidAudio { return onThisMac } // po rodzaju, nie po adresie: `local://` nie ma hosta
         return [openRouter, ollama].first { URL(string: $0.baseURL).map(addressKey) == addressKey(provider.baseURL) }
     }
 
     /// Dopasowanie samego adresu (bez rodzaju API).
     public static func matching(_ url: URL) -> ProviderPreset? {
         matching(Provider(name: "", baseURL: url))
+    }
+}
+
+/// Jedyny model lokalnego ASR. Stała w `MeetNotesProviders`, żeby `AppModel.loadModels` nie importował `MeetNotesLocalASR`.
+public enum LocalASRModels {
+    public static let parakeetV3 = "parakeet-tdt-0.6b-v3"
+
+    /// Modele dla roli — stała lista, bez sieci (jak `ElevenLabsClient.models`). Poza ASR pusto.
+    public static func models(for role: Role) -> [ModelInfo] {
+        role == .asr ? [ModelInfo(id: parakeetV3, inputModalities: ["audio"], outputModalities: ["transcription"])] : []
     }
 }
 
@@ -77,7 +93,7 @@ public enum ProviderListRow: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama,
+    /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, On this Mac,
     /// potem zapisani własni (także drugi OpenRouter — dostawca to instancja), na końcu „Custom endpoint".
     public static func rows(for providers: [Provider]) -> [ProviderListRow] {
         var used = Set<UUID>()

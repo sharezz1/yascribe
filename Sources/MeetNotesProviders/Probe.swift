@@ -75,6 +75,8 @@ public struct ProbeRunner: Sendable {
                         r.shape = shape
                         if shape == .chatAudio {
                             r.languageHandling = .unknown
+                        } else if client.provider.kind == .fluidAudio {
+                            r.languageHandling = .filtered // Parakeet: język tylko skryptowy; classifyLanguage nigdy nie zwraca .filtered (spec §4.2)
                         } else if let language {
                             r.languageHandling = await classifyLanguage(model: model, language: language)
                         } // bez języka (CLI bez --language) nie klasyfikujemy — wynik byłby dla angielskiego, a klucz cache to nil

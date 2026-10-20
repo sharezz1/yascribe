@@ -400,6 +400,10 @@ final class AppModel {
             modelLists[k] = ElevenLabsClient.models(for: role)
             return
         }
+        if self.provider(provider)?.api == .fluidAudio { // stała lista (Parakeet dla ASR), bez sieci
+            modelLists[k] = LocalASRModels.models(for: role)
+            return
+        }
         guard force || modelLists[k] == nil, !loadingModels.contains(k), let c = client(for: provider) else { return }
         loadingModels.insert(k)
         defer { loadingModels.remove(k) }
