@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import MeetNotesLocalASR
 import MeetNotesMeetings
 import MeetNotesNotes
 import MeetNotesProviders
@@ -89,6 +90,8 @@ final class AppModel {
     /// Wykrywanie spotkań (faza 1.6); startuje `MeetNotesApp.init`, nie `AppModel.init` (migawki i testy go nie chcą).
     let monitor = MeetingMonitor()
     let notes = NotesModel()
+    /// Lokalny ASR (F20): magazyn modelu i faza pobierania/przygotowania; UI w T7.
+    let localASR = LocalASRSupport()
 
     init() {
         recording.model = self
@@ -101,6 +104,11 @@ final class AppModel {
         notes.presetFor = { [weak self] in self?.presetFor(sessionURL: $0) }
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
+        notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }
+        notes.fillerWords = { [weak self] in
+            guard let s = self?.settings, s.removeFillersEnabled else { return [] }
+            return s.fillerWords ?? FillerWords.defaults
+        }
         notes.onChange = { [weak self] in self?.reloadSessions() }
         notes.isMoving = { [weak self] in self?.recordingsMove != nil }
         applyRetention()
@@ -131,6 +139,10 @@ final class AppModel {
             }
         }
         providers = read(paths.providers, ProvidersFile())
+        // Model Yascribe nie jest wierszem listy Providers, ale presety trzymają jego rekord — nie może go zabraknąć (F20 P3).
+        if providers.ensureOnDeviceProvider() {
+            do { try JSONFile.save(providers, to: paths.providers) } catch { errors.append("Couldn't save providers.json: \(error)") }
+        }
         presets = read(paths.presets, PresetsFile())
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())
@@ -307,8 +319,7 @@ final class AppModel {
         do { key = try secrets.get(p.id) } catch {
             return .failure(ClientProblem(message: "Couldn't read the API key for \(p.name) from Keychain: \(error)"))
         }
-        // ponytail: „lokalny = bez klucza" po nazwie hosta; jawna flaga w Provider, gdy zdalny dostawca obejdzie się bez klucza.
-        guard key != nil || (p.api == .openAICompatible && ["localhost", "127.0.0.1", "::1"].contains(p.baseURL.host() ?? "")) else {
+        guard key != nil || !p.requiresKey else {
             return .failure(ClientProblem(message: "No API key for \(p.name). Remove the provider and add it again with a key."))
         }
         return .success((p, key))
@@ -326,7 +337,17 @@ final class AppModel {
     /// Klient transkrypcji wybrany po `Provider.api`; nil = powód w `lastError`.
     func transcriptionClient(for providerID: UUID) -> (any TranscriptionClient)? {
         switch providerWithKey(providerID) {
-        case .success(let (p, key)): return p.transcriptionClient(key: key)
+        case .success(let (p, key)):
+            // `.fluidAudio` nigdy nie przechodzi przez `Provider.transcriptionClient` (tam siedzi zaślepka). Odmowa = błąd i koniec:
+            // żadnego klienta, więc nic nie pójdzie do API.
+            guard p.api == .fluidAudio else { return p.transcriptionClient(key: key) }
+            let support = localASR
+            switch LocalASRFactory.client(provider: p, store: support.store, onPhase: { phase in Task { @MainActor in support.apply(phase) } }) {
+            case .success(let c): return c
+            case .failure(let refusal):
+                lastError = refusal.message
+                return nil
+            }
         case .failure(let problem):
             lastError = problem.message
             return nil
@@ -337,18 +358,37 @@ final class AppModel {
     /// serwer wyłączony).
     func verifyProvider(_ id: UUID) async {
         providerChecks[id] = nil
+        detectedContexts[id] = nil
         providerVerifying.insert(id)
         defer { providerVerifying.remove(id) }
         switch providerWithKey(id) {
         case .failure(let problem): providerChecks[id] = .failed(problem.message)
-        case .success(let (p, key)): providerChecks[id] = await p.verify(key: key)
+        case .success(let (p, _)) where p.api == .fluidAudio: // bez sieci: model jest w magazynie i zgadza się z manifestem
+            localASR.refresh()
+            providerChecks[id] = RunGate.check(status: localASR.store.status()).map { .failed($0.message) } ?? .verified(models: 1)
+        case .success(let (p, key)):
+            providerChecks[id] = await p.verify(key: key)
+            // Lokalny serwer: pokaż efektywny kontekst (llama.cpp `/props`, Ollama `/api/ps`), żeby użytkownik mógł go wpisać w polu.
+            if case .verified? = providerChecks[id], p.isLocal, p.api == .openAICompatible {
+                detectedContexts[id] = ContextProbe.describe(await ContextProbe.effectiveContexts(client: OpenAICompatibleClient(provider: p, key: key)))
+            }
         }
     }
 
+    /// Wykryty kontekst lokalnego serwera z ostatniego „Check" (w pamięci); brak wpisu = nic wykrytego.
+    var detectedContexts: [UUID: String] = [:]
+
+    /// Pole „Context window (tokens)": `nil` = domyślne 4096. Zapis do `providers.json`.
+    func setContextTokens(_ id: UUID, _ value: Int?) {
+        guard let i = providers.providers.firstIndex(where: { $0.id == id }) else { return }
+        providers.providers[i].contextTokens = value
+        save()
+    }
+
     /// `nil` = dodano; tekst = powód odmowy (duplikat nazwy albo błąd pęku kluczy).
-    func addProvider(name: String, baseURL: URL, key: String, kind: ProviderKind? = nil) -> String? {
+    func addProvider(name: String, baseURL: URL, key: String, kind: ProviderKind? = nil, contextTokens: Int? = nil) -> String? {
         if let e = providers.nameError(name) { return e }
-        let p = Provider(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL, kind: kind)
+        let p = Provider(name: name.trimmingCharacters(in: .whitespaces), baseURL: baseURL, kind: kind, contextTokens: contextTokens)
         do {
             if !key.isEmpty { try secrets.set(p.id, key) }
             providers.providers.append(p)
@@ -370,9 +410,10 @@ final class AppModel {
 
     /// „Test connection" w arkuszu PRZED zapisem: klient z kluczem z pola (w pamięci, nic nie trafia do pęku kluczy).
     /// ElevenLabs: klienta tworzy `makeClient` z zapisanego klucza, więc przed zapisem testu nie ma (`nil`) — arkusz weryfikuje po Save.
-    nonisolated static func testConnection(baseURL: URL, kind: ProviderKind?, key: String) async -> ProviderCheck {
+    nonisolated static func testConnection(baseURL: URL, kind: ProviderKind?, key: String, name: String = "test") async -> ProviderCheck {
         // Klucz z pola, w pamięci — bez zapisu do pęku (Cancel nie zostawia klucza). Klient wg rodzaju API.
-        await Provider(name: "test", baseURL: baseURL, kind: kind).verify(key: key.isEmpty ? nil : key)
+        // `name` trafia do komunikatów o lokalnym serwerze („Can't reach Ollama at …").
+        await Provider(name: name, baseURL: baseURL, kind: kind).verify(key: key.isEmpty ? nil : key)
     }
 
     func removeProvider(_ id: UUID) {
@@ -401,6 +442,10 @@ final class AppModel {
             modelLists[k] = ElevenLabsClient.models(for: role)
             return
         }
+        if self.provider(provider)?.api == .fluidAudio { // stała lista (Parakeet dla ASR), bez sieci
+            modelLists[k] = LocalASRModels.models(for: role)
+            return
+        }
         guard force || modelLists[k] == nil, !loadingModels.contains(k), let c = client(for: provider) else { return }
         loadingModels.insert(k)
         defer { loadingModels.remove(k) }
@@ -416,6 +461,7 @@ final class AppModel {
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
         guard let c = transcriptionClient(for: providerID) else { return }
+        defer { Task { await (c as? ReleasableClient)?.release() } } // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
         let r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
         probeCache.record(r)
         save()
@@ -560,7 +606,8 @@ final class AppModel {
         guard let c = transcriptionClient(for: asr.providerID) else { return } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
-            let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe)
+            let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
+                                           modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: localASR.store))
             run(sessionURL: sessionURL, runID: Self.sessionName(Date()), snapshot: snapshot, client: c)
         } catch RunSnapshotError.chatShapeNotForMeetings {
             lastError = "This model returns no word timings, so it can't be used for meetings."
@@ -578,6 +625,12 @@ final class AppModel {
             return
         }
         guard let c = transcriptionClient(for: input.snapshot.providerID) else { return } // powód już w lastError
+        // Zapisana migawka trafia do runnera bez zmian, więc zmianę modelu we wspólnym magazynie łapie tylko ta bramka (przed `run`).
+        if let p = provider(input.snapshot.providerID),
+           let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p, currentFingerprint: localASR.store.fingerprint()) {
+            lastError = refusal.message
+            return
+        }
         run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
     }
 
@@ -609,6 +662,9 @@ final class AppModel {
             } catch {
                 self.lastError = "Transcription failed: \(error)"
             }
+            // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
+            await (c as? ReleasableClient)?.release()
+            self.localASR.endRun()
             self.transcribing.remove(id)
             self.reloadSessions()
             if let finished {

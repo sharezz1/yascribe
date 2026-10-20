@@ -281,6 +281,8 @@ struct SummaryTab: View {
     private var template: Template { model.notes.templates.all().first { $0.id == state.templateID } ?? .standard }
     private var choice: SummaryChoice? { model.notes.summaryChoice(for: item) }
     private var moving: Bool { model.recordingsMove != nil }
+    /// Korekta tej sesji trwa na tym samym lokalnym serwerze: notatka czekałaby w kolejce i wpadła w limit czasu części.
+    private var correcting: Bool { model.notes.isCorrecting(item.id) }
 
     /// „Using <model> from preset <nazwa>" przy zastępstwie; ostrzeżenie, gdy żaden preset nie ma modelu podsumowania.
     @ViewBuilder private var modelLine: some View {
@@ -307,9 +309,15 @@ struct SummaryTab: View {
             bar(item.notes.summary)
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
-            if item.notes.summary != nil, gen == .generating { StateLabel(.progress(nil), "Generating notes…") }
+            if gen == .generating { generatingRow }
+            if correcting, gen != .generating, hasText {
+                Text("Generate notes once the transcript has been improved.").font(.callout).foregroundStyle(.mnText2)
+            }
             errorView
             if let s = item.notes.summary {
+                if let parts = s.condensedParts {
+                    Text("Long meeting: condensed in \(parts) parts before summarizing.").font(.subheadline).foregroundStyle(.mnText2)
+                }
                 MarkdownView(blocks: MarkdownBlocks.group(s.markdown)).padding(.top, 8)
             } else if gen != .generating, hasText {
                 emptyState
@@ -317,6 +325,16 @@ struct SummaryTab: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear { prefillContext() }
+    }
+
+    /// Postęp generowania (krok z `NoteGenerator`) i „Cancel": podział długiego transkryptu może trwać kilka minut.
+    private var generatingRow: some View {
+        HStack(spacing: 10) {
+            StateLabel(.progress(nil), model.notes.progress[item.id]?.text ?? "Generating notes…")
+            Button("Cancel") { model.notes.cancelGeneration(item.id) }
+                .buttonStyle(.pillSmall)
+                .help("Stop generating the notes")
+        }
     }
 
     /// Kontekst wstępnie z My notes, dopóki użytkownik go nie ruszył.
@@ -371,17 +389,15 @@ struct SummaryTab: View {
                 if let s {
                     Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
                         .buttonStyle(.pill)
-                        .disabled(gen == .generating || !hasText || choice == nil || moving)
+                        .disabled(gen == .generating || !hasText || choice == nil || moving || correcting)
                     Button { copy(s.markdown) } label: { Image(systemName: "doc.on.doc") }
                         .buttonStyle(CircleIconButtonStyle())
                         .help("Copy the notes")
                         .accessibilityLabel("Copy the notes")
-                } else if gen == .generating {
-                    StateLabel(.progress(nil), "Generating notes…").frame(height: 28)
                 } else {
                     Button("Generate notes") { run() }
                         .buttonStyle(.pillPrimary)
-                        .disabled(!hasText || choice == nil || moving)
+                        .disabled(gen == .generating || !hasText || choice == nil || moving || correcting)
                         // ⌘↩, nie sam Return: Return w polu kontekstu ma wstawić nową linię, a nie uruchomić płatne generowanie.
                         .keyboardShortcut(.return, modifiers: .command)
                 }
@@ -413,7 +429,7 @@ struct SummaryTab: View {
     }
 
     @ViewBuilder private var errorView: some View {
-        if case .failed(let message) = gen { ErrorLine(message: message) { run() }.disabled(moving) }
+        if case .failed(let message) = gen { ErrorLine(message: message) { run() }.disabled(moving || correcting) }
     }
 
     private func run() {

@@ -129,3 +129,24 @@ private func fixture(_ name: String) throws -> Data {
         #expect(a == b)
     }
 }
+
+@Test func presetIsFullyLocalOnlyWhenEveryAssignedRoleIsLocal() {
+    let ollama = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
+    let parakeet = Provider(name: "On this Mac", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+    let cloud = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    let lan = Provider(name: "Box", baseURL: URL(string: "http://192.168.1.5:11434/v1")!)
+    let all = [ollama, parakeet, cloud, lan]
+    func role(_ p: Provider) -> RoleAssignment { RoleAssignment(providerID: p.id, model: "m") }
+    func preset(asr: Provider?, correction: Provider? = nil, summary: Provider? = nil) -> Preset {
+        Preset(name: "P", language: .polish, asr: asr.map(role), correction: correction.map(role), summary: summary.map(role))
+    }
+    #expect(preset(asr: parakeet, summary: ollama).isFullyLocal(providers: all))
+    #expect(preset(asr: parakeet, correction: ollama, summary: ollama).isFullyLocal(providers: all))
+    #expect(preset(asr: parakeet).isFullyLocal(providers: all)) // pusta rola się nie liczy
+    #expect(!preset(asr: parakeet, summary: cloud).isFullyLocal(providers: all)) // podsumowanie w chmurze psuje
+    #expect(!preset(asr: cloud, summary: ollama).isFullyLocal(providers: all))
+    #expect(!preset(asr: parakeet, correction: cloud, summary: ollama).isFullyLocal(providers: all))
+    #expect(!preset(asr: parakeet, summary: lan).isFullyLocal(providers: all)) // LAN nie jest lokalny
+    #expect(!preset(asr: nil).isFullyLocal(providers: all)) // żadna rola: nie ma czym się chwalić
+    #expect(!preset(asr: parakeet, summary: ollama).isFullyLocal(providers: [parakeet])) // nieznany dostawca = nie lokalny
+}

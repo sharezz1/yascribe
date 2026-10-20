@@ -1,4 +1,5 @@
 import AppKit
+import MeetNotesNotes
 import MeetNotesProviders
 import SwiftUI
 
@@ -7,8 +8,13 @@ final class SettingsDraft: ObservableObject {
     @Published var embedding: RoleAssignment?
     @Published var confirming = false
     @Published var saved = false
+    /// Pole „Words" sekcji Correction (zapisuje się Return, poza Save / Cancel).
+    @Published var fillers = ""
 
-    func load(_ s: GlobalSettings) { embedding = s.embedding; saved = false }
+    func load(_ s: GlobalSettings) {
+        embedding = s.embedding; saved = false
+        fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
+    }
 }
 
 /// Stan arkusza „Set up <dostawca>" (macos.md §11.5): nowy dostawca albo podmiana klucza istniejącego (`editing`).
@@ -22,6 +28,8 @@ final class ProviderSheetState: ObservableObject {
     @Published var name = ""
     @Published var url = ""
     @Published var key = ""
+    /// „Context window (tokens)" dla lokalnego serwera: puste = domyślne 4096.
+    @Published var context = ""
     @Published var error: String?
     @Published var result: ProviderCheck?
     @Published var note: String?
@@ -34,11 +42,12 @@ final class ProviderSheetState: ObservableObject {
     func editKey(_ provider: Provider) {
         let match = ProviderPreset.matching(provider)
         open(preset: match ?? .custom, logo: match, editing: provider, name: provider.name, url: provider.baseURL.absoluteString)
+        context = provider.contextTokens.map(String.init) ?? ""
     }
 
     private func open(preset: ProviderPreset, logo: ProviderPreset?, editing: Provider?, name: String, url: String) {
         self.preset = preset; self.logo = logo; self.editing = editing; self.name = name; self.url = url
-        key = ""; error = nil; result = nil; note = nil; testing = false; showing = true
+        key = ""; context = ""; error = nil; result = nil; note = nil; testing = false; showing = true
     }
 }
 
@@ -56,6 +65,8 @@ struct SettingsView: View {
             ScrollPage(640) {
                 VStack(alignment: .leading, spacing: 0) {
                     PageTitle("Settings").padding(.bottom, 4)
+                    // Model Yascribe (Parakeet) nie jest dostawcą: własna karta na górze, nad listą Providers (F20 P3).
+                    ModelCardSection(support: model.localASR)
                     SectionHeader("Providers")
                     Card {
                         let rows = ProviderListRow.rows(for: model.providers.providers)
@@ -66,6 +77,8 @@ struct SettingsView: View {
                     }
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     MeetingSettingsSections()
+                    correctionSection
+                    summarySection
                     archiveSearch
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Speech-to-text, correction and summary models are chosen in each preset.")
@@ -90,6 +103,56 @@ struct SettingsView: View {
             Button("Keep Current Model", role: .cancel) {}
         } message: {
             Text("Changing the embedding model means the whole archive will be re-indexed when archive search arrives. Change it?")
+        }
+    }
+
+    // MARK: Correction (F20 P2)
+
+    /// Zapisuje się od razu (Return w polu albo przełącznik). Lista idzie do polecenia dla modelu i do filtra po korekcie.
+    @ViewBuilder private var correctionSection: some View {
+        SectionHeader("Correction")
+        Card {
+            FormRow(label: "Filler sounds",
+                    caption: "Removes sounds like “yyy” and “mhm” from corrected transcripts: the model is asked to drop them and the app removes any that remain. The original transcript is kept.") {
+                Toggle("Filler sounds", isOn: Binding(
+                    get: { model.settings.removeFillersEnabled },
+                    set: { model.settings.removeFillers = $0; model.save() }))
+                    .labelsHidden().toggleStyle(.switch)
+            }
+            if model.settings.removeFillersEnabled {
+                RowDivider()
+                FormRow(label: "Words", caption: "Separate with commas. Press Return to save.") {
+                    HStack(spacing: 8) {
+                        TextField("yyy, eee, mhm", text: $draft.fillers).textFieldStyle(.roundedBorder)
+                            .onSubmit { commitFillers() }
+                        Button("Reset") { draft.fillers = FillerWords.format(FillerWords.defaults); commitFillers() }
+                            .buttonStyle(.pillSmall).help("Back to the default list")
+                    }
+                }
+            }
+        }
+    }
+
+    private func commitFillers() {
+        let words = FillerWords.parse(draft.fillers)
+        model.settings.fillerWords = words == FillerWords.defaults ? nil : words
+        model.save()
+        draft.fillers = FillerWords.format(words)
+    }
+
+    // MARK: Summary (F20 P1)
+
+    /// Zapisuje się od razu (poza Save / Cancel sekcji Archive). Korekta nigdy nie myśli — to nie jest ustawienie.
+    @ViewBuilder private var summarySection: some View {
+        SectionHeader("Summary")
+        Card {
+            FormRow(label: "Thinking",
+                    caption: "Lets API models reason before writing the notes. Off is faster and avoids timeouts; on may help with long or complex meetings. Local models always run without thinking, and corrections never think.") {
+                Toggle("Thinking", isOn: Binding(
+                    get: { model.settings.summaryThinkingEnabled },
+                    set: { model.settings.summaryThinking = $0; model.save() }))
+                    .labelsHidden().toggleStyle(.switch)
+            }
         }
     }
 
@@ -215,7 +278,9 @@ private struct ProviderRowView: View {
     }
     private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try model.secrets.get(p.id) }) } }
     private var failure: String? {
-        guard let p = provider, !model.providerVerifying.contains(p.id), case .failed(let why)? = model.providerChecks[p.id] else { return nil }
+        // „On this Mac": stan modelu opisuje karta poniżej, więc bez czerwonej linii i bez Retry (nic do ponowienia przez sieć).
+        guard let p = provider, p.api != .fluidAudio, !model.providerVerifying.contains(p.id),
+              case .failed(let why)? = model.providerChecks[p.id] else { return nil }
         return why
     }
 
@@ -231,6 +296,11 @@ private struct ProviderRowView: View {
                         .font(.system(size: 11)).foregroundStyle(.mnWarn).help(why)
                 }
                 if let failure { Text(failure).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
+                if let p = provider, p.isLocal, p.api == .openAICompatible {
+                    // Ustawione przez użytkownika i/lub wykryte przy „Test again" (ten sam komunikat, który widzi budżet).
+                    let parts = [p.contextTokens.map { "Context window: \($0) tokens" }, model.detectedContexts[p.id]].compactMap { $0 }
+                    if !parts.isEmpty { Text(parts.joined(separator: " · ")).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(2) }
+                }
             }
             Spacer(minLength: 8)
             trailing
@@ -252,7 +322,8 @@ private struct ProviderRowView: View {
                     .buttonStyle(.pillSmall).help("Test the connection again")
             }
             Menu {
-                if preset?.needsKey ?? true { Button("Edit key…") { sheet.editKey(p) } }
+                if preset.map({ $0.needsKey || $0.keyOptional }) ?? true { Button("Edit key…") { sheet.editKey(p) } }
+                if p.isLocal && p.api == .openAICompatible { Button("Context window…") { sheet.editKey(p) } }
                 Button("Test again") { Task { await model.verifyProvider(p.id) } }
                 Button("Refresh Models") { Task { await model.refreshModels(p.id) } }
                 Divider()
@@ -275,7 +346,9 @@ private struct ProviderRowView: View {
             StateLabel(.progress(nil), "Verifying…")
         } else {
             switch model.providerChecks[p.id] {
+            case .verified? where p.api == .fluidAudio: StateLabel(.ok, "Ready")
             case .verified(let n)?: StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s")")
+            case .failed(let why)? where p.api == .fluidAudio: WarnLabel("Model not ready").help(why)
             case .failed(let why)?: StateLabel(.bad, "Failed").help(why)
             case .limited(let why)?: WarnLabel(why)
             case nil: StateLabel(.neutral, "Not verified")
@@ -294,11 +367,19 @@ struct ProviderSetupSheet: View {
     private var preset: ProviderPreset { state.preset }
     private var editing: Bool { state.editing != nil }
     private var title: String {
-        if let p = state.editing { return "Edit key for \(p.name)" }
+        if let p = state.editing { return showsKeyField ? "Edit key for \(p.name)" : "Edit \(p.name)" }
         return preset == .custom ? "Set up custom endpoint" : "Set up \(preset.name)"
     }
+    /// „Paste your key first." dotyczy tylko `needsKey`; klucz opcjonalny (oMLX) ma pole, ale można je zostawić puste.
     private var needsKey: Bool { preset.needsKey }
+    private var showsKeyField: Bool { preset.needsKey || preset.keyOptional }
     private var editableAddress: Bool { preset == .custom && !editing }
+    /// Pole kontekstu tylko dla lokalnego serwera OpenAI-compatible (Ollama, llama.cpp, oMLX, własny na loopbacku).
+    private var showsContext: Bool {
+        guard let url = state.editing?.baseURL ?? URL(string: state.url.trimmingCharacters(in: .whitespaces)) else { return false }
+        let p = Provider(name: "", baseURL: url, kind: state.editing?.kind ?? preset.kind)
+        return p.isLocal && p.api == .openAICompatible
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -316,11 +397,23 @@ struct ProviderSetupSheet: View {
             } else {
                 FormRow(label: "Address", labelWidth: 70) { Text(state.url).foregroundStyle(.mnText).textSelection(.enabled) }
             }
-            if needsKey {
+            if showsKeyField {
                 FormRow(label: "API key", labelWidth: 70) {
                     VStack(alignment: .leading, spacing: 6) {
-                        SecureField("Paste your key", text: $state.key).textFieldStyle(.plain).fieldBox()
+                        SecureField(preset.keyOptional ? "Optional" : "Paste your key", text: $state.key).textFieldStyle(.plain).fieldBox()
+                        if preset.keyOptional {
+                            Text("Optional — only if you set a key in \(preset.name).").font(.system(size: 11)).foregroundStyle(.mnText2)
+                        }
                         if let page = preset.keyPage { keyLink(page) }
+                    }
+                }
+            }
+            if showsContext {
+                FormRow(label: "Context", labelWidth: 70) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        TextField("Context window (tokens) — default 4096", text: $state.context).textFieldStyle(.plain).fieldBox()
+                        Text("Ollama uses 4096 unless you raise it (OLLAMA_CONTEXT_LENGTH or Ollama's Context length setting). Enter the server's value here.")
+                            .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -336,6 +429,7 @@ struct ProviderSetupSheet: View {
         .frame(width: 480)
         .background(.mnCard)
         .onChange(of: state.key) { _, _ in state.result = nil; state.note = nil; state.error = nil }
+        .onChange(of: state.context) { _, _ in state.error = nil }
     }
 
     private func keyLink(_ page: URL) -> some View {
@@ -367,11 +461,11 @@ struct ProviderSetupSheet: View {
         if state.testing {
             StateLabel(.progress(nil), "Testing…")
         } else if let e = state.error {
-            StateLabel(.bad, e)
+            StateLabel(.bad, e).wrapping()
         } else if let r = state.result {
             switch r {
             case .verified(let n): StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s") available")
-            case .failed(let why): StateLabel(.bad, why)
+            case .failed(let why): StateLabel(.bad, why).wrapping()
             case .limited(let why): WarnLabel(why)
             }
         } else if let n = state.note {
@@ -404,21 +498,39 @@ struct ProviderSetupSheet: View {
             await model.verifyProvider(id)
             state.result = model.providerChecks[id]
         } else {
-            state.result = await AppModel.testConnection(baseURL: url, kind: kind, key: key)
+            state.result = await AppModel.testConnection(baseURL: url, kind: kind, key: key,
+                                                             name: preset == .custom ? (state.name.isEmpty ? "The server" : state.name) : preset.name)
         }
     }
+
+    /// Pole „Context window": puste = `nil` (4096); poza zakresem albo nie liczba = błąd w arkuszu.
+    private func contextTokens() -> Result<Int?, ContextFieldError> {
+        let text = state.context.trimmingCharacters(in: .whitespaces)
+        guard showsContext, !text.isEmpty else { return .success(nil) }
+        guard let n = Int(text), ContextBudget.userRange.contains(n) else { return .failure(ContextFieldError()) }
+        return .success(n)
+    }
+
+    private struct ContextFieldError: Error {}
 
     private func save() {
         state.error = nil
         let key = trimmedKey()
         if needsKey && key.isEmpty { state.error = "Paste your key first."; return }
+        guard case .success(let context) = contextTokens() else {
+            state.error = "Context window: enter a number from \(ContextBudget.userRange.lowerBound) to \(ContextBudget.userRange.upperBound), or leave it empty for \(ContextBudget.defaultTokens)."
+            return
+        }
         if let p = state.editing {
             // Podmiana klucza istniejącego dostawcy (adres i nazwa bez zmian): zapis i ponowna weryfikacja.
-            if let e = model.replaceKey(p.id, key: key) { state.error = e } else { state.showing = false }
+            if let e = model.replaceKey(p.id, key: key) { state.error = e } else {
+                if showsContext { model.setContextTokens(p.id, context) }
+                state.showing = false
+            }
             return
         }
         guard let url = address() else { return }
-        if let e = model.addProvider(name: preset == .custom ? state.name : preset.name, baseURL: url, key: key, kind: preset.kind) {
+        if let e = model.addProvider(name: preset == .custom ? state.name : preset.name, baseURL: url, key: key, kind: preset.kind, contextTokens: context) {
             state.error = e // duplikat nazwy albo błąd pęku kluczy; arkusz zostaje otwarty
         } else {
             state.showing = false

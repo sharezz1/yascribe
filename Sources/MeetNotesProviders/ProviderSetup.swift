@@ -14,6 +14,8 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     public var kind: ProviderKind?
     /// Strona z kluczem API („Get an API key"); Ollama i Custom nie mają.
     public var keyPage: URL?
+    /// Klucz możliwy, ale niewymagany (oMLX: użytkownik może go ustawić w serwerze). Pusty klucz nie trafia do pęku.
+    public var keyOptional: Bool = false
 
     public static let openRouter = ProviderPreset(id: "openrouter", name: "OpenRouter", baseURL: "https://openrouter.ai/api/v1",
                                                   needsKey: true, note: nil,
@@ -29,13 +31,27 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                               note: "correction and summary only, no transcription",
                                               role: "Runs on this Mac · correction and summary only, no transcription",
                                               kind: nil, keyPage: nil)
+    /// llama.cpp (`llama-server`, domyślny port 8080): jak Ollama, korekta i podsumowanie; ASR rozstrzyga sonda.
+    public static let llamaCpp = ProviderPreset(id: "llamacpp", name: "llama.cpp", baseURL: "http://localhost:8080/v1", needsKey: false,
+                                                note: nil, role: "Runs on this Mac · correction and summary",
+                                                kind: nil, keyPage: nil)
+    /// oMLX (port 8000 z jego konfiguracji): serwer użytkownika może mieć ustawiony klucz API (S2 §6: 401), więc klucz jest opcjonalny.
+    public static let omlx = ProviderPreset(id: "omlx", name: "oMLX", baseURL: "http://localhost:8000/v1", needsKey: false,
+                                            note: nil, role: "Runs on this Mac · correction and summary",
+                                            kind: nil, keyPage: nil, keyOptional: true)
+    /// Parakeet w procesie (FluidAudio): bez klucza i bez adresu sieciowego (`local://fluidaudio`), tylko transkrypcja.
+    public static let onThisMac = ProviderPreset(id: "on-this-mac", name: "On this Mac · Parakeet",
+                                                 baseURL: Provider.fluidAudioBaseURL.absoluteString, needsKey: false, note: nil,
+                                                 role: "Speech-to-text on this Mac · no network",
+                                                 kind: .fluidAudio, keyPage: nil)
     public static let custom = ProviderPreset(id: "custom", name: "Custom endpoint", baseURL: "", needsKey: true,
                                               note: "Any OpenAI-compatible server.",
                                               role: "Any OpenAI-compatible API · address and key",
                                               kind: nil, keyPage: nil)
-    public static let all: [ProviderPreset] = [openRouter, elevenLabs, ollama, custom]
-    /// Gotowi (z wpisanym adresem), w kolejności listy.
-    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama]
+    public static let all: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx, custom]
+    /// Gotowi (z wpisanym adresem), w kolejności listy. `onThisMac` (model Yascribe) to nie dostawca: ma własną kartę
+    /// „Yascribe model" w Settings, więc na liście Providers go nie ma (F20 P3).
+    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx]
 
     /// Adres bez schematu: host[:port] + ścieżka bez końcowego „/” („openrouter.ai/api/v1"). Służy też do porównań.
     public static func displayAddress(_ url: URL) -> String {
@@ -54,12 +70,23 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     /// Gotowy dostawca pasujący do zapisanego dostawcy (rodzaj API, a dla OpenAI-compatible adres); Custom nigdy.
     public static func matching(_ provider: Provider) -> ProviderPreset? {
         if provider.api == .elevenLabs { return elevenLabs }
-        return [openRouter, ollama].first { URL(string: $0.baseURL).map(addressKey) == addressKey(provider.baseURL) }
+        if provider.api == .fluidAudio { return onThisMac } // po rodzaju, nie po adresie: `local://` nie ma hosta
+        return [openRouter, ollama, llamaCpp, omlx].first { URL(string: $0.baseURL).map(addressKey) == addressKey(provider.baseURL) }
     }
 
     /// Dopasowanie samego adresu (bez rodzaju API).
     public static func matching(_ url: URL) -> ProviderPreset? {
         matching(Provider(name: "", baseURL: url))
+    }
+}
+
+/// Jedyny model lokalnego ASR. Stała w `MeetNotesProviders`, żeby `AppModel.loadModels` nie importował `MeetNotesLocalASR`.
+public enum LocalASRModels {
+    public static let parakeetV3 = "parakeet-tdt-0.6b-v3"
+
+    /// Modele dla roli — stała lista, bez sieci (jak `ElevenLabsClient.models`). Poza ASR pusto.
+    public static func models(for role: Role) -> [ModelInfo] {
+        role == .asr ? [ModelInfo(id: parakeetV3, inputModalities: ["audio"], outputModalities: ["transcription"])] : []
     }
 }
 
@@ -77,8 +104,9 @@ public enum ProviderListRow: Identifiable, Equatable, Sendable {
         }
     }
 
-    /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama,
+    /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, llama.cpp, oMLX,
     /// potem zapisani własni (także drugi OpenRouter — dostawca to instancja), na końcu „Custom endpoint".
+    /// Rekord modelu Yascribe (`.fluidAudio`) nie jest wierszem: ani presetem, ani „własnym" (F20 P3).
     public static func rows(for providers: [Provider]) -> [ProviderListRow] {
         var used = Set<UUID>()
         var rows: [ProviderListRow] = ProviderPreset.ready.map { preset in
@@ -86,7 +114,7 @@ public enum ProviderListRow: Identifiable, Equatable, Sendable {
             if let match { used.insert(match.id) }
             return .preset(preset, match)
         }
-        rows += providers.filter { !used.contains($0.id) }.map { .custom($0) }
+        rows += providers.filter { !used.contains($0.id) && $0.api != .fluidAudio }.map { .custom($0) }
         rows.append(.addCustom)
         return rows
     }
@@ -128,6 +156,8 @@ public enum ProviderCheck: Equatable, Sendable {
             case .http(let status, _): return "The server answered with error \(status)."
             case .badResponse: return "The answer wasn't a model list. Is this an OpenAI-compatible address?"
             case .missingKey: return "No API key."
+            case .replyCutOff: return "The reply was cut off before the end."
+            case .inputTruncated: return "The server cut off the start of the input: the Context window setting is higher than what it really uses."
             }
         }
         if let u = error as? URLError {
@@ -144,6 +174,49 @@ public enum ProviderCheck: Equatable, Sendable {
 
 public extension OpenAICompatibleClient {
     func verify() async -> ProviderCheck {
-        do { return .verified(models: try await listModels().count) } catch { return .failed(ProviderCheck.describe(error)) }
+        do { return .verified(models: try await listModels().count) } catch {
+            // Lokalny serwer: nazwa i podpowiedź zamiast ogólnego „Can't connect".
+            return .failed(LocalServerHint.message(for: provider, error: error) ?? ProviderCheck.describe(error))
+        }
+    }
+}
+
+/// Czytelny komunikat dla błędów lokalnego serwera tekstowego (Ollama, llama.cpp, oMLX, własny na loopbacku). `nil` = nie nasz
+/// przypadek (dostawca nielokalny — także LAN — albo inny błąd): wołający zostaje przy dotychczasowym tekście.
+/// Przekroczenie czasu to NIE „serwer nie działa" (serwer zwykle liczy — za wolno albo za duży model).
+public enum LocalServerHint {
+    /// `timeout` = limit w sekundach, jeśli wołający go zna (trafia do komunikatu o przekroczeniu czasu).
+    public static func message(for provider: Provider, error: Error, timeout: Double? = nil) -> String? {
+        guard provider.isLocal, provider.api == .openAICompatible else { return nil }
+        let name = provider.name
+        if let e = error as? URLError {
+            switch e.code {
+            case .cannotConnectToHost, .cannotFindHost:
+                return "Can't reach \(name) at \(ProviderPreset.displayAddress(provider.baseURL)). \(start(provider)) and try again."
+            case .timedOut:
+                let after = timeout.map { " within \(Int($0.rounded())) s" } ?? " in time"
+                return "\(name) didn't answer\(after). Try a smaller model, a longer limit or a lower Context window."
+            case .networkConnectionLost:
+                return "\(name) dropped the connection."
+            default: return nil
+            }
+        }
+        if case ProviderError.http(let status, _)? = error as? ProviderError {
+            switch status {
+            case 401: return "\(name) asks for an API key. Add the key you set in \(name) with Edit key…"
+            case 507: return "\(name) can't load the model: not enough free memory. Close other apps or choose a smaller model."
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    private static func start(_ provider: Provider) -> String {
+        switch ProviderPreset.matching(provider) {
+        case ProviderPreset.ollama?: "Start it (ollama serve)"
+        case ProviderPreset.llamaCpp?: "Start it (llama-server -m <model>)"
+        case ProviderPreset.omlx?: "Start it (open the oMLX app and press Start)"
+        default: "Start it"
+        }
     }
 }
