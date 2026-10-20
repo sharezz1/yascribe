@@ -143,6 +143,15 @@ Preset, który już wskazuje nieobsługującego dostawcę, zachowuje go w menu j
 
 **Stan: zgłoszone, przyczyna nieustalona, nie zrobione.** Zgłoszenie użytkownika: po wejściu w Meetings i wybraniu spotkania zmienia się szerokość sidebaru.
 
+**Pomiar 2026-10-20 (wieczór): NIE odtworzono.** Druga instancja (surowy plik binarny `MeetNotesApp` na tymczasowych danych z jednym spotkaniem, wykrywanie rozmów, auto-start i kalendarz wyłączone;
+tymczasowa instrumentacja, cofnięta, nigdzie niezacommitowana). Przejście: lista Meetings → otwarte spotkanie → lista → spotkanie → zakładka Presets, przez zmianę stanu modelu (nie prawdziwe kliknięcia).
+Mierzone: ramki kolumn `NSSplitView`, pozycje elementów paska narzędzi i widoków wizualnych, zrzuty okna renderowane przez samą aplikację. Okna: 900, 1300 i **1235×833 z zapisanym u użytkownika paskiem 160**.
+Wynik we wszystkich stanach: sidebar `0..160`, granica `160–161`, detal `161..koniec`, bez żadnej zmiany; pasek narzędzi dostaje przy otwartym spotkaniu dwa elementy (przycisk „Meetings" x166–202 i menu „⋯" x210–230), a separator i elementy wizualne bez zmian;
+zrzuty (lista vs spotkanie) mają granicę paska w tym samym miejscu. **Wniosek: w tym układzie to nie jest zmiana szerokości kolumny.** Hipoteza z toolbaru (`ToolbarItem(.navigation)` przesuwa kolumny) nie potwierdzona.
+**Czego nie wiadomo.** Czy u użytkownika zmienia się granica kolumny, czy coś, co wygląda jak zmiana paska (np. wygląd paska narzędzi, tło, zaznaczenie wiersza); różnice między prawdziwym kliknięciem a zmianą stanu; wpływ budu `.app` (pomiar na surowym pliku binarnym) i dłuższej zawartości spotkania.
+**Ślad po pomiarze (posprzątany):** surowy plik binarny utworzył `~/Library/Preferences/MeetNotesApp.plist`; usunięty, preferencje prawdziwej aplikacji (`io.github.sharezz1.meetnotes`) nietknięte.
+**Następny krok:** zrzut ekranu u użytkownika (lista i otwarte spotkanie, z widocznym paskiem) albo opis „o ile i w którą stronę"; bez tego żadnej poprawki.
+
 **Fakty z kodu (nie diagnoza).**
 - Układ: `NavigationSplitView` w `ContentView` (`MeetNotesApp.swift:75`), sidebar ma `.navigationSplitViewColumnWidth(min: 160, ideal: 180)` bez `max`.
 - Detal Meetings to `NavigationStack`, który po wyborze **wypycha** `MeetingDetailView` przez `.navigationDestination(item:)` (`MeetingsView.swift:40, 69`). Widok spotkania zmienia pasek okna:
