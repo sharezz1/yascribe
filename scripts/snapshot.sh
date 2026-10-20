@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 OUT=".design/review"
 DATA="$(mktemp -d)"
 trap 'rm -rf "$DATA"' EXIT
-swift build --product MeetNotesApp >&2
-BIN="$(swift build --show-bin-path)/MeetNotesApp"
+swift build --disable-keychain --product MeetNotesApp >&2
+BIN="$(swift build --disable-keychain --show-bin-path)/MeetNotesApp"
 MEETNOTES_DATA_DIR="$DATA" MEETNOTES_SNAPSHOT_DIR="$OUT" "$BIN"
 ls "$OUT"

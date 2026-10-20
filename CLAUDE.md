@@ -63,3 +63,4 @@ pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
   certyfikat w pęku login; stały podpis = macOS pamięta zgody na mikrofon i dźwięk systemowy).
 - CLI: `B=$(swift build --show-bin-path)/meetnotes-cli`, potem `$B --help`.
 - Ostrzeżenia linkera o brakujących search path przy buildzie to szum, nie błąd.
+- SwiftPM: `swift package --disable-keychain resolve` po zmianie `Package.swift` lub `rm -rf .build` — bez flagi pobranie `binaryTarget` FluidAudio wisi na pęku kluczy.
