@@ -45,9 +45,12 @@ public enum NotePromptBuilder {
         Structure:
         \(template.promptText)
         """
+        // Pole kontekstu bywa wstępnie wypełnione My notes: to samo nie idzie do modelu dwa razy (przegląd T13).
+        let sameAsNotes = !myNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && context.trimmingCharacters(in: .whitespacesAndNewlines) == myNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         let user = """
         Context from the user:
-        \(orNone(context))
+        \(orNone(sameAsNotes ? "" : context))
 
         The user's own notes:
         \(orNone(myNotes))
@@ -66,10 +69,12 @@ public enum NotePromptBuilder {
     public static func mapPrompt(part: [String], index: Int, count: Int, notesLanguage: LanguageCode?) -> NotePrompt {
         let system = """
         You condense part \(index) of \(count) of a meeting transcript. Every line has the form "[m:ss] Me: text" or \
-        "[m:ss] Them: text"; "Me" is the user's microphone, "Them" is everyone else on the call.
+        "[m:ss] Them: text" (after the first hour "[h:mm:ss] Me: text"); "Me" is the user's microphone, "Them" is \
+        everyone else on the call.
 
         Rules:
-        - Reply with condensed lines in the same format: each line keeps its own [m:ss] and its speaker, in the same order.
+        - Reply with condensed lines in the same format: each line starts with its [m:ss] or [h:mm:ss] and its speaker, in \
+        the same order. You may merge consecutive lines of the same speaker into one, keeping the first timestamp.
         - Keep names, numbers, dates, decisions and tasks exactly as spoken. Drop filler and repetition.
         - Do not interpret, do not add anything that is not in the input, do not translate.
         - Keep the result to at most 40% of the input length.

@@ -35,9 +35,18 @@ import Testing
 }
 
 @Test func orphanCloserRemovesEverythingBeforeIt() {
-    #expect(ThinkingStripper.clean("rozumuję bez otwarcia\n</think>\n# Tytuł\nTreść") == "# Tytuł\nTreść")
-    #expect(ThinkingStripper.clean("hm[/THINK]Tak.") == "Tak.")
-    #expect(ThinkingStripper.clean("hm</think>") == "")
+    #expect(ThinkingStripper.clean("rozumuję bez otwarcia\n</think>\n# Tytuł\nTreść", orphanClosers: true) == "# Tytuł\nTreść")
+    #expect(ThinkingStripper.clean("hm[/THINK]Tak.", orphanClosers: true) == "Tak.")
+    #expect(ThinkingStripper.clean("hm</think>", orphanClosers: true) == "")
+}
+
+@Test func orphanCloserIsIgnoredUnlessAskedFor() {
+    // API (domyślnie): notatka cytująca `</think>` w środku zostaje cała — nic przed zamknięciem nie jest „rozumowaniem".
+    let note = "# Notatka\n- Dodać tag </think> do filtra odpowiedzi\n- Reszta"
+    #expect(ThinkingStripper.clean(note) == note)
+    #expect(ThinkingStripper.clean("hm[/THINK]Tak.") == "hm[/THINK]Tak.")
+    // Zamknięty blok znika zawsze, także bez `orphanClosers`.
+    #expect(ThinkingStripper.clean("<think>x</think>Tak. </think> Nie.") == "Tak. </think> Nie.")
 }
 
 @Test func tagsAreCaseInsensitiveAndThinkingVariantsAreSupported() {

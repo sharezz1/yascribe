@@ -32,17 +32,23 @@ private func condense(_ user: String) -> String {
     }.joined(separator: "\n")
 }
 
-/// Najgorszy przypadek: model zużywa całe `max_tokens` (× 2,4 znaku), w liniach po ~100 znaków.
+/// Najgorszy przypadek: model zużywa całe `max_tokens` (× 2,4 znaku), w liniach po ~100 znaków (w formacie `[m:ss] Them: …`).
 private func worstCaseReply(_ maxTokens: Int?) -> String {
     let total = Int(Double(maxTokens ?? 0) * ContextBudget.charsPerToken)
+    let prefix = "[0:00] Them: "
     var lines: [String] = []
     var used = 0
     while used < total {
         let n = min(100, total - used)
-        lines.append(words(n))
+        if n > prefix.count + 1 { lines.append(prefix + words(n - prefix.count)) }
         used += n + 1
     }
     return lines.joined(separator: "\n")
+}
+
+/// Model, który kondensuje „do połowy": wypełnia połowę wejścia (jak obiecuje prompt), ale nie mniej niż `max_tokens` pozwala.
+private func halfSizeReply(_ c: ChatStub.Call) -> String {
+    worstCaseReply(min(c.maxTokens ?? 0, ContextBudget.maxTokens(inputChars: c.user.count, replyFactor: 0.5)))
 }
 
 private func summaryFiles(_ session: URL) -> [String] {
@@ -147,7 +153,7 @@ private func failure(_ stub: ChatStub, session: URL, transcript t: Transcript, c
     #expect(try NotesStore(session: session).readSummary() == s)
 }
 
-@Test func mapCallsSendHalfThePartAsMaxTokens() async throws {
+@Test func mapCallsUseTheRemainingRoomAsMaxTokens() async throws {
     let session = tempDir()
     defer { try? FileManager.default.removeItem(at: session) }
     let stub = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
@@ -155,11 +161,14 @@ private func failure(_ stub: ChatStub, session: URL, transcript t: Transcript, c
     let maps = stub.calls.filter(isMap)
     #expect(!maps.isEmpty)
     for m in maps {
-        #expect(m.maxTokens == ContextBudget.maxTokens(inputChars: m.user.count, replyFactor: ContextBudget.mapReplyFactor))
+        let promptTokens = Double(m.system.count + m.user.count) / ContextBudget.charsPerToken
+        let room = Double(budget.tokens - ContextBudget.marginTokens) - promptTokens
+        let half = ContextBudget.maxTokens(inputChars: m.user.count, replyFactor: ContextBudget.mapReplyFactor)
+        let maxTokens = Double(m.maxTokens ?? 0)
+        #expect(m.maxTokens.map { $0 > half } == true)            // więcej niż ciasna połowa wejścia (przegląd T13)…
+        #expect(maxTokens <= room + 1)                            // …ale nigdy ponad to, co zostaje w oknie po prompcie
+        #expect(maxTokens <= Double(ContextBudget.maxTokens(inputChars: m.user.count, replyFactor: 1.0)))
         #expect(m.temperature == 0.2 && m.timeout == 330)         // ChatLimits.for(lokalny, .mapPart)
-        // Cała mapa (system + user) i odpowiedź (połowa wejścia) mieszczą się w kontekście z marginesem.
-        let inTokens = Double(m.system.count + m.user.count) / ContextBudget.charsPerToken
-        #expect(inTokens + Double(m.maxTokens ?? 0) + Double(ContextBudget.marginTokens) <= Double(budget.tokens) + 1)
         #expect(m.user.count <= ContextBudget.mapPartCap)
     }
 }
@@ -192,13 +201,28 @@ private func failure(_ stub: ChatStub, session: URL, transcript t: Transcript, c
     #expect(isReduce(reduce) && reduce.user.contains("SECRET-MY-NOTE") && reduce.user.contains("SECRET-CONTEXT"))
 }
 
+@Test func halfSizeMapOutputGoesThroughTheHierarchy() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    // Suma wyjść mapy (≈ połowa wejścia) nie mieści się w jednym prompcie → ponowna kondensacja, a potem reduce.
+    let stub = ChatStub { c in isMap(c) ? halfSizeReply(c) : "# T\nbody" }
+    _ = try await run(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500))
+    #expect(stub.calls.filter(isMap).count > 3)                  // druga warstwa map, nie jeden przebieg
+    let reduces = stub.calls.filter(isReduce)
+    #expect(reduces.count == 1 && reduces.allSatisfy { $0.system.count + $0.user.count <= noteLimit })
+    for m in stub.calls.filter(isMap) {
+        let tokens = Double(m.system.count + m.user.count) / ContextBudget.charsPerToken + Double(m.maxTokens ?? 0)
+        #expect(tokens + Double(ContextBudget.marginTokens) <= Double(budget.tokens) + 1)
+    }
+}
+
 @Test func reduceInputNeverExceedsTheBudgetInTheWorstCase() async throws {
     let session = tempDir()
     defer { try? FileManager.default.removeItem(at: session) }
-    // Model zużywa całe `max_tokens` w każdej części — suma wyjść mapy nie mieści się w jednym prompcie.
+    // Model zużywa całe `max_tokens` w każdej części — nic ponad budżet nie idzie ani do reduce, ani do mapy.
     let stub = ChatStub { c in isMap(c) ? worstCaseReply(c.maxTokens) : "# T\nbody" }
     _ = try? await run(stub, session: session, transcript: bigTranscript(count: 12, chars: 2_500))
-    #expect(stub.calls.filter(isMap).count > 6)                  // był reduce hierarchiczny (druga warstwa map), nie jeden przebieg
+    #expect(stub.calls.filter(isMap).count >= 6)
     let reduces = stub.calls.filter(isReduce)
     #expect(reduces.allSatisfy { $0.system.count + $0.user.count <= noteLimit }) // reduce: nigdy ponad budżet
     for m in stub.calls.filter(isMap) { // a mapa na każdym poziomie mieści prompt + odpowiedź w oknie
@@ -207,14 +231,29 @@ private func failure(_ stub: ChatStub, session: URL, transcript t: Transcript, c
     }
 }
 
+private let tooLongMessage = "The transcript is too long for this model's Context window. Raise the server's context length "
+    + "(for Ollama: OLLAMA_CONTEXT_LENGTH=16384 or more) and the Context window field in Settings, or use a model with a longer context."
+
 @Test func tooLongEvenAfterHierarchyIsAnExplicitError() async throws {
     let session = tempDir()
     defer { try? FileManager.default.removeItem(at: session) }
     let stub = ChatStub { c in isMap(c) ? worstCaseReply(c.maxTokens) : "# T\nbody" }
     let message = await failure(stub, session: session, transcript: bigTranscript(count: 40, chars: 2_500))
-    #expect(message == "The transcript is too long for this model's Context window. Raise it in Settings or use a model with a longer context.")
+    #expect(message == tooLongMessage)
     #expect(!stub.calls.contains(where: isReduce))               // nic ponad budżet nie poszło do modelu
     #expect(summaryFiles(session).isEmpty)
+}
+
+@Test func hopelessTranscriptAbortsAfterTheFirstLevel() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { c in isMap(c) ? worstCaseReply(c.maxTokens) : "# T\nbody" }
+    let message = await failure(stub, session: session, transcript: bigTranscript(count: 40, chars: 2_500))
+    // Wystarczy poziom pierwszy: obserwowany współczynnik kondensacji nie dowiezie wejścia do budżetu w pozostałych poziomach.
+    // Wszystkie wywołania to jeden poziom: „part k of N", gdzie N = liczba wywołań (druga warstwa miałaby inne N).
+    let n = stub.calls.count
+    #expect(n > 1 && stub.calls.allSatisfy { isMap($0) && $0.system.contains("of \(n) ") })
+    #expect(message == tooLongMessage && message?.contains("OLLAMA_CONTEXT_LENGTH") == true)
 }
 
 @Test func notesAndContextAloneTooLongIsAnExplicitError() async throws {
@@ -225,6 +264,17 @@ private func failure(_ stub: ChatStub, session: URL, transcript t: Transcript, c
     let message = await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500))
     #expect(message == "Your notes and context are too long for this model's Context window.")
     #expect(stub.calls.isEmpty)                                  // nie marnujemy wywołań map
+}
+
+@Test func contextTooSmallForThePromptItselfSaysTheContextWindowIsTooSmall() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    // 2560 tokenów: na prompt zostaje ~600 znaków — mniej niż sam prompt szablonu, a My notes i kontekst są puste.
+    let tiny = ContextBudget(tokens: 2_560)
+    let stub = ChatStub { _ in "# T\nbody" }
+    let message = await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500), budget: tiny)
+    #expect(message == "local-model's Context window (2560 tokens) is too small for notes.")
+    #expect(stub.calls.isEmpty)
 }
 
 @Test func tooSmallContextFailsWithoutCallingTheModel() async throws {
@@ -253,15 +303,65 @@ private func failure(_ stub: ChatStub, session: URL, transcript t: Transcript, c
     #expect(try NotesStore(session: session).readSummary() == nil)
 }
 
-@Test func cutOffMapPartFailsTheSummary() async throws {
+@Test func cutOffMapPartSaysTheModelDidNotCondenseEnough() async throws {
     let session = tempDir()
     defer { try? FileManager.default.removeItem(at: session) }
     let stub = ChatStub(finishReasonFor: { $0.system.contains("part 3 of 3") ? "length" : nil }) { c in
         isMap(c) ? condense(c.user) : "# T\nbody"
     }
     let message = try #require(await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500)))
-    #expect(message.hasPrefix("Part 3 of 3 failed: ") && message.contains("cut off") && message.contains("Context window"))
+    // Ucięta część mapy = model nie skondensował jej dość; to nie jest sprawa pola „Context window".
+    #expect(message == "local-model didn't condense part 3 of 3 enough. Try another model.")
     #expect(summaryFiles(session).isEmpty)
+}
+
+@Test func cutOffNoteSaysTheReplyHitTheOutputLimit() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub(finishReason: "length") { _ in "# T\nbody" }
+    let gen = NoteGenerator(client: localChatClient(stub), model: "local-model", maxTokens: 2_048)
+    let message = try #require(await failure(stub, session: session, transcript: transcript([utt("Prognoza na sobotę.")]), generator: gen))
+    #expect(message.contains("local-model") && message.contains("output limit") && message.contains("2048"))
+    #expect(!message.contains("Context window") && !message.contains("context length"))
+    // To samo dla reduce po mapie.
+    let stub2 = ChatStub(finishReasonFor: { isReduce($0) ? "length" : nil }) { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+    let gen2 = NoteGenerator(client: localChatClient(stub2), model: "local-model", maxTokens: 2_048)
+    let message2 = try #require(await failure(stub2, session: session, transcript: bigTranscript(count: 6, chars: 2_500), generator: gen2))
+    #expect(message2.contains("output limit") && !message2.contains("Context window"))
+}
+
+// MARK: format wyjścia mapy
+
+@Test func mapOutputKeepsOnlyTranscriptLines() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    // Model dokleja wstęp, punktory i płot kodu: tylko linie `[m:ss]`/`[h:mm:ss]` idą dalej.
+    let stub = ChatStub { c in
+        isMap(c) ? "Here is the condensed transcript:\n```\n" + condense(c.user) + "\n[1:02:03] Me: late\n[1:02:04] Them: later\n```\n- a bullet\n" : "# T\nbody"
+    }
+    _ = try await run(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500))
+    let reduceUser = try #require(stub.calls.last).user
+    let lines = (reduceUser.components(separatedBy: "Transcript:\n").last ?? "").components(separatedBy: "\n")
+    #expect(lines.allSatisfy { $0.hasPrefix("[") })
+    #expect(!reduceUser.contains("Here is") && !reduceUser.contains("```") && !reduceUser.contains("a bullet"))
+    #expect(reduceUser.contains("[1:02:03] Me: late") && reduceUser.contains("[1:02:04] Them: later"))
+}
+
+@Test func mapOutputWithoutTheTranscriptFormatFailsThePart() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { c in
+        c.system.contains("part 2 of 3") ? "The meeting covered budgets.\n- Budget approved\n- Next steps agreed" : (isMap(c) ? condense(c.user) : "# T\nbody")
+    }
+    let message = try #require(await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500)))
+    #expect(message == "Part 2 of 3 failed: the model didn't keep the transcript format")
+    #expect(!stub.calls.contains(where: isReduce) && summaryFiles(session).isEmpty)
+}
+
+@Test func mapPromptNamesTheHourClockAndAllowsMergingSameSpeakerLines() {
+    let p = NotePromptBuilder.mapPrompt(part: ["[1:02:03] Me: x"], index: 1, count: 2, notesLanguage: nil)
+    #expect(p.system.contains("[h:mm:ss]"))
+    #expect(p.system.contains("same speaker") && p.system.contains("first"))
 }
 
 @Test func eachCallGetsItsOwnTimeout() async throws {

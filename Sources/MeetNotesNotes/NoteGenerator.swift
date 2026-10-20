@@ -69,7 +69,8 @@ public struct NoteGenerator: Sendable {
                 try await client.chat(model: model, system: prompt.system, user: prompt.user, timeout: chatTimeout, maxTokens: maxTokens)
             }
         } catch {
-            throw NoteGenerationError.failed(ContextError.describe(model: model, error, provider: client.provider, transport: chatTimeout))
+            throw NoteGenerationError.failed(ContextError.describe(model: model, error, provider: client.provider, transport: chatTimeout,
+                                                                maxTokens: maxTokens))
         }
     }
 
@@ -87,8 +88,15 @@ public struct NoteGenerator: Sendable {
         guard limit > 0 else {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.")
         }
+        // Sam prompt szablonu (bez My notes i kontekstu) ponad budżetem: okno za małe na notatki — nie wina użytkownika.
+        let bare = NotePromptBuilder.prompt(template: template, lines: [], myNotes: "", context: "", notesLanguage: notesLanguage,
+                                            condensed: true).chars
+        guard bare <= limit else {
+            throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.")
+        }
         // My notes + kontekst + prompt szablonu same ponad budżetem — mapa niczego nie naprawi, więc nie marnujemy wywołań.
-        guard reduce([]).chars <= limit else {
+        let room = limit - reduce([]).chars // miejsce na linie transkryptu w prompcie reduce
+        guard room >= 0 else {
             throw NoteGenerationError.failed("Your notes and context are too long for this model's Context window.")
         }
         let partChars = min(ContextBudget.mapPartCap,
@@ -97,34 +105,68 @@ public struct NoteGenerator: Sendable {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.")
         }
         var current = lines
-        for _ in 1...Self.maxMapLevels {
-            current = try await map(current, maxChars: partChars, notesLanguage: notesLanguage)
+        for level in 1...Self.maxMapLevels {
+            let before = current.joined(separator: "\n").count
+            current = try await map(current, maxChars: partChars, notesLanguage: notesLanguage, budget: budget)
             let prompt = reduce(current)
             // Warunek, na którym stoi cała gwarancja: reduce nigdy nie przekracza budżetu.
             if prompt.chars <= limit { return prompt }
+            // Wczesne przerwanie: gdyby kolejne poziomy kondensowały TAK SAMO jak ten (optymistycznie — skondensowane
+            // linie kurczą się słabiej), a i tak nie zmieszczą się w prompcie, to dalsze wywołania są stracone.
+            let after = current.joined(separator: "\n").count
+            let ratio = Double(after) / Double(max(before, 1))
+            if Double(after) * pow(ratio, Double(Self.maxMapLevels - level)) > Double(room) { break }
         }
         throw NoteGenerationError.failed(
-            "The transcript is too long for this model's Context window. Raise it in Settings or use a model with a longer context.")
+            "The transcript is too long for this model's Context window. Raise the server's context length "
+                + "(for Ollama: OLLAMA_CONTEXT_LENGTH=16384 or more) and the Context window field in Settings, or use a model with a longer context.")
+    }
+
+    /// Linie wyjścia mapy w formacie transkryptu (`[m:ss]` / `[h:mm:ss]` na początku); wstęp, punktory i płoty kodu odpadają.
+    /// `nil`, gdy model nie zachował formatu (mniej niż połowa niepustych linii ma znacznik) — wtedy część się nie udała.
+    static func transcriptLines(inReply reply: String) -> [String]? {
+        func hasClock(_ line: String) -> Bool {
+            guard line.hasPrefix("["), let close = line.firstIndex(of: "]") else { return false }
+            let fields = line[line.index(after: line.startIndex)..<close].split(separator: ":", omittingEmptySubsequences: false)
+            guard fields.count == 2 || fields.count == 3 else { return false }
+            return fields.enumerated().allSatisfy { i, f in
+                f.allSatisfy(\.isASCII) && f.allSatisfy(\.isNumber) && (i == 0 ? !f.isEmpty : f.count == 2)
+            }
+        }
+        let all = reply.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let kept = all.filter(hasClock)
+        return !kept.isEmpty && kept.count * 2 >= all.count ? kept : nil
     }
 
     /// Jeden poziom: podział na części, map każdej po kolei (limit czasu NA WYWOŁANIE). Błąd części = błąd całości („Part n of m failed").
-    private func map(_ lines: [String], maxChars: Int, notesLanguage: LanguageCode?) async throws -> [String] {
+    private func map(_ lines: [String], maxChars: Int, notesLanguage: LanguageCode?, budget: ContextBudget) async throws -> [String] {
         let parts = try TranscriptSplitter.parts(lines, maxChars: maxChars)
         let limits = mapLimits ?? ChatLimits.for(client.provider, call: .mapPart)
         var out: [String] = []
         for (i, part) in parts.enumerated() {
             try Task.checkCancellation()
             let prompt = NotePromptBuilder.mapPrompt(part: part, index: i + 1, count: parts.count, notesLanguage: notesLanguage)
-            let replyTokens = ContextBudget.maxTokens(inputChars: prompt.user.count, replyFactor: ContextBudget.mapReplyFactor)
+            // Odpowiedź dostaje całe miejsce, które po prompcie zostaje w oknie (nie ciasną połowę wejścia), ale nie więcej niż
+            // długość wejścia: dłuższa „kondensacja" to ucieczka modelu. Część ≤ `pairedInputChars`, więc miejsce jest ≥ połowie wejścia.
+            let room = budget.tokens - ContextBudget.marginTokens - Int((Double(prompt.chars) / ContextBudget.charsPerToken).rounded(.up))
+            let replyTokens = max(1, min(room, ContextBudget.maxTokens(inputChars: prompt.user.count, replyFactor: 1.0)))
             do {
                 let client = client, model = model
                 let reply = try await withDeadline(limits.soft) {
                     try await client.chat(model: model, system: prompt.system, user: prompt.user, timeout: limits.transport,
                                           maxTokens: replyTokens, temperature: limits.temperature)
                 }
-                out += reply.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                guard let kept = Self.transcriptLines(inReply: reply) else {
+                    throw NoteGenerationError.failed("Part \(i + 1) of \(parts.count) failed: the model didn't keep the transcript format")
+                }
+                out += kept
             } catch is CancellationError {
                 throw CancellationError()
+            } catch let e as NoteGenerationError {
+                throw e
+            } catch ProviderError.replyCutOff {
+                // Ucięta część mapy: model nie skondensował jej dość (limit wyjścia to nasz `max_tokens`) — nie rada o „Context window".
+                throw NoteGenerationError.failed("\(model) didn't condense part \(i + 1) of \(parts.count) enough. Try another model.")
             } catch {
                 let why = ContextError.describe(model: model, error, provider: client.provider, transport: limits.transport, isLocal: true)
                 throw NoteGenerationError.failed("Part \(i + 1) of \(parts.count) failed: \(why)")

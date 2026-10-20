@@ -42,15 +42,18 @@ public enum CorrectionRules {
 }
 
 public enum CorrectionBatches {
-    /// Linie `[n] tekst`, pakowane po kolei w partie do `maxChars` znaków (jedna wypowiedź nigdy nie jest dzielona).
+    /// Linie `[n] tekst`, pakowane po kolei w partie do `maxChars` znaków RENDEROWANEJ partii (`[k] ` z numerem lokalnym `k`,
+    /// tekst i `\n`; jedna wypowiedź nigdy nie jest dzielona). Liczy się to, co dostaje model, nie sam tekst (przegląd T12).
     public static func split(_ lines: [(n: Int, text: String)], maxChars: Int) -> [[(n: Int, text: String)]] {
         var out: [[(n: Int, text: String)]] = []
         var cur: [(n: Int, text: String)] = []
         var size = 0
         for l in lines {
-            if !cur.isEmpty && size + l.text.count > maxChars { out.append(cur); cur = []; size = 0 }
+            // `+ 1` na `\n` liczone zawsze (o jeden za dużo przy ostatniej linii: zapas, nie błąd).
+            func rendered(_ k: Int) -> Int { "[\(k)] ".count + l.text.count + 1 }
+            if !cur.isEmpty && size + rendered(cur.count + 1) > maxChars { out.append(cur); cur = []; size = 0 }
             cur.append(l)
-            size += l.text.count
+            size += rendered(cur.count)
         }
         if !cur.isEmpty { out.append(cur) }
         return out

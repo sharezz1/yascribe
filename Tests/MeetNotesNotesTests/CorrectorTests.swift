@@ -137,11 +137,6 @@ private func longTranscript(_ n: Int = 100) -> Transcript {
     transcript((0..<n).map { utt(String(repeating: "x", count: 100), at: Double($0) * 5) })
 }
 
-/// Suma długości tekstów w partii (bez prefiksów `[n] ` i znaków nowej linii) — to liczy `CorrectionBatches.split`.
-private func textChars(_ user: String) -> Int {
-    user.components(separatedBy: "\n").reduce(0) { $0 + $1.drop(while: { $0 != "]" }).dropFirst(2).count }
-}
-
 @Test func correctorBatchSizeFollowsTheBudget() async {
     let api = ChatStub { capitalizing($0.user) }
     _ = await corrector(api).correct(longTranscript(), language: .polish)
@@ -151,14 +146,38 @@ private func textChars(_ user: String) -> Int {
     let limit = c.batchLimit(language: .polish)
     #expect(limit > 0 && limit < 4_000)
     #expect(local.calls.count > api.calls.count)
-    #expect(local.calls.allSatisfy { textChars($0.user) <= limit })
+    #expect(local.calls.allSatisfy { $0.user.count <= limit })
 }
 
 @Test func localBatchesAreCappedAt4000EvenWithAHugeContext() async {
     let stub = ChatStub { capitalizing($0.user) }
     let c = Corrector(client: chatClient(stub), assignment: assignment, budget: ContextBudget(tokens: 1_048_576))
     _ = await c.correct(longTranscript(), language: .polish)
-    #expect(stub.calls.count >= 3 && stub.calls.allSatisfy { textChars($0.user) <= ContextBudget.correctionBatchCap })
+    #expect(stub.calls.count >= 3 && stub.calls.allSatisfy { $0.user.count <= ContextBudget.correctionBatchCap })
+}
+
+@Test func shortLinesStillFitTheBudgetOnceRendered() async {
+    // Sonda przeglądu T12: 400 krótkich linii — prefiks `[k] ` i `\n` to kilkadziesiąt procent rozmiaru, nie szum.
+    let t = transcript((0..<400).map { utt("Tak, jasne.", at: Double($0)) })
+    let stub = ChatStub { capitalizing($0.user) }
+    let c = Corrector(client: chatClient(stub), assignment: assignment, budget: ContextBudget(tokens: 4_096))
+    let r = await c.correct(t, language: .polish)
+    let limit = c.batchLimit(language: .polish)
+    #expect(stub.calls.count > 1 && r.failedBatches == 0)
+    #expect(stub.calls.allSatisfy { $0.user.count <= limit })
+    // I cały prompt z odpowiedzią mieści się w oknie: dokładnie to, co obiecuje reguła „sparowana".
+    for call in stub.calls {
+        let tokens = Double(call.system.count + call.user.count) / ContextBudget.charsPerToken + Double(call.maxTokens ?? 0)
+        #expect(tokens + Double(ContextBudget.marginTokens) <= 4_096 + 1)
+    }
+}
+
+@Test func splitCountsTheRenderedLength() {
+    // 10 linii po 10 znaków: renderowana partia to `[k] ` + tekst + `\n` — limit 40 mieści 2 takie linie, nie 4.
+    let lines = (1...10).map { (n: $0, text: String(repeating: "x", count: 10)) }
+    let batches = CorrectionBatches.split(lines, maxChars: 40)
+    #expect(batches.allSatisfy { CorrectionBatches.render($0.enumerated().map { (n: $0.offset + 1, text: $0.element.text) }).count <= 40 })
+    #expect(batches.map(\.count) == [2, 2, 2, 2, 2])
 }
 
 @Test func localBatchSendsMaxTokensAndApiDoesNot() async {
