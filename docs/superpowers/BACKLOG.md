@@ -13,6 +13,9 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
   - **Do decyzji przy S18 / faza 2** — wymaga decyzji produktowej (minimalna wersja systemu) i weryfikacji na starszym macOS — nie da się tego sprawdzić na tej maszynie.
 - [ ] `MeetNotesApp` nie ma targetu testowego (executable) — logika aplikacji (blokady, `preset.json`, `latestRun`, odtwarzanie) niemieszczalna w testach bez zmiany struktury (biblioteka + testTarget); rozważyć jako zadanie fazy 2 / przy S18. *(check S15 #7)*
   - **Do decyzji przy S18 / faza 2** — zmiana struktury pakietu (biblioteka + testTarget) i bramki liczby testów — poza zakresem sesji czyszczącej.
+  - **Stan po 2.0 (gałąź `faza20`):** nadal bez targetu; faza 2.0 dołożyła logikę w `MeetNotesApp`, której testy nie sięgają — `LocalASRSupport` (fazy pobierania,
+    blokada „Remove"), arkusz dostawcy w `SettingsView` (parsowanie pola „Context window"), Cancel i postęp w `NotesModel`. Cienką logikę stanu karty modelu
+    przeniesiono świadomie do biblioteki (`ModelCardState` w `MeetNotesLocalASR`), żeby miała testy; reszta pozostaje ręczna.
 - [ ] `AppModel.reloadSessions()` parsuje journale/transkrypty na MainActorze (init, startRecording, koniec przebiegu) — zawieszenie UI przy pełnym archiwum; `SettingsView.onChange` zapisuje wszystkie pliki przy każdym znaku. *(check S15 #10)*
   - **Do decyzji przy S18 / faza 2** — przeniesienie parsowania poza MainActor i debounce zapisu ustawień to zmiana zachowania aplikacji, nie kosmetyka; przy obecnej liczbie sesji niewidoczne.
 - [ ] **Usprawnienie (użytkownik, 2026-10-13): odzyskiwanie odmówionej zgody TCC.** Po kliknięciu „Nie pozwalaj" macOS nie pyta drugi raz o mikrofon / dźwięk systemowy. Potrzebne: (a) instrukcja ręczna w aplikacji (Ustawienia → Prywatność i ochrona → Mikrofon / Nagrywanie ekranu i dźwięku systemowego; albo `tccutil reset Microphone io.github.sharezz1.meetnotes` i `… AudioCapture …`), (b) opcjonalnie przycisk w setupie „Reset permission", który uruchamia `tccutil reset` dla własnego bundle ID i prosi o restart aplikacji.
@@ -119,6 +122,48 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 - [ ] Strona główna odświeża się po `EKEventStoreChanged` najpóźniej po minucie (`TimelineView(.everyMinute)`); od razu = podpiąć `calendarSource.changes`.
 - [ ] Nieaktualny wybór kalendarzy (`calendarSelectionStale`) na stronie głównej wygląda jak „No more meetings today”.
 - [ ] Brak migawki linii ostrzeżenia Auto pod nagłówkiem (preset Auto).
+
+## Z fazy 2.0 (2026-10-20, gałąź `faza20`; źródła: [F20-decyzje-opusa](reports/F20-decyzje-opusa.md), przeglądy Opusa w commitach `6b32807` (T4), `a95096e` (T10), `4ff727b` (T12/T13), kod) — bez rundy poprawek
+
+Bez odbioru T8/T14 część poniższych to hipotezy z kodu i recenzji, nie obserwacje z użycia. Pozycje decyzyjne 1–14 („Do potwierdzenia rano") zostają w logu decyzji,
+nie są tu kopiowane.
+
+**Lokalny ASR (2.0a)**
+- [ ] **Rewizja modelu na Hugging Face niepinowana** (`main`; `ModelRegistry.revisionOverrides` nie przetestowane — wymaga odczytu metadanych HF, S0 §2, §9; decyzja Opusa 7e, pkt 4 „rano").
+  Skutek: po ponownym wyeksportowaniu modelu upstream stan karty to „Needs repair" z „Download again" (`force` kasuje folder i pobiera 483 MB), a pobranie kończy się
+  błędem „differs from the version this build expects", po którym karta dalej pokazuje „Download again" — **możliwa pętla** (każdy klik = kolejne pobranie). Nic w kodzie jej nie przerywa
+  (`ModelStore.download` rzuca, status zostaje `invalid`). Pin rewizji albo osobny stan „upstream changed" bez ponownego pobierania. *(recenzja planu P3 pkt 3 przewidywała ten przypadek)*
+- [ ] **`unknownVariant` to ślepy zaułek:** gdy w folderze `parakeet-tdt-0.6b-v3` leży inny wariant (np. `.int8V2`: `Encoder_v2.mlmodelc` zamiast `Encoder.mlmodelc`, S0 §2), karta pokazuje
+  „Different variant" **bez żadnej akcji** (`primary = nil`: ani Download, ani Remove) i mówi, że aplikacja go nie ruszy. Użytkownik musi sam skasować folder w Finderze.
+- [ ] **`.int8` vs `.int8V2`** (upstream: `.int8V2` „naprawia zepsute tokeny", 568 MB) — jakości nie porównano; wymaga zgody na kolejne pobranie (decyzja 2, pkt 2 „rano").
+- [ ] **Sufit integralności:** podmiana pliku wag o tym samym rozmiarze nie jest wykrywana (wag, 480 MB, nie hashujemy; odcisk w migawce obejmuje treść małych plików — `6b32807`).
+  Dokumenty (spec §4.2, §10, decyzja 7e) mówią jeszcze „hash `config.json`" — kod hashuje treść wszystkich plików poza `weight.bin`; do ujednolicenia.
+- [ ] **Większe okna dla lokalnego ASR** — tylko jeśli czas przeszkadza: okna zostają ≤ 59 s (ziarno wznawiania); kryterium 3.7 „85 min ≤ 60 s" jest celem mierzonym, nie bramką.
+  S0 daje jedynie ekstrapolację (62–106 s dla 85 min z jednego toru, najdłuższe nagranie w pomiarze 9,5 min); realny pomiar 60 min planowano w S1 (niewykonany).
+- [ ] **Niezmierzone (czeka na użytkownika lub S1/T8):** jakość PL vs `mai-transcribe-2` i kompletność wobec FluidVoice (S1), halucynacje na ciszy, para PL+EN (T11), 3.1 (milczący
+  mikrofon, nagranie na żywo), pierwsze „Preparing model…" w `.app` po pobraniu, przebieg przy wyłączonej sieci.
+
+**Lokalny model tekstowy (2.0b)**
+- [ ] **Użytkownik nie może wyczyścić zapisanego klucza oMLX:** `AppModel.replaceKey` przy pustym polu niczego nie robi (pusty = „zostaw"/tylko weryfikuj), a `Edit key…` z pustym polem testuje
+  zapisany klucz. Usunięcie klucza = usunięcie dostawcy. Potrzebny jawny „Remove key".
+- [ ] **`ProviderPreset.all` vs `ready`:** dwie listy gotowych dostawców — `all` (z `custom`, bez `onThisMac`) używają tylko testy, aplikacja bierze `ready`; łatwo je rozjechać
+  przy kolejnym dostawcy. Zostawić jedną.
+- [ ] **Komunikat ucięcia w `Corrector` używa starej rady:** `Corrector` woła `ContextError.describe` bez `maxTokens`, więc partia ucięta na własnym limicie wyjścia (1,3× wejścia)
+  dostaje radę „Raise the Context window…" zamiast „reply hit the output limit", którą po `4ff727b` mają notatka i reduce (część mapy ma osobny komunikat).
+- [ ] **Postęp przez niestrukturalne `Task { @MainActor … }`** (`NotesModel` — „part n of m"; `AppModel` — postęp transkrypcji) — kolejność dostarczenia nie jest gwarantowana, więc licznik teoretycznie może się
+  cofnąć (nieobserwowane). Pobieranie modelu (`LocalASRSupport`) pilnuje monotoniczności przez `max`; generowanie notatki i postęp sesji nie.
+- [ ] **Niespójność API: notatka — limit miękki 180 s > transportowy 120 s** (`ChatLimits.for`, ścieżka API bez zmian w 2.0; plan T14).
+- [ ] **`finish_reason: "length"` w `transcribe(.chatAudio)`:** `chatContent` jest wspólny z `chat`, ale ścieżka ASR z API świadomie nie sprawdza pola (decyzja 8) — ucięta odpowiedź nadal przechodzi jako transkrypt.
+- [ ] **Bramka korekty nie łapie zmian dat i liczb** (`CorrectionRules.accepts` = pasmo długości): S2 — `bonsai-2` zmienił „pierwszego grudnia" na „pierwszy stycznia". Dodatkowa bramka
+  (porównanie liczb/dat) albo wyłączenie lokalnej korekty do czasu mocniejszego modelu — decyzja użytkownika (pkt 9 „po S2"); na razie tylko podpis ostrzegawczy w edytorze presetu.
+- [ ] **Wykrycie kontekstu podnoszące budżet przy pustym polu:** dziś wykrycie (`/props`, `/api/ps`) tylko obniża budżet; „Check" pokazuje wykrytą wartość, ale przy pustym polu budżet to 4096. Propozycja S2
+  (bezpieczna, bo przepełnienie i ucięcie są jawnymi błędami) — decyzja użytkownika (pkt 11 „po S2"). Z 4096 notatka > ok. 3,5 min mowy idzie przez map-reduce.
+- [ ] **Map-reduce tylko dla dostawców lokalnych:** API nadal bez dzielenia długich transkryptów (komunikat „arrives later"); ROADMAP trzyma tę część jako otwartą.
+- [ ] **Niezmierzone:** oMLX (jedyny model MLX nie mieści się w pamięci — HTTP 507; czasy, thinking, jakość, przepełnienie kontekstu), baseline API (ta sama notatka i korekta przez API — wymaga klucza
+  i wysyłki nagrania do chmury, tylko na polecenie użytkownika), `reasoning_effort` na modelu bez „thinking" (ponowienie bez pola jest w kodzie, ale nie zmierzono, kiedy działa),
+  czasy na cichej maszynie (S2 przy load do 107), n=1–2 na komórkę jakości, `temperature` 0,2 (wpływ), tokenizery Gemma/Llama (znaki na token).
+- [ ] **Przebiegi `mai-transcribe-2` na nagraniach służbowych z `~/GCX`** (zgodność na dłuższym materiale) — wysyłka do chmury i koszt; tylko na polecenie użytkownika.
+- [ ] **Plan fazy 2.0:** pola `- [ ]` przy T11 i T12 są nieodhaczone mimo commitów `fb12fe2` i `ffebac4`; T1, T8, T14 faktycznie niewykonane. Do uporządkowania przy odbiorze.
 
 ## Zapisane (dla kroniki)
 

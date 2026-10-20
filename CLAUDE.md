@@ -12,7 +12,7 @@ angielsku, dokumenty w repo po polsku.
 | `docs/wymagania.md` | wymagania (W§) — m.in. język jawny domyślnie, „Auto" tylko awaryjnie |
 | `docs/design/macos.md` | referencja platformy, świadome odstępstwa od HIG |
 | `docs/design/inspiracje/` | Granola, Wispr Flow, Meetily — zrzuty i co przenosimy |
-| `docs/superpowers/specs/` | specyfikacje: rdzeń nagrywania, warstwa dostawców, faza 1.5 |
+| `docs/superpowers/specs/` | specyfikacje: rdzeń nagrywania, warstwa dostawców, faza 1.5, 1.6, 2.0 |
 | `docs/superpowers/plans/` | plany faz (zadania z gotowym kodem) i runbook fazy 1 |
 | `docs/superpowers/reports/` | raporty sesji, przeglądy, recenzje planów |
 | `docs/superpowers/spikes/` | pomiary na sprzęcie (sondy, transkrypcja na żywo, odbiór D3) |
@@ -20,9 +20,11 @@ angielsku, dokumenty w repo po polsku.
 | `docs/superpowers/ROADMAP.md` | co w 1.5b, fazie 2, 3 i bez przydziału — ze źródłami |
 
 Kod: `Sources/MeetNotesRecording` (rdzeń audio), `MeetNotesSessionFormat` (dziennik, CAF),
-`MeetNotesProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy),
+`MeetNotesProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy; od 2.0 także budżet kontekstu `ContextBudget`/`ContextProbe`,
+limity czatu `ChatLimits`, `ThinkingStripper`, `finish_reason`, lokalność `isLocal`),
+`MeetNotesLocalASR` (od 2.0a; **jedyny moduł importujący FluidAudio**: magazyn modelu Parakeet, klient lokalnego ASR, bramka wznowienia, karta modelu),
 `MeetNotesTranscription` (bramka, pakowanie okien, wznawianie), `MeetNotesApp` (SwiftUI),
-`MeetNotesNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań), `MeetNotesMeetings` (kalendarz, wykrywanie spotkań, Coming up), `meetnotes-cli` (narzędzie deweloperskie).
+`MeetNotesNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań; od 2.0b map-reduce dla podsumowania i `TranscriptSplitter`), `MeetNotesMeetings` (kalendarz, wykrywanie spotkań, Coming up), `meetnotes-cli` (narzędzie deweloperskie; `transcribe … local://fluidaudio`).
 
 ## Stan
 
@@ -38,6 +40,22 @@ Raporty: 1.5a `docs/superpowers/reports/F15-T13-czesc-B.md`; 1.5b `docs/superpow
 1.6 `docs/superpowers/reports/F16-odbior.md`, `docs/superpowers/reports/F16-przeglad.md`.
 **Niezamknięta:** poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji; lekarz/urodziny/OOO tylko z testów;
 pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
+
+**Faza 2.0 „Lokalne modele"** — na gałęzi `faza20` (stan na `e36b8bd`), **nie scalona do `master`, bez tagu**; scalenie to wyłącznie decyzja użytkownika.
+Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/superpowers/reports/F20-decyzje-opusa.md` (w tym lista „Do potwierdzenia rano").
+- **2.0a — lokalny ASR** (Parakeet TDT v3 w procesie przez FluidAudio, pin `exact: "0.17.7"`, `.v3`/`.int8`): kod T2–T7 jest na gałęzi
+  (`ProviderKind.fluidAudio`, `MeetNotesLocalASR`, odmowa bez modelu i bez cichego fallbacku do API, karta modelu w Settings).
+  Model pobiera wyłącznie użytkownik przyciskiem; ładowanie tylko `AsrModels.loadLocal`.
+- **2.0b — lokalny model tekstowy** przez Ollamę, llama.cpp albo oMLX (zwykły `Provider` na loopbacku): kod T10–T13 jest na gałęzi
+  (`finish_reason: "length"` = błąd, `reasoning_effort: "none"` tylko dla lokalnych, limity czatu, budżet kontekstu z polem „Context window",
+  numeracja partii korekty 1…N, map-reduce dla podsumowania). Aplikacja nie rekomenduje modeli.
+- **Niezamknięte w 2.0:** S1 (jakość Parakeet vs `mai-transcribe-2`; T1) — brak raportu w `docs/superpowers/spikes/`; odbiór 2.0a na sprzęcie (T8:
+  sieć off, pierwsze „Download", nagranie na żywo) — brak raportu; odbiór 2.0b i przegląd całości (T14, STOP) — niewykonane; oMLX niezmierzony (HTTP 507);
+  baseline API niezmierzony (wymaga klucza użytkownika). Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.
+- Spec: `docs/superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md` (§13 decyzje po S0, §14 po S2); plan: `docs/superpowers/plans/2026-10-20-faza20-lokalne-modele.md`.
+  Recenzje: `docs/superpowers/reports/F20-recenzja-design.md`, `docs/superpowers/reports/F20-recenzja-planu.md`; przeglądy Opusa po T4, T10 i T13 zostały
+  tylko w komunikatach commitów `6b32807`, `a95096e`, `4ff727b` (brak osobnych raportów). Spiki: `docs/superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md` (S0, GO),
+  `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (S2, commit `38ac47f`); pliku S1 nie ma.
 
 ## Twarde zasady
 
@@ -64,3 +82,6 @@ pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
 - CLI: `B=$(swift build --show-bin-path)/meetnotes-cli`, potem `$B --help`.
 - Ostrzeżenia linkera o brakujących search path przy buildzie to szum, nie błąd.
 - SwiftPM: `swift package --disable-keychain resolve` po zmianie `Package.swift` lub `rm -rf .build` — bez flagi pobranie `binaryTarget` FluidAudio wisi na pęku kluczy.
+  `scripts/test.sh`, `bundle.sh` i `snapshot.sh` same przekazują flagę (wyłącza tylko odczyt poświadczeń SwiftPM z pęku, niczego w nim nie zmienia).
+- Lokalny ASR w buildzie DEBUG: `MEETNOTES_MODEL_STORE` wskazuje kopię magazynu modelu (np. `.devdata/model-store`) zamiast wspólnego
+  `~/Library/Application Support/FluidAudio/Models`, który należy do użytkownika i innych aplikacji — nie zapisuj do niego i nie kasuj z niego.
