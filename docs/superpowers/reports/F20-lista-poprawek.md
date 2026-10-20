@@ -150,7 +150,10 @@ Wynik we wszystkich stanach: sidebar `0..160`, granica `160–161`, detal `161..
 zrzuty (lista vs spotkanie) mają granicę paska w tym samym miejscu. **Wniosek: w tym układzie to nie jest zmiana szerokości kolumny.** Hipoteza z toolbaru (`ToolbarItem(.navigation)` przesuwa kolumny) nie potwierdzona.
 **Czego nie wiadomo.** Czy u użytkownika zmienia się granica kolumny, czy coś, co wygląda jak zmiana paska (np. wygląd paska narzędzi, tło, zaznaczenie wiersza); różnice między prawdziwym kliknięciem a zmianą stanu; wpływ budu `.app` (pomiar na surowym pliku binarnym) i dłuższej zawartości spotkania.
 **Ślad po pomiarze (posprzątany):** surowy plik binarny utworzył `~/Library/Preferences/MeetNotesApp.plist`; usunięty, preferencje prawdziwej aplikacji (`io.github.sharezz1.meetnotes`) nietknięte.
-**Następny krok:** zrzut ekranu u użytkownika (lista i otwarte spotkanie, z widocznym paskiem) albo opis „o ile i w którą stronę"; bez tego żadnej poprawki.
+**Drugi pomiar (ta sama noc, na prośbę użytkownika): prawdziwa aplikacja** (`scripts/run.sh`: paczka `.build/MeetNotes.app` na `.devdata`, okno 1235×833, prawdziwe spotkania), zrzuty okna `screencapture -l` i prawdziwe kliknięcie w wiersz spotkania.
+Lista Meetings i otwarte spotkanie (okno aktywne): granica paska identyczna (160 pt, x≈260 na zrzucie 2000 px), przycisk „Meetings" i „⋯" tuż za granicą. **Szerokość paska się nie zmienia.**
+Jedyna widoczna różnica: odcień tła paska (na liście jaśniejszy, przy otwartym spotkaniu ciemniejszy). Prawdopodobnie przezroczystość (vibrancy) zależna od tego, co jest pod oknem; nie sprawdzono, czy to to, co widzi użytkownik.
+**Następny krok:** użytkownik ocenia zrzuty (lista i otwarte spotkanie) i mówi, co się różni; bez tego żadnej poprawki.
 
 **Fakty z kodu (nie diagnoza).**
 - Układ: `NavigationSplitView` w `ContentView` (`MeetNotesApp.swift:75`), sidebar ma `.navigationSplitViewColumnWidth(min: 160, ideal: 180)` bez `max`.
