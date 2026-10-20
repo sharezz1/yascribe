@@ -222,3 +222,14 @@ private func longTranscript(_ n: Int = 100) -> Transcript {
     let empty = await c.correct(transcript([]), language: .polish)
     #expect(empty.batches == 0 && stub.calls.isEmpty)
 }
+
+@Test func truncatedInputBatchFailsWithAReadableReason() async {
+    // Odbiór 2.0b, pkt 2c: serwer obciął partię (HTTP 200) — partia liczy się jako nieudana, a oryginał zostaje.
+    let t = transcript([utt(String(repeating: "no to jest test ", count: 300))])
+    let stub = ChatStub(promptTokens: { _ in 30 }) { capitalizing($0.user) }
+    let c = Corrector(client: localChatClient(stub), assignment: assignment, maxBatchChars: 6_000)
+    let r = await c.correct(t, language: .polish)
+    #expect(r.failedBatches == 1 && r.failedCompletely)
+    #expect(r.firstError?.contains("fix-model's server cut off the start of the input") == true)
+    #expect(r.transcript.utterances[0].text == t.utterances[0].text)
+}

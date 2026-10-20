@@ -108,3 +108,14 @@ import MeetNotesProviders
                                  notesLanguage: .polish, store: NotesStore(session: session), timeout: 120, chatTimeout: 150, maxTokens: 64)
     #expect(stub.calls[0].timeout == 150 && stub.calls[0].maxTokens == 64)
 }
+
+@Test func truncatedInputGivesNoAutoTitle() async {
+    // Serwer obciął prompt: odpowiedź to ogon bez sensu — tytuł nie powstaje (cicho "Untitled meeting").
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let store = NotesStore(session: session)
+    let stub = ChatStub(promptTokens: { _ in 20 }) { _ in "Fragment ogona" }
+    let t = transcript([utt(String(repeating: "Prognoza na sobotę jest wyższa. ", count: 300))])
+    let title = await AutoTitle.generate(client: localChatClient(stub), model: "m", transcript: t, notesLanguage: .polish, store: store)
+    #expect(title == nil && store.readMeta().autoTitle == nil && stub.calls.count == 1)
+}

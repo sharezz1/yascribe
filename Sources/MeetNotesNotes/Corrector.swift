@@ -170,7 +170,7 @@ public struct Corrector: Sendable {
                 failed += 1
                 if firstError == nil {
                     let hinted = ContextError.localHint(provider: client.provider, error, transport: chatTimeout) != nil
-                    firstError = ContextError.isCutOff(error) || ContextError.isEmptyReply(error) || hinted
+                    firstError = ContextError.isCutOff(error) || ContextError.isEmptyReply(error) || ContextError.isInputTruncated(error) || hinted
                         ? ContextError.describe(model: assignment.model, error, provider: client.provider, transport: chatTimeout) : "\(error)"
                 }
             }

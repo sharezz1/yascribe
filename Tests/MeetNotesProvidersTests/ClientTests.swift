@@ -249,3 +249,81 @@ private func chat(_ provider: Provider, _ http: StubHTTP, timeout: Double = 120,
     #expect(r.text == "raz, dwa, trzy")
     #expect(http.calls[0].body["reasoning_effort"] == nil)
 }
+
+// MARK: ciche obcięcie wejścia przez lokalny serwer (odbiór 2.0b, pkt 2c)
+
+private let longSystem = String(repeating: "s", count: 1_500)
+private let longUser = String(repeating: "u", count: 6_000) // 7500 znaków razem
+
+private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system: String = longSystem, user: String = longUser,
+                           finish: String = "stop") async throws -> String {
+    let http = StubHTTP { _, _ in
+        var obj: [String: Any] = ["choices": [["message": ["content": "# T\nbody"], "finish_reason": finish]]]
+        if let promptTokens { obj["usage"] = ["prompt_tokens": promptTokens, "completion_tokens": 5] }
+        return ok(obj)
+    }
+    return try await OpenAICompatibleClient(provider: provider, key: nil, http: http).chat(model: "m", system: system, user: user)
+}
+
+@Test func truncatedInputOnALocalServerIsAnError() async {
+    // Ollama + bonsai-2: 7500 znaków, serwer przeczytał 1000 tokenów (7,5 znaku/token), HTTP 200, finish_reason "stop".
+    await #expect(throws: ProviderError.inputTruncated(sentChars: 7_500, readTokens: 1_000)) {
+        _ = try await chatWithUsage(ollamaLocal, 1_000)
+    }
+    // Jeszcze mniej tokenów (15 znaków/token) — to samo.
+    await #expect(throws: ProviderError.inputTruncated(sentChars: 7_500, readTokens: 500)) { _ = try await chatWithUsage(ollamaLocal, 500) }
+    // `usage` jako liczba zmiennoprzecinkowa (JSON 1000.0) też działa.
+    await #expect(throws: ProviderError.inputTruncated(sentChars: 7_500, readTokens: 1_000)) { _ = try await chatWithUsage(ollamaLocal, 1_000.0) }
+}
+
+@Test func normalLocalReplyPassesTheRatioCheck() async throws {
+    // 7500 znaków / 2500 tokenów = 3,0 (zmierzone normalnie 2,8–3,3) i granica: dokładnie 5,0 nie jest błędem.
+    #expect(try await chatWithUsage(ollamaLocal, 2_500) == "# T\nbody")
+    #expect(try await chatWithUsage(ollamaLocal, 1_500) == "# T\nbody")
+}
+
+@Test func missingUsageIsNotAnError() async throws {
+    #expect(try await chatWithUsage(ollamaLocal, nil) == "# T\nbody")
+    #expect(try await chatWithUsage(ollamaLocal, 0) == "# T\nbody")
+    let text = StubHTTP { _, _ in ok(["choices": [["message": ["content": "OK"], "finish_reason": "stop"]], "usage": ["prompt_tokens": "dużo"]]) }
+    #expect(try await OpenAICompatibleClient(provider: ollamaLocal, key: nil, http: text).chat(model: "m", system: longSystem, user: longUser) == "OK")
+    // `usage` bez `prompt_tokens` (np. tylko completion_tokens).
+    let http = StubHTTP { _, _ in ok(["choices": [["message": ["content": "OK"], "finish_reason": "stop"]], "usage": ["completion_tokens": 3]]) }
+    #expect(try await chat(ollamaLocal, http) == "OK")
+}
+
+@Test func shortPromptsAreNotChecked() async throws {
+    // 3999 znaków, 1 token → iloraz ogromny, ale poniżej `truncationMinChars`: nie sprawdzamy (np. sonda „ping").
+    let user = String(repeating: "u", count: 3_999 - 1)
+    #expect(try await chatWithUsage(ollamaLocal, 1, system: "s", user: user) == "# T\nbody")
+    // Równo 4000 znaków już podlega sprawdzeniu.
+    await #expect(throws: ProviderError.inputTruncated(sentChars: 4_000, readTokens: 1)) {
+        _ = try await chatWithUsage(ollamaLocal, 1, system: "s", user: user + "u")
+    }
+}
+
+@Test func remoteProviderIsNeverChecked() async throws {
+    #expect(try await chatWithUsage(openRouter, 10) == "# T\nbody")
+}
+
+@Test func lengthFinishReasonStaysAnOutputErrorWhenUsageIsNormal() async {
+    // finish_reason "length" zostaje błędem wyjścia (nie wejścia), gdy `usage` jest normalne.
+    await #expect(throws: ProviderError.replyCutOff) { _ = try await chatWithUsage(ollamaLocal, 2_500, finish: "length") }
+}
+
+@Test func truncatedInputIsNotRetriedAndDescribed() async {
+    let http = StubHTTP { _, _ in ok(["choices": [["message": ["content": "x"], "finish_reason": "stop"]], "usage": ["prompt_tokens": 100]]) }
+    await #expect(throws: ProviderError.inputTruncated(sentChars: 7_500, readTokens: 100)) {
+        _ = try await OpenAICompatibleClient(provider: ollamaLocal, key: nil, http: http).chat(model: "m", system: longSystem, user: longUser)
+    }
+    #expect(http.calls.count == 1)
+    #expect(ProviderCheck.describe(ProviderError.inputTruncated(sentChars: 7_500, readTokens: 100)).contains("cut off the start of the input"))
+}
+
+@Test func chatAudioTranscriptionIsNotCheckedForTruncation() async throws {
+    // `transcribe(.chatAudio)` idzie przez `chatContent`, nie przez `chat`: audio w base64 ma inny iloraz znaków do tokenów.
+    let http = StubHTTP { _, _ in ok(["choices": [["message": ["content": "raz dwa trzy"], "finish_reason": "stop"]], "usage": ["prompt_tokens": 1]]) }
+    let r = try await OpenAICompatibleClient(provider: ollamaLocal, key: nil, http: http)
+        .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .chatAudio)
+    #expect(r.text == "raz dwa trzy")
+}
