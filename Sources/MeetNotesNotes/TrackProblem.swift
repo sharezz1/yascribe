@@ -20,7 +20,21 @@ public struct TrackProblem: Equatable, Sendable {
     public var detail: String
 
     public static func of(tracks: [SessionSummary.Track], transcript: Transcript?) -> [TrackProblem] {
-        tracks.compactMap { classify($0, transcript: transcript) }
+        tracks.compactMap { neverStarted($0, among: tracks) ?? classify($0, transcript: transcript) }
+    }
+
+    /// Tor, który nie dostał ani jednej próbki (`stalledNs`, 0 klatek), gdy inny tor nagrał dźwięk: nic nie grało w głośnikach
+    /// (np. dyktowanie do mikrofonu), więc to informacja, nie ostrzeżenie. Odmowa uprawnienia zostaje ostrzeżeniem.
+    static func neverStarted(_ t: SessionSummary.Track, among tracks: [SessionSummary.Track]) -> TrackProblem? {
+        guard t.permissionDenied == nil, t.failure?.hasPrefix("stalled") == true, t.frames == 0,
+              tracks.contains(where: { $0.id != t.id && $0.failure == nil && ($0.frames ?? 0) > 0 }) else { return nil }
+        let system = t.id == SessionSummary.timelineTrackID
+        let name = system ? "System audio" : "Microphone"
+        let lower = system ? "system audio" : "the microphone"
+        return TrackProblem(trackID: t.id, isWarning: false, name: name, line: "\(name) captured nothing.",
+                            detail: "\(name) never received any sound, which is what happens when nothing is playing on this Mac. "
+                                + "The other track was recorded normally. If you expected \(lower), check System Settings → "
+                                + "Privacy & Security.")
     }
 
     static func classify(_ t: SessionSummary.Track, transcript: Transcript?) -> TrackProblem? {

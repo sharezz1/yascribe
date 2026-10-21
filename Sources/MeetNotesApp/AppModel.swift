@@ -53,10 +53,9 @@ struct SessionItem: Identifiable, Equatable {
         useCorrected ? (corrected?.transcript ?? transcript) : transcript
     }
 
+    /// Najdłuższy tor: gdy dźwięk systemowy nic nie nagrał (0 klatek), czas liczy się z mikrofonu, nie „0 min".
     var duration: Double? {
-        guard let t = summary?.tracks.first(where: { $0.id == "system" }) ?? summary?.tracks.first,
-              let f = t.frames, t.sampleRate > 0 else { return nil }
-        return Double(f) / t.sampleRate
+        summary?.tracks.compactMap { t in t.frames.flatMap { f in t.sampleRate > 0 ? Double(f) / t.sampleRate : nil } }.max()
     }
 }
 
