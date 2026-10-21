@@ -116,7 +116,7 @@ struct SettingsView: View {
                     caption: "Removes sounds like “yyy” and “mhm” from corrected transcripts: the model is asked to drop them and the app removes any that remain. The original transcript is kept.") {
                 Toggle("Filler sounds", isOn: Binding(
                     get: { model.settings.removeFillersEnabled },
-                    set: { model.settings.removeFillers = $0; model.save() }))
+                    set: { model.settings.removeFillers = $0; autosave() }))
                     .labelsHidden().toggleStyle(.switch)
             }
             if model.settings.removeFillersEnabled {
@@ -133,10 +133,16 @@ struct SettingsView: View {
         }
     }
 
+    /// Przełączniki i pola poza Archive search zapisują się od razu; stopka pokazuje „Saved”, bo Save jest tam wyszarzony.
+    private func autosave() {
+        model.save()
+        draft.saved = true
+    }
+
     private func commitFillers() {
         let words = FillerWords.parse(draft.fillers)
         model.settings.fillerWords = words == FillerWords.defaults ? nil : words
-        model.save()
+        autosave()
         draft.fillers = FillerWords.format(words)
     }
 
@@ -150,7 +156,7 @@ struct SettingsView: View {
                     caption: "Lets API models reason before writing the notes. Off is faster and avoids timeouts; on may help with long or complex meetings. Local models always run without thinking, and corrections never think.") {
                 Toggle("Thinking", isOn: Binding(
                     get: { model.settings.summaryThinkingEnabled },
-                    set: { model.settings.summaryThinking = $0; model.save() }))
+                    set: { model.settings.summaryThinking = $0; autosave() }))
                     .labelsHidden().toggleStyle(.switch)
             }
         }
