@@ -42,7 +42,7 @@ Raporty: 1.5a `docs/superpowers/reports/F15-T13-czesc-B.md`; 1.5b `docs/superpow
 pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
 
 **Faza 2.0 „Lokalne modele"** — **scalona do `master` 2026-10-20 przez PR #1** (commit scalenia `7eebaea`, `--merge`, nie squash; tag `faza-2.0` na nim),
-pełny przebieg `scripts/test.sh`: **580/580**. **Cofnięcie:** `git revert -m 1 7eebaea` (albo „Revert" na stronie PR). Gałąź `faza20` zostaje na GitHubie.
+pełny przebieg `scripts/test.sh`: **580/580** (po poprawkach P6–P10: **581/581**). **Cofnięcie:** `git revert -m 1 7eebaea` (albo „Revert" na stronie PR). Gałąź `faza20` zostaje na GitHubie.
 Poprawki po odbiorach (P1–P5) są w tym samym PR; lista z dowodami i niezweryfikowanym: `docs/superpowers/reports/F20-lista-poprawek.md`.
 Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/superpowers/reports/F20-decyzje-opusa.md` (w tym lista „Do potwierdzenia rano").
 - **2.0a — lokalny ASR** (Parakeet TDT v3 w procesie przez FluidAudio, pin `exact: "0.17.7"`, `.v3`/`.int8`): kod T2–T7 jest na gałęzi
@@ -72,9 +72,9 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
   - **P4** (`8736c68`, `849e25f`): Correction i Summary oferują tylko dostawców z czatem (bez ElevenLabs i Yascribe), „Yascribe" to etykieta w menu (rekord bez zmiany nazwy); preset, który już wskazuje
     nieobsługującego dostawcę, zachowuje go w menu.
   - **P5**: szerokość paska bocznego przy otwartym spotkaniu — nie odtworzono (pomiar na drugiej instancji i na prawdziwej aplikacji), użytkownik potwierdził „jest ok", bez zmiany w kodzie.
-- **Niezamknięte w 2.0 (kroki użytkownika i klucze):** powtórzenie T8 przy wyłączonym Wi-Fi, klik „Download (483 MB)" i „Preparing…" w `.app`, nagranie na żywo
+- **Niezamknięte w 2.0 (kroki użytkownika i klucze):** (zaliczone przez użytkownika 2026-10-22: usunięcie modelu, „Download" i lokalna transkrypcja presetem „Parakeet PL" w `.app`; stan Wi-Fi przy przebiegu nie jest zapisany w danych, korekta przez API poszła o 00:29 przy działającej sieci) nagranie na żywo
   dla kryterium 3.1 i para PL+EN (T11); oMLX (model mieszczący się w pamięci + własny klucz) niezmierzony; baseline API (klucz, koszt) niezmierzony. Po P1–P5 dochodzi: test jakości podsumowania z myśleniem i bez (jedna próba na wariant 2026-10-21, nierozstrzygająca — `F20-lista-poprawek.md`, na końcu; domyślnie nadal włączone),
-  żywe wywołanie OpenRoutera po zmianie P1, wygląd sekcji Correction i Summary w Settings (migawki nie sięgają tak nisko) (embedding w Archive search działa, potwierdzone 2026-10-21).
+  (żywe wywołanie OpenRoutera po P1 i wygląd sekcji Correction i Summary w Settings potwierdzone 2026-10-21; **priorytet wysoki:** echo głośników w mikrofonie — BACKLOG) (embedding w Archive search działa, potwierdzone 2026-10-21).
   Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.
 - Spec: `docs/superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md` (§13 decyzje po S0, §14 po S2, nota „korekta po T14" na końcu §14); plan: `docs/superpowers/plans/2026-10-20-faza20-lokalne-modele.md`.
   Recenzje: `docs/superpowers/reports/F20-recenzja-design.md`, `docs/superpowers/reports/F20-recenzja-planu.md`; przeglądy Opusa po T4, T10 i T13 zostały
