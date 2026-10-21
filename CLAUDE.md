@@ -73,9 +73,8 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
     nieobsługującego dostawcę, zachowuje go w menu.
   - **P5**: szerokość paska bocznego przy otwartym spotkaniu — nie odtworzono (pomiar na drugiej instancji i na prawdziwej aplikacji), użytkownik potwierdził „jest ok", bez zmiany w kodzie.
 - **Niezamknięte w 2.0 (kroki użytkownika i klucze):** powtórzenie T8 przy wyłączonym Wi-Fi, klik „Download (483 MB)" i „Preparing…" w `.app`, nagranie na żywo
-  dla kryterium 3.1 i para PL+EN (T11); oMLX (model mieszczący się w pamięci + własny klucz) niezmierzony; baseline API (klucz, koszt) niezmierzony. Po P1–P5 dochodzi: test jakości podsumowania z myśleniem i bez (przełącznik już jest),
-  żywe wywołanie OpenRoutera po zmianie P1, wygląd sekcji Correction i Summary w Settings (migawki nie sięgają tak nisko) oraz pytanie o embedding w Archive search
-  (w `.devdata` skonfigurowany tylko OpenRouter; jeśli po dodaniu Ollamy/llama.cpp/oMLX nie pojawiają się w menu, to nowy błąd).
+  dla kryterium 3.1 i para PL+EN (T11); oMLX (model mieszczący się w pamięci + własny klucz) niezmierzony; baseline API (klucz, koszt) niezmierzony. Po P1–P5 dochodzi: test jakości podsumowania z myśleniem i bez (jedna próba na wariant 2026-10-21, nierozstrzygająca — `F20-lista-poprawek.md`, na końcu; domyślnie nadal włączone),
+  żywe wywołanie OpenRoutera po zmianie P1, wygląd sekcji Correction i Summary w Settings (migawki nie sięgają tak nisko) (embedding w Archive search działa, potwierdzone 2026-10-21).
   Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.
 - Spec: `docs/superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md` (§13 decyzje po S0, §14 po S2, nota „korekta po T14" na końcu §14); plan: `docs/superpowers/plans/2026-10-20-faza20-lokalne-modele.md`.
   Recenzje: `docs/superpowers/reports/F20-recenzja-design.md`, `docs/superpowers/reports/F20-recenzja-planu.md`; przeglądy Opusa po T4, T10 i T13 zostały
