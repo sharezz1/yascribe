@@ -21,10 +21,10 @@ angielsku, dokumenty w repo po polsku.
 
 Kod: `Sources/MeetNotesRecording` (rdzeń audio), `MeetNotesSessionFormat` (dziennik, CAF),
 `MeetNotesProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy; od 2.0 także budżet kontekstu `ContextBudget`/`ContextProbe`,
-limity czatu `ChatLimits`, `ThinkingStripper`, `finish_reason`, lokalność `isLocal`),
+limity czatu `ChatLimits`, `ThinkingStripper`, `finish_reason`, lokalność `isLocal`; `chat(thinking:)`, `Provider.supports(_:)`/`RoleProviders` — kto może obsłużyć rolę),
 `MeetNotesLocalASR` (od 2.0a; **jedyny moduł importujący FluidAudio**: magazyn modelu Parakeet, klient lokalnego ASR, bramka wznowienia, karta modelu),
 `MeetNotesTranscription` (bramka, pakowanie okien, wznawianie), `MeetNotesApp` (SwiftUI),
-`MeetNotesNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań; od 2.0b map-reduce dla podsumowania i `TranscriptSplitter`), `MeetNotesMeetings` (kalendarz, wykrywanie spotkań, Coming up), `meetnotes-cli` (narzędzie deweloperskie; `transcribe … local://fluidaudio`).
+`MeetNotesNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań; od 2.0b map-reduce dla podsumowania i `TranscriptSplitter`; `FillerWords` — filtr przerywników), `MeetNotesMeetings` (kalendarz, wykrywanie spotkań, Coming up), `meetnotes-cli` (narzędzie deweloperskie; `transcribe … local://fluidaudio`).
 
 ## Stan
 
@@ -41,8 +41,9 @@ Raporty: 1.5a `docs/superpowers/reports/F15-T13-czesc-B.md`; 1.5b `docs/superpow
 **Niezamknięta:** poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji; lekarz/urodziny/OOO tylko z testów;
 pomiar T11 (Auto, para PL+EN) czeka na nagranie użytkownika.
 
-**Faza 2.0 „Lokalne modele"** — na gałęzi `faza20` (stan na `606ee39` + scalenie `9059aeb`; pełny przebieg `scripts/test.sh`: **561/561**),
-**nie scalona do `master`, bez tagu**; scalenie to wyłącznie decyzja użytkownika.
+**Faza 2.0 „Lokalne modele"** — **scalona do `master` 2026-10-20 przez PR #1** (commit scalenia `7eebaea`, `--merge`, nie squash; tag `faza-2.0` na nim),
+pełny przebieg `scripts/test.sh`: **580/580**. **Cofnięcie:** `git revert -m 1 7eebaea` (albo „Revert" na stronie PR). Gałąź `faza20` zostaje na GitHubie.
+Poprawki po odbiorach (P1–P5) są w tym samym PR; lista z dowodami i niezweryfikowanym: `docs/superpowers/reports/F20-lista-poprawek.md`.
 Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/superpowers/reports/F20-decyzje-opusa.md` (w tym lista „Do potwierdzenia rano").
 - **2.0a — lokalny ASR** (Parakeet TDT v3 w procesie przez FluidAudio, pin `exact: "0.17.7"`, `.v3`/`.int8`): kod T2–T7 jest na gałęzi
   (`ProviderKind.fluidAudio`, `MeetNotesLocalASR`, odmowa bez modelu i bez cichego fallbacku do API, karta modelu w Settings).
@@ -60,9 +61,22 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
   a pole „Context window" jest wyższe niż serwer i model nie jest załadowany (wykrycie `/api/ps` go nie obniży); nie do wykrycia także na oMLX. Spec §14 i `wymagania.md`
   mówiły inaczej (prawda tylko dla `genesys-ministral3`) — poprawione notą „korekta". **Obrona wdrożona (T14b, `606ee39`):** w `chat` dla dostawców lokalnych porównanie
   `usage.prompt_tokens` z długością promptu (prompt ≥ 4000 znaków i > 5,0 znaku na token → `ProviderError.inputTruncated`, jawny błąd zamiast notatki); działa też na oMLX.
+- **Poprawki P1–P5 (2026-10-20, zgłoszone przez użytkownika)** — szczegóły i dowody w `F20-lista-poprawek.md`:
+  - **P1** (`9602466`): korekta przez API dostawała „myślenie" modelu hybrydowego (`deepseek-v4.1-flash` milczał ponad 120 s, keep-alive odświeża `timeoutInterval`). Teraz `chat(thinking: false)`
+    wysyła `reasoning: {"enabled": false}` (jedno ponowienie bez pola po 400/422 z „reasoning"/„think"); korekta i sonda korekty zawsze bez myślenia. Podsumowanie:
+    `GlobalSettings.summaryThinking` (opcjonalne, domyślnie włączone), przełącznik w Settings → Summary → Thinking; lokalne serwery zawsze bez myślenia (`reasoning_effort: "none"`).
+  - **P2** (`2765a9b`): przerywniki (yyy, mhm…) — lista idzie do polecenia korektora i do deterministycznego filtra po korekcie (`FillerWords`); Settings → Correction (przełącznik, edytowalna lista, Reset).
+    Surowy transkrypt nietknięty; wypowiedź złożona tylko z przerywników zostaje.
+  - **P3** (`148d9ea`): karta „Yascribe model" (Parakeet) na górze Settings z jednobarwnym znakiem Yascribe; Parakeet nie jest wierszem listy Providers (rekord `.fluidAudio` zostaje i jest dopisywany przy starcie,
+    bo presety trzymają jego `providerID`); ikony llama.cpp i oMLX jednobarwne (źródła i odstępstwo w `docs/design/makiety/logo-dostawcow/ZRODLA.md`).
+  - **P4** (`8736c68`, `849e25f`): Correction i Summary oferują tylko dostawców z czatem (bez ElevenLabs i Yascribe), „Yascribe" to etykieta w menu (rekord bez zmiany nazwy); preset, który już wskazuje
+    nieobsługującego dostawcę, zachowuje go w menu.
+  - **P5**: szerokość paska bocznego przy otwartym spotkaniu — nie odtworzono (pomiar na drugiej instancji i na prawdziwej aplikacji), użytkownik potwierdził „jest ok", bez zmiany w kodzie.
 - **Niezamknięte w 2.0 (kroki użytkownika i klucze):** powtórzenie T8 przy wyłączonym Wi-Fi, klik „Download (483 MB)" i „Preparing…" w `.app`, nagranie na żywo
-  dla kryterium 3.1 i para PL+EN (T11); oMLX (model mieszczący się w pamięci + własny klucz) niezmierzony; baseline API (klucz, koszt) niezmierzony; decyzja o scaleniu
-  `faza20` → `master`. Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.
+  dla kryterium 3.1 i para PL+EN (T11); oMLX (model mieszczący się w pamięci + własny klucz) niezmierzony; baseline API (klucz, koszt) niezmierzony. Po P1–P5 dochodzi: test jakości podsumowania z myśleniem i bez (przełącznik już jest),
+  żywe wywołanie OpenRoutera po zmianie P1, wygląd sekcji Correction i Summary w Settings (migawki nie sięgają tak nisko) oraz pytanie o embedding w Archive search
+  (w `.devdata` skonfigurowany tylko OpenRouter; jeśli po dodaniu Ollamy/llama.cpp/oMLX nie pojawiają się w menu, to nowy błąd).
+  Stan zadań wg commitów (`git log faza15..faza20`), nie wg pól `- [ ]` w planie.
 - Spec: `docs/superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md` (§13 decyzje po S0, §14 po S2, nota „korekta po T14" na końcu §14); plan: `docs/superpowers/plans/2026-10-20-faza20-lokalne-modele.md`.
   Recenzje: `docs/superpowers/reports/F20-recenzja-design.md`, `docs/superpowers/reports/F20-recenzja-planu.md`; przeglądy Opusa po T4, T10 i T13 zostały
   tylko w komunikatach commitów `6b32807`, `a95096e`, `4ff727b` (brak osobnych raportów).
