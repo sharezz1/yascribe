@@ -100,6 +100,8 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
   nie loguj, nie commituj kluczy; literały testowe nie mogą wyglądać jak klucz (`test-fake-…`).
 - Nie zmieniaj Ustawień systemowych, uprawnień TCC ani pęku kluczy — to robi użytkownik.
 - Decyzje projektowe i bramki (STOP) należą do użytkownika; wykonawca nie naprawia „na ślepo".
+- **Artefakt „Mapa faz Yascribe"** (https://claude.ai/artifact/NH8mCRJsz9Y8AxVVBz7bKz, prywatny): każda zmiana w `BACKLOG.md`, ROADMAP i w postępie prac
+  (zamknięta faza/zadanie, tag, scalony PR, liczba testów, wynik odbioru) ma też zaktualizować ten artefakt (`Artifact` read, edycja, publikacja pod tym samym URL-em; polecenie użytkownika 2026-10-21).
 
 ## Uruchamianie
 
