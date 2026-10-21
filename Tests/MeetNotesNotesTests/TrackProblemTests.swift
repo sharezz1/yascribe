@@ -83,3 +83,17 @@ private func silentStart(_ id: String = "system") -> SessionSummary.Track {
     #expect(notes.map(\.line) == ["Microphone muted 0:00–0:12"])
     #expect(notes.map(\.start) == [0])
 }
+
+@Test func systemTrackThatNeverStartedWhileTheMicRecordedIsInformation() throws {
+    // Dyktowanie do mikrofonu: nic nie grało w głośnikach, tor systemowy `stalled30s` z 0 klatek, mikrofon nagrał 2,7 min.
+    let system = SessionSummary.Track(id: "system", sampleRate: 48_000, channels: 2, frames: 0, failure: "stalled30s")
+    let mic = SessionSummary.Track(id: "mic_raw", sampleRate: 16_000, channels: 1, frames: 2_130_432)
+    let p = try #require(TrackProblem.of(tracks: [system, mic], transcript: nil).first)
+    #expect(!p.isWarning && p.line == "System audio captured nothing.")
+    // Bez dźwięku na innym torze — nadal ostrzeżenie; stall po nagraniu klatek — też; odmowa uprawnienia — też.
+    #expect(try #require(TrackProblem.of(tracks: [system], transcript: nil).first).isWarning)
+    var late = system; late.frames = 480_000
+    #expect(try #require(TrackProblem.of(tracks: [late, mic], transcript: nil).first).isWarning)
+    var denied = system; denied.permissionDenied = "audioCapture"
+    #expect(try #require(TrackProblem.of(tracks: [denied, mic], transcript: nil).first).isWarning)
+}
