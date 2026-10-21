@@ -184,6 +184,10 @@ nie są tu kopiowane.
   (zmierzona osobno tylko gęstość wejścia: 2,84 znaku/token). Jakość map-reduce wobec jednego przebiegu ocenia użytkownik.
 - [x] **Ciche obcięcie wejścia przez Ollamę (`bonsai-2`) — obrona wdrożona (T14b, `606ee39`):** porównanie `usage.prompt_tokens` z długością promptu dla dostawców lokalnych; do czasu wdrożenia dotyczy pola „Context window” wyższego niż kontekst serwera
   przy niezaładowanym modelu oraz oMLX. Decyzja (a)/(b)/(c) z przeglądu §5 pkt 1 — użytkownika. Po wdrożeniu odhaczyć i dopisać hash.
+- [ ] **Funkcja (użytkownik, 2026-10-21): zmiana modelu dla podsumowania bezpośrednio w zakładce Summary.** Dziś model podsumowania zmienia się tylko przez preset (Settings → Presets).
+  Przy porównywaniu jakości (np. z myśleniem i bez, albo dwóch modeli) trzeba wychodzić do Settings i wracać. Oczekiwane: wybór modelu (i przełącznika „Thinking") przy przycisku generowania notatki,
+  ponowne wygenerowanie tą samą drogą. Do rozstrzygnięcia przy projekcie: czy wybór zmienia preset sesji, czy tylko jeden przebieg (zapisany w `notes/meta.json` albo `summary.json`: pole `model` już jest).
+  - **Bez przydziału do fazy** — fazę wybiera użytkownik.
 
 ## Zapisane (dla kroniki)
 
