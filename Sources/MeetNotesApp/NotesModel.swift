@@ -62,7 +62,9 @@ final class NotesModel {
     /// „Improve transcript"/Retry: preset nagrania ma model korekty, jest transkrypt i nic nie trwa, a korekta
     /// albo padła (całkiem lub z częścią partii: „N parts kept as heard”), albo jej nie ma (np. aplikacja zamknięta w trakcie).
     func canRetryCorrection(_ item: SessionItem) -> Bool {
-        guard !correcting.contains(item.id), state(item.id) != .generating, item.transcript != nil, item.runID != nil else { return false }
+        // Bez wypowiedzi (np. wszystkie okna padły offline) nie ma czego poprawiać: przycisk nic by nie zrobił; wtedy jest „Retry Failed Parts”.
+        guard !correcting.contains(item.id), state(item.id) != .generating, item.runID != nil,
+              let transcript = item.transcript, !transcript.utterances.isEmpty else { return false }
         guard let c = presetFor(item.url)?.correction, !c.model.isEmpty else { return false }
         return correctionFailure[item.id] != nil || item.corrected == nil || (item.corrected?.failedBatches ?? 0) > 0
     }
