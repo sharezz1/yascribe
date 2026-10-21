@@ -14,7 +14,8 @@
 - **Faza 1.5b, kamień milowy „wyciszanie torów”** — scalone do `faza15` 2026-10-19, tag `faza-1.5b-wyciszanie`
   (345/345, odbiór na żywo zaliczony; [raport F15b-wyciszanie](reports/F15b-wyciszanie.md)). 1.5b trwa dalej.
 - **Faza 1.5 (1.5a + 1.5b + 1.6 + „Coming up”) — scalona do `master` 2026-10-19** (`--no-ff`, tag `faza-1.5` na commicie scalenia; `faza-1.6` → `49c4980`), 355/355. Przegląd całości: [F15-przeglad-calosci](reports/F15-przeglad-calosci.md) (0 blokujących); poprawki P1, P2, P4: [F15-poprawki-P1-P2-P4](reports/F15-poprawki-P1-P2-P4.md).
-- **Faza 2.0 „Lokalne modele"** — kod, S1, odbiór 2.0a (T8) i odbiór 2.0b z przeglądem całości (T14) na gałęzi `faza20` (nie scalona, bez tagu; scalenie czeka na użytkownika); zostają kroki wyłącznie użytkownika (sekcja niżej).
+- **Faza 2.0 „Lokalne modele"** — **scalona do `master` 2026-10-20 przez PR #1** (commit scalenia `7eebaea`, `--merge`, tag `faza-2.0`), 580/580, wraz z poprawkami P1–P7 po odbiorach (`reports/F20-lista-poprawek.md`). Cofnięcie: `git revert -m 1 7eebaea`. Zostają kroki wyłącznie użytkownika (sekcja niżej).
+- **Faza 2.1 „Słownik"** — decyzja użytkownika 2026-10-21: obowiązkowa następna faza (sekcja niżej).
 
 ## Faza 1.5b (zostało: T11 i drobne)
 
@@ -40,10 +41,10 @@ Wymaga spike'a na sprzęcie (lista procesów audio, Teams, OOO w Exchange) przed
 
 **Stan (2026-10-19):** kod T0–T12 scalony do `faza15`, odbiór na żywo T10/T11 zaliczony przez użytkownika (zbiorczo), przegląd całości: [F16-przeglad](reports/F16-przeglad.md) (0 blokujących). **Niezamknięte:** poczekalnia Teams (kryterium §6 pkt 2) bez pomiaru i decyzji; wizyta u lekarza, urodziny i OOO pokryte tylko testami z pomiaru T0. Tag `faza-1.6` → `49c4980`. „Coming up" zrobione ([F16-coming-up](reports/F16-coming-up.md)); zostają integracje Google/Outlook/Slack.
 
-## Faza 2.0 „Lokalne modele" (zrealizowana i odebrana na sprzęcie na gałęzi `faza20`, do scalenia przez użytkownika)
+## Faza 2.0 „Lokalne modele" (scalona do `master` 2026-10-20, PR #1, tag `faza-2.0`; zostają kroki użytkownika)
 
 Lokalna ścieżka **obok API**, nie zamiast niego (decyzja użytkownika 2026-10-19, [spec §3](specs/2026-10-19-faza20-lokalne-modele-design.md)).
-**Stan (gałąź `faza20` na `9059aeb`, 561/561):** **niescalona do `master`, bez tagu** — scalenie to wyłącznie decyzja użytkownika. Zrobione jest to, co
+**Stan (scalona do `master` przez PR #1, `7eebaea`, tag `faza-2.0`, 580/580):** Zrobione jest to, co
 dało się bez rąk użytkownika: **S1** ([raport](spikes/2026-10-20-f20-s1-jakosc-asr.md), `6f2da98`), **odbiór 2.0a** ([T8](reports/F20-2.0a-odbior.md), `cec0263`/`aca4260`; wykryta U1 naprawiona w `11fb41d`),
 **odbiór 2.0b i przegląd całości** ([T14](reports/F20-2.0b-odbior.md), [przegląd](reports/F20-przeglad-calosci.md), `a8ad702`). **Znalezisko przed scaleniem:** Ollama + `bonsai-2` obcina wejście po cichu
 (obrona `usage.prompt_tokens` vs długość promptu — wdrożona w T14b, `606ee39`; [spec §14 „Korekta po T14”](specs/2026-10-19-faza20-lokalne-modele-design.md)).
@@ -58,12 +59,23 @@ oMLX z modelem mieszczącym się w pamięci i własnym kluczem, baseline API (kl
 | ✅ **Lokalny ASR w procesie (Parakeet v3)** — zamknięte w kodzie 2.0a; **Cohere Transcribe lokalnie nie jest zrobione** (zostaje w „Nieprzypisane") | kod na gałęzi, odbiór bez kroków użytkownika wykonany (T8) | [wymagania §0, §2](../wymagania.md) |
 | Odłożone z 2.0 (`.int8` vs `.int8V2`, przypięcie rewizji HF, większe okna lokalnego ASR, bramka dat/liczb w lokalnej korekcie, drobiazgi z przeglądów) | do decyzji użytkownika | [BACKLOG „Z fazy 2.0"](BACKLOG.md) |
 
+## Faza 2.1 „Słownik" (decyzja użytkownika 2026-10-21: obowiązkowa, następna po 2.0)
+
+Powód: test korekty na żywo (sesja z 2026-10-21, [lista poprawek](reports/F20-lista-poprawek.md)) pokazał, że ASR i korekta poprawiają tylko przerywniki; nazwy własne zostają błędne
+(„Jarla" zamiast Jarka, „Zoe"/„Zoey"/„Zoim" zamiast **Zowie**, „Doomem"/„Zoomem"). Korektor nie wie, kim są uczestnicy ani jakie nazwy występują w firmie.
+
+| Pozycja | Źródło |
+|---|---|
+| **Własny słownik** (terminy + aliasy „co usłyszał → co miało być", format = `replacements.tsv`, 166 terminów i 223 pary w `GCX/dictation/`), zakładka Dictionary, pętla „klik na słowo → poprawka → alias" | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
+| **Word boosting** w lokalnym ASR (FluidAudio ma `customVocabulary`; dla ścieżki API boosting nie istnieje, tam zostaje podmiana po transkrypcji i słownik w poleceniu korektora) | [wymagania §3](../wymagania.md) |
+| Do rozstrzygnięcia w specyfikacji (nie ustalone): gdzie słownik działa (po ASR, w poleceniu korektora, w podsumowaniu), czy uczestnicy z wydarzenia kalendarza trafiają do kontekstu automatycznie, czy słownik jest globalny czy per preset | — |
+
 ## Faza 2.1+ (kandydaci po 2.0; fazę wybiera użytkownik)
 
 | Pozycja | Źródło |
 |---|---|
 | **Wbudowany model tekstowy** pobierany i uruchamiany przez aplikację (`llama-server` jako sidecar zarządzany przez aplikację: pobranie GGUF z sumą kontrolną i zgodą, start, health-check, zatrzymanie po bezczynności). Decyzja użytkownika: „w fazie 2.1 albo dalszej, nie priorytet"; furtka w 2.0: lokalny model to zwykły `Provider` mówiący `/v1/*`, więc preset, `Corrector` i `NoteGenerator` nie zauważą różnicy | [spec 2.0 §2 (nie-cele), §3 pkt 4, §8](specs/2026-10-19-faza20-lokalne-modele-design.md) |
-| **Diaryzacja lokalna** i **słownik/word boosting** — spec 2.0 zostawia je „pod swoimi numerami"; **bez przydziału do fazy**, wiersze w „Nieprzypisane" poniżej pozostają obowiązujące | [spec 2.0 §2](specs/2026-10-19-faza20-lokalne-modele-design.md), [wymagania §3–§5](../wymagania.md) |
+| **Diaryzacja lokalna** — spec 2.0 zostawia ją „pod swoim numerem"; **bez przydziału do fazy**, wiersz w „Nieprzypisane" poniżej pozostaje obowiązujący. (Słownik/word boosting: przeniesiony do fazy 2.1, patrz wyżej.) | [spec 2.0 §2](specs/2026-10-19-faza20-lokalne-modele-design.md), [wymagania §3–§5](../wymagania.md) |
 
 ## Faza 2 (decyzje już zapadły)
 
@@ -93,7 +105,7 @@ oMLX z modelem mieszczącym się w pamięci i własnym kluczem, baseline API (kl
 |---|---|
 | ✅ Lokalny ASR w procesie: FluidAudio + Parakeet v3 — kod w 2.0a na gałęzi `faza20` (S1 i odbiór T8 wykonane; kroki użytkownika otwarte). **Zostaje:** Cohere Transcribe lokalnie | [wymagania §0, §2](../wymagania.md) |
 | Diaryzacja lokalna z nastawialnym progiem, edycja rozmówców, automatyczne nazwiska; tożsamość mówcy aż do zadań | [wymagania §4, §5](../wymagania.md) |
-| Słownik i word boosting (format aliasów = `replacements.tsv`), klik na słowo → poprawka → alias (zakładka Dictionary) | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
+| **→ Faza 2.1.** Słownik i word boosting (format aliasów = `replacements.tsv`), klik na słowo → poprawka → alias (zakładka Dictionary) | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
 | Kalendarz Apple: „Coming up” na stronie głównej — **design gotowy 2026-10-19** (wariant B: karta najbliższego spotkania ≤ 60 min + mały Record ad hoc w nagłówku, [macos.md §11.5](../design/macos.md)); **wdrożone 2026-10-19** na gałęzi `claude/infallible-wu-2aef0e` ([F16-coming-up](reports/F16-coming-up.md); D1 potwierdzone, D2–D9 u użytkownika; scalone do `faza15` i z nią do `master` 2026-10-19) (sam EventKit i wykrywanie → faza 1.6; koniec sesji z kalendarza **uchylony**) | [wymagania §5](../wymagania.md), [spec 1.6](specs/2026-10-16-faza16-kalendarz-design.md) |
 | Chat nad spotkaniem i nad archiwum (RAG, „Ask anything”) | [wymagania §4](../wymagania.md), [spec 1.5 §2](specs/2026-10-14-faza15-design.md) |
 | Zakładka zadań (zależna od tożsamości mówcy) | [wymagania §4](../wymagania.md) |
