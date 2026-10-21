@@ -192,3 +192,33 @@ sprawdzić, czy to samo dzieje się przy samych przyciskach paska (bez wypychani
 6. **P2:** użytkownik nie zrozumiał opcji A/B/C — do wyjaśnienia prostszym językiem.
 7. **P5 zawężone:** inny rozmiar paska ma **tylko widok otwartego spotkania**; po kliknięciu innej zakładki pasek wraca do normalnego. Nie podano, czy się zwęża, czy poszerza.
    To wspiera hipotezę, że winny jest widok spotkania (pasek okna z własnym przyciskiem „Meetings" w `ToolbarItem(placement: .navigation)` albo szerokość treści), a nie sam `NavigationSplitView`.
+
+## Wyniki testów na żywo (2026-10-21, wieczór)
+
+Aplikacja zbudowana z `master` (`6074560`) przez `scripts/run.sh`, dane z `.devdata/`. Treści spotkań nie cytuję; sesja `2026-10-21T07-29-08Z-62de`.
+
+### Podsumowanie z myśleniem i bez (P1)
+Ta sama sesja (135 wypowiedzi, 20 097 znaków po korekcie), ten sam model `deepseek/deepseek-v4.1-flash` przez OpenRouter, ten sam szablon `standard`; zmienia się tylko Settings → Summary → Thinking.
+Jedna próba na wariant, więc **wynik nie rozstrzyga** (model jest niedeterministyczny).
+
+| | Myślenie włączone (21:04) | Myślenie wyłączone (22:04) |
+|---|---|---|
+| Długość | 6711 znaków | 5617 znaków |
+| Czas | nie mierzony | „wyjątkowo szybko" (użytkownik), nie mierzony |
+| Rozmówca przypisany do zespołu na podstawie pytania retorycznego, choć padło sprostowanie | błąd | poprawnie |
+| Kroki niewynikające z rozmowy (YouTube, „kontynuować IVR-y") | 2 | 0 (zostały 3 wywnioskowane: zakres AI, obrona kwoty, roadmapa) |
+| Sprzeczne liczby (2,5 mln rocznie kontra 150 tys.) | oznaczone jako niejasne | zlane przez „czyli" (fałszywa precyzja) |
+| Uwaga, że zapis jest chaotyczny | jest | brak |
+| Nagłówki | polskie | angielskie przy preset „Polski" (nie wiadomo, czy to efekt myślenia) |
+| Dopisek bez pokrycia w rozmowie | brak | jeden (o płatności miesięcznej) |
+| Udział rozmowy luźnej (naklejki) | ok. 1/3 | ok. 1/3 |
+
+Wnioski: (1) korekta zostaje na stałe bez myślenia; (2) dla podsumowania wyłączone myślenie nie wypadło gorzej na zgłoszonych błędach, ale wprowadziło dwa nowe; (3) domyślne ustawienie (włączone) **bez zmian**, decyzja użytkownika 2026-10-21; (4) żeby rozstrzygnąć, trzeba 2–3 próby na wariant.
+Przy okazji: plik `summary-<czas>.json` zachowuje poprzednią wersję, więc obie są do porównania w `notes/`.
+
+### Korekta tej sesji (stary build)
+`corrected.json` z 09:46: 3 partie, **1 nieudana** („The model didn't answer within 120 s"), 1 odrzucona linia. Zrobiona starą aplikacją, **przed P1**, więc nie testuje poprawki. Nowy build ma P1 od 21:00; korektę tej sesji da się powtórzyć przyciskiem Retry.
+
+### Inne
+- **Embedding (P3):** użytkownik potwierdził, że menu pokazuje dostawców i wyszukiwanie działa (`embeddinggemma-2:270m` przez Ollamę). Pytanie 5 z listy zamknięte.
+- **Zapis w Settings (P6, nowe):** po przełączeniu Thinking nie było widać zapisu (Save/Cancel wyszarzone, bo obsługują tylko Archive search). Ustawienie zapisywało się (`settings.json`: `summaryThinking: false`). Poprawka: stopka pokazuje „Saved" (PR #4).
