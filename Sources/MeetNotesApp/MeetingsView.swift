@@ -116,7 +116,7 @@ struct ComingUpHeader: View {
                 PageTitle("Meetings")
                 Spacer(minLength: 12)
                 SearchCapsule(text: $state.query)
-                PresetMenu(width: 96)
+                PresetMenu(width: nil)
                 Button {
                     recording ? model.recording.stop() : model.startRecording()
                 } label: {
