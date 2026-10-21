@@ -231,3 +231,9 @@ Ten sam model i sesja, ale **inny szablon** (`weekly-team`: Summary, Progress, B
 - Sekcja Decisions zawiera „decyzje", których w rozmowie nie podjęto (przerobienie dokumentu na Confluence'a, dołożenie AI do subskrypcji); sekcja Blockers zawiera ryzyko, którego nikt nie wypowiedział („klient jej nie przyjmie"). Wygląda to na skutek szablonu, który wymaga wypełnienia tych sekcji.
 
 Zestawienie trzech prób (błąd Szota / krok YouTube / zlane liczby): myślenie włączone — tak / tak / nie; wyłączone, `standard` — nie / nie / tak; wyłączone, `weekly-team` — tak / tak / tak. Błędy pojawiają się i znikają niezależnie od myślenia, więc **nie ma dowodu, że myślenie je poprawia lub psuje**. Trzy próby to nadal za mało na wniosek; decyzja o domyślnym ustawieniu pozostaje przy użytkowniku (bez zmiany: włączone).
+
+### P1 potwierdzone na żywo (2026-10-21, 23:11)
+Sesja `2026-10-21T07-29-08Z-62de`, 135 wypowiedzi, 3 partie, ten sam model `deepseek/deepseek-v4.1-flash` przez OpenRouter. Przed P1 (09:53, stary build): `failedBatches: 1`, „The model didn't answer within 120 s".
+Po P1 (nowy build, „Improve transcript" po PR #6): **`failedBatches: 0`**, 3 odrzucone linie (`rejectedLines: 3`, zostają jak usłyszane). Zmieniło się 31 wypowiedzi, tekst skrócił się z 20 052 do 19 835 znaków.
+Filtr przerywników (P2): przerywniki w liniach poddanych korekcie — 74 → 8 (zliczenie przybliżone); wszystkie 8 to wypowiedzi złożone wyłącznie z „Mhm."/„yy", które zostają z założenia. W 32 wypowiedziach pominiętych (echo toru, flaga języka) przerywniki zostają (19), bo nie idą do korekty.
+Czas trwania korekty nie zmierzony (przycisk kliknięty przed rozpoczęciem monitora).
