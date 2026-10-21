@@ -222,3 +222,12 @@ Przy okazji: plik `summary-<czas>.json` zachowuje poprzednią wersję, więc obi
 ### Inne
 - **Embedding (P3):** użytkownik potwierdził, że menu pokazuje dostawców i wyszukiwanie działa (`embeddinggemma-2:270m` przez Ollamę). Pytanie 5 z listy zamknięte.
 - **Zapis w Settings (P6, nowe):** po przełączeniu Thinking nie było widać zapisu (Save/Cancel wyszarzone, bo obsługują tylko Archive search). Ustawienie zapisywało się (`settings.json`: `summaryThinking: false`). Poprawka: stopka pokazuje „Saved" (PR #4).
+
+### Trzecia próba (2026-10-21, 22:46): szablon `weekly-team`, myślenie wyłączone
+Ten sam model i sesja, ale **inny szablon** (`weekly-team`: Summary, Progress, Blockers and risks, Decisions, Next steps), więc próba nie jest czysta. Notatka ma 4907 znaków.
+- Błąd z zespołem Pawła Szota (zespół przypisany do voicebota mimo sprostowania w rozmowie) **wrócił**, mimo wyłączonego myślenia.
+- Krok „zdecydować o publikacji audiobooków na YouTube" **wrócił**.
+- Liczby (2,5 mln rocznie, 150–200 tys. „w piku") znów zestawione bez zastrzeżenia, że w rozmowie były niespójne.
+- Sekcja Decisions zawiera „decyzje", których w rozmowie nie podjęto (przerobienie dokumentu na Confluence'a, dołożenie AI do subskrypcji); sekcja Blockers zawiera ryzyko, którego nikt nie wypowiedział („klient jej nie przyjmie"). Wygląda to na skutek szablonu, który wymaga wypełnienia tych sekcji.
+
+Zestawienie trzech prób (błąd Szota / krok YouTube / zlane liczby): myślenie włączone — tak / tak / nie; wyłączone, `standard` — nie / nie / tak; wyłączone, `weekly-team` — tak / tak / tak. Błędy pojawiają się i znikają niezależnie od myślenia, więc **nie ma dowodu, że myślenie je poprawia lub psuje**. Trzy próby to nadal za mało na wniosek; decyzja o domyślnym ustawieniu pozostaje przy użytkowniku (bez zmiany: włączone).
