@@ -60,11 +60,11 @@ final class NotesModel {
     func correctionFailureMessage(_ id: String) -> String? { correctionFailure[id] }
 
     /// „Improve transcript"/Retry: preset nagrania ma model korekty, jest transkrypt i nic nie trwa, a korekta
-    /// albo padła, albo jej nie ma (np. aplikacja zamknięta w trakcie).
+    /// albo padła (całkiem lub z częścią partii: „N parts kept as heard”), albo jej nie ma (np. aplikacja zamknięta w trakcie).
     func canRetryCorrection(_ item: SessionItem) -> Bool {
         guard !correcting.contains(item.id), state(item.id) != .generating, item.transcript != nil, item.runID != nil else { return false }
         guard let c = presetFor(item.url)?.correction, !c.model.isEmpty else { return false }
-        return correctionFailure[item.id] != nil || item.corrected == nil
+        return correctionFailure[item.id] != nil || item.corrected == nil || (item.corrected?.failedBatches ?? 0) > 0
     }
 
     func retryCorrection(_ item: SessionItem) {

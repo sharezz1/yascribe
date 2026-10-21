@@ -3,16 +3,21 @@ import MeetNotesNotes
 import MeetNotesProviders
 import SwiftUI
 
-/// Szkic sekcji „Archive": Save / Cancel obejmuje tylko ją; dostawcy zapisują się od razu (plan 1.5-B, T4).
+/// Szkic ustawień globalnych: Save / Cancel obejmuje Archive search, Correction i Summary; dostawcy zapisują się od razu (plan 1.5-B, T4).
 final class SettingsDraft: ObservableObject {
     @Published var embedding: RoleAssignment?
     @Published var confirming = false
     @Published var saved = false
-    /// Pole „Words" sekcji Correction (zapisuje się Return, poza Save / Cancel).
+    /// Sekcja Correction: przełącznik i pole „Words" (F20 P2).
+    @Published var removeFillers = true
     @Published var fillers = ""
+    /// Sekcja Summary: „Thinking" (F20 P1).
+    @Published var summaryThinking = true
 
     func load(_ s: GlobalSettings) {
         embedding = s.embedding; saved = false
+        removeFillers = s.removeFillersEnabled
+        summaryThinking = s.summaryThinkingEnabled
         fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
     }
 }
@@ -58,7 +63,12 @@ struct SettingsView: View {
     @StateObject private var sheet = ProviderSheetState()
     @StateObject private var draft = SettingsDraft()
 
-    private var isDirty: Bool { draft.embedding != model.settings.embedding }
+    private var isDirty: Bool {
+        draft.embedding != model.settings.embedding
+            || draft.removeFillers != model.settings.removeFillersEnabled
+            || draft.summaryThinking != model.settings.summaryThinkingEnabled
+            || FillerWords.parse(draft.fillers) != (model.settings.fillerWords ?? FillerWords.defaults)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,24 +118,23 @@ struct SettingsView: View {
 
     // MARK: Correction (F20 P2)
 
-    /// Zapisuje się od razu (Return w polu albo przełącznik). Lista idzie do polecenia dla modelu i do filtra po korekcie.
+    /// Zapis przyciskiem Save. Lista idzie do polecenia dla modelu i do filtra po korekcie.
     @ViewBuilder private var correctionSection: some View {
         SectionHeader("Correction")
         Card {
             FormRow(label: "Filler sounds",
                     caption: "Removes sounds like “yyy” and “mhm” from corrected transcripts: the model is asked to drop them and the app removes any that remain. The original transcript is kept.") {
                 Toggle("Filler sounds", isOn: Binding(
-                    get: { model.settings.removeFillersEnabled },
-                    set: { model.settings.removeFillers = $0; autosave() }))
+                    get: { draft.removeFillers },
+                    set: { draft.removeFillers = $0 }))
                     .labelsHidden().toggleStyle(.switch)
             }
-            if model.settings.removeFillersEnabled {
+            if draft.removeFillers {
                 RowDivider()
-                FormRow(label: "Words", caption: "Separate with commas. Press Return to save.") {
+                FormRow(label: "Words", caption: "Separate with commas.") {
                     HStack(spacing: 8) {
                         TextField("yyy, eee, mhm", text: $draft.fillers).textFieldStyle(.roundedBorder)
-                            .onSubmit { commitFillers() }
-                        Button("Reset") { draft.fillers = FillerWords.format(FillerWords.defaults); commitFillers() }
+                        Button("Reset") { draft.fillers = FillerWords.format(FillerWords.defaults) }
                             .buttonStyle(.pillSmall).help("Back to the default list")
                     }
                 }
@@ -133,30 +142,17 @@ struct SettingsView: View {
         }
     }
 
-    /// Przełączniki i pola poza Archive search zapisują się od razu; stopka pokazuje „Saved”, bo Save jest tam wyszarzony.
-    private func autosave() {
-        model.save()
-        draft.saved = true
-    }
-
-    private func commitFillers() {
-        let words = FillerWords.parse(draft.fillers)
-        model.settings.fillerWords = words == FillerWords.defaults ? nil : words
-        autosave()
-        draft.fillers = FillerWords.format(words)
-    }
-
     // MARK: Summary (F20 P1)
 
-    /// Zapisuje się od razu (poza Save / Cancel sekcji Archive). Korekta nigdy nie myśli — to nie jest ustawienie.
+    /// Zapis przyciskiem Save. Korekta nigdy nie myśli — to nie jest ustawienie.
     @ViewBuilder private var summarySection: some View {
         SectionHeader("Summary")
         Card {
             FormRow(label: "Thinking",
                     caption: "Lets API models reason before writing the notes. Off is faster and avoids timeouts; on may help with long or complex meetings. Local models always run without thinking, and corrections never think.") {
                 Toggle("Thinking", isOn: Binding(
-                    get: { model.settings.summaryThinkingEnabled },
-                    set: { model.settings.summaryThinking = $0; autosave() }))
+                    get: { draft.summaryThinking },
+                    set: { draft.summaryThinking = $0 }))
                     .labelsHidden().toggleStyle(.switch)
             }
         }
@@ -237,8 +233,13 @@ struct SettingsView: View {
     }
 
     private func commit() {
+        let words = FillerWords.parse(draft.fillers)
         model.settings.embedding = draft.embedding
+        model.settings.removeFillers = draft.removeFillers
+        model.settings.fillerWords = words == FillerWords.defaults ? nil : words
+        model.settings.summaryThinking = draft.summaryThinking
         model.save()
+        draft.fillers = FillerWords.format(words)
         draft.saved = true
     }
 }
