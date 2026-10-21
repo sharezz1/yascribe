@@ -237,3 +237,6 @@ Sesja `2026-10-21T07-29-08Z-62de`, 135 wypowiedzi, 3 partie, ten sam model `deep
 Po P1 (nowy build, „Improve transcript" po PR #6): **`failedBatches: 0`**, 3 odrzucone linie (`rejectedLines: 3`, zostają jak usłyszane). Zmieniło się 31 wypowiedzi, tekst skrócił się z 20 052 do 19 835 znaków.
 Filtr przerywników (P2): przerywniki w liniach poddanych korekcie — 74 → 8 (zliczenie przybliżone); wszystkie 8 to wypowiedzi złożone wyłącznie z „Mhm."/„yy", które zostają z założenia. W 32 wypowiedziach pominiętych (echo toru, flaga języka) przerywniki zostają (19), bo nie idą do korekty.
 Czas trwania korekty nie zmierzony (przycisk kliknięty przed rozpoczęciem monitora).
+
+### P4 potwierdzone przez użytkownika (2026-10-21)
+Menu Provider w presetach (Correction, Summary) nie oferuje ElevenLabs ani Yascribe; użytkownik sprawdził w aplikacji: „działa dobrze".
