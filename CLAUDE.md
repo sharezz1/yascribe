@@ -88,6 +88,8 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
 preset i `RunSnapshot` bez zmian. `master` po PR #17 (pigułka: wyjście i „No system audio yet"): **582/582**; gałąź 2.0.1: **592/592**. Odbiór na żywo czeka na użytkownika.
 Spec: `docs/superpowers/specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md`, plan: `docs/superpowers/plans/2026-10-22-faza201-zmiana-modelu.md`.
 
+**Faza 2.0.2 „Nagrywanie na słuchawkach"** (przypisana 2026-10-22, niezaczęta): tor `system` na słuchawkach Bluetooth — zakres i dowody w `BACKLOG.md` („PRIORYTET WYSOKI … słuchawki Bluetooth"); pigułka z PR #17 jest pierwszym krokiem.
+
 ## Twarde zasady
 
 - **Toolchain:** Swift 6.4, tylko Command Line Tools, bez Xcode. XCTest niedostępny — `swift-testing`.
