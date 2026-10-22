@@ -15,7 +15,7 @@
   (345/345, odbiór na żywo zaliczony; [raport F15b-wyciszanie](reports/F15b-wyciszanie.md)). 1.5b trwa dalej.
 - **Faza 1.5 (1.5a + 1.5b + 1.6 + „Coming up”) — scalona do `master` 2026-10-19** (`--no-ff`, tag `faza-1.5` na commicie scalenia; `faza-1.6` → `49c4980`), 355/355. Przegląd całości: [F15-przeglad-calosci](reports/F15-przeglad-calosci.md) (0 blokujących); poprawki P1, P2, P4: [F15-poprawki-P1-P2-P4](reports/F15-poprawki-P1-P2-P4.md).
 - **Faza 2.0 „Lokalne modele"** — **scalona do `master` 2026-10-20 przez PR #1** (commit scalenia `7eebaea`, `--merge`, tag `faza-2.0`), 580/580, wraz z poprawkami P1–P7 po odbiorach (`reports/F20-lista-poprawek.md`). Cofnięcie: `git revert -m 1 7eebaea`. Zostają kroki wyłącznie użytkownika (sekcja niżej).
-- **Faza 2.0.1 „Zmiana modelu w spotkaniu"** — kod na gałęzi `faza201-zmiana-modelu` (PR #20, niescalony), 592/592; wybór modelu podsumowania i korekty przy sesji (`notes/meta.json`). Odbiór na żywo czeka na użytkownika ([spec](specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md), [plan](plans/2026-10-22-faza201-zmiana-modelu.md)).
+- **Faza 2.0.1 „Zmiana modelu w spotkaniu"** — scalona do `master` 2026-10-22 (PR #19 `bed13d5`, PR #20 `0409a3f`), 592/592; wybór modelu podsumowania i korekty przy sesji (`notes/meta.json`). Użytkownik uruchomił aplikację 2026-10-22: „działa” (zakres odbioru niepodany) ([spec](specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md), [plan](plans/2026-10-22-faza201-zmiana-modelu.md)).
 - **Faza 2.1 „Słownik"** — decyzja użytkownika 2026-10-21: obowiązkowa następna faza (sekcja niżej).
 
 ## Faza 1.5b (zostało: T11 i drobne)
