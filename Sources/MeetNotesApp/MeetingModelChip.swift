@@ -29,6 +29,8 @@ struct MeetingModelChip: View {
     private var override: RoleOverride? {
         model.notes.overrides(for: item).usable(role, knownProviders: model.notes.knownProviderIDs())
     }
+    /// Wybór zapisany, ale dostawca zniknął: chip pokazuje to i nadal pozwala wrócić do presetu.
+    private var stale: Bool { model.notes.overrides(for: item).isStale(role, knownProviders: model.notes.knownProviderIDs()) }
     private func provider(_ id: UUID?) -> Provider? { model.providers.providers.first { $0.id == id } }
     private var title: String { role == .summary ? "summary" : "correction" }
 
@@ -43,7 +45,7 @@ struct MeetingModelChip: View {
                     Image(systemName: "cpu").font(.system(size: 10)).accessibilityHidden(true)
                 }
                 Text(assignment?.model ?? "Choose model").lineLimit(1).truncationMode(.middle)
-                if override != nil { Text("· changed").fixedSize() }
+                if override != nil { Text("· changed").fixedSize() } else if stale { Text("· unavailable").fixedSize() }
                 Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
             }
             .font(.system(size: 11)).foregroundStyle(.mnText2)
@@ -76,7 +78,7 @@ struct MeetingModelChip: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Model for this meeting's \(title)").font(.system(size: 13, weight: .medium))
-            if override != nil {
+            if override != nil || stale {
                 Button("Use preset (\(presetModel ?? "none"))") {
                     model.notes.setOverride(role, nil, item: item)
                     state.showing = false
