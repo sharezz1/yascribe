@@ -126,6 +126,40 @@ private func baseEvents() -> [JournalEvent] {
     #expect(rebuilt.tracks.allSatisfy { $0.mutes == nil && $0.audibleFrame == nil })
 }
 
+@Test func rateMismatchFlagsAThreeTimesSlowTrack() throws {
+    let track = rateTrack(effectiveRate: 16_500, lastFrame: 330_000)
+    let ratio = try #require(track.rateMismatch)
+    #expect(abs(ratio - 16_500.0 / 48_000) < 1e-9)
+}
+
+@Test func rateMismatchFlagsEightPercentOffTrack() throws {
+    let track = rateTrack(effectiveRate: 44_100, lastFrame: 882_000)
+    let ratio = try #require(track.rateMismatch)
+    #expect(abs(ratio - 0.91875) < 1e-9)
+}
+
+@Test func rateMismatchIgnoresHealthyTracks() {
+    #expect(rateTrack(effectiveRate: 47_998, lastFrame: 959_960).rateMismatch == nil)
+    #expect(rateTrack(sampleRate: 16_000, effectiveRate: 16_000, lastFrame: 320_000).rateMismatch == nil)
+}
+
+@Test func rateMismatchNeedsTwentySecondsOfAnchors() {
+    #expect(rateTrack(effectiveRate: 16_500, lastFrame: 165_000).rateMismatch == nil)
+    #expect(rateTrack(effectiveRate: nil, lastFrame: 330_000).rateMismatch == nil)
+    var track = rateTrack(effectiveRate: 16_500, lastFrame: 330_000)
+    track.clock.removeLast()
+    #expect(track.rateMismatch == nil)
+    track.clock = []
+    #expect(track.rateMismatch == nil)
+}
+
+private func rateTrack(sampleRate: Double = 48_000, effectiveRate: Double?, lastFrame: Int) -> SessionSummary.Track {
+    SessionSummary.Track(id: "system", sampleRate: sampleRate, channels: 2,
+                         clock: [.init(frameIndex: 0, hostTime: 0),
+                                 .init(frameIndex: lastFrame, hostTime: 20 * s)],
+                         effectiveSampleRate: effectiveRate)
+}
+
 private let oldJournal = #"""
 {"hostTime":9653240567350,"timebase":{"denom":3,"numer":125},"type":"session.started","wallClock":"2026-10-13T10:27:14Z"}
 {"channels":2,"deviceUID":"BuiltInSpeakerDevice","hostTime":9653241227925,"sampleFormat":"int16","sampleRate":48000,"trackID":"system","type":"track.opened"}
