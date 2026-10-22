@@ -56,3 +56,10 @@ private let q = UUID()
     #expect(r == RoleAssignment(providerID: q, model: "new", prompt: nil))
     #expect(CorrectionModel.resolve(frozen: preset, override: nil) == nil)
 }
+
+@Test func staleMeansSavedButNotUsable() {
+    let o = ModelOverrides(summary: RoleOverride(providerID: p, model: "m"))
+    #expect(o.isStale(.summary, knownProviders: [q]))
+    #expect(!o.isStale(.summary, knownProviders: [p]))
+    #expect(!o.isStale(.correction, knownProviders: [q]))
+}

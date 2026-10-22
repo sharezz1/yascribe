@@ -46,6 +46,7 @@ final class NotesModel {
     /// Trwające generowanie (klucz: id sesji); token odróżnia przebieg anulowany od nowego na tej samej sesji.
     private var generationRuns: [String: (token: UUID, task: Task<Void, Never>)] = [:]
     private var saveTasks: [String: Task<Void, Never>] = [:]
+    private var staleReported: Set<String> = []
     /// Treść My notes czekająca na autozapis (klucz: id sesji).
     private var pendingSaves: [String: (session: URL, text: String)] = [:]
 
@@ -80,7 +81,8 @@ final class NotesModel {
 
     /// Zapisane nadpisanie jest, ale nie działa (np. dostawca usunięty): wracamy do presetu i mówimy o tym.
     private func reportStaleOverride(_ role: Role, for item: SessionItem) {
-        guard overrides(for: item).raw(role) != nil, usableOverride(role, for: item) == nil else { return }
+        guard overrides(for: item).isStale(role, knownProviders: knownProviderIDs()),
+              staleReported.insert("\(item.id)/\(role.rawValue)").inserted else { return } // raz na uruchomienie, nie przy każdym przebiegu
         report("The model you chose for this meeting is no longer available. Using the preset's.")
     }
 
@@ -241,13 +243,17 @@ final class NotesModel {
     func afterTranscription(sessionURL: URL, runID: String, snapshot: RunSnapshot, transcript: Transcript) async {
         let id = sessionURL.lastPathComponent
         var working = transcript
-        if let corr = snapshot.preset.correction, !corr.model.isEmpty {
+        // Wznowienie też bierze własny model sesji (jeśli jest), nie tylko preset.
+        let saved = NotesStore(session: sessionURL).readMeta().modelOverrides
+        let known = knownProviderIDs()
+        if let corr = CorrectionModel.resolve(frozen: snapshot.preset, override: saved?.usable(.correction, knownProviders: known)) {
             working = await runCorrection(sessionURL: sessionURL, runID: runID, assignment: corr,
                                           language: snapshot.language, transcript: transcript)
         }
         // Ten sam wybór modelu co przy „Generate notes": preset nagrania → domyślny → dowolny z `summary` (`SummaryModel`).
         let info = presetsInfo()
-        if let choice = SummaryModel.resolve(frozen: snapshot.preset, defaultPresetID: info.defaultID, presets: info.presets),
+        if let choice = SummaryModel.resolve(frozen: snapshot.preset, override: saved?.usable(.summary, knownProviders: known),
+                                             defaultPresetID: info.defaultID, presets: info.presets),
            let client = clientFor(choice.assignment.providerID) {
             titling.insert(id)
             onChange()

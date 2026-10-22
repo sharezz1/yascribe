@@ -33,6 +33,11 @@ public struct ModelOverrides: Codable, Equatable, Sendable {
         return o
     }
 
+    /// Jest zapisane, ale nie działa (np. dostawca usunięty): wracamy do presetu i pokazujemy użytkownikowi, że wybór wygasł.
+    public func isStale(_ role: Role, knownProviders: Set<UUID>) -> Bool {
+        raw(role) != nil && usable(role, knownProviders: knownProviders) == nil
+    }
+
     /// Zapisana wartość bez sprawdzania; do pokazania w chipie.
     public func raw(_ role: Role) -> RoleOverride? {
         switch role {
