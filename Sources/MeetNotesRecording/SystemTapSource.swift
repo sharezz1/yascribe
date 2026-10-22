@@ -2,9 +2,9 @@ import AVFoundation
 import CoreAudio
 import Foundation
 
-/// Układ urządzenia zbiorczego tapa (faza 2.0.2, eksperyment T1). `.tapOnly` bez wyjścia jako podurządzenia
-/// robi OpenWhispr; domyślny zostaje dotychczasowy, dopóki odbiór M2b nie pokaże, że tapOnly niczego nie psuje.
-public enum AggregateLayout: Sendable {
+/// Układ urządzenia zbiorczego tapa (faza 2.0.2). `.tapOnly` bez wyjścia jako podurządzenia robią OpenWhispr i Chromium;
+/// jest domyślny od D4 (pomiary M2b). `.withOutputSubdevice` to układ sprzed fazy 2.0.2, zostaje do porównań (`tap-rate`).
+public enum AggregateLayout: Sendable, Equatable {
     case withOutputSubdevice, tapOnly
 }
 
@@ -44,7 +44,11 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
 
     private let layout: AggregateLayout
 
-    public init(layout: AggregateLayout = .withOutputSubdevice) { self.layout = layout }
+    /// D4 (2026-10-23): bez wyjścia jako podurządzenia zegar tapa nie idzie za częstotliwością słuchawek (M2b: 48 000 Hz
+    /// przy wyjściu 44 100 i 16 000), tak samo buduje tap Chromium (Wispr Flow).
+    public static let defaultLayout: AggregateLayout = .tapOnly
+
+    public init(layout: AggregateLayout = SystemTapSource.defaultLayout) { self.layout = layout }
 
     public func prepare() throws -> TrackFormat {
         let (tapFmt, uid) = try build()
@@ -122,6 +126,8 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
             AudioHardwareDestroyProcessTap(tapID)
             throw error
         }
+        // Jak Chromium: częstotliwość urządzenia zbiorczego ustawiona jawnie na format tapa (M2b zmierzył 48 000 bez tego).
+        if layout == .tapOnly { CoreAudioDevices.setNominalSampleRate(of: aggID, to: fmt.sampleRate) }
         lock.lock(); tap = tapID; aggregate = aggID; tapRate = fmt.sampleRate; lock.unlock()
         return (fmt, outputUID)
     }
@@ -145,7 +151,8 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         removeRateListeners()
         lock.lock(); let agg = aggregate; lock.unlock()
         var objects = [agg]
-        if let out = try? CoreAudioDevices.defaultOutputDevice() { objects.append(out) }
+        // Przy tapOnly zegar nie zależy od wyjścia, więc jego zmiana częstotliwości (np. do 16 kHz) nie wymaga przebudowy.
+        if layout == .withOutputSubdevice, let out = try? CoreAudioDevices.defaultOutputDevice() { objects.append(out) }
         let watchers = objects.filter { $0 != kAudioObjectUnknown }
             .map { DeviceWatcher(object: $0, selector: kAudioDevicePropertyNominalSampleRate) }
         for w in watchers { w.start { [weak self] in self?.requestRebuild() } }
