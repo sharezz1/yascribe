@@ -15,3 +15,7 @@ import Testing
     #expect(list?.count == 1)
     #expect(list?.first?[kAudioSubDeviceUIDKey] as? String == "out-uid")
 }
+
+@Test func tapOnlyIsTheDefaultLayout() {
+    #expect(SystemTapSource.defaultLayout == .tapOnly)
+}

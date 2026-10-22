@@ -17,7 +17,7 @@ struct CLI {
       summarize <katalog>                                         odtwarza session.json z dziennika
       fit <wzorzec> <nagranie.caf> [--max-lag-ms N]              T1/T3/T4: dopasowanie nagranie ≈ a·wzorzec
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
-      tap-rate [--seconds N] [--with-mic] [--tap-only]                         mierzy częstotliwości tapa i rzeczywiste dostarczanie (faza 2.0.2)
+      tap-rate [--seconds N] [--with-mic] [--with-output]                         mierzy częstotliwości tapa i rzeczywiste dostarczanie (faza 2.0.2)
       models <baseURL>                                            lista modeli (klucz: MEETNOTES_API_KEY)
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
@@ -28,7 +28,7 @@ struct CLI {
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
     static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store"]
-    static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--tap-only"])
+    static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output"])
 
     static func main() async {
         var args = Array(CommandLine.arguments.dropFirst())
@@ -153,7 +153,7 @@ struct CLI {
     /// Faza 2.0.2, bramka M1: trzy częstotliwości tapa kontra to, co naprawdę dociera do IOProc.
     static func tapRate(_ args: [String]) async throws {
         let seconds = number(args, "--seconds") ?? 10
-        let tap = SystemTapSource(layout: args.contains("--tap-only") ? .tapOnly : .withOutputSubdevice)
+        let tap = SystemTapSource(layout: args.contains("--with-output") ? .withOutputSubdevice : SystemTapSource.defaultLayout)
         let format = try tap.prepare()
         let stats = TapStats()
         try tap.start { if case .chunk(let c) = $0 { stats.add(c, channels: format.channels) } }

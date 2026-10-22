@@ -68,6 +68,14 @@ public enum CoreAudioDevices {
         return format(d) ?? tap
     }
 
+    /// Ustawia nominalną częstotliwość tylko gdy jest inna; błąd nie przerywa nagrania (`captureFormat` i tak czyta rzeczywistą).
+    static func setNominalSampleRate(of device: AudioObjectID, to rate: Double) {
+        guard rate > 0, let current = try? nominalSampleRate(of: device), abs(current - rate) > 0.5 else { return }
+        var addr = address(kAudioDevicePropertyNominalSampleRate)
+        var value = Float64(rate)
+        _ = AudioObjectSetPropertyData(device, &addr, 0, nil, UInt32(MemoryLayout<Float64>.size), &value)
+    }
+
     public static func tapFormat(of tap: AudioObjectID) throws -> AVAudioFormat {
         var addr = address(kAudioTapPropertyFormat)
         var asbd = AudioStreamBasicDescription()
