@@ -1,7 +1,7 @@
 import Testing
 @testable import MeetNotesRecording
 
-private let hint = "Headset in call mode may block system audio. Switch the microphone or the output."
+private let hint = "Headset in call mode may block system audio."
 
 @Test func hintAppearsForAStalledTrackOnTheSameBluetoothHeadset() {
     #expect(PillHint.systemStalled(stalled: true, micUID: "00-02-3C-8D-E0-50:input", outputUID: "00-02-3C-8D-E0-50:output",

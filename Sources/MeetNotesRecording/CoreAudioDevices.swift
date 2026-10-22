@@ -106,6 +106,20 @@ public enum CoreAudioDevices {
         return v as String
     }
 
+    public static func defaultInputUID() -> String? { (try? defaultInputDevice()).flatMap { try? uid(of: $0) } }
+    public static func defaultOutputUID() -> String? { (try? defaultOutputDevice()).flatMap { try? uid(of: $0) } }
+
+    /// Słuchawki Bluetooth (klasyczne i LE) przełączają profil, gdy otwiera się ich mikrofon; urządzenie przewodowe nie.
+    public static func isBluetooth(_ device: AudioObjectID) -> Bool {
+        var addr = address(kAudioDevicePropertyTransportType)
+        var transport = UInt32(0)
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &transport) == noErr else { return false }
+        return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
+    }
+
+    public static func defaultInputIsBluetooth() -> Bool { (try? defaultInputDevice()).map(isBluetooth) ?? false }
+
     /// Nazwa mikrofonu, który nagrywa `RawMicrophoneSource` (domyślne wejście systemu; wybór urządzenia: faza 2).
     public static func defaultInputName() -> String? {
         guard let d = try? defaultInputDevice() else { return nil }

@@ -26,6 +26,13 @@ final class RecordingController {
     /// w poczekalni na wbudowanych urządzeniach nic nie gra i tor nie dostaje klatek).
     private(set) var outputName = ""
     private(set) var systemStalled = false
+    /// UID wejścia i wyjścia oraz Bluetooth wejścia — dla podpowiedzi przy martwym torze (faza 2.0.2); odświeżane z nazwami.
+    private(set) var micUID = ""
+    private(set) var outputUID = ""
+    private(set) var micIsBluetooth = false
+    var stallHint: String? {
+        PillHint.systemStalled(stalled: systemStalled, micUID: micUID, outputUID: outputUID, isBluetooth: micIsBluetooth)
+    }
     /// Tory wyciszone w pigułce (macos.md §11.5); każde nagranie startuje bez wyciszenia.
     private(set) var muted: Set<String> = []
     /// „Nothing is being recorded” po próbie wyciszenia ostatniego nagrywającego toru; znika po 4 s (decyzja 1).
@@ -67,6 +74,7 @@ final class RecordingController {
         muteWarning = false
         micName = CoreAudioDevices.defaultInputName() ?? "Unknown microphone"
         outputName = CoreAudioDevices.defaultOutputName() ?? "Unknown output"
+        refreshDeviceIdentity()
         systemStalled = false
         started = Date()
         elapsed = 0
@@ -76,6 +84,7 @@ final class RecordingController {
                 // Źródło mikrofonu podąża za domyślnym wejściem systemu (np. AirPods podłączone w trakcie) — nazwa też.
                 self.micName = CoreAudioDevices.defaultInputName() ?? self.micName
                 self.outputName = CoreAudioDevices.defaultOutputName() ?? self.outputName
+                self.refreshDeviceIdentity()
                 self.recorder?.tick()
                 self.systemStalled = self.recorder?.currentStalledTracks().contains("system") ?? false
             }
@@ -83,6 +92,12 @@ final class RecordingController {
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
             Task { @MainActor in self.levels = self.recorder?.currentLevels() ?? [:] }
         }
+    }
+
+    private func refreshDeviceIdentity() {
+        micUID = CoreAudioDevices.defaultInputUID() ?? ""
+        outputUID = CoreAudioDevices.defaultOutputUID() ?? ""
+        micIsBluetooth = CoreAudioDevices.defaultInputIsBluetooth()
     }
 
     func stop() { recorder?.stop(reason: .button) }
@@ -107,15 +122,19 @@ final class RecordingController {
 
     /// Migawki (`Snapshots.swift`): kontroler w stanie „trwa nagranie” bez rejestratora i czasomierzy.
     static func snapshotPreview(elapsed: TimeInterval, muted: Set<String> = [], muteWarning: Bool = false,
-                                systemStalled: Bool = false) -> RecordingController {
+                                systemStalled: Bool = false, headsetStall: Bool = false) -> RecordingController {
         let r = RecordingController()
         r.isRecording = true
         r.elapsed = elapsed
         r.presetLabel = "Polish · PL"
         r.micName = "MacBook Air Microphone"
         r.outputName = "MacBook Air Speakers"
-        r.systemStalled = systemStalled
-        r.levels = ["system": systemStalled ? -160 : -22, "mic_raw": -41]
+        r.systemStalled = systemStalled || headsetStall
+        if headsetStall {
+            r.micName = "Sound Blaster JAM V2"; r.outputName = "Sound Blaster JAM V2"
+            r.micUID = "00-02-3C-8D-E0-50:input"; r.outputUID = "00-02-3C-8D-E0-50:output"; r.micIsBluetooth = true
+        }
+        r.levels = ["system": systemStalled || headsetStall ? -160 : -22, "mic_raw": -41]
         r.muted = muted
         r.muteWarning = muteWarning
         return r
@@ -458,8 +477,12 @@ struct RecordingPanelView: View {
             }
             // Ostrzeżenie w miejscu linii presetu, ta sama wysokość — okno nie zmienia rozmiaru (decyzja 1).
             Text(rec.eventTitle.map { "\($0) · \(rec.presetLabel)" } ?? rec.presetLabel).lineLimit(rec.eventTitle == nil ? nil : 1)
-                .font(.callout).foregroundStyle(.mnText2).opacity(rec.muteWarning ? 0 : 1)
-                .overlay(alignment: .leading) { if rec.muteWarning { WarnLabel("Nothing is being recorded").lineLimit(1).fixedSize() } }
+                .font(.callout).foregroundStyle(.mnText2).opacity(rec.muteWarning || rec.stallHint != nil ? 0 : 1)
+                .overlay(alignment: .leading) {
+                    // Na tym samym miejscu i o tej samej wysokości co ostrzeżenie: okno pigułki zmienia rozmiar tylko przy rozwinięciu.
+                    if rec.muteWarning { WarnLabel("Nothing is being recorded").lineLimit(1).fixedSize() }
+                    else if let hint = rec.stallHint { Text(hint).font(.callout).foregroundStyle(.mnText2).lineLimit(1).fixedSize() }
+                }
                 .padding(.leading, 16).padding(.top, 2).padding(.bottom, 14)
             LevelRow(title: "System audio: \(rec.systemStalled ? "No system audio yet · " : "")\(rec.outputName)", db: rec.levels["system"], animated: !reduceMotion,
                      muted: rec.muted.contains("system")) { rec.toggleMute("system") }
