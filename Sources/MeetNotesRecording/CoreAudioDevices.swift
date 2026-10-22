@@ -47,6 +47,17 @@ public enum CoreAudioDevices {
         return f
     }
 
+    /// Nominalna częstotliwość urządzenia (także zbiorczego). Format tapa bywa inny niż rzeczywisty zegar:
+    /// słuchawki Bluetooth w trybie rozmowy dostarczały 16 kHz przy deklarowanych 48 kHz (faza 2.0.2, S0).
+    public static func nominalSampleRate(of device: AudioObjectID) throws -> Double {
+        var addr = address(kAudioDevicePropertyNominalSampleRate)
+        var rate = Float64(0)
+        var size = UInt32(MemoryLayout<Float64>.size)
+        let st = AudioObjectGetPropertyData(device, &addr, 0, nil, &size, &rate)
+        guard st == noErr else { throw AudioSourceError.coreAudio("NominalSampleRate", st) }
+        return rate
+    }
+
     public static func tapFormat(of tap: AudioObjectID) throws -> AVAudioFormat {
         var addr = address(kAudioTapPropertyFormat)
         var asbd = AudioStreamBasicDescription()

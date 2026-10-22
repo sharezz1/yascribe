@@ -2,6 +2,14 @@ import AVFoundation
 import CoreAudio
 import Foundation
 
+/// Trzy częstotliwości, które mogą się rozjechać na słuchawkach Bluetooth (faza 2.0.2): format tapa,
+/// nominalna częstotliwość urządzenia zbiorczego i bieżącego wyjścia. 0 = nie udało się odczytać.
+public struct TapRates: Equatable, Sendable {
+    public var tapFormat: Double
+    public var aggregateNominal: Double
+    public var outputNominal: Double
+}
+
 /// Kanał „Oni": process tap Core Audio na całym wyjściu systemu, przez urządzenie
 /// zbiorcze związane z bieżącym wyjściem (spec rdzenia §2, droga Narady).
 /// Przy zmianie domyślnego wyjścia przebudowuje tap na nowym urządzeniu; luka
@@ -16,6 +24,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
     private var aggregate = AudioObjectID(kAudioObjectUnknown)
     private var capture: HALCapture?
     private var format: TrackFormat?
+    private var tapRate = 0.0
     private var handler: (@Sendable (AudioSourceEvent) -> Void)?
     /// Po `stop()` przebudowa z kolejki obserwatora nie może zostawić capture ani tapu (P8).
     private var stopped = false
@@ -28,6 +37,14 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         let f = TrackFormat(sampleRate: tapFmt.sampleRate, channels: Int(tapFmt.channelCount), deviceUID: uid)
         lock.lock(); format = f; lock.unlock()
         return f
+    }
+
+    /// Częstotliwości do pomiaru (`meetnotes-cli tap-rate`); `nil` przed `prepare()`.
+    public func rates() -> TapRates? {
+        lock.lock(); let agg = aggregate, rate = tapRate; lock.unlock()
+        guard agg != kAudioObjectUnknown else { return nil }
+        let out = (try? CoreAudioDevices.defaultOutputDevice()).flatMap { try? CoreAudioDevices.nominalSampleRate(of: $0) } ?? 0
+        return TapRates(tapFormat: rate, aggregateNominal: (try? CoreAudioDevices.nominalSampleRate(of: agg)) ?? 0, outputNominal: out)
     }
 
     public func start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws {
@@ -80,7 +97,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
             AudioHardwareDestroyProcessTap(tapID)
             throw error
         }
-        lock.lock(); tap = tapID; aggregate = aggID; lock.unlock()
+        lock.lock(); tap = tapID; aggregate = aggID; tapRate = fmt.sampleRate; lock.unlock()
         return (fmt, outputUID)
     }
 
