@@ -106,7 +106,9 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         guard let f = format, let h = handler, !stopped else { lock.unlock(); return }
         let agg = aggregate, tapID = tap
         lock.unlock()
-        let c = try HALCapture(device: agg, inputFormat: try CoreAudioDevices.tapFormat(of: tapID),
+        let deviceRate = (try? CoreAudioDevices.nominalSampleRate(of: agg)) ?? 0
+        let input = CoreAudioDevices.captureFormat(tap: try CoreAudioDevices.tapFormat(of: tapID), deviceRate: deviceRate)
+        let c = try HALCapture(device: agg, inputFormat: input,
                                sampleRate: f.sampleRate, channels: f.channels,
                                onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
