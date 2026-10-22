@@ -1,7 +1,7 @@
 # Zmiana modelu w widoku spotkania (podsumowanie i korekta): krótka specyfikacja
 
-Status: **projekt do akceptacji**, bez kodu. Prośba użytkownika z 2026-10-21/22, wpis w `BACKLOG.md`, kontekst w
-`reports/HANDOVER-2026-10-22-nagrywanie-i-modele.md` (zadanie 2). Faza nieustalona; pozycja mała i niezależna od rdzenia nagrywania.
+Status: **zaakceptowany 2026-10-22** (decyzje 1 i 3 potwierdzone, faza **2.0.1**), bez kodu. Prośba użytkownika z 2026-10-21/22, wpis w `BACKLOG.md`, kontekst w
+`reports/HANDOVER-2026-10-22-nagrywanie-i-modele.md` (zadanie 2). Faza 2.0.1 (decyzja użytkownika); pozycja mała i niezależna od rdzenia nagrywania.
 
 ## Cel
 
@@ -44,8 +44,3 @@ Zmiana modelu ASR (wymaga ponownej transkrypcji), model per szablon, porównanie
 - `NoteMeta`: stary `meta.json` bez `modelOverrides` czyta się; zapis i odczyt `RoleOverride`; reset usuwa pole (mutacja bramki).
 - `NotesModel`: `generate`/`retryCorrection` biorą model z nadpisania; zmiana wyboru nie uruchamia pracy.
 - Migawki: chip w Summary i Transcript (domyślny, zmieniony, lokalny).
-
-## Do rozstrzygnięcia przez użytkownika
-
-- Zgoda na `notes/meta.json` jako miejsce zapisu (decyzja 1) i na „działa od następnego uruchomienia" (decyzja 3).
-- Numer fazy (propozycja: osobna mała pozycja przed 2.1 „Słownik", bo nie dotyka rdzenia).
