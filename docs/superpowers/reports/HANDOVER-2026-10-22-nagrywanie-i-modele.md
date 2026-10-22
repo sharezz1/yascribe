@@ -5,9 +5,9 @@ Dokumenty po polsku, interfejs aplikacji po angielsku. Zmiany do `master` tylko 
 
 ## Stan na koniec sesji
 
-- `master` = `6e075df` (po PR #1–#14), 581/581 (`scripts/test.sh`). Faza 2.0 scalona (tag `faza-2.0` → `7eebaea`).
-- **PR #15 otwarty** (`docs/tap-bluetooth`, tylko dokumentacja, czeka na „scal"): wpis w `BACKLOG.md` o torze `system` na słuchawkach Bluetooth + ten plik.
-- Artefakt „Mapa faz Yascribe": https://claude.ai/artifact/NH8mCRJsz9Y8AxVVBz7bKz (wersja 19). Każda zmiana w BACKLOG/ROADMAP/postępie ma go aktualizować: `Artifact read`, edycja, publikacja pod tym samym `url`.
+- `master` = `00e45b9` (po PR #1–#15), 581/581 (`scripts/test.sh`). Faza 2.0 scalona (tag `faza-2.0` → `7eebaea`).
+- PR #15 scalony: wpis w `BACKLOG.md` o torze `system` na słuchawkach Bluetooth + ten plik. Brak otwartych PR.
+- Artefakt „Mapa faz Yascribe": https://claude.ai/artifact/NH8mCRJsz9Y8AxVVBz7bKz (wersja 20). Każda zmiana w BACKLOG/ROADMAP/postępie ma go aktualizować: `Artifact read`, edycja, publikacja pod tym samym `url`.
 - Aplikacja uruchomiona z `scripts/run.sh` (build z `master`); dane w `.devdata/`. Nie zamykaj jej (zamyka użytkownik); `run.sh` odmówi, gdy działa.
 - **Nie wchodź shellem do katalogów sesji w `.devdata/sessions/…`** (hooki tworzą tam `.claude-flow/`, `.swarm/`). Czytaj je przez ścieżki bezwzględne (`Read`, `python3 -I` z pełną ścieżką).
 
