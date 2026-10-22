@@ -240,3 +240,8 @@ Czas trwania korekty nie zmierzony (przycisk kliknięty przed rozpoczęciem moni
 
 ### P4 potwierdzone przez użytkownika (2026-10-21)
 Menu Provider w presetach (Correction, Summary) nie oferuje ElevenLabs ani Yascribe; użytkownik sprawdził w aplikacji: „działa dobrze".
+
+### Testy użytkownika (2026-10-22): lokalna transkrypcja i poprawki P8–P10
+- **Lokalna transkrypcja po ponownym pobraniu modelu — zaliczona.** Sesja `2026-10-21T22-26-49Z-9a67`, preset „Parakeet PL": przebieg na `local://fluidaudio`, 2 okna (56 s audio), 0 nieudanych, 4 wypowiedzi, 2 s. Korekta przez API poszła o 00:29 (`failedBatches: 0`), więc **sieć była włączona przy korekcie**; stan Wi-Fi w czasie samej transkrypcji nie jest zapisany w danych — „offline" przyjmuję z deklaracji użytkownika, nie z pomiaru.
+- **P8** (Improve transcript ukryty bez wypowiedzi), **P9** (pełna nazwa presetu w nagłówku Meetings), **P10** (tor systemowy bez próbek to informacja, czas z najdłuższego toru): użytkownik potwierdził, „wszystko działa jak należy".
+- **Nowe, priorytet wysoki:** echo głośników w mikrofonie (BACKLOG, ROADMAP).

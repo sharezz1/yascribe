@@ -48,7 +48,7 @@ Lokalna ścieżka **obok API**, nie zamiast niego (decyzja użytkownika 2026-10-
 dało się bez rąk użytkownika: **S1** ([raport](spikes/2026-10-20-f20-s1-jakosc-asr.md), `6f2da98`), **odbiór 2.0a** ([T8](reports/F20-2.0a-odbior.md), `cec0263`/`aca4260`; wykryta U1 naprawiona w `11fb41d`),
 **odbiór 2.0b i przegląd całości** ([T14](reports/F20-2.0b-odbior.md), [przegląd](reports/F20-przeglad-calosci.md), `a8ad702`). **Znalezisko przed scaleniem:** Ollama + `bonsai-2` obcina wejście po cichu
 (obrona `usage.prompt_tokens` vs długość promptu — wdrożona w T14b, `606ee39`; [spec §14 „Korekta po T14”](specs/2026-10-19-faza20-lokalne-modele-design.md)).
-**Tylko użytkownik:** powtórzenie T8 przy wyłączonym Wi-Fi, klik „Download (483 MB)” (albo przeniesienie kopii z `.devdata/model-store`) i „Preparing…” w `.app`, nagranie na żywo dla kryterium 3.1 i pary PL+EN (T11),
+**Tylko użytkownik** (usunięcie modelu, „Download” i lokalna transkrypcja presetem „Parakeet PL” w `.app` zaliczone 2026-10-22; stan Wi-Fi nie zapisany w danych): nagranie na żywo dla kryterium 3.1 i pary PL+EN (T11),
 oMLX z modelem mieszczącym się w pamięci i własnym kluczem, baseline API (klucz, koszt, wysyłka do chmury), decyzje z przeglądu §5. Decyzje: [F20-decyzje-opusa](reports/F20-decyzje-opusa.md) (z listą „Do potwierdzenia rano").
 
 | Pozycja | Stan | Źródło |
@@ -90,7 +90,7 @@ Powód: test korekty na żywo (sesja z 2026-10-21, [lista poprawek](reports/F20-
 | `reloadSessions()` poza MainActorem, debounce zapisu ustawień | [BACKLOG](BACKLOG.md), aneks S18 |
 | Minimalna wersja macOS (`.macOS(15.0)` vs `LSMinimumSystemVersion 27.0`) | [BACKLOG](BACKLOG.md), aneks S18 |
 | Oś i czas trwania nagrań bez dźwięku systemowego („0 min”) | [BACKLOG](BACKLOG.md), [spec 1.5 §10](specs/2026-10-14-faza15-design.md) |
-| AEC offline (echo głośników w mikrofonie; w 1.5 jest filtr tekstowy) | [F15-T13 uwagi, A #2](reports/F15-T13-uwagi-uzytkownika.md) |
+| **PRIORYTET WYSOKI (użytkownik, 2026-10-22):** AEC offline (echo głośników w mikrofonie; w 1.5 jest filtr tekstowy, który w prawdziwym spotkaniu oznaczył 32 z 58 linii „Me”, ale nie łapie krótkich) | [F15-T13 uwagi, A #2](reports/F15-T13-uwagi-uzytkownika.md) |
 | Decyzja o „Auto” / parze języków na podstawie pomiaru T11 | [spec 1.5 decyzja 8](specs/2026-10-14-faza15-design.md) |
 
 ## Faza 3 (decyzja już zapadła)
