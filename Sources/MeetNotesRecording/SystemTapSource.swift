@@ -2,6 +2,12 @@ import AVFoundation
 import CoreAudio
 import Foundation
 
+/// Układ urządzenia zbiorczego tapa (faza 2.0.2, eksperyment T1). `.tapOnly` bez wyjścia jako podurządzenia
+/// robi inne narzędzie; domyślny zostaje dotychczasowy, dopóki odbiór M2b nie pokaże, że tapOnly niczego nie psuje.
+public enum AggregateLayout: Sendable {
+    case withOutputSubdevice, tapOnly
+}
+
 /// Trzy częstotliwości, które mogą się rozjechać na słuchawkach Bluetooth (faza 2.0.2): format tapa,
 /// nominalna częstotliwość urządzenia zbiorczego i bieżącego wyjścia. 0 = nie udało się odczytać.
 public struct TapRates: Equatable, Sendable {
@@ -36,7 +42,9 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
     private var rebuildPending = false
     private let rebuildQueue = DispatchQueue(label: "meetnotes.tap.rebuild")
 
-    public init() {}
+    private let layout: AggregateLayout
+
+    public init(layout: AggregateLayout = .withOutputSubdevice) { self.layout = layout }
 
     public func prepare() throws -> TrackFormat {
         let (tapFmt, uid) = try build()
@@ -68,6 +76,25 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         teardown()
     }
 
+    static func aggregateDescription(layout: AggregateLayout, outputUID: String, tapUUID: String) -> [String: Any] {
+        var d: [String: Any] = [
+            kAudioAggregateDeviceNameKey: "meetnotes-tap",
+            kAudioAggregateDeviceUIDKey: "meetnotes-tap-\(UUID().uuidString)",
+            kAudioAggregateDeviceIsPrivateKey: true,
+            kAudioAggregateDeviceIsStackedKey: false,
+            kAudioAggregateDeviceTapAutoStartKey: true,
+            kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: true, kAudioSubTapUIDKey: tapUUID]],
+        ]
+        switch layout {
+        case .withOutputSubdevice:
+            d[kAudioAggregateDeviceMainSubDeviceKey] = outputUID
+            d[kAudioAggregateDeviceSubDeviceListKey] = [[kAudioSubDeviceUIDKey: outputUID]]
+        case .tapOnly:
+            d[kAudioAggregateDeviceSubDeviceListKey] = [] as [[String: Any]]
+        }
+        return d
+    }
+
     /// Tworzy tap i urządzenie zbiorcze na bieżącym wyjściu. Zwraca format tapu i UID wyjścia.
     private func build() throws -> (AVAudioFormat, String) {
         let output = try CoreAudioDevices.defaultOutputDevice()
@@ -80,17 +107,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         var tapID = AudioObjectID(kAudioObjectUnknown)
         let st = AudioHardwareCreateProcessTap(desc, &tapID)
         guard st == noErr else { throw AudioSourceError.coreAudio("CreateProcessTap", st) }
-        let agg: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "meetnotes-tap",
-            kAudioAggregateDeviceUIDKey: "meetnotes-tap-\(UUID().uuidString)",
-            kAudioAggregateDeviceMainSubDeviceKey: outputUID,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceIsStackedKey: false,
-            kAudioAggregateDeviceTapAutoStartKey: true,
-            kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: outputUID]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: true,
-                                               kAudioSubTapUIDKey: desc.uuid.uuidString]],
-        ]
+        let agg = Self.aggregateDescription(layout: layout, outputUID: outputUID, tapUUID: desc.uuid.uuidString)
         var aggID = AudioObjectID(kAudioObjectUnknown)
         let st2 = AudioHardwareCreateAggregateDevice(agg as CFDictionary, &aggID)
         guard st2 == noErr else {
