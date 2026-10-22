@@ -106,6 +106,36 @@ public enum CoreAudioDevices {
         return v as String
     }
 
+    /// Urządzenia z strumieniem wejściowym (do menu wejścia w pigułce); bez naszego urządzenia zbiorczego tapa.
+    public static func inputDevices() -> [InputDevice] {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        var addr = address(kAudioHardwarePropertyDevices)
+        var size = UInt32(0)
+        guard AudioObjectGetPropertyDataSize(system, &addr, 0, nil, &size) == noErr else { return [] }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(system, &addr, 0, nil, &size, &ids) == noErr else { return [] }
+        return ids.compactMap { id in
+            var streams = address(kAudioDevicePropertyStreams, kAudioObjectPropertyScopeInput)
+            var streamsSize = UInt32(0)
+            guard AudioObjectGetPropertyDataSize(id, &streams, 0, nil, &streamsSize) == noErr, streamsSize > 0,
+                  let deviceUID = try? uid(of: id), let deviceName = try? name(of: id), !deviceName.hasPrefix("meetnotes-tap")
+            else { return nil }
+            return InputDevice(uid: deviceUID, name: deviceName)
+        }
+    }
+
+    public static func deviceID(forUID uid: String) throws -> AudioObjectID {
+        var addr = address(kAudioHardwarePropertyTranslateUIDToDevice)
+        var cfUID = uid as CFString
+        var id = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        let st = withUnsafeMutablePointer(to: &cfUID) {
+            AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, UInt32(MemoryLayout<CFString>.size), $0, &size, &id)
+        }
+        guard st == noErr, id != kAudioObjectUnknown else { throw AudioSourceError.deviceUnavailable("uid \(uid)") }
+        return id
+    }
+
     public static func defaultInputUID() -> String? { (try? defaultInputDevice()).flatMap { try? uid(of: $0) } }
     public static func defaultOutputUID() -> String? { (try? defaultOutputDevice()).flatMap { try? uid(of: $0) } }
 
