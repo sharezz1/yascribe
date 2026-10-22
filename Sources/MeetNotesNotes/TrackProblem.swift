@@ -31,10 +31,16 @@ public struct TrackProblem: Equatable, Sendable {
         let system = t.id == SessionSummary.timelineTrackID
         let name = system ? "System audio" : "Microphone"
         let lower = system ? "system audio" : "the microphone"
+        // Tory na tym samym urządzeniu Bluetooth: tryb rozmowy potrafi zablokować dźwięk systemowy (faza 2.0.2, sesja 08f6).
+        let other = tracks.first { $0.id != t.id && ($0.frames ?? 0) > 0 }
+        let sameHeadset = other.map { DeviceUID.same(t.deviceUIDs.last ?? "", $0.deviceUIDs.last ?? "") } ?? false
+        let headset = sameHeadset
+            ? " Both tracks were on the same headset; in call mode it can block system audio. Use the Mac's microphone or speakers."
+            : ""
         return TrackProblem(trackID: t.id, isWarning: false, name: name, line: "\(name) captured nothing.",
                             detail: "\(name) never received any sound, which is what happens when nothing is playing on this Mac. "
                                 + "The other track was recorded normally. If you expected \(lower), check System Settings → "
-                                + "Privacy & Security.")
+                                + "Privacy & Security.\(headset)")
     }
 
     static func classify(_ t: SessionSummary.Track, transcript: Transcript?) -> TrackProblem? {
@@ -47,7 +53,7 @@ public struct TrackProblem: Equatable, Sendable {
                                 detail: "macOS didn't let MeetNotes record \(lower) (\(p)). Allow it in System Settings → "
                                     + "Privacy & Security, then record again.")
         }
-        guard let reason = t.failure else { return nil }
+        guard let reason = t.failure else { return wrongSpeed(t, name: name) }
         guard reason.hasPrefix("allZeros") else {
             return TrackProblem(trackID: t.id, isWarning: true, name: name, line: "\(name) had a problem: \(reason).",
                                 detail: "The \(lower) track reported “\(reason)” while recording. What it captured is kept.\(total)")
@@ -83,6 +89,17 @@ public struct TrackProblem: Equatable, Sendable {
                                     + "permission looks, but it can also be a quiet start. Recording continued; the transcript "
                                     + "will show whether sound came later.\(total)")
         }
+    }
+
+    /// Zegar toru poszedł inaczej niż deklarowana częstotliwość (słuchawki Bluetooth zmieniające tryb): mowa jest przyspieszona
+    /// albo spowolniona, a transkrypt może jej nie rozpoznać (sesja ec0b: 6 słów zamiast 1832). Neutralne wobec przyczyny.
+    static func wrongSpeed(_ t: SessionSummary.Track, name: String) -> TrackProblem? {
+        guard let ratio = t.rateMismatch else { return nil }
+        let devices = t.deviceUIDs.isEmpty ? "" : " Devices: \(t.deviceUIDs.joined(separator: ", "))."
+        return TrackProblem(trackID: t.id, isWarning: true, name: name, line: "\(name) was recorded at the wrong speed.",
+                            detail: "The track's clock ran at \(Int((ratio * 100).rounded()))% of the declared rate, so its audio is sped up or "
+                                + "slowed down and speech may be missing from the transcript. Bluetooth headphones switching modes can "
+                                + "cause this. Record again with the Mac's microphone or speakers if it matters.\(devices)")
     }
 
     static func clock(_ s: Double) -> String {
