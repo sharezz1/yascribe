@@ -22,6 +22,10 @@ final class RecordingController {
     /// Ostatni poziom (dBFS) każdej ścieżki i nazwa mikrofonu — dla rozwiniętej pigułki.
     private(set) var levels: [String: Double] = [:]
     private(set) var micName = ""
+    /// Wyjście, z którego tap czyta dźwięk systemowy, i flaga „tor `system` milczy ≥ 30 s” (informacja, nie błąd:
+    /// w poczekalni na wbudowanych urządzeniach nic nie gra i tor nie dostaje klatek).
+    private(set) var outputName = ""
+    private(set) var systemStalled = false
     /// Tory wyciszone w pigułce (macos.md §11.5); każde nagranie startuje bez wyciszenia.
     private(set) var muted: Set<String> = []
     /// „Nothing is being recorded” po próbie wyciszenia ostatniego nagrywającego toru; znika po 4 s (decyzja 1).
@@ -62,6 +66,8 @@ final class RecordingController {
         muted = []
         muteWarning = false
         micName = CoreAudioDevices.defaultInputName() ?? "Unknown microphone"
+        outputName = CoreAudioDevices.defaultOutputName() ?? "Unknown output"
+        systemStalled = false
         started = Date()
         elapsed = 0
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
@@ -69,7 +75,9 @@ final class RecordingController {
                 self.elapsed = Date().timeIntervalSince(self.started)
                 // Źródło mikrofonu podąża za domyślnym wejściem systemu (np. AirPods podłączone w trakcie) — nazwa też.
                 self.micName = CoreAudioDevices.defaultInputName() ?? self.micName
+                self.outputName = CoreAudioDevices.defaultOutputName() ?? self.outputName
                 self.recorder?.tick()
+                self.systemStalled = self.recorder?.currentStalledTracks().contains("system") ?? false
             }
         }
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
@@ -98,13 +106,16 @@ final class RecordingController {
     var silentSeconds: Double { recorder?.silentSeconds() ?? 0 }
 
     /// Migawki (`Snapshots.swift`): kontroler w stanie „trwa nagranie” bez rejestratora i czasomierzy.
-    static func snapshotPreview(elapsed: TimeInterval, muted: Set<String> = [], muteWarning: Bool = false) -> RecordingController {
+    static func snapshotPreview(elapsed: TimeInterval, muted: Set<String> = [], muteWarning: Bool = false,
+                                systemStalled: Bool = false) -> RecordingController {
         let r = RecordingController()
         r.isRecording = true
         r.elapsed = elapsed
         r.presetLabel = "Polish · PL"
         r.micName = "MacBook Air Microphone"
-        r.levels = ["system": -22, "mic_raw": -41]
+        r.outputName = "MacBook Air Speakers"
+        r.systemStalled = systemStalled
+        r.levels = ["system": systemStalled ? -160 : -22, "mic_raw": -41]
         r.muted = muted
         r.muteWarning = muteWarning
         return r
@@ -450,7 +461,7 @@ struct RecordingPanelView: View {
                 .font(.callout).foregroundStyle(.mnText2).opacity(rec.muteWarning ? 0 : 1)
                 .overlay(alignment: .leading) { if rec.muteWarning { WarnLabel("Nothing is being recorded").lineLimit(1).fixedSize() } }
                 .padding(.leading, 16).padding(.top, 2).padding(.bottom, 14)
-            LevelRow(title: "System audio", db: rec.levels["system"], animated: !reduceMotion,
+            LevelRow(title: "System audio: \(rec.systemStalled ? "No system audio yet · " : "")\(rec.outputName)", db: rec.levels["system"], animated: !reduceMotion,
                      muted: rec.muted.contains("system")) { rec.toggleMute("system") }
             // Nazwa mikrofonu wyraźnie — żeby od razu było widać, gdy nagrywa nie ten (decyzja użytkownika).
             LevelRow(title: "Microphone: \(rec.micName)", db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion,

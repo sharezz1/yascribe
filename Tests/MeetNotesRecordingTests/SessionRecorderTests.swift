@@ -239,6 +239,22 @@ private final class Pump: AudioSource, @unchecked Sendable {
     #expect(try SessionDirectory(url: dir).summarize().tracks.first { $0.id == "system" }?.failure == nil)
 }
 
+@Test func currentStalledTracksShowsStallUntilItRecovers() throws {
+    // Pigułka: „No system audio yet” po 30 s bez klatek, znika po pierwszej porcji.
+    let dir = sessionDir()
+    let clock = ManualHostClock(0)
+    let sys = Pump("system"), mic = Pump("mic_raw")
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: clock, timebase: ns, zeroWatch: [:])
+    try r.start()
+    for k in 1...29 { clock.set(UInt64(k) * s); mic.pump(at: k); r.tick() }
+    #expect(r.currentStalledTracks().isEmpty)
+    clock.set(31 * s); mic.pump(at: 31); r.tick()
+    #expect(r.currentStalledTracks() == ["system"])
+    clock.set(32 * s); sys.pump(at: 32); r.tick()
+    #expect(r.currentStalledTracks().isEmpty)
+    r.stop()
+}
+
 @Test func stallDoesNotOverwriteEarlierFailure() throws {
     // S4 P2: tor, którego start() rzucił, nie dostaje po 30 s drugiego track.failed nadpisującego przyczynę.
     final class Broken: AudioSource, @unchecked Sendable {
