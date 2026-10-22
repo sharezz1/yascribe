@@ -159,7 +159,7 @@ struct CLI {
         try tap.start { if case .chunk(let c) = $0 { stats.add(c, channels: format.channels) } }
         func report(_ label: String) {
             let r = tap.rates()
-            print("[\(label)] tapFormat=\(r.map { String(Int($0.tapFormat)) } ?? "?") aggregateNominal=\(r.map { String(Int($0.aggregateNominal)) } ?? "?") "
+            print("[\(label)] wejście=\"\(CoreAudioDevices.defaultInputName() ?? "?")\" wyjście=\"\(CoreAudioDevices.defaultOutputName() ?? "?")\" tapFormat=\(r.map { String(Int($0.tapFormat)) } ?? "?") aggregateNominal=\(r.map { String(Int($0.aggregateNominal)) } ?? "?") "
                   + "outputNominal=\(r.map { String(Int($0.outputNominal)) } ?? "?") deklarowane=\(Int(format.sampleRate)) \(stats.takeLine())")
         }
         let half = args.contains("--with-mic") ? seconds / 2 : seconds
