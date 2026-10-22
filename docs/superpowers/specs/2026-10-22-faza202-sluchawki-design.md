@@ -75,6 +75,7 @@ S odwraca dwie jawne decyzje projektu, ale Granola dowodzi, że SCK działa na t
 
 - **D1: przyjęta.** Opcja T plus równoległy spike S1 (ScreenCaptureKit jako pomiar). D1a: Wispr Flow i Granola sprawdzone na prawdziwych spotkaniach, wejście i wyjście na słuchawkach (konfiguracja A).
 - **D2: używamy urządzenia, które jest aktualnie używane (domyślnego), także gdy to słuchawki.** Bez automatycznego przełączania na wbudowany mikrofon (T4 zostaje jako informacja, nie jako zmiana urządzenia).
+  Potwierdzone 2026-10-22: „używane urządzenie" = domyślne urządzenia systemu, nie urządzenie wykryte w Teams.
   Do pigułki dochodzi **opcja zmiany wejścia**, nieinwazyjna: użytkownik może jej użyć, ale nie musi; domyślne zachowanie bez zmian.
 - **D3: wybór urządzenia wchodzi do 2.0.2, ale tylko jako ta opcja w pigułce** (wejście; wyjście toru `system` dalej podąża za domyślnym wyjściem systemu, bez wyboru w interfejsie). Użytkownik nie chce rozbudowanego wyboru urządzeń: aplikacja ma pozostać prosta.
   Żadnych nowych ekranów w Settings, żadnych pytań przed startem.

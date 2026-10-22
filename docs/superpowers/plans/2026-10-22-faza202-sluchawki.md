@@ -20,7 +20,7 @@ Przeczytaj przed startem. Użytkownik nie powinien oczekiwać:
 - Automatycznej zmiany mikrofonu (D2).
 - Przejścia na ScreenCaptureKit: Task 10 to wyłącznie pomiar na osobnej gałęzi.
 - Ostrzeżenia przy nagraniach krótszych niż 20 s i przy torze bez kotwic zegara (poza istniejącą informacją o torze bez klatek).
-- Wykrywania urządzenia, którego **używa spotkanie** (Teams): D2 rozumiemy jako „domyślne urządzenia systemu, a gdy to słuchawki, to słuchawki". BACKLOG notuje przypadek, gdy Teams używał MacBooka, a domyślne były słuchawki; wtedy pomaga menu wejścia z Task 8–9 (ręcznie). **Założenie do potwierdzenia przez użytkownika: bramka STOP przed Task 7** (Task 7–9 nie startują bez potwierdzenia; Task 1–6 i 10 nie zależą od tej odpowiedzi).
+- Wykrywania urządzenia, którego **używa spotkanie** (Teams): D2 rozumiemy jako „domyślne urządzenia systemu, a gdy to słuchawki, to słuchawki". BACKLOG notuje przypadek, gdy Teams używał MacBooka, a domyślne były słuchawki; wtedy pomaga menu wejścia z Task 8–9 (ręcznie). **Potwierdzone przez użytkownika 2026-10-22** („tak, masz rację"): D2 = domyślne urządzenia systemu; bramka STOP przed Task 7 zamknięta.
 
 ## Mapowanie spec ↔ plan
 
