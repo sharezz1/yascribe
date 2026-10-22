@@ -23,6 +23,7 @@ Anty-cel: poprawka, która psuje działającą konfigurację (urządzenia wbudow
 | słuchawki / głośniki MacBooka (B) | zdrowy, 48 000 Hz |
 | wbudowane / wbudowane (`82c4`) | zdrowy |
 
+Uwaga (S0b): w `ec0b` audio z toru `system` było kompletne, tylko oznaczone złą częstotliwością (16 kHz zapisane jako 48 kHz); transkrypcja po odczycie jako 16 kHz: 84 wypowiedzi, 1832 słowa.
 Trzy osobne zjawiska: **A** martwy lub zwolniony tap, gdy mikrofon i wyjście są na tych samych słuchawkach (tryb rozmowy HFP);
 **C** rozjazd częstotliwości przy samym wyjściu na słuchawkach (A2DP); **D** (z BACKLOG) pigułka milczy, gdy tor jest martwy (naprawione w PR #17 dla przypadku „0 klatek po 30 s").
 
@@ -45,6 +46,8 @@ Zmiany, od najtańszej:
    FluidVoice #592 opisuje dokładnie ten brak jako przyczynę „time-stretched" audio po przejściu A2DP→HFP.
 4. **T4, alarm o martwym torze podczas spotkania:** pigułka po 30 s bez klatek już pokazuje „No system audio yet · <wyjście>" (PR #17). Dodać: gdy **mikrofon i wyjście to to samo urządzenie Bluetooth**, komunikat podpowiada przyczynę
    („Headset in call mode may block system audio. Use the Mac's microphone or speakers."). Informacja, nie błąd; cisza w poczekalni dalej jest normalna.
+5a. **T6, naprawa istniejących sesji:** w S0b `ec0b` odzyskano 1832 słowa „Them" po odczytaniu `system.caf` jako 16 kHz. Narzędzie (CLI albo przycisk w szczegółach spotkania) wyliczałoby rzeczywistą częstotliwość z kotwic `track.clock`, poprawiało nagłówek CAF (z kopią zapasową) i ponawiało transkrypcję.
+   Zmienia dane użytkownika, więc wymaga jego zgody dla każdej sesji.
 5. **T5, ostrzeżenie w widoku spotkania po nagraniu:** gdy `czas toru / czas sesji` odbiega od 1 o więcej niż 5 %, wiersz ostrzeżenia ze stosunkiem i urządzeniami (z dziennika). Dotyczy A i C.
 
 ### Opcja S: ScreenCaptureKit zamiast tapa
