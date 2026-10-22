@@ -271,6 +271,9 @@ enum Snapshots {
                 try render("pill-expanded-nosystem", size: CGSize(width: 400, height: 270), dark: dark, model: model) {
                     RecordingPanelView(model: model, recording: RecordingController.snapshotPreview(elapsed: 754, systemStalled: true), pill: open)
                 }
+                try render("pill-expanded-nosystem-headset", size: CGSize(width: 400, height: 270), dark: dark, model: model) {
+                    RecordingPanelView(model: model, recording: RecordingController.snapshotPreview(elapsed: 754, headsetStall: true), pill: open)
+                }
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Preset: Polish · PL").font(.caption).foregroundStyle(.secondary)

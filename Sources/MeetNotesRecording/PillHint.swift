@@ -5,6 +5,6 @@ import MeetNotesSessionFormat
 public enum PillHint {
     public static func systemStalled(stalled: Bool, micUID: String, outputUID: String, isBluetooth: Bool) -> String? {
         guard stalled, isBluetooth, DeviceUID.same(micUID, outputUID) else { return nil }
-        return "Headset in call mode may block system audio. Switch the microphone or the output."
+        return "Headset in call mode may block system audio."
     }
 }
