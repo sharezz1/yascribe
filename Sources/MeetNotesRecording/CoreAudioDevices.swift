@@ -58,6 +58,16 @@ public enum CoreAudioDevices {
         return rate
     }
 
+    /// Format wejścia IOProc: format tapa, ale z rzeczywistą częstotliwością urządzenia zbiorczego. Tap zgłasza zawsze
+    /// 48 kHz, a zegar dostarczania idzie za urządzeniem (44,1 kHz na A2DP, 16 kHz w trybie rozmowy; faza 2.0.2, M1).
+    /// Zgodne częstotliwości (urządzenia wbudowane) zwracają ten sam obiekt, więc działający tor się nie zmienia.
+    static func captureFormat(tap: AVAudioFormat, deviceRate: Double) -> AVAudioFormat {
+        guard deviceRate > 0, abs(deviceRate - tap.sampleRate) > 0.5 else { return tap }
+        var d = tap.streamDescription.pointee
+        d.mSampleRate = deviceRate
+        return format(d) ?? tap
+    }
+
     public static func tapFormat(of tap: AudioObjectID) throws -> AVAudioFormat {
         var addr = address(kAudioTapPropertyFormat)
         var asbd = AudioStreamBasicDescription()
