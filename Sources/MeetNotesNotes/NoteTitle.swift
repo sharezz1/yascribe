@@ -7,6 +7,8 @@ public struct NoteMeta: Codable, Equatable, Sendable {
     public var autoTitle: String?
     /// Powiązane wydarzenie z kalendarza (migawka). Opcjonalne: stary `meta.json` czyta się bez zmian.
     public var calendarEvent: CalendarLink?
+    /// Model wybrany dla tego nagrania zamiast presetowego (faza 2.0.1). Opcjonalne: stary `meta.json` czyta się bez zmian.
+    public var modelOverrides: ModelOverrides?
     public init(manualTitle: String? = nil, autoTitle: String? = nil) {
         self.manualTitle = manualTitle
         self.autoTitle = autoTitle

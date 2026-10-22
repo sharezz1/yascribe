@@ -33,3 +33,31 @@ private func preset(_ name: String, summary: String?) -> Preset {
     #expect(SummaryModel.resolve(frozen: frozen, defaultPresetID: noSummary.id, presets: [frozen, noSummary]) == nil)
     #expect(SummaryModel.resolve(frozen: preset("Blank", summary: "  "), defaultPresetID: nil, presets: []) == nil) // pusty model to brak modelu
 }
+
+@Test func overrideWinsOverFrozenPresetAndCarriesThinking() {
+    let frozen = preset("Polski", summary: "own-model")
+    let o = RoleOverride(providerID: UUID(), model: "picked", thinking: false)
+    let c = SummaryModel.resolve(frozen: frozen, override: o, defaultPresetID: nil, presets: [frozen])
+    #expect(c?.isOverride == true)
+    #expect(c?.assignment.model == "picked")
+    #expect(c?.assignment.providerID == o.providerID)
+    #expect(c?.thinking == false)
+    #expect(c?.presetName == "Polski")
+    #expect(c?.label == nil)
+}
+
+@Test func overrideWorksWhenNoPresetHasASummary() {
+    let o = RoleOverride(providerID: UUID(), model: "picked")
+    let c = SummaryModel.resolve(frozen: nil, override: o, defaultPresetID: nil, presets: [])
+    #expect(c?.assignment.model == "picked")
+    #expect(c?.presetName == "")
+    #expect(c?.thinking == nil)
+}
+
+@Test func noOverrideKeepsTheOldResult() {
+    let frozen = preset("Polski", summary: "own-model")
+    let c = SummaryModel.resolve(frozen: frozen, override: nil, defaultPresetID: nil, presets: [frozen])
+    #expect(c?.assignment.model == "own-model")
+    #expect(c?.isOverride == false)
+    #expect(c?.thinking == nil)
+}
