@@ -29,6 +29,8 @@ final class NotesModel {
     var clientFor: (UUID) -> OpenAICompatibleClient? = { _ in nil }
     var presetFor: (URL) -> Preset? = { _ in nil }
     var presetsInfo: () -> (presets: [Preset], defaultID: UUID?) = { ([], nil) }
+    /// Dostawcy, którzy jeszcze istnieją; nadpisanie wskazujące innego jest nieważne (faza 2.0.1).
+    var knownProviderIDs: () -> Set<UUID> = { [] }
     /// `GlobalSettings.summaryThinkingEnabled`: czy model API może „myśleć" przy notatce.
     var summaryThinking: () -> Bool = { true }
     /// Przerywniki do usunięcia z poprawionego tekstu (F20 P2); pusta lista = nic nie usuwamy.
@@ -44,6 +46,7 @@ final class NotesModel {
     /// Trwające generowanie (klucz: id sesji); token odróżnia przebieg anulowany od nowego na tej samej sesji.
     private var generationRuns: [String: (token: UUID, task: Task<Void, Never>)] = [:]
     private var saveTasks: [String: Task<Void, Never>] = [:]
+    private var staleReported: Set<String> = []
     /// Treść My notes czekająca na autozapis (klucz: id sesji).
     private var pendingSaves: [String: (session: URL, text: String)] = [:]
 
@@ -52,7 +55,46 @@ final class NotesModel {
     /// Model podsumowania dla tego nagrania: z jego presetu, a gdy go tam nie ma — z presetu domyślnego (patrz `SummaryModel`).
     func summaryChoice(for item: SessionItem) -> SummaryChoice? {
         let info = presetsInfo()
+        return SummaryModel.resolve(frozen: presetFor(item.url), override: usableOverride(.summary, for: item),
+                                    defaultPresetID: info.defaultID, presets: info.presets)
+    }
+
+    /// To samo bez nadpisania: model, do którego wraca „Use preset".
+    func presetSummaryChoice(for item: SessionItem) -> SummaryChoice? {
+        let info = presetsInfo()
         return SummaryModel.resolve(frozen: presetFor(item.url), defaultPresetID: info.defaultID, presets: info.presets)
+    }
+
+    func presetCorrection(for item: SessionItem) -> RoleAssignment? {
+        CorrectionModel.resolve(frozen: presetFor(item.url), override: nil)
+    }
+
+    func correctionAssignment(for item: SessionItem) -> RoleAssignment? {
+        CorrectionModel.resolve(frozen: presetFor(item.url), override: usableOverride(.correction, for: item))
+    }
+
+    func overrides(for item: SessionItem) -> ModelOverrides { item.notes.meta.modelOverrides ?? ModelOverrides() }
+
+    private func usableOverride(_ role: Role, for item: SessionItem) -> RoleOverride? {
+        overrides(for: item).usable(role, knownProviders: knownProviderIDs())
+    }
+
+    /// Zapisane nadpisanie jest, ale nie działa (np. dostawca usunięty): wracamy do presetu i mówimy o tym.
+    private func reportStaleOverride(_ role: Role, for item: SessionItem) {
+        guard overrides(for: item).isStale(role, knownProviders: knownProviderIDs()),
+              staleReported.insert("\(item.id)/\(role.rawValue)").inserted else { return } // raz na uruchomienie, nie przy każdym przebiegu
+        report("The model you chose for this meeting is no longer available. Using the preset's.")
+    }
+
+    /// Zapisuje wybór modelu przy sesji (`nil` = wróć do presetu). Niczego nie uruchamia; trwające przebiegi zostają przy modelu z chwili startu.
+    func setOverride(_ role: Role, _ value: RoleOverride?, item: SessionItem) {
+        guard !isMoving() else { report(Self.movingMessage); return }
+        do {
+            if let note = try NotesStore(session: item.url).updateMeta({ $0.setOverride(role, value) }) { report(note) }
+        } catch {
+            report("Couldn't save the model choice: \(error)")
+        }
+        onChange()
     }
 
     func isCorrecting(_ id: String) -> Bool { correcting.contains(id) }
@@ -65,16 +107,20 @@ final class NotesModel {
         // Bez wypowiedzi (np. wszystkie okna padły offline) nie ma czego poprawiać: przycisk nic by nie zrobił; wtedy jest „Retry Failed Parts”.
         guard !correcting.contains(item.id), state(item.id) != .generating, item.runID != nil,
               let transcript = item.transcript, !transcript.utterances.isEmpty else { return false }
-        guard let c = presetFor(item.url)?.correction, !c.model.isEmpty else { return false }
-        return correctionFailure[item.id] != nil || item.corrected == nil || (item.corrected?.failedBatches ?? 0) > 0
+        guard correctionAssignment(for: item) != nil else { return false }
+        // Własny model korekty pozwala puścić ją jeszcze raz także po udanej, żeby porównać modele (nadpisuje corrected.json).
+        return usableOverride(.correction, for: item) != nil || correctionFailure[item.id] != nil
+            || item.corrected == nil || (item.corrected?.failedBatches ?? 0) > 0
     }
 
     func retryCorrection(_ item: SessionItem) {
         guard !isMoving() else { report(Self.movingMessage); return }
-        guard canRetryCorrection(item), let preset = presetFor(item.url), let c = preset.correction,
+        guard canRetryCorrection(item), let c = correctionAssignment(for: item),
               let runID = item.runID, let t = item.transcript else { return }
+        reportStaleOverride(.correction, for: item)
         let url = item.url
-        Task { _ = await runCorrection(sessionURL: url, runID: runID, assignment: c, language: preset.language, transcript: t) }
+        let language = presetFor(url)?.language
+        Task { _ = await runCorrection(sessionURL: url, runID: runID, assignment: c, language: language, transcript: t) }
     }
 
     /// Jedna korekta; stan ZAWSZE się kończy: sukces (corrected.json), albo `correctionFailure` z powodem.
@@ -129,11 +175,12 @@ final class NotesModel {
             generation[id] = .failed("Couldn't reach the summary provider. Check Settings.")
             return
         }
+        reportStaleOverride(.summary, for: item)
         generation[id] = .generating
         let limits = ChatLimits.for(client.provider, call: .note)
         var generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
                                       chatTimeout: limits.transport, maxTokens: limits.maxTokens)
-        generator.thinking = summaryThinking()
+        generator.thinking = choice.thinking ?? summaryThinking()
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url
@@ -196,13 +243,17 @@ final class NotesModel {
     func afterTranscription(sessionURL: URL, runID: String, snapshot: RunSnapshot, transcript: Transcript) async {
         let id = sessionURL.lastPathComponent
         var working = transcript
-        if let corr = snapshot.preset.correction, !corr.model.isEmpty {
+        // Wznowienie też bierze własny model sesji (jeśli jest), nie tylko preset.
+        let saved = NotesStore(session: sessionURL).readMeta().modelOverrides
+        let known = knownProviderIDs()
+        if let corr = CorrectionModel.resolve(frozen: snapshot.preset, override: saved?.usable(.correction, knownProviders: known)) {
             working = await runCorrection(sessionURL: sessionURL, runID: runID, assignment: corr,
                                           language: snapshot.language, transcript: transcript)
         }
         // Ten sam wybór modelu co przy „Generate notes": preset nagrania → domyślny → dowolny z `summary` (`SummaryModel`).
         let info = presetsInfo()
-        if let choice = SummaryModel.resolve(frozen: snapshot.preset, defaultPresetID: info.defaultID, presets: info.presets),
+        if let choice = SummaryModel.resolve(frozen: snapshot.preset, override: saved?.usable(.summary, knownProviders: known),
+                                             defaultPresetID: info.defaultID, presets: info.presets),
            let client = clientFor(choice.assignment.providerID) {
             titling.insert(id)
             onChange()
