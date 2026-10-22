@@ -48,6 +48,12 @@ public final class SessionRecorder: @unchecked Sendable {
         return levels
     }
 
+    /// Tory po `stalled…`, które jeszcze nie dostały porcji (znikają po `track.recovered`) — dla informacji na pigułce.
+    public func currentStalledTracks() -> Set<String> {
+        lock.lock(); defer { lock.unlock() }
+        return stalledTracks
+    }
+
     /// Sekundy od ostatniej głośnej porcji (ten sam próg i ten sam `lastLoudAt` co `SilenceCondition`) — dla pytania "Meeting ended?".
     public func silentSeconds() -> Double {
         let now = clock.now()
