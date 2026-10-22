@@ -201,7 +201,7 @@ nie są tu kopiowane.
   Drugi objaw tej samej sesji: mikrofon 79 dziur (razem 14,4 s) i tor systemowy 92 dziury (15,6 s), najgęściej ok. 766.–812. s zegara; w tekście „Me" brak ok. 48 s (755 s → 803 s).
   Do zrobienia: potwierdzić hipotezę (np. `system.caf` odczytany jako 16 kHz przez lokalny Parakeet), naprawić (ponowne czytanie formatu tapa albo przeliczanie), dopisać test (tap z formatem innym niż zapisany; mutacja bramki), ostrzeżenie w widoku, gdy tor ma wyraźnie mniej audio niż trwa sesja. Zobacz też „Tor systemowy bez ani jednej próbki" (PR #13): to inny przypadek, tor bez klatek.
   **Zrobione (PR faza22-pill-system-audio, 2026-10-22):** pigułka pokazuje nazwę wyjścia w wierszu „System audio", a po 30 s bez klatek „No system audio yet · <nazwa wyjścia>" (informacja, nie ostrzeżenie; znika po `track.recovered`). Zostaje: wybór urządzeń przed startem, pomiar na słuchawkach, formatu tapa czytany raz.
-  - **Faza:** rdzeń nagrywania — numer wybiera użytkownik. Powiązane: wybór mikrofonu, AEC offline.
+  - **Faza 2.0.2 „Nagrywanie na słuchawkach"** (decyzja użytkownika 2026-10-22). W zakresie: pomiar na słuchawkach, format tapa czytany raz (`SystemTapSource.swift:77`, `:92`), ostrzeżenie, gdy tor ma wyraźnie mniej audio niż trwa sesja; pigułka z PR #17 jest pierwszym krokiem tej fazy. Do ustalenia z użytkownikiem: czy wybór mikrofonu i wyjścia przed startem (spec 1.5 decyzja 4) wchodzi do 2.0.2, czy ma osobną fazę. Specyfikacji i planu jeszcze nie ma. Powiązane: wybór mikrofonu, AEC offline.
 
 ## Zapisane (dla kroniki)
 
