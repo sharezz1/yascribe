@@ -101,6 +101,7 @@ final class AppModel {
             || !UserDefaults.standard.bool(forKey: "systemAudioVerified")
         notes.clientFor = { [weak self] in self?.client(for: $0) }
         notes.presetFor = { [weak self] in self?.presetFor(sessionURL: $0) }
+        notes.knownProviderIDs = { [weak self] in Set(self?.providers.providers.map(\.id) ?? []) }
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
         notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }

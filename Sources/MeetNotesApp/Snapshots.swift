@@ -138,11 +138,35 @@ enum Snapshots {
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
                     let summaryTab = MeetingViewState(); summaryTab.tab = .summary
                     try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
+                    // Faza 2.0.1: chip modelu zmieniony dla tego nagrania (z „changed" i linią pochodzenia), lokalny (bez „Thinking"), popover wprost.
+                    if let cloud = model.providers.providers.first(where: { !$0.isLocal }) {
+                        var changed = withNotes
+                        changed.notes.meta.modelOverrides = ModelOverrides(summary: RoleOverride(providerID: cloud.id, model: "anthropic/claude-sonnet-4.5", thinking: false))
+                        changed.notes.summary?.model = "anthropic/claude-sonnet-4.5"
+                        try render("meeting-summary-model-changed", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: changed, state: summaryTab) }
+                        try render("model-popover-changed", size: CGSize(width: 340, height: 270), dark: dark, model: model) { MeetingModelChip(role: .summary, item: changed, inlinePopover: true) }
+                        let ollama = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!, contextTokens: 8_192)
+                        model.providers.providers.append(ollama)
+                        var onMac = withNotes
+                        onMac.notes.meta.modelOverrides = ModelOverrides(summary: RoleOverride(providerID: ollama.id, model: "qwen3:8b"))
+                        try render("meeting-summary-model-local", size: CGSize(width: 900, height: 200), dark: dark, model: model) { MeetingDetailView(item: onMac, state: summaryTab) }
+                        try render("model-popover-local", size: CGSize(width: 340, height: 230), dark: dark, model: model) { MeetingModelChip(role: .summary, item: onMac, inlinePopover: true) }
+                        model.providers.providers.removeAll { $0.id == ollama.id }
+                    }
                     // UX po T13: notatka z podziału (linia „Long meeting"), generowanie z postępem i „Cancel", korekta blokuje generowanie.
                     // Fixture nie ładuje transkryptu z dysku; bez niego „Generate notes" jest nieaktywne z innego powodu.
                     var split = withNotes; split.notes.summary?.condensedParts = 4
                     split.transcript = try JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8))
                     try render("meeting-summary-split", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: split, state: summaryTab) }
+                    // Faza 2.0.1: korekta innym modelem niż preset — „Corrected with …", chip i przycisk po gotowej korekcie.
+                    if let cloud = model.providers.providers.first(where: { !$0.isLocal }), let t = split.transcript {
+                        var picked = split
+                        picked.runID = "snapshot-run"
+                        picked.corrected = CorrectedTranscript(transcript: t, model: "anthropic/claude-haiku-4.5", batches: 1, failedBatches: 0, rejectedLines: 0)
+                        picked.notes.meta.modelOverrides = ModelOverrides(correction: RoleOverride(providerID: cloud.id, model: "anthropic/claude-haiku-4.5"))
+                        let transcriptView = MeetingViewState(); transcriptView.tab = .transcript
+                        try render("meeting-transcript-model", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: picked, state: transcriptView) }
+                    }
                     var unwritten = split; unwritten.notes.summary = nil
                     model.notes.setPreview(unwritten.id, generating: .condensing(pass: 1, part: 3, of: 6))
                     try render("meeting-summary-generating", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: unwritten, state: summaryTab) }

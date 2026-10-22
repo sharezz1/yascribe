@@ -170,12 +170,18 @@ struct TranscriptTab: View {
                                 .help("Corrections that failed a check were left as the model heard them")
                         }
                     }
+                    if let c = item.corrected, c.model != model.notes.correctionAssignment(for: item)?.model {
+                        Text("Corrected with \(c.model)").font(.callout).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle)
+                    }
                     Spacer(minLength: 0)
+                    // Chip także przy gotowej korekcie: bez niego nie dałoby się wybrać innego modelu, a dopiero wtedy pojawia się przycisk.
+                    if item.runID != nil, item.transcript?.utterances.isEmpty == false { MeetingModelChip(role: .correction, item: item) }
                     if model.notes.correctionFailureMessage(item.id) == nil, model.notes.canRetryCorrection(item) {
                         Button("Improve transcript") { model.notes.retryCorrection(item) }
                             .buttonStyle(.pill)
+                            .layoutPriority(2)
                             .disabled(moving)
-                            .help("Run the preset's correction model on this transcript")
+                            .help("Run the correction model on this transcript")
                     }
                     copyButton
                 }
@@ -293,6 +299,12 @@ struct SummaryTab: View {
                 .font(.callout).foregroundStyle(.mnWarn)
         }
     }
+    /// Spec 6: notatka powstała innym modelem niż ten z presetu — jedna linia, znika po zgodności.
+    private var madeWithLine: String? {
+        guard let made = item.notes.summary?.model, let preset = model.notes.presetSummaryChoice(for: item)?.assignment.model,
+              made != preset else { return nil }
+        return "Made with \(made) (preset: \(preset))"
+    }
     private var hasText: Bool {
         guard let t = item.transcript(corrected: state.useCorrected) else { return false }
         return !NotePromptBuilder.transcriptLines(t).isEmpty
@@ -308,6 +320,7 @@ struct SummaryTab: View {
         VStack(alignment: .leading, spacing: 12) {
             bar(item.notes.summary)
             if choice?.isFallback == true || choice == nil { modelLine }
+            if let made = madeWithLine { Text(made).font(.subheadline).foregroundStyle(.mnText2) }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
             if gen == .generating { generatingRow }
             if correcting, gen != .generating, hasText {
@@ -381,14 +394,12 @@ struct SummaryTab: View {
                 .disabled(moving)
                 .help(state.showContext ? "Hide the context field" : "Add or change the context for the model")
                 .accessibilityValue(state.showContext ? "Expanded" : "Collapsed")
-                if let c = choice {
-                    Text(c.assignment.model).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1)
-                        .layoutPriority(1) // id modelu wygrywa z kontekstem (przegląd migawek: „deepseek/…-fla…”)
-                        .help(c.label ?? "Summary model")
-                }
+                MeetingModelChip(role: .summary, item: item)
+                    .layoutPriority(1) // id modelu wygrywa z kontekstem (przegląd migawek: „deepseek/…-fla…”)
                 if let s {
                     Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
                         .buttonStyle(.pill)
+                        .layoutPriority(2) // długi id modelu skraca się sam, przycisk nie
                         .disabled(gen == .generating || !hasText || choice == nil || moving || correcting)
                     Button { copy(s.markdown) } label: { Image(systemName: "doc.on.doc") }
                         .buttonStyle(CircleIconButtonStyle())
