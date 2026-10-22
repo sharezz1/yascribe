@@ -20,7 +20,7 @@ Przeczytaj przed startem. Użytkownik nie powinien oczekiwać:
 - Automatycznej zmiany mikrofonu (D2).
 - Przejścia na ScreenCaptureKit: Task 10 to wyłącznie pomiar na osobnej gałęzi.
 - Ostrzeżenia przy nagraniach krótszych niż 20 s i przy torze bez kotwic zegara (poza istniejącą informacją o torze bez klatek).
-- Wykrywania urządzenia, którego **używa spotkanie** (Teams): D2 rozumiemy jako „domyślne urządzenia systemu, a gdy to słuchawki, to słuchawki". BACKLOG notuje przypadek, gdy Teams używał MacBooka, a domyślne były słuchawki; wtedy pomaga menu wejścia z Task 8–9 (ręcznie). **Założenie do potwierdzenia przez użytkownika.**
+- Wykrywania urządzenia, którego **używa spotkanie** (Teams): D2 rozumiemy jako „domyślne urządzenia systemu, a gdy to słuchawki, to słuchawki". BACKLOG notuje przypadek, gdy Teams używał MacBooka, a domyślne były słuchawki; wtedy pomaga menu wejścia z Task 8–9 (ręcznie). **Założenie do potwierdzenia przez użytkownika: bramka STOP przed Task 7** (Task 7–9 nie startują bez potwierdzenia; Task 1–6 i 10 nie zależą od tej odpowiedzi).
 
 ## Mapowanie spec ↔ plan
 
@@ -91,12 +91,12 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
 - Produces: `CoreAudioDevices.nominalSampleRate(of device: AudioObjectID) throws -> Double` (`kAudioDevicePropertyNominalSampleRate`, zakres globalny);
   `public struct TapRates: Equatable, Sendable { public var tapFormat: Double; public var aggregateNominal: Double; public var outputNominal: Double }`;
   `SystemTapSource.rates() -> TapRates?` (po `prepare()`, `nil` przed nim).
-- CLI: `meetnotes-cli tap-rate [--seconds N]` (domyślnie 10) wypisuje `tapFormat`, `aggregateNominal`, `outputNominal` oraz **zmierzoną** częstotliwość dostarczania (suma klatek porcji / czas zegara hosta) w jednej linii.
+- CLI: `meetnotes-cli tap-rate [--seconds N] [--with-mic] [--tap-only]` (domyślnie 10 s) wypisuje `tapFormat`, `aggregateNominal`, `outputNominal`, **zmierzoną** częstotliwość dostarczania (suma klatek porcji / czas zegara hosta) i poziom RMS dostarczonych próbek (dBFS; sprawdza, że to nie cisza) w jednej linii. `--with-mic` otwiera `RawMicrophoneSource` **po** starcie tapa, jak aplikacja, i wypisuje te same wartości także po otwarciu mikrofonu (profil słuchawek przełącza się dopiero wtedy; hipoteza S0b). `--tap-only` dochodzi w Task 5.
 
 - [ ] **Step 1:** Zaimplementuj (bez testu jednostkowego: odczyt sprzętu; uzasadnienie w komunikacie commita).
 - [ ] **Step 2: Run** `scripts/test.sh` — Expected: 599/599; `swift build` bez nowych ostrzeżeń kompilatora.
 - [ ] **Step 3: Commit.**
-- [ ] **Step 4: STOP M1 (użytkownik).** Użytkownik uruchamia `meetnotes-cli tap-rate --seconds 15` z dźwiękiem puszczonym przez cały czas w konfiguracjach **C**, **B**, **W** i **A** (A najlepiej z aktywnym połączeniem, np. Teams, żeby słuchawki były w trybie rozmowy); wkleja wyniki. Wykonawca zapisuje liczby w raporcie S0 (sekcja „M1") i **wybiera źródło prawdy dla Task 3**: tę z trzech wartości, która zgadza się ze zmierzoną w C, B i W. **A nie blokuje bramki:** jeśli w A zmierzone dostarczanie to 0 (brak częstotliwości do porównania), zapisz to jako „A otwarte" i przejdź dalej; A rozstrzygają Task 5, 10 i M4. Brak wartości zgodnej z C/B/W = STOP, wynik wraca do użytkownika.
+- [ ] **Step 4: STOP M1 (użytkownik).** Użytkownik uruchamia `meetnotes-cli tap-rate --seconds 15 --with-mic` z dźwiękiem puszczonym przez cały czas w konfiguracjach **C**, **B**, **W** i **A** (A najlepiej z aktywnym połączeniem, np. Teams, żeby słuchawki były w trybie rozmowy); wkleja wyniki. Wykonawca zapisuje liczby w raporcie S0 (sekcja „M1") i **wybiera źródło prawdy dla Task 3**: tę z trzech wartości, która zgadza się ze zmierzoną w C, B i W. **A nie blokuje bramki:** jeśli w A zmierzone dostarczanie to 0 (brak częstotliwości do porównania), zapisz to jako „A otwarte" i przejdź dalej; A rozstrzygają Task 5, 10 i M4. Brak wartości zgodnej z C/B/W = STOP, wynik wraca do użytkownika.
 
 ### Task 3: Rzeczywista częstotliwość wejścia tapa (T2; naprawa C i `ec0b`)
 
@@ -126,17 +126,17 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
 
 **Interfaces:**
 - Consumes: Task 3 (`captureFormat` używany przez `startCapture()` w `rebuild()`).
-- Produces: `enum RebuildDecision: Equatable { case now; case deferred(until: Double); case refuse }`;
-  `struct RebuildGate { init(minInterval: Double = 1.0, maxPerMinute: Int = 6); mutating func decide(now: Double) -> RebuildDecision }` — `.now`, gdy od ostatniej przebudowy minęło co najmniej `minInterval` i w ostatnich 60 s było mniej niż `maxPerMinute`; `.deferred(until: ostatnia + minInterval)`, gdy za wcześnie (jedno ponowienie na końcu serii, więc **ostatni stan jest zawsze zastosowany**); `.refuse`, gdy osiągnięto `maxPerMinute` (do końca okna minuty).
-  `DeviceWatcher(object: AudioObjectID, selector: AudioObjectPropertySelector)`: nasłuch na konkretnym obiekcie; `stop()` bez zmian.
-  `SystemTapSource`: nasłuch `kAudioDevicePropertyNominalSampleRate` na urządzeniu zbiorczym **i** na bieżącym wyjściu; **istniejący nasłuch zmiany domyślnego wyjścia też przechodzi przez bramkę**. `installListeners()` wołane w `start()` **i na końcu każdego `rebuild()`** (nowe urządzenie zbiorcze ma nowy `AudioObjectID`); `removeListeners()` w `teardown()` i `stop()`. `.deferred` planuje jedno ponowienie (`DispatchQueue.asyncAfter`), `.refuse` nic nie emituje: **żadnego `AudioSourceEvent.failed`** (patrz Global Constraints); skutek zła prędkość pokaże ostrzeżenie z Task 6.
+- Produces: `enum RebuildDecision: Equatable { case now; case deferred(until: Double) }`;
+  `struct RebuildGate { init(minInterval: Double = 1.0, maxPerMinute: Int = 6); mutating func decide(now: Double) -> RebuildDecision }` — `.now`, gdy od ostatniej przebudowy minęło co najmniej `minInterval` i w ostatnich 60 s było mniej niż `maxPerMinute`; `.deferred(until: ostatnia + minInterval)`, gdy za wcześnie; `.deferred(until: najstarsza przebudowa w oknie + 60)`, gdy osiągnięto `maxPerMinute`. Bramka **nigdy nie odrzuca**: zawsze wyznacza termin, więc ostatni stan jest zastosowany bez następnego zdarzenia (pętla A2DP↔HFP zwalnia do `maxPerMinute` na minutę, ale końcowy stan jest poprawny).
+  `DeviceWatcher(object: AudioObjectID, selector: AudioObjectPropertySelector)`: nasłuch na konkretnym obiekcie. `stop()` musi zdejmować nasłuch z **zapamiętanego** obiektu: dziś robi to zawsze na `kAudioObjectSystemObject` (`DeviceWatcher.swift` l. 23), więc `init` zapamiętuje obiekt (istniejący `init(selector:)` ustawia obiekt systemowy).
+  `SystemTapSource`: nasłuch `kAudioDevicePropertyNominalSampleRate` na urządzeniu zbiorczym **i** na bieżącym wyjściu. `kAudioStreamPropertyVirtualFormat` (spec §3 T3) pomijamy **świadomie**: wymaga obiektu strumienia; dodać, jeśli M4 pokaże zmianę formatu bez zmiany częstotliwości nominalnej (spec poprawiony zgodnie z tą decyzją); **istniejący nasłuch zmiany domyślnego wyjścia też przechodzi przez bramkę**. `installListeners()` wołane w `start()` **i na końcu każdego `rebuild()`** (nowe urządzenie zbiorcze ma nowy `AudioObjectID`); `removeListeners()` w `teardown()` i `stop()`. `.deferred(until:)` planuje **jedno** oczekujące ponowienie naraz (`DispatchQueue.asyncAfter`; kolejne zdarzenia w czasie oczekiwania są scalane, a ponowienie czyta stan z chwili wykonania). Bramka niczego nie emituje: **żadnego `AudioSourceEvent.failed`** (patrz Global Constraints).
 
-- [ ] **Step 1: Write the failing tests:** `gateAllowsTheFirstRebuild` (`.now`); `gateDefersASecondRebuildWithinTheMinimumInterval` (0 s `.now`, 0,5 s `.deferred(until: 1.0)`, 1,2 s `.now`); `gateRefusesAfterTheCapAndAllowsAfterAMinute` (sześć `.now` w odstępach 2 s, siódma w 12,5 s `.refuse`, w 61 s od pierwszej `.now`).
+- [ ] **Step 1: Write the failing tests:** `gateAllowsTheFirstRebuild` (`.now`); `gateDefersASecondRebuildWithinTheMinimumInterval` (0 s `.now`, 0,5 s `.deferred(until: 1.0)`, 1,2 s `.now`); `gateDefersToTheEndOfTheMinuteAfterTheCap` (sześć `.now` w odstępach 2 s od 0 s, siódma w 12,5 s `.deferred(until: 60.0)`, w 61 s `.now`).
 - [ ] **Step 2: Run** — Expected: FAIL.
 - [ ] **Step 3: Implement** bramkę, `DeviceWatcher(object:selector:)` i podłączenie w `SystemTapSource` jak wyżej.
 - [ ] **Step 4: Run** `scripts/test.sh` — Expected: 605/605.
 - [ ] **Step 5: Commit.** Nasłuch sprzętowy bez testu jednostkowego (jak `DeviceWatcher` dziś); weryfikuje go M4.
-- [ ] **Step 6: Mutation** (po commicie): `minInterval` na 0 (pada drugi test); `maxPerMinute` na 100 (pada trzeci); `git checkout` po każdej.
+- [ ] **Step 6: Mutation** (po commicie): `minInterval` na 0 (pada drugi test); `maxPerMinute` na 100 (pada trzeci: siódma byłaby `.now`); `git checkout` po każdej.
 
 ### Task 5: Eksperyment: układ urządzenia zbiorczego bez wyjścia (T1; bramka M2b i decyzja D4)
 
@@ -145,7 +145,7 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
 - Test: `Tests/MeetNotesRecordingTests/AggregateLayoutTests.swift`
 
 **Interfaces:**
-- Produces: `enum AggregateLayout { case withOutputSubdevice, tapOnly }`; `SystemTapSource.init(layout: AggregateLayout = .withOutputSubdevice)` (domyślnie zachowanie dzisiejsze);
+- Produces: `public enum AggregateLayout { case withOutputSubdevice, tapOnly }`; `public init(layout: AggregateLayout = .withOutputSubdevice)` w `SystemTapSource` (domyślnie zachowanie dzisiejsze; `public`, bo używa go `meetnotes-cli`);
   `static func aggregateDescription(layout: AggregateLayout, outputUID: String, tapUUID: String) -> [String: Any]` — dla `.withOutputSubdevice` jak dziś (`kAudioAggregateDeviceMainSubDeviceKey`, `kAudioAggregateDeviceSubDeviceListKey` z wyjściem); dla `.tapOnly` pusta lista podurządzeń i **brak** klucza głównego podurządzenia (jak OpenWhispr).
 
 - [ ] **Step 1: Write the failing tests:** `tapOnlyLayoutHasNoSubDevices` (pusta lista, brak `MainSubDevice`), `outputLayoutKeepsTheOutputAsMainSubDevice` (klucz równy `outputUID`, lista z jedną pozycją).
@@ -164,10 +164,10 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
 
 **Interfaces:**
 - Consumes: Task 1 (`rateMismatch`, `DeviceUID.same`); `SessionSummary.Track.deviceUIDs` (ostatni element = urządzenie na końcu nagrania).
-- Produces: (a) w `TrackProblem.of(…)` tor z `rateMismatch != nil` (bez `failure`/`permissionDenied`) daje ostrzeżenie (`isWarning: true`): `line: "System audio was recorded at the wrong speed."` (dla mikrofonu „Microphone was recorded at the wrong speed."), `detail`: „The track's clock ran at N% of the declared rate, so its audio is sped up or slowed down and speech may be missing from the transcript. Bluetooth headphones switching modes can cause this. Record again with the Mac's microphone or speakers if it matters." (`N` = zaokrąglony procent `rateMismatch × 100`; treść neutralna: nie rozstrzyga HFP czy A2DP).
+- Produces: (a) w `TrackProblem.of(…)` tor z `rateMismatch != nil` (bez `failure`/`permissionDenied`) daje ostrzeżenie (`isWarning: true`): `line: "System audio was recorded at the wrong speed."` (dla mikrofonu „Microphone was recorded at the wrong speed."), `detail`: „The track's clock ran at N% of the declared rate, so its audio is sped up or slowed down and speech may be missing from the transcript. Bluetooth headphones switching modes can cause this. Record again with the Mac's microphone or speakers if it matters. Devices: <UID urządzeń toru z dziennika, po przecinku>." (`N` = zaokrąglony procent `rateMismatch × 100`; treść neutralna: nie rozstrzyga HFP czy A2DP).
   (b) `neverStarted` (tor `system`, 0 klatek, drugi tor nagrał): gdy `DeviceUID.same(system.deviceUIDs.last, mic.deviceUIDs.last)`, do `detail` dochodzi zdanie „Both tracks were on the same headset; in call mode it can block system audio. Use the Mac's microphone or speakers." (inaczej tekst bez zmian).
 
-- [ ] **Step 1: Write the failing tests:** `wrongSpeedTrackIsAWarning` (48 000/16 500, kotwice ≥ 20 s → `isWarning`, `line` jak wyżej, `detail` zawiera „34%"), `healthyRateGivesNoProblem`, `wrongSpeedDoesNotMaskAFailure` (`failure: "stalled30s"` zachowuje dotychczasowy komunikat), `neverStartedOnTheSameHeadsetMentionsCallMode`, `neverStartedOnDifferentDevicesKeepsTheOldText`.
+- [ ] **Step 1: Write the failing tests:** `wrongSpeedTrackIsAWarning` (48 000/16 500, kotwice ≥ 20 s → `isWarning`, `line` jak wyżej, `detail` zawiera „34%" oraz UID z `deviceUIDs`), `healthyRateGivesNoProblem`, `wrongSpeedDoesNotMaskAFailure` (`failure: "stalled30s"` zachowuje dotychczasowy komunikat), `neverStartedOnTheSameHeadsetMentionsCallMode`, `neverStartedOnDifferentDevicesKeepsTheOldText`.
 - [ ] **Step 2: Run** — Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** `scripts/test.sh` — Expected: 612/612.
@@ -183,8 +183,8 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
 
 **Interfaces:**
 - Consumes: Task 1 (`DeviceUID.same`).
-- Produces: `enum PillHint { static func systemStalled(stalled: Bool, micUID: String, outputUID: String, isBluetooth: Bool) -> String? }` — gdy `stalled && DeviceUID.same(micUID, outputUID) && isBluetooth`: „Headset in call mode may block system audio. Switch the microphone or the output."; inaczej `nil` (informacja, nie błąd).
-  `RecordingController`: nowe pola `micUID`, `outputUID`, `micIsBluetooth`, odświeżane w istniejącym liczniku co sekundę razem z `micName`/`outputName`; `stallHint: String?` wywołuje `PillHint.systemStalled`; wiersz pigułki pokazuje podpowiedź pod wierszem systemowym tylko przy `stallHint != nil`.
+- Produces: `public enum PillHint { public static func systemStalled(stalled: Bool, micUID: String, outputUID: String, isBluetooth: Bool) -> String? }` (`public`, bo używa go `MeetNotesApp`) — gdy `stalled && DeviceUID.same(micUID, outputUID) && isBluetooth`: „Headset in call mode may block system audio. Switch the microphone or the output."; inaczej `nil` (informacja, nie błąd).
+  `RecordingController`: nowe pola `micUID`, `outputUID`, `micIsBluetooth`, odświeżane w istniejącym liczniku co sekundę razem z `micName`/`outputName`; w tym zadaniu `micUID` = `defaultInputUID()` (Task 9 przełącza na UID faktycznie otwartego wejścia, bo po ręcznym wyborze domyślne już nie jest nagrywane); `stallHint: String?` wywołuje `PillHint.systemStalled`; wiersz pigułki pokazuje podpowiedź pod wierszem systemowym tylko przy `stallHint != nil`.
 
 - [ ] **Step 1: Write the failing tests:** `hintAppearsForAStalledTrackOnTheSameBluetoothHeadset`, `hintIsAbsentWithoutAStall`, `hintIsAbsentForADifferentOrWiredDevice` (inne UID albo `isBluetooth == false`).
 - [ ] **Step 2: Run** — Expected: FAIL.
@@ -193,7 +193,7 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
 - [ ] **Step 5: Commit.**
 - [ ] **Step 6: Mutation** (po commicie): zawsze `nil` (pada pierwszy); pominięty `isBluetooth` (pada trzeci); `git checkout`.
 
-### Task 8: Wejście w pigułce: rdzeń
+### Task 8: Wejście w pigułce: rdzeń (prefactoring bez ścieżki użytkownika; ścieżkę i demo dostarcza Task 9)
 
 **Files:**
 - Create: `Sources/MeetNotesRecording/InputChoice.swift`
@@ -205,7 +205,7 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
   `CoreAudioDevices.inputDevices() -> [InputDevice]` (urządzenia ze strumieniem wejściowym, bez urządzeń zbiorczych „meetnotes-tap");
   `CoreAudioDevices.deviceID(forUID uid: String) throws -> AudioObjectID`;
   `enum InputChoice { static func resolve(preferred: String?, available: [InputDevice], defaultUID: String?) -> String?` (UID do użycia: `preferred`, jeśli jest na liście; inaczej `defaultUID`; `nil` = domyślne systemu); `static func needsReopen(current: String?, preferred: String?, available: [InputDevice], defaultUID: String?) -> Bool` (prawda, gdy `resolve(...) != current`) `}`;
-  `RawMicrophoneSource.select(deviceUID: String?)` — zapamiętuje preferencję (pole pod `lock`) i woła `reopen()`; `open()` używa `InputChoice.resolve` oraz `deviceID(forUID:)` zamiast `defaultInputDevice()`; `currentInputName: String?` (pod `lock`, ustawiane w `open()`).
+  `RawMicrophoneSource.select(deviceUID: String?)` — zapamiętuje preferencję (pole pod `lock`) i woła `reopen()`; `public var currentInputUID: String?` (pod `lock`, obok `currentInputName`); `open()` używa `InputChoice.resolve` oraz `deviceID(forUID:)` zamiast `defaultInputDevice()`; `currentInputName: String?` (pod `lock`, ustawiane w `open()`).
   Nasłuch: oprócz nasłuchu domyślnego wejścia `RawMicrophoneSource` nasłuchuje `kAudioHardwarePropertyDevices` (lista urządzeń) i przy zmianie woła `reopen()` **tylko gdy** `needsReopen` (odłączenie ręcznie wybranego wejścia przy niezmienionym domyślnym); przebudowa przez `RebuildGate` z Task 4.
 
 - [ ] **Step 1: Write the failing tests:** `choiceKeepsThePreferredDeviceWhenPresent`, `choiceFallsBackToTheDefaultWhenThePreferredDeviceVanishes`, `choiceWithoutPreferenceUsesTheSystemDefault`, `choiceIsNilWhenThereIsNothingToChoose`, `reopenWhenThePreferredDeviceVanished`, `noReopenWhenTheChoiceIsUnchanged`.
@@ -215,14 +215,14 @@ Słownictwo: „tor `system`" = kanał „Them" = „System audio" w interfejsie
 - [ ] **Step 5: Commit.**
 - [ ] **Step 6: Mutation** (po commicie): `resolve` zawsze zwraca `preferred` (pada test znikającego urządzenia); `needsReopen` zawsze `false` (pada `reopenWhenThePreferredDeviceVanished`); `git checkout`.
 
-### Task 9: Wejście w pigułce: interfejs
+### Task 9: Wejście w pigułce: interfejs (cięcie pionowe: menu → przełączenie → pigułka pokazuje faktyczne wejście)
 
 **Files:**
 - Modify: `Sources/MeetNotesApp/RecordingController.swift`, `Sources/MeetNotesApp/Snapshots.swift`
 
 **Interfaces:**
 - Consumes: Task 8.
-- Produces: `RecordingController` trzyma referencję `private var mic: RawMicrophoneSource?` utworzoną w `start(…)` (dziś `RawMicrophoneSource()` jest w literale tablicy, `RecordingController.swift` l. 50, bez referencji) i przekazaną do `SessionRecorder`; `selectInput(uid: String?)` woła `mic?.select(deviceUID:)`; `micName` w liczniku sekundowym to `mic?.currentInputName ?? CoreAudioDevices.defaultInputName()` (zamiast bezwarunkowego nadpisywania domyślnym, l. 77). W wierszu „Microphone: <nazwa>" mała strzałka `⌄` otwiera `Menu`: „System default" (zaznaczone domyślnie) i lista `inputDevices()`. Bez nowych ekranów, bez zapisu preferencji.
+- Produces: `RecordingController` trzyma referencję `private var mic: RawMicrophoneSource?` utworzoną w `start(…)` (dziś `RawMicrophoneSource()` jest w literale tablicy, `RecordingController.swift` l. 50, bez referencji) i przekazaną do `SessionRecorder`; `selectInput(uid: String?)` woła `mic?.select(deviceUID:)`; `micName` w liczniku sekundowym to `mic?.currentInputName ?? CoreAudioDevices.defaultInputName()` (zamiast bezwarunkowego nadpisywania domyślnym, l. 77), a `micUID` to `mic?.currentInputUID ?? CoreAudioDevices.defaultInputUID()`, z `micIsBluetooth` liczonym dla tego UID (`isBluetooth(uid:)`), żeby podpowiedź z Task 7 diagnozowała **faktycznie nagrywane** wejście. W wierszu „Microphone: <nazwa>" mała strzałka `⌄` otwiera `Menu`: „System default" (zaznaczone domyślnie) i lista `inputDevices()`. Bez nowych ekranów, bez zapisu preferencji.
 
 - [ ] **Step 1: Implement** (kod UI; testy jednostkowe nie dotyczą: aplikacja nie ma celu testowego; logika jest w Task 8).
 - [ ] **Step 2: Run** `scripts/test.sh` — Expected: 621/621 (bez zmian); `scripts/snapshot.sh` z migawką `pill-input-menu` (menu rysowane jako lista w miejscu, jak popover w migawkach 2.0.1; światło i ciemny).
@@ -240,7 +240,7 @@ Niezależny od Task 3–9: może ruszyć zaraz po Task 2, równolegle (D1 „ró
 
 ### Task 11: Odbiór na żywo, dokumenty, przegląd
 
-- [ ] **Step 1: STOP M4 (użytkownik):** nowy build (`scripts/run.sh`), nagranie **A** na prawdziwym spotkaniu Teams, 3–5 min, oraz krótkie **W**. Kryteria dla A: tor `system` ma klatki; `Track.rateMismatch == nil`; transkrypt „Them" zawiera rozmówców; pigułka nie pokazuje fałszywego alarmu; menu wejścia działa (zmiana na wbudowany mikrofon, powrót do „System default", wyłączenie wybranych słuchawek w trakcie nagrania wraca do domyślnego z `device.changed` w dzienniku). Wykonawca czyta dziennik i podsumowanie ścieżkami bezwzględnymi.
+- [ ] **Step 1: STOP M4 (użytkownik):** nowy build (`scripts/run.sh`), nagranie **A** na prawdziwym spotkaniu Teams, 3–5 min, oraz krótkie **W**. Kryteria dla A: tor `system` ma klatki; `effectiveSampleRate` toru `system` w granicach **±0,1 %** deklarowanej (`rateMismatch == nil` to tylko dolna poprzeczka ±5 %, niewystarczająca dla celu fazy); transkrypt „Them" zawiera rozmówców; pigułka nie pokazuje fałszywego alarmu; menu wejścia działa (zmiana na wbudowany mikrofon, powrót do „System default", wyłączenie wybranych słuchawek w trakcie nagrania wraca do domyślnego z `device.changed` w dzienniku). Wykonawca czyta dziennik i podsumowanie ścieżkami bezwzględnymi.
 - [ ] **Step 2: Gdy kryteria A niespełnione:** STOP. Wykonawca nie ogłasza sukcesu; raport z danymi (M1–M4, M2b, ewentualnie M3) idzie do użytkownika z opcjami: promocja `.tapOnly` (Task 5), przejście na ScreenCaptureKit (wymaga zmiany uprawnień), albo udokumentowanie ograniczenia i poprzestanie na komunikatach (Task 6, 7). Decyzja należy do użytkownika.
 - [ ] **Step 3:** Zaktualizuj `docs/superpowers/BACKLOG.md` (pozycja o słuchawkach: zrobione/niezrobione z dowodami), `docs/superpowers/ROADMAP.md` (faza 2.0.2), `CLAUDE.md` (akapit fazy 2.0.2, liczba testów), raport S0 (M1, M2, M2b, M4), oraz artefakt „Mapa faz".
 - [ ] **Step 4:** Przegląd całej gałęzi świeżym recenzentem (Review Focus powyżej verbatim), poprawki jednym przebiegiem, PR do `master`; scala użytkownik.

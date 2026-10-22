@@ -42,7 +42,7 @@ Zmiany, od najtańszej:
    Ryzyko: odwraca decyzję z kodu fazy 1 (tap „związany z urządzeniem wyjściowym", `SystemTapSource.swift`, `…MainSubDeviceKey`) i może zmienić dryf. Wymaga pomiaru na wbudowanych urządzeniach i na słuchawkach.
 2. **T2, częstotliwość z urządzenia, nie z tapa:** po utworzeniu urządzenia zbiorczego odczytać `kAudioDevicePropertyNominalSampleRate` i, gdy różni się od `tapFormat`, przeliczyć (`AVAudioConverter`) do deklarowanej w CAF.
    Naprawia C niezależnie od T1. Test: tap z formatem innym niż zapisany (mutacja bramki).
-3. **T3, nasłuch zmian:** `kAudioStreamPropertyVirtualFormat` i `kAudioDevicePropertyNominalSampleRate` urządzenia zbiorczego, plus istniejące `device.changed`; przy zmianie przebudować taśmę (`rebuild()` już jest) i wpisać zdarzenie do dziennika.
+3. **T3, nasłuch zmian:** `kAudioDevicePropertyNominalSampleRate` urządzenia zbiorczego i bieżącego wyjścia (`kAudioStreamPropertyVirtualFormat` świadomie pominięte w planie: wymaga obiektu strumienia, do dodania, jeśli odbiór pokaże zmianę formatu bez zmiany częstotliwości), plus istniejące `device.changed`; przy zmianie przebudować taśmę (`rebuild()` już jest) i wpisać zdarzenie do dziennika.
    FluidVoice #592 opisuje dokładnie ten brak jako przyczynę „time-stretched" audio po przejściu A2DP→HFP.
 4. **T4, alarm o martwym torze podczas spotkania:** pigułka po 30 s bez klatek już pokazuje „No system audio yet · <wyjście>" (PR #17). Dodać: gdy **mikrofon i wyjście to to samo urządzenie Bluetooth**, komunikat podpowiada przyczynę
    („Headset in call mode may block system audio. Use the Mac's microphone or speakers."). Informacja, nie błąd; cisza w poczekalni dalej jest normalna.
