@@ -1,6 +1,6 @@
 # Faza 2.0.2: Nagrywanie na słuchawkach Bluetooth (specyfikacja)
 
-Status: **szkic do decyzji użytkownika** (2026-10-22), bez kodu. Faza przypisana przez użytkownika 2026-10-22.
+Status: **decyzje D1–D3 podjęte przez użytkownika 2026-10-22** (sekcja 5), bez kodu. Faza przypisana przez użytkownika 2026-10-22.
 Dowody: `docs/superpowers/spikes/2026-10-22-f202-s0-sluchawki.md` (pomiar S0, trzy nagrania, kod i zgłoszenia FluidVoice, Meetily, OpenWhispr)
 i pozycja „PRIORYTET WYSOKI … słuchawki Bluetooth" w `docs/superpowers/BACKLOG.md`.
 Wszystkie przyczyny poniżej są **hipotezami**, dopóki nie padną w pomiarze po zmianie.
@@ -71,14 +71,16 @@ Opcja T, w kolejności T2 → T3 → T1 (eksperyment) → T4 → T5, każdy krok
 (throwaway CLI przechwytujący przez SCK przy konfiguracji A, wymaga zgody użytkownika na Screen Recording dla tego jednego narzędzia; wynik: czy SCK daje klatki i poprawną prędkość w A, B, C). Uzasadnienie: T zmienia mało kodu i nie dotyka zaufania do aplikacji;
 S odwraca dwie jawne decyzje projektu, ale Granola dowodzi, że SCK działa na tych słuchawkach, więc wart pomiaru. Jeśli S1 rozwiąże A, a T nie, decyzja o przejściu na S wraca do użytkownika z danymi.
 
-## 5. Decyzje użytkownika
+## 5. Decyzje użytkownika (2026-10-22)
 
-- **D1.** Czy rekomendacja (T plus równoległy spike S1 jako pomiar) jest przyjęta, czy chcesz S od razu?
-- **D1a.** W jakiej konfiguracji sprawdzałeś Wispr Flow i Granolę (wejście i wyjście na słuchawkach, jak A)?
-- **D2.** Przypadek A: czy dopuszczasz, żeby aplikacja **sama** wybrała wbudowany mikrofon, gdy domyślne wejście i wyjście to to samo urządzenie Bluetooth (z widoczną informacją w pigułce),
-  czy ma tylko ostrzegać (T4) i nagrywać domyślne? Automat zmienia, czyj głos nagrywamy, dlatego pytam.
-- **D3.** Czy wybór mikrofonu i wyjścia przed startem wchodzi do 2.0.2, czy osobna faza (moja propozycja: osobna)?
-- **D4.** Czy T1 (zmiana budowy urządzenia zbiorczego) ma wejść do kodu produkcyjnego dopiero po pomiarze, że niczego nie psuje na urządzeniach wbudowanych? (rekomendacja: tak)
+- **D1: przyjęta.** Opcja T plus równoległy spike S1 (ScreenCaptureKit jako pomiar). D1a: Wispr Flow i Granola sprawdzone na prawdziwych spotkaniach, wejście i wyjście na słuchawkach (konfiguracja A).
+- **D2: używamy urządzenia, które jest aktualnie używane (domyślnego), także gdy to słuchawki.** Bez automatycznego przełączania na wbudowany mikrofon (T4 zostaje jako informacja, nie jako zmiana urządzenia).
+  Do pigułki dochodzi **opcja zmiany wejścia**, nieinwazyjna: użytkownik może jej użyć, ale nie musi; domyślne zachowanie bez zmian.
+- **D3: wybór urządzenia wchodzi do 2.0.2, ale tylko jako ta opcja w pigułce** (wejście; wyjście toru `system` dalej podąża za domyślnym wyjściem systemu, bez wyboru w interfejsie). Użytkownik nie chce rozbudowanego wyboru urządzeń: aplikacja ma pozostać prosta.
+  Żadnych nowych ekranów w Settings, żadnych pytań przed startem.
+- **D4: tak** (zmiana budowy urządzenia zbiorczego T1 wchodzi do kodu produkcyjnego dopiero po pomiarze, że niczego nie psuje na urządzeniach wbudowanych) — rekomendacja przyjęta domyślnie, bo użytkownik nie zgłosił sprzeciwu; do potwierdzenia przy planie.
+
+Skutek dla zakresu: cel fazy to poprawne nagrywanie następnych spotkań na słuchawkach, bez zmiany tego, którego mikrofonu używamy, i bez nowej złożoności w interfejsie.
 
 ## 6. Do ustalenia przez wykonawcę
 
