@@ -29,6 +29,12 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
     /// Po `stop()` przebudowa z kolejki obserwatora nie może zostawić capture ani tapu (P8).
     private var stopped = false
     private let watcher = DeviceWatcher(selector: kAudioHardwarePropertyDefaultOutputDevice)
+    /// Nasłuchy nominalnej częstotliwości urządzenia zbiorczego i wyjścia; nowe urządzenie zbiorcze po `rebuild()` ma nowy
+    /// `AudioObjectID`, więc zakładamy je od nowa po każdej przebudowie (faza 2.0.2: w A częstotliwość spada do 16 kHz w trakcie nagrania).
+    private var rateWatchers: [DeviceWatcher] = []
+    private var gate = RebuildGate()
+    private var rebuildPending = false
+    private let rebuildQueue = DispatchQueue(label: "meetnotes.tap.rebuild")
 
     public init() {}
 
@@ -50,11 +56,13 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
     public func start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws {
         lock.lock(); self.handler = handler; lock.unlock()
         try startCapture()
-        watcher.start { [weak self] in self?.rebuild() }
+        installRateListeners()
+        watcher.start { [weak self] in self?.requestRebuild() }
     }
 
     public func stop() {
         watcher.stop()
+        removeRateListeners()
         lock.lock(); stopped = true; let c = capture; capture = nil; lock.unlock()
         c?.stop()
         teardown()
@@ -116,7 +124,45 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         if late { c.stop() }
     }
 
+    private func installRateListeners() {
+        removeRateListeners()
+        lock.lock(); let agg = aggregate; lock.unlock()
+        var objects = [agg]
+        if let out = try? CoreAudioDevices.defaultOutputDevice() { objects.append(out) }
+        let watchers = objects.filter { $0 != kAudioObjectUnknown }
+            .map { DeviceWatcher(object: $0, selector: kAudioDevicePropertyNominalSampleRate) }
+        for w in watchers { w.start { [weak self] in self?.requestRebuild() } }
+        lock.lock(); rateWatchers = watchers; lock.unlock()
+    }
+
+    private func removeRateListeners() {
+        lock.lock(); let ws = rateWatchers; rateWatchers = []; lock.unlock()
+        for w in ws { w.stop() }
+    }
+
+    /// Wszystkie powody przebudowy (zmiana domyślnego wyjścia, zmiana częstotliwości) idą przez bramkę. Odroczone ponowienie
+    /// jest jedno naraz, a stan czyta w chwili wykonania, więc nie ginie ostatnia zmiana w serii.
+    private func requestRebuild() {
+        lock.lock()
+        if stopped || rebuildPending { lock.unlock(); return }
+        let now = ProcessInfo.processInfo.systemUptime
+        switch gate.decide(now: now) {
+        case .now:
+            lock.unlock()
+            rebuild()
+        case .deferred(let until):
+            rebuildPending = true
+            lock.unlock()
+            rebuildQueue.asyncAfter(deadline: .now() + max(until - now, 0)) { [weak self] in
+                guard let self else { return }
+                self.lock.lock(); self.rebuildPending = false; self.lock.unlock()
+                self.requestRebuild()
+            }
+        }
+    }
+
     private func teardown() {
+        removeRateListeners()
         lock.lock()
         let agg = aggregate, tapID = tap
         aggregate = AudioObjectID(kAudioObjectUnknown)
@@ -133,6 +179,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         do {
             let (_, uid) = try build()
             try startCapture()
+            installRateListeners()
             h?(.deviceChanged(uid))
         } catch {
             h?(.failed("rebuild: \(error)"))
