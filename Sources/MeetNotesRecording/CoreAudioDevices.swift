@@ -82,4 +82,10 @@ public enum CoreAudioDevices {
         guard let d = try? defaultInputDevice() else { return nil }
         return try? name(of: d)
     }
+
+    /// Nazwa wyjścia, z którego tap czyta dźwięk systemowy (domyślne wyjście systemu).
+    public static func defaultOutputName() -> String? {
+        guard let d = try? defaultOutputDevice() else { return nil }
+        return try? name(of: d)
+    }
 }
