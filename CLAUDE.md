@@ -84,7 +84,7 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
   Odbiory i przegląd: `docs/superpowers/reports/F20-2.0a-odbior.md` (T8), `docs/superpowers/reports/F20-2.0b-odbior.md` (T14, sprzęt),
   `docs/superpowers/reports/F20-przeglad-calosci.md` (T14, przegląd całości gałęzi: spójna ze specem, jeden wyjątek — ciche obcięcie wejścia).
 
-**Faza 2.0.1 „Zmiana modelu w spotkaniu"** (PR #20, niescalony): chip modelu w Summary i przy „Improve transcript", wybór zapisany przy sesji w `notes/meta.json` (`modelOverrides`, opcjonalne),
+**Faza 2.0.1 „Zmiana modelu w spotkaniu"** (scalona do `master` 2026-10-22: PR #19 plan `bed13d5`, PR #20 kod `0409a3f`, `--merge`): chip modelu w Summary i przy „Improve transcript", wybór zapisany przy sesji w `notes/meta.json` (`modelOverrides`, opcjonalne),
 preset i `RunSnapshot` bez zmian. `master` po PR #17 (pigułka: wyjście i „No system audio yet"): **582/582**; gałąź 2.0.1: **592/592**. Odbiór na żywo czeka na użytkownika.
 Spec: `docs/superpowers/specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md`, plan: `docs/superpowers/plans/2026-10-22-faza201-zmiana-modelu.md`.
 
