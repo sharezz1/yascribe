@@ -229,6 +229,19 @@ import MeetNotesSessionFormat
         #expect(RunLanguage.of(RunSelection.of(session: t).snapshot, fallback: sessionPreset) == RunLanguage(language: nil, isAuto: true))
     }
 
+    @Test func olderCorrectionFailureCannotOverwriteNewerEarlyFailure() {
+        // A poprawia; B (nowy bieżący) zaczyna i od razu pada bez klienta; potem pada A.
+        var owners: [String: String] = [:]
+        owners["s"] = old                                                          // start A
+        owners["s"] = new                                                          // start B — własność przed wczesnym wyjściem
+        #expect(CorrectionOwnership.finish(&owners, session: "s", runID: new))    // B zapisuje swoją porażkę
+        #expect(!CorrectionOwnership.finish(&owners, session: "s", runID: old))   // A nie nadpisuje
+        #expect(owners["s"] == nil)
+        // Bez wyścigu: jedyna korekta kończy się jako właściciel.
+        owners["s"] = old
+        #expect(CorrectionOwnership.finish(&owners, session: "s", runID: old))
+    }
+
     @Test func reloadGivesTheSameSelection() throws {
         // Przeładowanie listy (np. powiązanie wydarzenia w trakcie przebiegu) i restart aplikacji wołają to samo od nowa.
         let s = try session()

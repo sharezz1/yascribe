@@ -132,8 +132,13 @@ final class NotesModel {
     private func runCorrection(sessionURL: URL, runID: String, assignment: RoleAssignment, language: LanguageCode?,
                                transcript: Transcript) async -> Transcript {
         let id = sessionURL.lastPathComponent
+        // Własność stanu od pierwszej linii, przed każdym wczesnym wyjściem: inaczej starsza korekta, kończąc się, nadpisałaby
+        // porażkę nowszej, która padła bez klienta (fix round 2).
+        correcting[id] = runID
         guard !assignment.model.isEmpty, let client = clientFor(assignment.providerID) else {
-            correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
+            if CorrectionOwnership.finish(&correcting, session: id, runID: runID) {
+                correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
+            }
             onChange()
             return transcript
         }
@@ -143,7 +148,6 @@ final class NotesModel {
         let link = NotesStore(session: sessionURL).readMeta().calendarEvent
         let input = Replacement.apply(transcript, rules: rules)
         correctionFailure[id] = nil
-        correcting[id] = runID
         onChange()
         let limits = ChatLimits.for(client.provider, call: .correctionBatch)
         // Kontekst lokalnego serwera sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); API: bez budżetu.
@@ -155,8 +159,7 @@ final class NotesModel {
                                      temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used)
             .correct(input, language: language)
         // Stan sesji należy do najnowszej korekty: starsza ani go nie zdejmuje, ani nie zgłasza porażki za nowszy przebieg.
-        let owner = correcting[id] == runID
-        if owner { correcting[id] = nil }
+        let owner = CorrectionOwnership.finish(&correcting, session: id, runID: runID)
         defer { onChange() }
         if result.failedCompletely {
             if owner { correctionFailure[id] = result.firstError ?? "The correction didn't go through." }
