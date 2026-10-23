@@ -67,3 +67,14 @@ private func status(recording: Bool = false, progress: Double? = nil, correcting
     // Nagranie już się skończyło: sama lista spotkań, bez otwierania czegokolwiek.
     #expect(OpenNoteDestination.forRecording(directory: nil) == OpenNoteDestination(section: .meetings, sessionID: nil, tab: nil))
 }
+
+/// F6 (D13): „Transcribe again…" także w stanie „No transcript yet" — jedna bramka dla obu miejsc, niezależna od transkryptu.
+@Suite struct TranscribeAgainGateTests {
+    @Test func availableWithAudioEvenWithoutTranscript() {
+        // Nagranie z audio, pierwsza próba bez transkryptu (np. zamrożony dostawca pada): można wybrać inny model.
+        #expect(TranscribeAgain.blocker(audioDeletedAfterDays: nil, transcribing: false, moving: false) == nil)
+        #expect(TranscribeAgain.blocker(audioDeletedAfterDays: 30, transcribing: false, moving: false) == "Audio was deleted after 30 days")
+        #expect(TranscribeAgain.blocker(audioDeletedAfterDays: nil, transcribing: true, moving: false) == "This recording is being transcribed")
+        #expect(TranscribeAgain.blocker(audioDeletedAfterDays: nil, transcribing: false, moving: true) == "Meetings are being moved to a new folder")
+    }
+}
