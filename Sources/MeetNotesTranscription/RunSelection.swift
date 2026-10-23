@@ -56,10 +56,7 @@ public struct RunSelection: Equatable, Sendable {
                 ?? ((try? JSONFile.load(RunInput?.self, from: RunDirectory(session: session, runID: id).input, default: nil)) ?? nil)?.snapshot
         }
         // Najpierw mały `run.json`; transkrypt dekodujemy tylko dla ukończonych, od najnowszego (wołane przy każdym przeładowaniu).
-        let complete = ids.reversed().first { id in
-            guard metadata(id)?.finishedAt != nil, let t = transcript(id) else { return false }
-            return !t.utterances.isEmpty && t.failedChunks.isEmpty
-        }
+        let complete = ids.reversed().first { qualifies(metadata($0), transcript($0)) }
         let current = complete
             ?? ids.reversed().first { transcript($0)?.utterances.isEmpty == false }
             ?? ids.reversed().first { transcript($0) != nil } ?? ids.last
@@ -75,6 +72,14 @@ public struct RunSelection: Equatable, Sendable {
             out.notPromoted = Attempt(snapshot: snapshot(latest), reason: reason)
         }
         return out
+    }
+
+    /// Przebieg się kwalifikuje: ukończony (`run.json` z `finishedAt`), z niepustym transkryptem bez luk. Jedno kryterium dla
+    /// wyboru bieżącego i dla retencji audio (F1): próba, której tu nie awansujemy, nie może stracić audio potrzebnego do wznowienia.
+    /// Transkrypt jako `@autoclosure`: dekodowany dopiero po sprawdzeniu małego `run.json`.
+    public static func qualifies(_ metadata: RunMetadata?, _ transcript: @autoclosure () -> Transcript?) -> Bool {
+        guard metadata?.finishedAt != nil, let t = transcript() else { return false }
+        return !t.utterances.isEmpty && t.failedChunks.isEmpty
     }
 
     /// Czy po zakończeniu przebiegu `runID` puścić łańcuch korekta → autotytuł (R23 pkt 4): tylko gdy został bieżącym i się
