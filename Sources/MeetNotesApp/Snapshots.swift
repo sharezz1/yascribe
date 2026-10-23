@@ -416,6 +416,45 @@ enum Snapshots {
                 try render("settings-meetings-denied", size: CGSize(width: 900, height: 560), dark: dark, model: model) {
                     ScrollPage(640) { VStack(alignment: .leading, spacing: 0) { MeetingSettingsSections(state: meetingDenied) } }.contentBackground()
                 }
+                // Faza 2.1 T8: zakładka Dictionary (makiety dictionary-*.png) — pusta, lista z licznikiem, arkusz Terma, raport importu,
+                // plus sidebar z czwartym wierszem dolnej grupy. Arkusze renderujemy bez okna (jak ProviderSetupSheet).
+                let dictBefore = (model.dictionary, model.presets, model.providers.providers, model.activePresetID)
+                try render("sidebar-dictionary", size: CGSize(width: 210, height: 500), dark: dark, model: model) {
+                    SidebarList(selection: .constant(.dictionary)).listStyle(.sidebar)
+                }
+                model.dictionary = UserDictionary()
+                try render("dictionary-empty", size: CGSize(width: 900, height: 520), dark: dark, model: model) { DictionaryView() }
+                func term(_ t: String, _ p: TermPriority, _ a: [DictionaryAlias] = []) -> DictionaryTerm { DictionaryTerm(t, priority: p, aliases: a) }
+                var terms = [term("Zowie", .high, [DictionaryAlias("Zoey"), DictionaryAlias("Zoim"), DictionaryAlias("Zoe", risky: true, enabled: false)]),
+                             term("PUDO", .high, [DictionaryAlias("pu do"), DictionaryAlias("Pudo", risky: true, enabled: false)]),
+                             term("Genesys", .high, [DictionaryAlias("Genesis"), DictionaryAlias("Dżenesis")]),
+                             term("InPost", .high, [DictionaryAlias("in post"), DictionaryAlias("impost", risky: true, enabled: false)]),
+                             term("Jarek", .normal, [DictionaryAlias("Jarla")]),
+                             term("Zoom", .normal, [DictionaryAlias("Doomem"), DictionaryAlias("Zoomem")]),
+                             term("WFM", .normal),
+                             term("Terraform", .low, [DictionaryAlias("teraform")])]
+                // Wypełniacz niskiej rangi: przy kontekście 2048 większość nie zmieści się w poleceniu, więc licznik jest widoczny.
+                terms += (1...60).map { term("Acme-\(String(format: "%03d", $0))", .low) }
+                model.dictionary = UserDictionary(terms: terms)
+                let local = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!, contextTokens: 2_048)
+                model.providers.providers.append(local)
+                let dictPreset = Preset(name: "Polish, local correction", language: .polish,
+                                        asr: RoleAssignment(providerID: local.id, model: "unused"),
+                                        correction: RoleAssignment(providerID: local.id, model: "gemma-3-4b"))
+                model.presets.presets.append(dictPreset)
+                model.activePresetID = dictPreset.id
+                try render("dictionary-list", size: CGSize(width: 900, height: 760), dark: dark, model: model) { DictionaryView() }
+                let termEditing = DictionaryViewState()
+                termEditing.open(terms[0])
+                termEditing.newAlias = "Zoomem"
+                termEditing.show(.aliasTaken(alias: "Zoomem", by: "Zoom"), draftText: "Zowie")
+                try render("dictionary-edit", size: CGSize(width: 500, height: 560), dark: dark, model: model) { DictionaryTermSheet(state: termEditing) }
+                let report = DictionaryImportReport(termsAdded: 166, aliasesAdded: 223, riskyLeftOff: 12, conflicts: [
+                    .init(alias: "Jarla", keptBy: "Jarek", skippedFor: "Jarosław"), .init(alias: "in post", keptBy: "InPost", skippedFor: "Post Office")])
+                try render("dictionary-import-report", size: CGSize(width: 500, height: 480), dark: dark, model: model) {
+                    DictionaryImportSheet(report: report, files: ["vocab_core.txt", "replacements.tsv"], onDone: {})
+                }
+                (model.dictionary, model.presets, model.providers.providers, model.activePresetID) = dictBefore
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —
                 // nie używamy go w migawkach.

@@ -545,7 +545,7 @@ struct ProviderSetupSheet: View {
     }
 }
 
-private extension View {
+extension View {
     /// Pole tekstowe wg makiety: 28 pt, `field`, obwódka 0,5 pt, promień 7 (jak ModelField).
     func fieldBox() -> some View {
         padding(.horizontal, 10).frame(height: 28)
