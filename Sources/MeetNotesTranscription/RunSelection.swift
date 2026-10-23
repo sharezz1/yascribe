@@ -91,6 +91,18 @@ public struct RunSelection: Equatable, Sendable {
     }
 }
 
+/// Własność stanu korekty sesji (`NotesModel.correcting`, sesja → przebieg): rozpoczęcie korekty przypisuje sesję przebiegowi;
+/// kończąca się korekta (także wczesna porażka) zdejmuje stan i zapisuje porażkę tylko jako właściciel. Starsza korekta nie
+/// zdejmuje stanu nowszej i nie nadpisuje jej komunikatu.
+public enum CorrectionOwnership {
+    /// Zwraca, czy `runID` był właścicielem (wtedy stan zdjęty i wolno zapisać porażkę).
+    public static func finish(_ owners: inout [String: String], session: String, runID: String) -> Bool {
+        guard owners[session] == runID else { return false }
+        owners[session] = nil
+        return true
+    }
+}
+
 /// Język, w jakim powstał wybrany przebieg (I2): z jego migawki, bo „Transcribe again…" może zmienić język bez zmiany
 /// `preset.json` sesji. Preset sesji tylko dla przebiegów bez migawki.
 public struct RunLanguage: Equatable, Sendable {
