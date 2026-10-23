@@ -85,10 +85,10 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
   `docs/superpowers/reports/F20-przeglad-calosci.md` (T14, przegląd całości gałęzi: spójna ze specem, jeden wyjątek — ciche obcięcie wejścia).
 
 **Faza 2.0.1 „Zmiana modelu w spotkaniu"** (scalona do `master` 2026-10-22: PR #19 plan `bed13d5`, PR #20 kod `0409a3f`, `--merge`): chip modelu w Summary i przy „Improve transcript", wybór zapisany przy sesji w `notes/meta.json` (`modelOverrides`, opcjonalne),
-preset i `RunSnapshot` bez zmian. `master` po PR #17 (pigułka: wyjście i „No system audio yet"): **582/582**; gałąź 2.0.1: **592/592**. Odbiór na żywo czeka na użytkownika.
+preset i `RunSnapshot` bez zmian. `master` po PR #17 (pigułka: wyjście i „No system audio yet"): **582/582**; gałąź 2.0.1: **592/592**. Odbiór na żywo zaliczony przez użytkownika 2026-10-22.
 Spec: `docs/superpowers/specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md`, plan: `docs/superpowers/plans/2026-10-22-faza201-zmiana-modelu.md`.
 
-**Faza 2.0.2 „Nagrywanie na słuchawkach"** (przypisana 2026-10-22, niezaczęta): tor `system` na słuchawkach Bluetooth — zakres i dowody w `BACKLOG.md` („PRIORYTET WYSOKI … słuchawki Bluetooth"); pigułka z PR #17 jest pierwszym krokiem.
+**Faza 2.0.2 „Nagrywanie na słuchawkach"** (kod na gałęzi `faza202-sluchawki`, PR do `master` czeka na scalenie; testy **622/622**, `master` 592): tor `system` na słuchawkach Bluetooth. Format tapa czytany z urządzenia zbiorczego (`CoreAudioDevices.captureFormat`), układ `AggregateLayout.tapOnly` domyślny (bez podurządzeń, jak w Chromium), nasłuch częstotliwości z `RebuildGate`, ostrzeżenie o złej prędkości toru (`SessionSummary.Track.rateMismatch`), `PillHint.systemStalled` i menu wejścia w pigułce (`InputChoice`, `RawMicrophoneSource.select`). Narzędzie `meetnotes-cli tap-rate`. **Odbiór M4 2026-10-23** (sesja `2f1c`, słuchawki jako wejście i wyjście, 27,5 min): tor `system` 47 998,9 Hz, „Them" kompletny. Niezmierzone: menu wejścia, fałszywy alarm pigułki, B, poczekalnia Teams, przypadek `08f6`. ScreenCaptureKit (Task 10) pominięty. Spec `docs/superpowers/specs/2026-10-22-faza202-sluchawki-design.md`, plan `docs/superpowers/plans/2026-10-22-faza202-sluchawki.md`, pomiary `docs/superpowers/spikes/2026-10-22-f202-s0-sluchawki.md`. **Jakość transkrypcji** (Parakeet myli terminy, korekta bez słownika i uczestników) czeka na fazę 2.1 „Słownik".
 
 ## Twarde zasady
 
