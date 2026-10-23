@@ -52,20 +52,22 @@ public struct NoteGenerator: Sendable {
     /// `budget == nil` (API) — zawsze jeden przebieg. Z budżetem: jeden przebieg, gdy CAŁY prompt (z My notes i kontekstem) mieści
     /// się w `promptChars(replyTokens: noteReplyTokens)`; inaczej map każdej części, potem reduce (hierarchiczny, gdy trzeba).
     public func generate(session: URL, template: Template, transcript: Transcript, context: String,
-                         notesLanguage: LanguageCode?, budget: ContextBudget? = nil, now: Date = Date(),
+                         notesLanguage: LanguageCode?, budget: ContextBudget? = nil, vocabulary: PromptVocabulary? = nil,
+                         now: Date = Date(),
                          onProblem: @Sendable (String) -> Void = { _ in },
                          progress: (@Sendable (NoteProgress) -> Void)? = nil) async throws -> NoteSummary {
         let store = NotesStore(session: session)
         let myNotes = store.readMyNotes()
         guard var prompt = NotePromptBuilder.build(template: template, transcript: transcript, myNotes: myNotes,
-                                                   context: context, notesLanguage: notesLanguage) else {
+                                                   context: context, notesLanguage: notesLanguage,
+                                                   vocabulary: vocabulary) else {
             throw NoteGenerationError.nothingToSummarize
         }
         var condensedParts: Int?
         if let budget, prompt.chars > budget.promptChars(replyTokens: ContextBudget.noteReplyTokens) {
             let reduced = try await reducePrompt(template: template, lines: NotePromptBuilder.transcriptLines(transcript),
                                                  myNotes: myNotes, context: context, notesLanguage: notesLanguage,
-                                                 budget: budget, progress: progress)
+                                                 vocabulary: vocabulary, budget: budget, progress: progress)
             prompt = reduced.0
             condensedParts = reduced.1
         }
@@ -107,18 +109,19 @@ public struct NoteGenerator: Sendable {
     /// wchodzi — ponowna kondensacja wyjść (do `maxMapLevels` poziomów); inaczej jawny błąd.
     /// Zwraca też liczbę części pierwszego przebiegu (znacznik „Long meeting" w notatce).
     private func reducePrompt(template: Template, lines: [String], myNotes: String, context: String, notesLanguage: LanguageCode?,
-                              budget: ContextBudget, progress: (@Sendable (NoteProgress) -> Void)?) async throws -> (NotePrompt, Int) {
+                              vocabulary: PromptVocabulary?, budget: ContextBudget,
+                              progress: (@Sendable (NoteProgress) -> Void)?) async throws -> (NotePrompt, Int) {
         let limit = budget.promptChars(replyTokens: ContextBudget.noteReplyTokens)
         func reduce(_ lines: [String]) -> NotePrompt {
             NotePromptBuilder.prompt(template: template, lines: lines, myNotes: myNotes, context: context,
-                                     notesLanguage: notesLanguage, condensed: true)
+                                     notesLanguage: notesLanguage, condensed: true, vocabulary: vocabulary)
         }
         guard limit > 0 else {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.")
         }
         // Sam prompt szablonu (bez My notes i kontekstu) ponad budżetem: okno za małe na notatki — nie wina użytkownika.
         let bare = NotePromptBuilder.prompt(template: template, lines: [], myNotes: "", context: "", notesLanguage: notesLanguage,
-                                            condensed: true).chars
+                                            condensed: true, vocabulary: vocabulary).chars
         guard bare <= limit else {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.")
         }
@@ -128,7 +131,7 @@ public struct NoteGenerator: Sendable {
             throw NoteGenerationError.failed("Your notes and context are too long for this model's Context window.")
         }
         let partChars = min(ContextBudget.mapPartCap,
-                            budget.pairedInputChars(fixedChars: NotePromptBuilder.mapSystemChars, replyFactor: ContextBudget.mapReplyFactor))
+                            budget.pairedInputChars(fixedChars: NotePromptBuilder.mapSystemChars(vocabulary: vocabulary), replyFactor: ContextBudget.mapReplyFactor))
         guard partChars > 0 else {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.")
         }
@@ -136,8 +139,8 @@ public struct NoteGenerator: Sendable {
         var firstPassParts = 0
         for level in 1...Self.maxMapLevels {
             let before = current.joined(separator: "\n").count
-            let (condensed, partCount) = try await map(current, maxChars: partChars, notesLanguage: notesLanguage, budget: budget,
-                                                       pass: level, progress: progress)
+            let (condensed, partCount) = try await map(current, maxChars: partChars, notesLanguage: notesLanguage, vocabulary: vocabulary,
+                                                       budget: budget, pass: level, progress: progress)
             current = condensed
             if level == 1 { firstPassParts = partCount }
             let prompt = reduce(current)
@@ -172,7 +175,8 @@ public struct NoteGenerator: Sendable {
 
     /// Jeden poziom: podział na części, map każdej po kolei (limit czasu NA WYWOŁANIE). Błąd części = błąd całości („Part n of m failed").
     /// Zwraca też liczbę części tego poziomu.
-    private func map(_ lines: [String], maxChars: Int, notesLanguage: LanguageCode?, budget: ContextBudget, pass: Int,
+    private func map(_ lines: [String], maxChars: Int, notesLanguage: LanguageCode?, vocabulary: PromptVocabulary?,
+                     budget: ContextBudget, pass: Int,
                      progress: (@Sendable (NoteProgress) -> Void)?) async throws -> ([String], Int) {
         let parts = try TranscriptSplitter.parts(lines, maxChars: maxChars)
         let limits = mapLimits ?? ChatLimits.for(client.provider, call: .mapPart)
@@ -180,7 +184,8 @@ public struct NoteGenerator: Sendable {
         for (i, part) in parts.enumerated() {
             try Task.checkCancellation()
             progress?(.condensing(pass: pass, part: i + 1, of: parts.count))
-            let prompt = NotePromptBuilder.mapPrompt(part: part, index: i + 1, count: parts.count, notesLanguage: notesLanguage)
+            let prompt = NotePromptBuilder.mapPrompt(part: part, index: i + 1, count: parts.count, notesLanguage: notesLanguage,
+                                                    vocabulary: vocabulary)
             // Odpowiedź dostaje całe miejsce, które po prompcie zostaje w oknie (nie ciasną połowę wejścia), ale nie więcej niż
             // długość wejścia: dłuższa „kondensacja" to ucieczka modelu. Część ≤ `pairedInputChars`, więc miejsce jest ≥ połowie wejścia.
             let room = budget.tokens - ContextBudget.marginTokens - Int((Double(prompt.chars) / ContextBudget.charsPerToken).rounded(.up))
