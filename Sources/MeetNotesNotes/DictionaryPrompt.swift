@@ -42,7 +42,7 @@ public enum DictionaryPrompt {
     /// zamyka listę (krótszy, niższy Term nie wyprzedza dłuższego, wyższego).
     public static func make(_ d: UserDictionary, link: CalendarLink?, maxChars: Int) -> PromptVocabulary {
         var seen = Set<String>()
-        let names = (link?.attendees ?? []).compactMap { $0.name.map(sanitize) }
+        let names = (link?.attendees ?? []).compactMap { $0.name.map(attendeeName) }
             .filter { !$0.isEmpty && seen.insert(UserDictionary.key($0)).inserted }
             .prefix(maxAttendees)
         let (attendees, usedByAttendees, _) = fit(Array(names), budget: maxChars)
@@ -71,6 +71,14 @@ public enum DictionaryPrompt {
             used += cost
         }
         return (kept, used, items.count - kept.count)
+    }
+
+    /// Imię uczestnika bez adresów e-mail (D5: „adresy nigdy"): wzorzec `lokalna@domena.tld` (też w `<…>`), potem każdy token z `@`
+    /// (adres przerwany znakiem, który `sanitize` zamienia na spację). Imię puste po tym jest pomijane przez wołającego (F4).
+    static func attendeeName(_ s: String) -> String {
+        let noAddress = s.precomposedStringWithCanonicalMapping
+            .replacingOccurrences(of: "<?[\\p{L}\\p{N}._%+\\-]+@[\\p{L}\\p{N}.\\-]+\\.\\p{L}{2,}>?", with: " ", options: .regularExpression)
+        return sanitize(noAddress).split(separator: " ").filter { !$0.contains("@") }.joined(separator: " ")
     }
 
     /// NFC (U+037E „średnik grecki" staje się `;` przed wycięciem), potem każdy znak, który mógłby dopisać linię albo strukturę, to spacja:

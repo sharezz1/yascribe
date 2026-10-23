@@ -38,7 +38,7 @@ public enum DictionaryError: Error, Equatable {
     case aliasTaken(alias: String, by: String)
     case aliasIsTerm(alias: String, term: String)
     case emptyAlias
-    /// Tekst zaczyna się od `#` albo zawiera tabulator / koniec linii: eksport TSV i `vocab_core.txt` nie odtworzyłby go (komentarz, rozdzielacz).
+    /// Tekst zaczyna się od `#` albo zawiera tabulator, znak sterujący lub koniec linii: eksport TSV i `vocab_core.txt` nie odtworzyłby go (komentarz, rozdzielacz).
     case invalidCharacters(String)
 }
 
@@ -53,9 +53,18 @@ public struct UserDictionary: Codable, Equatable, Sendable {
         s.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil).precomposedStringWithCanonicalMapping
     }
 
-    /// `#` na początku (komentarz w plikach importu) albo tabulator / koniec linii w środku (rozdzielacz pól i linii); tekst już po `clean`.
+    /// `#` na początku (komentarz w plikach importu) albo tabulator / znak sterujący / separator linii w środku; tekst już po `clean`.
+    /// Zbiór zakazany to wszystko, co parser (`Character.isNewline`: CR, LF, VT, FF, U+0085, U+2028, U+2029) albo eksport (TAB) mógłby
+    /// rozciąć, plus pozostałe znaki sterujące (kategoria Cc) — jedna definicja, której niezmiennik pilnuje test (F8).
     static func isReserved(_ s: String) -> Bool {
-        s.hasPrefix("#") || s.unicodeScalars.contains { "\t\r\n\u{2028}\u{2029}\u{85}".unicodeScalars.contains($0) }
+        s.hasPrefix("#") || s.unicodeScalars.contains(where: isForbiddenScalar)
+    }
+
+    static func isForbiddenScalar(_ c: Unicode.Scalar) -> Bool {
+        switch c.properties.generalCategory {
+        case .control, .lineSeparator, .paragraphSeparator: true
+        default: false
+        }
     }
 
     static func clean(_ s: String) -> String {
@@ -102,4 +111,12 @@ public struct UserDictionary: Codable, Equatable, Sendable {
     }
 
     public mutating func remove(_ id: UUID) { terms.removeAll { $0.id == id } }
+}
+
+public extension UserDictionary {
+    /// Alias, który różni się od swojego Terma tylko wielkością liter (np. „Pudo" → „PUDO"): podmiana normalizuje zapis i jest poprawna,
+    /// choć liczenie bez rozróżniania wielkości liter nadal widzi Alias w wyniku. Odbiór `dictionary-check` nie wymaga tu zera (F9).
+    static func aliasOnlyNormalizesCase(alias: String, term: String) -> Bool {
+        key(alias) == key(term)
+    }
 }

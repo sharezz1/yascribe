@@ -126,4 +126,22 @@ import MeetNotesProviders
             #expect(v.promptLines == nil, "budget \(budget)")
         }
     }
+
+    @Test func emailAddressesNeverReachThePromptOrTheTrace() {
+        // F4 (D5: adresy nigdy): sam adres, adres w <…>, adres w dłuższym imieniu, pole `email` i adres przerwany znakiem formatującym.
+        let l = link([.init(name: "jan@example.com"), .init(name: "Jan Kowalski <jan.kowalski@example.com>", email: "x@example.com"),
+                      .init(name: "Anna Nowak jan_x+tag@sub.example.co.uk dzwoni"), .init(name: "<a@b.pl>"),
+                      .init(name: "Ewa jan@exa\u{200B}mple.com"), .init(name: "Grace Hopper", email: "grace@example.com")])
+        let v = DictionaryPrompt.make(UserDictionary(), link: l, maxChars: 3000)
+        // Adres przerwany znakiem formatującym traci część z `@` (zostaje fragment domeny bez adresu), reszta wzorca działa jak zwykle.
+        #expect(v.attendees == ["Jan Kowalski", "Anna Nowak dzwoni", "Ewa mple.com", "Grace Hopper"])
+        #expect(!(v.promptLines ?? "").contains("@"))
+        #expect(DictionaryPrompt.make(UserDictionary(), link: link([.init(name: "jan@example.com")]), maxChars: 3000).promptLines == nil)
+    }
+
+    @Test func realNamesSurviveEmailStripping() {
+        let names = ["Anna Nowak", "Jean-Luc O'Brien", "J. R. R. Tolkien", "Zoë Müller-Łukasiewicz", "Dr. Jan Kowalski-Nowak"]
+        let v = DictionaryPrompt.make(UserDictionary(), link: link(names.map { .init(name: $0) }), maxChars: 3000)
+        #expect(v.attendees == names)
+    }
 }
