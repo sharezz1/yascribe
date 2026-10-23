@@ -1,0 +1,190 @@
+import Foundation
+
+/// Wynik importu (F21 D9): co dodano i co pominięto, żeby żadna decyzja nie zapadła po cichu. Zero we wszystkich polach = nic się nie zmieniło.
+public struct DictionaryImportReport: Equatable, Sendable {
+    public var termsAdded: Int
+    public var aliasesAdded: Int
+    /// Nowe Aliasy risky, które weszły wyłączone (zawierają się też w `aliasesAdded`).
+    public var riskyLeftOff: Int
+    public var conflicts: [Conflict]
+
+    public struct Conflict: Equatable, Sendable {
+        /// Alias z pliku, który nie wszedł.
+        public var alias: String
+        /// Term, który go już ma (albo którego tekst jest równy Aliasowi, albo który zajmuje ten tekst jako Alias).
+        public var keptBy: String
+        /// Term, któremu plik chciał dać ten Alias.
+        public var skippedFor: String
+
+        public init(alias: String, keptBy: String, skippedFor: String) {
+            self.alias = alias
+            self.keptBy = keptBy
+            self.skippedFor = skippedFor
+        }
+    }
+
+    public init(termsAdded: Int = 0, aliasesAdded: Int = 0, riskyLeftOff: Int = 0, conflicts: [Conflict] = []) {
+        self.termsAdded = termsAdded
+        self.aliasesAdded = aliasesAdded
+        self.riskyLeftOff = riskyLeftOff
+        self.conflicts = conflicts
+    }
+
+    public var summary: String {
+        "\(termsAdded) terms, \(aliasesAdded) aliases, \(riskyLeftOff) risky left off, \(conflicts.count) conflicts"
+    }
+}
+
+/// Import i eksport słownika w formatach `vocab_core.txt` (jeden Term w linii, tiery T1/T2/T3) i `replacements.tsv` (`fraza<TAB>zapis`).
+/// Import przechodzi przez `UserDictionary.upsert`, więc inwarianty słownika (unikalność Aliasów, Alias ≠ Term) obowiązują tak jak przy ręcznej edycji.
+public enum DictionaryTransfer {
+    private enum Mode {
+        case normal, riskyOff, riskyOn, disabled
+
+        var flags: (risky: Bool, enabled: Bool) {
+            switch self {
+            case .normal: (false, true)
+            case .riskyOff: (true, false)
+            case .riskyOn: (true, true)
+            case .disabled: (false, false)
+            }
+        }
+    }
+
+    private struct Row {
+        var phrase: String
+        var target: String
+        var mode: Mode
+    }
+
+    public static func importFiles(vocabulary: String?, replacements: String?, into d: UserDictionary)
+        -> (dictionary: UserDictionary, report: DictionaryImportReport) {
+        var dict = d
+        var report = DictionaryImportReport()
+        let vocab = vocabulary.map(parseVocabulary) ?? []
+        let rows = replacements.map(parseReplacements) ?? []
+
+        // Przebieg 1: wszystkie Termy (najpierw z vocab, potem cele spoza niego jako Low), żeby wynik nie zależał od kolejności linii.
+        for (text, priority) in vocab + rows.map({ ($0.target, TermPriority.low) }) {
+            let k = UserDictionary.key(text)
+            if dict.terms.contains(where: { UserDictionary.key($0.text) == k }) { continue }
+            do {
+                try dict.upsert(DictionaryTerm(text, priority: priority))
+                report.termsAdded += 1
+            } catch {
+                // Tekst Terma jest już cudzym Aliasem: nie dodajemy, a dalsze linie tego celu zgłosi przebieg 2.
+                if let owner = dict.owner(ofAlias: text) {
+                    report.conflicts.append(.init(alias: text, keptBy: owner.text, skippedFor: text))
+                }
+            }
+        }
+
+        // Przebieg 2: Aliasy. Istniejący Alias tego samego Terma zostaje nietknięty (flagi użytkownika wygrywają).
+        for row in rows {
+            let k = UserDictionary.key(row.target)
+            guard var term = dict.terms.first(where: { UserDictionary.key($0.text) == k }) else {
+                report.conflicts.append(.init(alias: row.phrase, keptBy: dict.owner(ofAlias: row.target)?.text ?? row.target, skippedFor: row.target))
+                continue
+            }
+            let ak = UserDictionary.key(row.phrase)
+            if term.aliases.contains(where: { UserDictionary.key($0.text) == ak }) { continue }
+            if row.phrase == term.text { continue } // upsert i tak by go zgubił; to nie konflikt
+            if let other = dict.terms.first(where: { $0.id != term.id && UserDictionary.key($0.text) == ak }) {
+                report.conflicts.append(.init(alias: row.phrase, keptBy: other.text, skippedFor: term.text))
+                continue
+            }
+            if let owner = dict.owner(ofAlias: row.phrase, excluding: term.id) {
+                report.conflicts.append(.init(alias: row.phrase, keptBy: owner.text, skippedFor: term.text))
+                continue
+            }
+            let flags = row.mode.flags
+            term.aliases.append(DictionaryAlias(row.phrase, risky: flags.risky, enabled: flags.enabled))
+            do {
+                try dict.upsert(term)
+                report.aliasesAdded += 1
+                if flags.risky && !flags.enabled { report.riskyLeftOff += 1 }
+            } catch {
+                report.conflicts.append(.init(alias: row.phrase, keptBy: "?", skippedFor: term.text))
+            }
+        }
+        return (dict, report)
+    }
+
+    // MARK: Parsery
+
+    private static func lines(_ text: String) -> [String] {
+        text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map {
+            $0.trimmingCharacters(in: .whitespaces)
+        }
+    }
+
+    /// Nagłówek `# ==` z `T1`/`T2`/`T3` ustawia priorytet kolejnych linii; przed pierwszym Normal.
+    private static func parseVocabulary(_ text: String) -> [(String, TermPriority)] {
+        var priority = TermPriority.normal
+        var out: [(String, TermPriority)] = []
+        for line in lines(text) {
+            if line.hasPrefix("# ==") {
+                if line.contains("T1") { priority = .high } else if line.contains("T2") { priority = .normal } else if line.contains("T3") { priority = .low }
+            } else if !line.isEmpty, !line.hasPrefix("#") {
+                out.append((UserDictionary.clean(line), priority))
+            }
+        }
+        return out
+    }
+
+    /// Markery sekcji `#!` (risky, wyłączone), `#+` (risky, włączone), `#-` (zwykłe, wyłączone) trwają do następnego nagłówka `# ---`.
+    /// Linia bez tabulatora jest pomijana (nie ma jej jak zgłosić w raporcie).
+    private static func parseReplacements(_ text: String) -> [Row] {
+        var mode = Mode.normal
+        var out: [Row] = []
+        for line in lines(text) {
+            if line.hasPrefix("#!") { mode = .riskyOff } else if line.hasPrefix("#+") { mode = .riskyOn } else if line.hasPrefix("#-") { mode = .disabled } else if line.hasPrefix("# ---") { mode = .normal } else if line.hasPrefix("#") || line.isEmpty { continue } else {
+                let parts = line.components(separatedBy: "\t")
+                guard parts.count >= 2 else { continue }
+                let phrase = UserDictionary.clean(parts[0]), target = UserDictionary.clean(parts[1])
+                if !phrase.isEmpty, !target.isEmpty { out.append(Row(phrase: phrase, target: target, mode: mode)) }
+            }
+        }
+        return out
+    }
+
+    // MARK: Eksport
+
+    /// Tabulator i koniec linii w tekście zepsułyby format; zamieniamy je na spację.
+    /// shortcut: tekst zaczynający się od `#` wróciłby z importu jako komentarz; format nie ma ucieczki, do dodania gdy ktoś wpisze taki Term.
+    private static func flat(_ s: String) -> String {
+        String(s.map { $0 == "\t" || $0.isNewline ? " " : $0 })
+    }
+
+    public static func exportReplacements(_ d: UserDictionary) -> String {
+        let sections: [(header: String, risky: Bool, enabled: Bool)] = [
+            ("# ---------- Replacements ----------", false, true),
+            ("#! ---------- RISKY (disabled) ----------", true, false),
+            ("#+ ---------- RISKY (enabled) ----------", true, true),
+            ("#- ---------- DISABLED ----------", false, false),
+        ]
+        var out: [String] = []
+        for s in sections {
+            var body: [String] = []
+            for t in d.terms {
+                for a in t.aliases where a.risky == s.risky && a.enabled == s.enabled { body.append("\(flat(a.text))\t\(flat(t.text))") }
+            }
+            if !body.isEmpty { out += [s.header] + body + [""] }
+        }
+        return out.joined(separator: "\n")
+    }
+
+    public static func exportVocabulary(_ d: UserDictionary) -> String {
+        let tiers: [(TermPriority, String)] = [
+            (.high, "# ====== T1 — high ======"),
+            (.normal, "# ====== T2 — normal ======"),
+            (.low, "# ====== T3 — low ======"),
+        ]
+        var out: [String] = []
+        for (priority, header) in tiers {
+            let terms = d.terms.filter { $0.priority == priority }
+            if !terms.isEmpty { out += [header] + terms.map { flat($0.text) } + [""] }
+        }
+        return out.joined(separator: "\n")
+    }
+}
