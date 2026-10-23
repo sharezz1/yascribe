@@ -171,6 +171,8 @@ final class RecordingController {
         muteWarning = false
         warningTask?.cancel()
         recorder = nil
+        mic = nil
+        selectedInputUID = nil
         directory = nil
         hidePanel()
     }
