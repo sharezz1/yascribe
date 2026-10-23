@@ -186,7 +186,7 @@ final class AppModel {
 
     /// Sesje, których katalogi są w użyciu (nagrywanie, transkrypcja, korekta, tytuł, notatka).
     private var busySessions: Set<String> {
-        var s = transcribing.union(notes.correcting).union(notes.titling)
+        var s = transcribing.union(notes.correcting.keys).union(notes.titling)
         s.formUnion(notes.generation.filter { $0.value == .generating }.keys)
         if let d = recording.directory { s.insert(d.lastPathComponent) }
         return s
