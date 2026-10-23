@@ -14,6 +14,8 @@ final class DictionaryViewState: ObservableObject {
     /// Komunikaty `DictionaryError` przy polu Terma i przy polu Aliasu w arkuszu.
     @Published var termError: String?
     @Published var aliasError: String?
+    /// Nieudany zapis na dysk: arkusz zostaje otwarty z tym komunikatem, słownik w pamięci jest cofnięty.
+    @Published var saveError: String?
     @Published var confirmingDelete = false
     @Published var importReport: DictionaryImportReport?
     /// Nazwy zaimportowanych plików (podtytuł raportu).
@@ -37,21 +39,13 @@ final class DictionaryViewState: ObservableObject {
     }
 
     private func resetEditorMessages() {
-        newAlias = ""; termError = nil; aliasError = nil; confirmingDelete = false
+        newAlias = ""; termError = nil; aliasError = nil; saveError = nil; confirmingDelete = false
     }
 
-    /// Błąd walidacji słownika po angielsku, przy właściwym polu. Pola Terma: pusty i podwójny Term oraz zarezerwowane znaki w nim samym.
+    /// Błąd walidacji słownika po angielsku, przy właściwym polu (`DictionaryEdit.presentation`, testowane w Notes).
     func show(_ e: DictionaryError, draftText: String) {
-        termError = nil; aliasError = nil
-        switch e {
-        case .emptyTerm: termError = "Give the term a name."
-        case .duplicateTerm(let t): termError = "“\(t)” is already in the dictionary."
-        case .invalidCharacters(let t):
-            let message = "Can’t start with # or contain tabs or line breaks."
-            if t.trimmingCharacters(in: .whitespacesAndNewlines) == draftText.trimmingCharacters(in: .whitespacesAndNewlines) { termError = message } else { aliasError = message }
-        case .aliasTaken(let a, let by): aliasError = "“\(a)” already belongs to “\(by)”."
-        case .aliasIsTerm(let a, let term): aliasError = "“\(a)” is already a term (“\(term)”)."
-        case .emptyAlias: aliasError = "Type an alias first."
-        }
+        let p = DictionaryEdit.presentation(of: e, draftTerm: draftText)
+        termError = p.field == .term ? p.message : nil
+        aliasError = p.field == .alias ? p.message : nil
     }
 }

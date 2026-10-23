@@ -449,6 +449,11 @@ enum Snapshots {
                 termEditing.newAlias = "Zoomem"
                 termEditing.show(.aliasTaken(alias: "Zoomem", by: "Zoom"), draftText: "Zowie")
                 try render("dictionary-edit", size: CGSize(width: 500, height: 560), dark: dark, model: model) { DictionaryTermSheet(state: termEditing) }
+                // R22/I4: 40 Aliasów — lista w arkuszu przewija się, Save/Cancel/Delete zostają na widoku; plus komunikat nieudanego zapisu.
+                let many = DictionaryViewState()
+                many.open(DictionaryTerm("Genesys", priority: .high, aliases: (1...40).map { DictionaryAlias("Genesis \($0)", risky: $0 % 7 == 0, enabled: $0 % 7 != 0) }))
+                many.saveError = "Couldn’t save the dictionary: The file couldn’t be saved because the disk is full."
+                try render("dictionary-edit-many-aliases", size: CGSize(width: 500, height: 700), dark: dark, model: model) { DictionaryTermSheet(state: many) }
                 let report = DictionaryImportReport(termsAdded: 166, aliasesAdded: 223, riskyLeftOff: 12, conflicts: [
                     .init(alias: "Jarla", keptBy: "Jarek", skippedFor: "Jarosław"), .init(alias: "in post", keptBy: "InPost", skippedFor: "Post Office")])
                 try render("dictionary-import-report", size: CGSize(width: 500, height: 480), dark: dark, model: model) {

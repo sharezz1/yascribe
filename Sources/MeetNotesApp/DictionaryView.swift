@@ -13,6 +13,7 @@ struct DictionaryView: View {
 
     private static let vocabularyFile = "vocab_core.txt"
     private static let replacementsFile = "replacements.tsv"
+    private static let maxImportBytes = 5_000_000
 
     var body: some View {
         ScrollPage(640) {
@@ -176,22 +177,28 @@ struct DictionaryView: View {
         panel.message = "Choose \(Self.vocabularyFile) and/or \(Self.replacementsFile)"
         panel.prompt = "Import"
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
-        var vocabulary: [String] = [], replacements: [String] = []
+        var vocabularies: [String] = [], replacements: [String] = []
         do {
             for url in panel.urls {
+                // Limit rozmiaru przed odczytem; przekroczenie przerywa cały import, zanim cokolwiek się zmieni.
+                if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > Self.maxImportBytes {
+                    state.error = "“\(url.lastPathComponent)” is larger than 5 MB. Nothing was imported."
+                    return
+                }
                 let text = try String(contentsOf: url, encoding: .utf8)
-                if url.pathExtension.lowercased() == "tsv" { replacements.append(text) } else { vocabulary.append(text) }
+                if url.pathExtension.lowercased() == "tsv" { replacements.append(text) } else { vocabularies.append(text) }
             }
         } catch {
-            state.error = "Couldn’t read the file: \(error.localizedDescription)"
+            state.error = "Couldn’t read the file: \(error.localizedDescription). Nothing was imported."
             return
         }
-        let result = DictionaryTransfer.importFiles(vocabulary: vocabulary.isEmpty ? nil : vocabulary.joined(separator: "\n"),
-                                                    replacements: replacements.isEmpty ? nil : replacements.joined(separator: "\n"),
-                                                    into: model.dictionary)
+        // Każdy plik osobno (stan sekcji i BOM nie przechodzą dalej); słownik zmienia się dopiero po udanym zapisie.
+        let result = DictionaryTransfer.importFiles(vocabularies: vocabularies, replacements: replacements, into: model.dictionary)
         if result.dictionary != model.dictionary {
-            model.dictionary = result.dictionary
-            state.error = model.saveDictionary()
+            if let failure = DictionaryEdit.commit(result.dictionary, replacing: model.dictionary, set: { model.dictionary = $0 }, save: { model.saveDictionary() }) {
+                state.error = "\(failure) Nothing was imported; try again."
+                return
+            }
         }
         state.importedNames = panel.urls.map(\.lastPathComponent)
         state.importReport = result.report
@@ -319,25 +326,8 @@ struct DictionaryTermSheet: View {
                 }
                 .font(.system(size: 11)).foregroundStyle(.mnText2)
                 .padding(.horizontal, 14).padding(.vertical, 7)
-                ForEach(aliases.indices, id: \.self) { i in
-                    RowDivider(inset: 0)
-                    HStack(spacing: 12) {
-                        Text(alias(i).wrappedValue.text).foregroundStyle(alias(i).wrappedValue.enabled ? .mnText : .mnText2)
-                            .lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
-                        Toggle("Risky", isOn: alias(i).risky).toggleStyle(.checkbox).frame(width: 62, alignment: .leading)
-                            .accessibilityLabel("\(alias(i).wrappedValue.text) is risky")
-                        Toggle("", isOn: alias(i).enabled).toggleStyle(.switch).labelsHidden().controlSize(.small).frame(width: 38)
-                            .accessibilityLabel("\(alias(i).wrappedValue.text) is on")
-                        Button { state.draft?.aliases.remove(at: i); state.aliasError = nil } label: {
-                            Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(.mnText2)
-                        }
-                        .buttonStyle(.plain).frame(width: 18)
-                        .help("Remove alias")
-                        .accessibilityLabel("Remove alias \(alias(i).wrappedValue.text)")
-                    }
-                    .font(.system(size: 13))
-                    .padding(.horizontal, 14).padding(.vertical, 7)
-                }
+                // Wiele Aliasów (import potrafi dać dziesiątki): od kilku wierszy lista przewija się, a Save/Cancel/Delete zostają na widoku.
+                if aliases.count > 7 { ScrollView { aliasRows }.frame(maxHeight: 280) } else { aliasRows }
                 RowDivider(inset: 0)
                 HStack(spacing: 8) {
                     TextField("Add alias", text: $state.newAlias).textFieldStyle(.plain).fieldBox()
@@ -361,6 +351,7 @@ struct DictionaryTermSheet: View {
                 Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
             }
             .padding(.top, 18)
+            if let e = state.saveError { StateLabel(.bad, e).wrapping().padding(.top, 10).padding(.leading, 2) }
         }
         .padding(.horizontal, 20).padding(.vertical, 20)
         .frame(width: 500)
@@ -370,6 +361,30 @@ struct DictionaryTermSheet: View {
             Button("Delete term", role: .destructive) { delete() }
         } message: {
             Text("Its aliases stop being replaced. Transcripts already corrected keep their text.")
+        }
+    }
+
+    private var aliasRows: some View {
+        VStack(spacing: 0) {
+            ForEach(aliases.indices, id: \.self) { i in
+                RowDivider(inset: 0)
+                HStack(spacing: 12) {
+                    Text(alias(i).wrappedValue.text).foregroundStyle(alias(i).wrappedValue.enabled ? .mnText : .mnText2)
+                        .lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
+                    Toggle("Risky", isOn: alias(i).risky).toggleStyle(.checkbox).frame(width: 62, alignment: .leading)
+                        .accessibilityLabel("\(alias(i).wrappedValue.text) is risky")
+                    Toggle("", isOn: alias(i).enabled).toggleStyle(.switch).labelsHidden().controlSize(.small).frame(width: 38)
+                        .accessibilityLabel("\(alias(i).wrappedValue.text) is on")
+                    Button { state.draft?.aliases.remove(at: i); state.aliasError = nil } label: {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).foregroundStyle(.mnText2)
+                    }
+                    .buttonStyle(.plain).frame(width: 18)
+                    .help("Remove alias")
+                    .accessibilityLabel("Remove alias \(alias(i).wrappedValue.text)")
+                }
+                .font(.system(size: 13))
+                .padding(.horizontal, 14).padding(.vertical, 7)
+            }
         }
     }
 
@@ -404,19 +419,25 @@ struct DictionaryTermSheet: View {
             state.show(error, draftText: d.text)
             return
         }
-        model.dictionary = dictionary
-        let failure = model.saveDictionary()
+        if let failure = DictionaryEdit.commit(dictionary, replacing: model.dictionary, set: { model.dictionary = $0 }, save: { model.saveDictionary() }) {
+            state.saveError = failure // arkusz zostaje otwarty ze szkicem; ponowne Save próbuje jeszcze raz
+            return
+        }
         state.closeEditor()
-        state.error = failure
+        state.error = nil
         state.notice = nil
     }
 
     private func delete() {
         guard let id = state.draft?.id else { return }
-        model.dictionary.remove(id)
-        let failure = model.saveDictionary()
+        var dictionary = model.dictionary
+        dictionary.remove(id)
+        if let failure = DictionaryEdit.commit(dictionary, replacing: model.dictionary, set: { model.dictionary = $0 }, save: { model.saveDictionary() }) {
+            state.saveError = failure
+            return
+        }
         state.closeEditor()
-        state.error = failure
+        state.error = nil
         state.notice = nil
     }
 }
