@@ -186,7 +186,7 @@ final class AppModel {
 
     /// Sesje, których katalogi są w użyciu (nagrywanie, transkrypcja, korekta, tytuł, notatka).
     private var busySessions: Set<String> {
-        var s = transcribing.union(notes.correcting.keys).union(notes.titling)
+        var s = transcribing.union(notes.corrections.sessions).union(notes.titles.sessions)
         s.formUnion(notes.generation.filter { $0.value == .generating }.keys)
         if let d = recording.directory { s.insert(d.lastPathComponent) }
         return s
@@ -194,7 +194,7 @@ final class AppModel {
 
     /// Powód, dla którego teraz nie wolno zmienić lokalizacji; `nil` = wolno.
     var recordingsMoveBlocked: String? {
-        let busy = !transcribing.isEmpty || !notes.correcting.isEmpty || !notes.titling.isEmpty
+        let busy = !transcribing.isEmpty || !notes.corrections.sessions.isEmpty || !notes.titles.sessions.isEmpty
             || notes.generation.values.contains(.generating)
         return RecordingsMove.blocked(recording: recording.isRecording, busy: busy, moving: recordingsMove != nil)
     }
@@ -676,6 +676,11 @@ final class AppModel {
     /// migawka z `input.json`, więc opłacone okna nie idą drugi raz (P5). `runID`: najnowsza próba („Resume Transcription")
     /// albo bieżący przebieg z lukami na ekranie („Retry Failed Parts").
     func resume(_ item: SessionItem, runID: String?) {
+        // F2: wznowienie z korektą w toku dałoby drugą korektę tego samego przebiegu (blokada także poza interfejsem, jak R3).
+        guard !notes.isCorrecting(item.id) else {
+            lastError = "This transcript is being corrected. Try again when that finishes."
+            return
+        }
         guard let runID,
               let input = try? JSONFile.load(RunInput?.self, from: RunDirectory(session: item.url, runID: runID).input, default: nil) else {
             lastError = "Nothing to resume for this recording."

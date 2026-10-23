@@ -96,16 +96,49 @@ public struct RunSelection: Equatable, Sendable {
     }
 }
 
-/// Własność stanu korekty sesji (`NotesModel.correcting`, sesja → przebieg): rozpoczęcie korekty przypisuje sesję przebiegowi;
-/// kończąca się korekta (także wczesna porażka) zdejmuje stan i zapisuje porażkę tylko jako właściciel. Starsza korekta nie
-/// zdejmuje stanu nowszej i nie nadpisuje jej komunikatu.
-public enum CorrectionOwnership {
-    /// Zwraca, czy `runID` był właścicielem (wtedy stan zdjęty i wolno zapisać porażkę).
-    public static func finish(_ owners: inout [String: String], session: String, runID: String) -> Bool {
-        guard owners[session] == runID else { return false }
-        owners[session] = nil
-        return true
+/// Trwające operacje na przebiegach sesji (korekta, autotytuł), każda z własnym biletem (F2, F3). Rejestr WSZYSTKICH trwających
+/// (`isActive`, `sessions` — sesja zajęta, przenoszenie nagrań zablokowane) jest oddzielony od własności komunikatu: komunikat
+/// zapisuje tylko najnowsza rozpoczęta w sesji, a wynik (`corrected.json`, ślad słownika) — tylko najnowsza rozpoczęta dla
+/// danego przebiegu. Starsza, kończąc się po nowszej, nie zdejmuje zajętości innych, nie nadpisuje komunikatu ani wyniku.
+public struct RunOperations: Equatable, Sendable {
+    public struct Ticket: Hashable, Sendable {
+        public let session: String
+        public let runID: String
+        let token: Int
     }
+
+    public struct Outcome: Equatable, Sendable {
+        /// Najnowsza rozpoczęta w sesji: wolno zapisać porażkę dla interfejsu.
+        public var ownsMessage: Bool
+        /// Najnowsza rozpoczęta dla tego przebiegu: wolno zapisać wynik.
+        public var mayPublish: Bool
+        public init(ownsMessage: Bool, mayPublish: Bool) { self.ownsMessage = ownsMessage; self.mayPublish = mayPublish }
+    }
+
+    private var counter = 0
+    private var active: Set<Ticket> = []
+    // Nie czyścimy przy końcu: starsza kończąca się po nowszej musi wciąż widzieć, że nowsza była (nazwy katalogów nie mają „/”).
+    private var latestInSession: [String: Int] = [:]
+    private var latestForRun: [String: Int] = [:]
+
+    public init() {}
+
+    public mutating func start(session: String, runID: String) -> Ticket {
+        counter += 1
+        let t = Ticket(session: session, runID: runID, token: counter)
+        active.insert(t)
+        latestInSession[session] = counter
+        latestForRun[session + "/" + runID] = counter
+        return t
+    }
+
+    public mutating func finish(_ t: Ticket) -> Outcome {
+        active.remove(t)
+        return Outcome(ownsMessage: latestInSession[t.session] == t.token, mayPublish: latestForRun[t.session + "/" + t.runID] == t.token)
+    }
+
+    public func isActive(_ session: String) -> Bool { active.contains { $0.session == session } }
+    public var sessions: Set<String> { Set(active.map(\.session)) }
 }
 
 /// Język, w jakim powstał wybrany przebieg (I2): z jego migawki, bo „Transcribe again…" może zmienić język bez zmiany

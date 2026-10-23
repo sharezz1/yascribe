@@ -231,15 +231,51 @@ import MeetNotesSessionFormat
 
     @Test func olderCorrectionFailureCannotOverwriteNewerEarlyFailure() {
         // A poprawia; B (nowy bieżący) zaczyna i od razu pada bez klienta; potem pada A.
-        var owners: [String: String] = [:]
-        owners["s"] = old                                                          // start A
-        owners["s"] = new                                                          // start B — własność przed wczesnym wyjściem
-        #expect(CorrectionOwnership.finish(&owners, session: "s", runID: new))    // B zapisuje swoją porażkę
-        #expect(!CorrectionOwnership.finish(&owners, session: "s", runID: old))   // A nie nadpisuje
-        #expect(owners["s"] == nil)
-        // Bez wyścigu: jedyna korekta kończy się jako właściciel.
-        owners["s"] = old
-        #expect(CorrectionOwnership.finish(&owners, session: "s", runID: old))
+        var ops = RunOperations()
+        let a = ops.start(session: "s", runID: old)
+        let b = ops.start(session: "s", runID: new)                 // bilet przed wczesnym wyjściem
+        #expect(ops.finish(b).ownsMessage)                           // B zapisuje swoją porażkę
+        #expect(!ops.finish(a).ownsMessage)                          // A nie nadpisuje
+        #expect(!ops.isActive("s"))
+        // Bez wyścigu: jedyna korekta kończy się jako właściciel i publikuje.
+        let only = ops.start(session: "s", runID: old)
+        #expect(ops.finish(only) == RunOperations.Outcome(ownsMessage: true, mayPublish: true))
+    }
+
+    @Test func twoCorrectionsOfOneRunKeepTheNewerResult() {
+        // F2: dwie korekty tego samego przebiegu kończą się odwrotnie — `corrected.json` i ślad słownika zostają z nowszej.
+        var ops = RunOperations()
+        let first = ops.start(session: "s", runID: old)
+        let second = ops.start(session: "s", runID: old)
+        #expect(ops.finish(second) == RunOperations.Outcome(ownsMessage: true, mayPublish: true))
+        #expect(ops.finish(first) == RunOperations.Outcome(ownsMessage: false, mayPublish: false))
+        // Kolejność zwykła: starsza kończy pierwsza i też nie publikuje (nowsza i tak nadpisze), nowsza publikuje.
+        let x = ops.start(session: "s", runID: old), y = ops.start(session: "s", runID: old)
+        #expect(!ops.finish(x).mayPublish)
+        #expect(ops.finish(y).mayPublish)
+        // Inny przebieg i inna sesja się nie blokują.
+        let p = ops.start(session: "s", runID: old), q = ops.start(session: "s", runID: new), r = ops.start(session: "t", runID: old)
+        #expect(ops.finish(q).mayPublish && ops.finish(r).mayPublish && ops.finish(p).mayPublish)
+    }
+
+    @Test func olderOperationKeepsTheSessionBusyAfterNewerEnds() {
+        // F3: A trwa, B kończy się wcześniej — sesja wciąż zajęta (blokada przenoszenia), dopóki A nie skończy.
+        var ops = RunOperations()
+        let a = ops.start(session: "s", runID: old)
+        let b = ops.start(session: "s", runID: new)
+        let other = ops.start(session: "t", runID: old)
+        _ = ops.finish(b)
+        #expect(ops.isActive("s") && ops.sessions == ["s", "t"])
+        _ = ops.finish(other)
+        #expect(ops.sessions == ["s"])
+        _ = ops.finish(a)
+        #expect(!ops.isActive("s") && ops.sessions.isEmpty)
+        // Ta sama operacja dwa razy (np. dwa autotytuły jednej sesji): pierwszy koniec nie zwalnia sesji.
+        let t1 = ops.start(session: "s", runID: new), t2 = ops.start(session: "s", runID: new)
+        _ = ops.finish(t1)
+        #expect(ops.isActive("s"))
+        _ = ops.finish(t2)
+        #expect(!ops.isActive("s"))
     }
 
     @Test func reloadGivesTheSameSelection() throws {

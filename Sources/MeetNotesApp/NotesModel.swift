@@ -19,9 +19,10 @@ final class NotesModel {
     var generation: [String: GenState] = [:]
     /// Bieżący krok generowania (klucz: id sesji) — „Condensing part 2 of 6 (pass 1)…"; `nil` poza generowaniem.
     private(set) var progress: [String: NoteProgress] = [:]
-    /// Sesja → przebieg, którego korekta trwa. Starsza korekta, kończąc się, nie zdejmuje stanu nowszej (fix round 1, I2).
-    private(set) var correcting: [String: String] = [:]
-    private(set) var titling: Set<String> = []
+    /// Wszystkie trwające korekty i autotytuły, każdy z biletem (F2, F3): sesja zajęta, dopóki trwa którykolwiek; komunikat
+    /// i wynik należą do najnowszego (`RunOperations`).
+    private(set) var corrections = RunOperations()
+    private(set) var titles = RunOperations()
     /// Powód ostatniego nieudanego przebiegu korekty (klucz: id sesji). Znika po udanym ponowieniu.
     private(set) var correctionFailure: [String: String] = [:]
     var templates = TemplatesFile()
@@ -101,15 +102,15 @@ final class NotesModel {
         onChange()
     }
 
-    func isCorrecting(_ id: String) -> Bool { correcting[id] != nil }
-    func isTitling(_ id: String) -> Bool { titling.contains(id) }
+    func isCorrecting(_ id: String) -> Bool { corrections.isActive(id) }
+    func isTitling(_ id: String) -> Bool { titles.isActive(id) }
     func correctionFailureMessage(_ id: String) -> String? { correctionFailure[id] }
 
     /// „Improve transcript"/Retry: preset nagrania ma model korekty, jest transkrypt i nic nie trwa, a korekta
     /// albo padła (całkiem lub z częścią partii: „N parts kept as heard”), albo jej nie ma (np. aplikacja zamknięta w trakcie).
     func canRetryCorrection(_ item: SessionItem) -> Bool {
         // Bez wypowiedzi (np. wszystkie okna padły offline) nie ma czego poprawiać: przycisk nic by nie zrobił; wtedy jest „Retry Failed Parts”.
-        guard correcting[item.id] == nil, state(item.id) != .generating, item.runID != nil,
+        guard !isCorrecting(item.id), state(item.id) != .generating, item.runID != nil,
               let transcript = item.transcript, !transcript.utterances.isEmpty else { return false }
         guard correctionAssignment(for: item) != nil else { return false }
         // Własny model korekty pozwala puścić ją jeszcze raz także po udanej, żeby porównać modele (nadpisuje corrected.json).
@@ -132,11 +133,11 @@ final class NotesModel {
     private func runCorrection(sessionURL: URL, runID: String, assignment: RoleAssignment, language: LanguageCode?,
                                transcript: Transcript) async -> Transcript {
         let id = sessionURL.lastPathComponent
-        // Własność stanu od pierwszej linii, przed każdym wczesnym wyjściem: inaczej starsza korekta, kończąc się, nadpisałaby
+        // Bilet od pierwszej linii, przed każdym wczesnym wyjściem: inaczej starsza korekta, kończąc się, nadpisałaby
         // porażkę nowszej, która padła bez klienta (fix round 2).
-        correcting[id] = runID
+        let ticket = corrections.start(session: id, runID: runID)
         guard !assignment.model.isEmpty, let client = clientFor(assignment.providerID) else {
-            if CorrectionOwnership.finish(&correcting, session: id, runID: runID) {
+            if corrections.finish(ticket).ownsMessage {
                 correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
             }
             onChange()
@@ -158,14 +159,15 @@ final class NotesModel {
         let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
                                      temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used)
             .correct(input, language: language)
-        // Stan sesji należy do najnowszej korekty: starsza ani go nie zdejmuje, ani nie zgłasza porażki za nowszy przebieg.
-        let owner = CorrectionOwnership.finish(&correcting, session: id, runID: runID)
+        // Komunikat należy do najnowszej korekty sesji, wynik — do najnowszej korekty tego przebiegu (F2): starsza, kończąc się
+        // później, nie nadpisuje `corrected.json` ani śladu nowszej. Sprawdzenie i zapis bez `await` pomiędzy.
+        let outcome = corrections.finish(ticket)
         defer { onChange() }
         if result.failedCompletely {
-            if owner { correctionFailure[id] = result.firstError ?? "The correction didn't go through." }
+            if outcome.ownsMessage { correctionFailure[id] = result.firstError ?? "The correction didn't go through." }
             return transcript
         }
-        if result.batches > 0 {
+        if result.batches > 0, outcome.mayPublish {
             let run = RunDirectory(session: sessionURL, runID: runID)
             let saved = (try? JSONFile.save(result, to: run.corrected)) != nil
             // Ślad do odbioru §8.4 tylko po zapisanej korekcie (R18): stary ślad obok nowego `corrected.json` kłamałby.
@@ -185,7 +187,7 @@ final class NotesModel {
         guard !isMoving() else { report(Self.movingMessage); return }
         guard state(id) != .generating else { return }
         // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
-        guard correcting[id] == nil else { return }
+        guard !isCorrecting(id) else { return }
         guard let source = item.transcript(corrected: useCorrected) else {
             generation[id] = .failed("This meeting has no transcript yet.")
             return
@@ -244,7 +246,8 @@ final class NotesModel {
     func setPreview(_ id: String, generating: NoteProgress? = nil, correcting isCorrecting: Bool = false) {
         generation[id] = generating == nil ? nil : .generating
         progress[id] = generating
-        correcting[id] = isCorrecting ? "preview" : nil
+        // Tylko tryb migawek, w którym nic naprawdę nie trwa: wyczyszczenie rejestru nikomu nie zabiera biletu.
+        if isCorrecting { _ = corrections.start(session: id, runID: "preview") } else { corrections = RunOperations() }
     }
 
     /// „Cancel" przy generowaniu: zatrzymuje kolejne wywołania serwera i od razu zwalnia sesję (bez błędu, bez notatki).
@@ -285,7 +288,7 @@ final class NotesModel {
         if let choice = SummaryModel.resolve(frozen: snapshot.preset, override: saved?.usable(.summary, knownProviders: known),
                                              defaultPresetID: info.defaultID, presets: info.presets),
            let client = clientFor(choice.assignment.providerID) {
-            titling.insert(id)
+            let ticket = titles.start(session: id, runID: runID)
             onChange()
             let limits = ChatLimits.for(client.provider, call: .title)
             // Tytuł z tekstu po Replacement — także bez korekty w presecie i po jej porażce (wtedy `working` jest surowy).
@@ -296,7 +299,7 @@ final class NotesModel {
                                          maxTokens: limits.maxTokens,
                                          stillCurrent: { RunSelection.shouldPostProcess(session: sessionURL, runID: runID) },
                                          onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
-            titling.remove(id)
+            _ = titles.finish(ticket)
             onChange()
         }
     }
