@@ -46,6 +46,7 @@ public struct ReplacementRules: @unchecked Sendable {
 
     /// `preFilter: false` (pełne przeszukanie wyrażeniem) tylko dla testu równoważności z filtrem.
     func apply(to text: String, preFilter: Bool) -> String {
+        // shortcut: tekst pominięty przez filtr wraca bez NFC, choć wpis Terma by go znormalizował (R19); kanonicznie równy (`==`, klucze), więc bez różnicy dla użytkownika.
         guard let regex, !preFilter || mayMatch(text) else { return text }
         var current = text
         for _ in 0..<5 {
@@ -91,8 +92,14 @@ public struct ReplacementRules: @unchecked Sendable {
         }
     }
 
-    /// Licznik przebiegów wyrażenia dla testu filtra wstępnego (zmienna zadania: równoległe testy jej nie widzą).
-    final class RegexRuns: @unchecked Sendable { var count = 0 }
+    /// Licznik wywołań `once` (przebiegów wyrażenia) dla testu filtra wstępnego. Zmienna zadania: równoległe testy jej nie widzą,
+    /// ale dziedziczą ją zadania potomne, więc licznik jest pod blokadą.
+    final class RegexRuns: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0
+        var count: Int { lock.withLock { value } }
+        func increment() { lock.withLock { value += 1 } }
+    }
     @TaskLocal static var regexRuns: RegexRuns?
 
     /// Jedno przejście, bez ponownego skanowania wstawionych Termów. Dopasowanie na tekście w NFC (Alias z NFD ze schowka trafia
@@ -100,7 +107,7 @@ public struct ReplacementRules: @unchecked Sendable {
     /// początków słów o kluczu z tego zbioru, od lewej (zakotwiczone, z widocznym tekstem przed zakresem dla lookbehind): najbardziej
     /// lewe dopasowanie zaczyna się na takim słowie, więc wynik jest ten sam co przy pełnym przeszukaniu, a ICU nie skanuje każdej pozycji.
     private static func once(_ text: String, _ regex: NSRegularExpression, _ terms: [String], from starts: Set<String>?) -> String {
-        regexRuns?.count += 1
+        regexRuns?.increment()
         let source = text.precomposedStringWithCanonicalMapping as NSString
         let string = source as String
         var matches: [NSTextCheckingResult] = []

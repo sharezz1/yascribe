@@ -153,6 +153,35 @@ import Testing
         #expect(ReplacementRules(UserDictionary(terms: dictionaries[13])).mayMatch("nic tu nie ma"))
     }
 
+    /// Przypadki brzegowe filtra (M1): wynik z filtrem i bez niego równy oczekiwanemu (`==`, równoważność kanoniczna).
+    @Test func preFilterMatchesRegexOnAdversarialCases() throws {
+        let prefix = String(repeating: "lorem ipsum ", count: 4200)   // ok. 50 tys. znaków innych słów
+        let cases: [(alias: String, text: String, expected: String)] = [
+            ("fi", "\u{FB01}", "Target"),                                // ligatura ﬁ
+            ("k", "\u{212A}", "Target"),                                 // znak Kelvina
+            ("\u{01C5}", "\u{01C6}", "Target"),                          // ǅ / ǆ
+            ("i", "\u{0131}", "\u{0131}"),                                // ı bez kropki: ICU go nie składa do i
+            ("\u{0130}", "i\u{0307}", "Target"),                         // İ / i + kropka
+            ("o'neil", "O'NEIL", "Target"),
+            ("r2.d2", "R2.D2", "Target"),
+            ("3d", "x_3D\u{203F}3d", "x_Target\u{203F}Target"),           // łączniki Pc nie są słowem
+            ("a", "a\u{2163} a\u{00B2}", "a\u{2163} a\u{00B2}"),          // Nl i No przedłużają słowo
+            ("pu do", "pu\u{0301} do", "pu\u{0301} do"),
+            ("x\u{0301} y", "X\u{0301} Y", "Target"),                     // Alias ze znakiem łączącym w środku
+            ("Zoim", "\u{1F600} Zoim \u{1F600}\u{1F600}zoim", "\u{1F600} Target \u{1F600}\u{1F600}Target"),  // UTF-16 poza BMP
+            ("Zoim", prefix + "Zoim", prefix + "Target"),
+        ]
+        for c in cases {
+            let r = rules(DictionaryTerm("Target", aliases: [DictionaryAlias(c.alias)]))
+            #expect(r.apply(to: c.text) == c.expected, "\(c.alias) \(c.text.prefix(40))")
+            #expect(r.apply(to: c.text, preFilter: false) == c.expected, "\(c.alias) \(c.text.prefix(40))")
+        }
+        // Punkt stały po długim przedrostku: druga runda też musi trafić w słowo daleko od początku.
+        let chain = try upserted(DictionaryTerm("A", aliases: [DictionaryAlias("x")]), DictionaryTerm("B", aliases: [DictionaryAlias("A y")]))
+        #expect(chain.apply(to: prefix + "\u{1F600}x y") == prefix + "\u{1F600}B")
+        #expect(chain.apply(to: prefix + "\u{1F600}x y", preFilter: false) == prefix + "\u{1F600}B")
+    }
+
     @Test func preFilterSkipsRegexWhenNoCandidateToken() {
         let r = rules(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")]))
         let runs = ReplacementRules.RegexRuns()
