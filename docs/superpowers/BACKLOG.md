@@ -209,11 +209,14 @@ nie są tu kopiowane.
 
 **Funkcje i decyzje**
 - [ ] **Odmiany Aliasów** (polska fleksja: „Zoomem", „Zoomie"…) — dziś każda forma to osobny Alias; rozważyć dopasowanie po rdzeniu (ryzyko fałszywych trafień) albo podpowiedź przy dopisywaniu.
-- [ ] **Licznik „N terms don't fit" z sondą kontekstu** — licznik liczy z pola „Context window" dostawcy, nie z sondy `/api/ps`; dla API (`ContextBudget.resolve` = `nil`) nie liczy wcale.
+- [ ] **Licznik „N terms don't fit" z sondą kontekstu** — licznik liczy z pola „Context window" dostawcy, nie z sondy `/api/ps`; dla API (`ContextBudget.resolve` = `nil`) liczy z stałego limitu 3000 znaków (`DictionaryPrompt.apiMaxChars`), a nie z okna modelu.
 - [ ] **Przełącznik przebiegów w UI** — stare przebiegi zostają w `runs/`, ale nie da się ich wybrać ani porównać (bieżący jest wyliczany, R23).
 - [ ] **`generate()` bierze język notatki z presetu sesji**, a autotytuł i korekta z migawki bieżącego przebiegu (I2); po „Transcribe again…" z innym językiem notatka może mieć język starego presetu. Powinien pochodzić z migawki przebiegu.
-- [ ] **Identyfikatory przebiegów monotoniczne** (R25) — dwa przebiegi w tej samej sekundzie mogą sortować się w złej kolejności (`RunDirectory.runIDs` sortuje leksykalnie); wymusić rosnący sufiks.
 - [ ] **Baner na karcie Transcript przypisuje aktywność najnowszej próbie** (R26), gdy użytkownik wznawia luki bieżącego przebiegu („Retry Failed Parts"); komunikat powinien nazywać przebieg, na którym trwa praca.
+- [ ] **Retencja audio trzyma nagranie bez końca**, gdy najnowszy przebieg jest pusty (cisza, „No speech") albo bez `run.json` — kryterium ukończenia jak w `RunSelection` (fala A, F1); rozważyć osobną regułę dla pustych nagrań.
+- [ ] **Etykieta „Transcribe again…" w stanie „No transcript yet"** brzmi dziwnie dla nagrania, które jeszcze nigdy nie miało transkryptu; rozważyć „Transcribe with another model…".
+- [ ] **Starsza korekta trzyma sesję zajętą**, dopóki się nie skończy, choć jej wynik zostanie odrzucony (F2/F3; informacyjnie — blokuje Improve/Generate i przenoszenie).
+- [ ] **Brak testów integracyjnych `NotesModel`** dla wyścigów korekt i autotytułów (cel `MeetNotesApp` nie ma testów jednostkowych; logika przeniesiona do `RunOperations` jest pokryta, okablowanie nie).
 - [ ] **Import: linia bez tabulatora** jest pomijana bez raportu (R15b; nadmiar kolumn jest już zgłaszany jako `rejected`).
 - [ ] **Import: konflikty powtarzają się** przy każdym imporcie tego samego pliku (judged acceptable w T4) — rozważyć zapamiętanie już zgłoszonych.
 - [ ] **Brak błędu specyficznego dla słownika**, gdy prompt reduce w map-reduce przekracza budżet (T6); komunikat jest ogólny.
@@ -221,7 +224,6 @@ nie są tu kopiowane.
 - [ ] **Egzotyczne zaparkowane** (R12, R19): para Greek dialytika+tonos w NFC vs NFD; filtr wstępny zwraca tekst bez NFC, gdy nic się nie zmienia (kanonicznie równy, bez różnicy dla użytkownika).
 
 **Brakujące testy (z recenzji, odłożone)**
-- [ ] `UserDictionary`: test NFC używa Terma ASCII, więc usunięcie normalizacji Terma nie wychodzi — dodać Term w NFD (T2).
 - [ ] Test map-reduce z przekazaniem słownika (T6) prawdopodobnie sięga 2, nie 3 poziomów (wymagane ≥ 2, nie blokuje).
 - [ ] `DictionaryEdit` (T8) nie sprawdza stanu arkusza UI.
 

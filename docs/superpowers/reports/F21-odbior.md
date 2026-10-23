@@ -14,7 +14,7 @@
 | 8.1 w UI (migawki: widok surowy, poprawiony, preset bez korekty) | **zaliczone** na wymyślonym krótkim transkrypcie; **mutacja kontrolna** (Replacement wyłączony w `AppModel.transcript(of:corrected:)`) przywraca stare zapisy we wszystkich trzech scenach |
 | 8.2 Testy jednostkowe (risky, idempotencja, granice słów PL, najdłuższy Alias, import idempotentny) | **zaliczone** — `ReplacementTests`, `UserDictionaryTests`, `DictionaryTransferTests` w pełnym przebiegu |
 | 8.3 Przycinanie do kontekstu 4096 i licznik „N terms don't fit” | **zaliczone** — test `capturedCorrectorRequestListsExactlyThePrunedTerms` (Task 6) + scena `dictionary-list` (128 Termów, kontekst 4096, budżet 983 znaków: „28 terms don’t fit the correction prompt”, `gemma-3-4b · context 4096`; poprawka końcowa) |
-| Pełny przebieg `scripts/test.sh` | **720/720** po poprawce własności stanu korekty (Task 10b fix round 2, +1); 719/719 po poprawce końcowej (704 w chwili odbioru agenta; 711 po `dd78443`, +8 testów w poprawce końcowej) |
+| Pełny przebieg `scripts/test.sh` | **730/730** po poprawkach końcowych A i B (704 w chwili odbioru agenta; 719 po poprawce końcowej R27; 726 po fali A; +4 testy w fali B) |
 | 8.4, 8.5 (nagranie, Termy w zakładce, „Transcribe again…”, panele systemowe) | **czeka na użytkownika** — §4 |
 
 ## 1. §8.1 — sesja `62de` i słownik testowy (CLI)
@@ -66,7 +66,7 @@ punkt odczytu, a nie fixture z gotowymi poprawnymi zapisami.
 
 ## 3. §8.2, §8.3 i pełny przebieg
 
-- `scripts/test.sh` (pełny): przy odbiorze agenta (HEAD `4bfb2fa`) 704/704; po poprawce końcowej `test.sh: 719/719 testów uruchomionych i zaliczonych.`, `check-bundle: OK`; po Task 10b fix round 2 `test.sh: 720/720 testów uruchomionych i zaliczonych.`
+- `scripts/test.sh` (pełny): przy odbiorze agenta (HEAD `4bfb2fa`) 704/704; po poprawce końcowej `test.sh: 719/719 testów uruchomionych i zaliczonych.`, `check-bundle: OK`; po fali A (F1–F3, F5–F7) 726/726; po fali B (F4, F8, F9) `test.sh: 730/730 testów uruchomionych i zaliczonych.`
 - §8.3: przycinanie polecenia korektora do budżetu dowodzi `capturedCorrectorRequestListsExactlyThePrunedTerms` (`Tests/MeetNotesNotesTests/CorrectorTests.swift`);
   licznik „N terms don’t fit” w zakładce — scena `dictionary-list` (Task 8, w poprawce końcowej przestawiona ze 2048 na **4096** zgodnie ze specem §8.3): 128 Termów
   (8 prawdziwych + 120 wypełniaczy `Acme-NNN`), lokalny dostawca `gemma-3-4b` z Context window 4096, budżet `DictionaryPrompt.maxChars` = 983 znaki;
@@ -79,10 +79,14 @@ punkt odczytu, a nie fixture z gotowymi poprawnymi zapisami.
 1. **Prawdziwy słownik:** w zakładce Dictionary wpisać prawdziwe Termy i Aliasy (np. `Zowie` z `Zoey`, `Zoim`), potem **Import…** z plików GCX (`vocab_core.txt`,
    `replacements.tsv`; wielokrotny wybór w `NSOpenPanel` — klasyfikacja po rozszerzeniu `.tsv`). Sprawdzić raport importu (konflikty, odrzucone, risky wyłączone).
 2. **Nagranie z wydarzeniem i korektą:** nagrać spotkanie powiązane z wydarzeniem kalendarza na presecie **z modelem korekty**; w `runs/<przebieg>/vocabulary.txt`
-   sprawdzić imiona uczestników i Termy; w transkrypcie i notatce poprawne zapisy (bez korekty Attendee hint niczego nie poprawia).
+   sprawdzić imiona uczestników i Termy (bez adresów e-mail). Po transkrypcji aplikacja robi automatycznie tylko korekcję i autotytuł — **notatki nie**: wybrać w presecie
+   działający model Summary, poczekać, aż korekta się skończy, kliknąć **Generate notes** (albo **Regenerate**) i dopiero w notatce sprawdzić imiona uczestników i Termy;
+   w transkrypcie poprawne zapisy (bez korekty Attendee hint niczego nie poprawia).
 3. **„Transcribe again…”** na nagraniu z 2026-10-21 z innym modelem ASR: powstaje drugi przebieg w `runs/`, bieżący transkrypt zmienia się dopiero, gdy nowy
    przebieg jest ukończony i bez luk (R23); sprawdzić też przypadek nieudanego/przerwanego przebiegu (baner „didn’t finish — showing the transcript from …”)
-   i „Resume Transcription with …”.
+   i „Resume Transcription with …”. Dodatkowo (fala A): w trakcie korekty „Retry Failed Parts" i „Resume Transcription" są wyłączone (komunikat „This transcript is being
+   corrected…"); „Transcribe again…" jest też w stanie „No transcript yet" (obok „Transcribe with <preset>" i „Resume Transcription"); przenoszenie nagrań jest zablokowane,
+   dopóki trwa jakakolwiek korekta lub autotytuł sesji; po restarcie z wygasłą retencją audio nieukończonej próby nie znika.
 4. **Wygląd i panele systemowe, których migawki nie weryfikują:** odcień przełącznika „On” (Task 8), `NSOpenPanel` przy Import/Export, potwierdzenie
    nadpisania przy Export…, stany banera przebiegu na prawdziwym oknie, popover „Transcribe again…” w oknie (migawka rysuje go inline), Dictionary jako czwarty
    wiersz dolnej grupy paska bocznego.
@@ -108,4 +112,15 @@ puste ogony tabulatora nadal dozwolone, linie z `#` nadal komentarze. (4) `Vocab
 (5) Nowe testy: U+037E na granicy 60 znaków, znaki sterujące U+001C–1F, uczestnik pusty po sanityzacji, budżety zerowe/ujemne/minimalne, suma konfliktów i odrzuceń przy imporcie wielu plików.
 Mutacje po commicie (każda cofnięta `git checkout`): bez gałęzi POSIX w `isMissingFile` pada `missingFileIsRecognizedInBothErrorDomains`; bez odrzucenia nadmiarowych kolumn padają
 `replacementsRowWithExtraColumnsIsRejected` i `multiFileImportSumsConflictsAndRejectionsAcrossFiles`; bez straży zero-Termów CLI zwraca „OK" i exit 0 (pomiar wyżej).
-Pełny przebieg: **720/720** (po Task 10b fix round 2; wcześniej 719/719).
+Pełny przebieg: **719/719** po R27, **730/730** po falach A i B (§7).
+
+## 7. Fale poprawek po przeglądzie całości (R28)
+
+Przegląd całości gałęzi (Codex gpt-6-astra) dał F1–F11. **Fala A** (inny agent, `6b77bb0` i poprzednie): F1 retencja audio z kryterium ukończenia jak `RunSelection`, F2/F3 bilety korekt i autotytułów
+(zajętość osobno od komunikatu, tylko najnowsza korekta przebiegu publikuje wynik), F5 wypowiedź ponad limit partii ze słownikiem zostaje oryginalna, F6 „Transcribe again…" w stanie „No transcript yet",
+F7 identyfikatory przebiegów ściśle rosnące. **Fala B** (ten agent, 730/730): **F4** adresy e-mail nigdy nie trafiają do polecenia ani do `vocabulary.txt` (wzorzec `lokalna@domena.tld`, też w `<…>`,
+potem każdy token z `@`; imiona z kropkami, myślnikami i apostrofami bez zmian; zostaje fragment domeny, gdy adres przerwie znak formatujący); **F8** zbiór zakazanych znaków w Terminie i Aliasie =
+`#` na początku, TAB oraz każdy znak sterujący i separator linii (Cc, Zl, Zp: m.in. VT, FF), test pilnuje, że żaden znak `Character.isNewline` nie przechodzi; **F9** `dictionary-check` nie wymaga zera
+dla Aliasu różniącego się od Terma tylko wielkością liter (`Pudo` → `PUDO`; `UserDictionary.aliasOnlyNormalizesCase`), nadal go wypisuje. Kody wyjścia: fixture `62de` 0, pusty TSV 1,
+TSV `Pudo\tPUDO` na tekście z „Pudo" 0. Mutacje po commicie (cofnięte): bez usuwania adresów pada `emailAddressesNeverReachThePromptOrTheTrace`, bez Cc w zbiorze pada
+`upsertRejectsReservedCharacters`, bez wyjątku wielkości liter pada `caseOnlyAliasIsRecognizedForTheCliCheck`. Wyniki dokumentowe: F10 (BACKLOG, ROADMAP), F11 (krok 2 powyżej).
