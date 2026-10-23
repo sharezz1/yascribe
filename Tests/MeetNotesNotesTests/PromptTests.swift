@@ -115,6 +115,27 @@ private func condensed(_ user: String) -> String {
     }.joined(separator: "\n")
 }
 
+/// Odpowiedź mapy o połowie długości wejścia (jak obiecuje prompt), w liniach po ~100 znaków formatu transkryptu.
+private func halfSizeMapReply(_ c: ChatStub.Call) -> String {
+    let total = min(Int(Double(c.maxTokens ?? 0) * ContextBudget.charsPerToken), c.user.count / 2)
+    let prefix = "[0:00] Them: "
+    var lines: [String] = []
+    var used = 0
+    while used < total {
+        let n = min(100, total - used)
+        if n > prefix.count + 1 { lines.append(prefix + String(String(repeating: "word ", count: n / 5 + 1).prefix(n - prefix.count - 1)) + "w") }
+        used += n + 1
+    }
+    return lines.joined(separator: "\n")
+}
+
+private final class PassLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [NoteProgress] = []
+    var all: [NoteProgress] { lock.withLock { items } }
+    func add(_ p: NoteProgress) { lock.withLock { items.append(p) } }
+}
+
 private func occurrences(of needle: String, in s: String) -> Int { s.components(separatedBy: needle).count - 1 }
 
 extension VocabularyInPromptTests {
@@ -165,5 +186,31 @@ extension VocabularyInPromptTests {
         #expect(with.allSatisfy { occurrences(of: lines, in: $0.system) == 1 && !$0.user.contains("Known names and terms") })
         #expect(with.count == withMaps.count + 1) // ostatnie wywołanie to reduce
         #expect(plain.allSatisfy { !$0.system.contains("Known names and terms") })
+    }
+
+    @Test func vocabularyReachesEverySubsequentMapLevelAndReduce() async throws {
+        let budget = ContextBudget(tokens: 4_096)
+        let v = DictionaryPrompt.make(Self.dictionary(30), link: nil, maxChars: DictionaryPrompt.maxChars(budget: budget))
+        let words = String(repeating: "word ", count: 500)
+        let t = transcript((0..<6).map { utt(String(words.prefix(2_500)), $0 % 2 == 0 ? .them : .me, at: Double($0) * 10) })
+        let session = tempDir()
+        defer { try? FileManager.default.removeItem(at: session) }
+        // Wyjścia pierwszego poziomu (≈ połowa wejścia) nie mieszczą się w reduce → kolejne poziomy map, dopiero potem reduce.
+        let stub = ChatStub { c in isMapCall(c) ? halfSizeMapReply(c) : "# T\nbody" }
+        let log = PassLog()
+        let gen = NoteGenerator(client: localChatClient(stub), model: "local-model")
+        _ = try await gen.generate(session: session, template: .standard, transcript: t, context: "", notesLanguage: .polish,
+                                   budget: budget, vocabulary: v, now: Date(timeIntervalSince1970: 5_000), progress: { log.add($0) })
+        let passes = log.all.compactMap { p -> Int? in if case .condensing(let pass, _, _) = p { pass } else { nil } }
+        #expect(Set(passes).isSuperset(of: [1, 2])) // co najmniej dwa poziomy kondensacji (tu trzy)
+        let maps = stub.calls.filter(isMapCall)
+        #expect(maps.count == passes.count && stub.calls.count == maps.count + 1) // ostatnie wywołanie to reduce
+        let lines = v.promptLines!
+        let names = Set(v.terms)
+        for call in stub.calls { // każde wywołanie: każda linia raz w `system`, żadna w `user`
+            #expect(occurrences(of: lines, in: call.system) == 1)
+            #expect(occurrences(of: "Known names and terms", in: call.system) == 1 && !call.user.contains("Known names and terms"))
+            #expect(names.allSatisfy { occurrences(of: $0, in: call.system) == 1 })
+        }
     }
 }
