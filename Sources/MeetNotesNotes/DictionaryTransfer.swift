@@ -7,6 +7,8 @@ public struct DictionaryImportReport: Equatable, Sendable {
     /// Nowe Aliasy risky, które weszły wyłączone (zawierają się też w `aliasesAdded`).
     public var riskyLeftOff: Int
     public var conflicts: [Conflict]
+    /// Pozycje z zarezerwowanymi znakami (zaczynają się od `#` albo mają tabulator / koniec linii w środku): `upsert` je odrzuca.
+    public var rejected: Int
 
     public struct Conflict: Equatable, Sendable {
         /// Alias z pliku, który nie wszedł.
@@ -23,15 +25,16 @@ public struct DictionaryImportReport: Equatable, Sendable {
         }
     }
 
-    public init(termsAdded: Int = 0, aliasesAdded: Int = 0, riskyLeftOff: Int = 0, conflicts: [Conflict] = []) {
+    public init(termsAdded: Int = 0, aliasesAdded: Int = 0, riskyLeftOff: Int = 0, conflicts: [Conflict] = [], rejected: Int = 0) {
         self.termsAdded = termsAdded
         self.aliasesAdded = aliasesAdded
         self.riskyLeftOff = riskyLeftOff
         self.conflicts = conflicts
+        self.rejected = rejected
     }
 
     public var summary: String {
-        "\(termsAdded) terms, \(aliasesAdded) aliases, \(riskyLeftOff) risky left off, \(conflicts.count) conflicts"
+        "\(termsAdded) terms, \(aliasesAdded) aliases, \(riskyLeftOff) risky left off, \(conflicts.count) conflicts, \(rejected) rejected"
     }
 }
 
@@ -65,7 +68,13 @@ public enum DictionaryTransfer {
         let rows = replacements.map(parseReplacements) ?? []
 
         // Przebieg 1: wszystkie Termy (najpierw z vocab, potem cele spoza niego jako Low), żeby wynik nie zależał od kolejności linii.
-        for (text, priority) in vocab + rows.map({ ($0.target, TermPriority.low) }) {
+        // Cele z replacements, które odrzuca `isReserved`, liczy przebieg 2 (raz na wiersz), z vocab liczymy tu.
+        let candidates = vocab.map { ($0.0, $0.1, true) } + rows.map { ($0.target, TermPriority.low, false) }
+        for (text, priority, fromVocab) in candidates {
+            if UserDictionary.isReserved(text) {
+                if fromVocab { report.rejected += 1 }
+                continue
+            }
             let k = UserDictionary.key(text)
             if dict.terms.contains(where: { UserDictionary.key($0.text) == k }) { continue }
             do {
@@ -81,6 +90,10 @@ public enum DictionaryTransfer {
 
         // Przebieg 2: Aliasy. Istniejący Alias tego samego Terma zostaje nietknięty (flagi użytkownika wygrywają).
         for row in rows {
+            if UserDictionary.isReserved(row.phrase) || UserDictionary.isReserved(row.target) {
+                report.rejected += 1
+                continue
+            }
             let k = UserDictionary.key(row.target)
             guard var term = dict.terms.first(where: { UserDictionary.key($0.text) == k }) else {
                 report.conflicts.append(.init(alias: row.phrase, keptBy: dict.owner(ofAlias: row.target)?.text ?? row.target, skippedFor: row.target))
@@ -103,6 +116,8 @@ public enum DictionaryTransfer {
                 try dict.upsert(term)
                 report.aliasesAdded += 1
                 if flags.risky && !flags.enabled { report.riskyLeftOff += 1 }
+            } catch DictionaryError.invalidCharacters {
+                report.rejected += 1
             } catch {
                 report.conflicts.append(.init(alias: row.phrase, keptBy: "?", skippedFor: term.text))
             }
@@ -112,8 +127,11 @@ public enum DictionaryTransfer {
 
     // MARK: Parsery
 
+    /// Pojedynczy BOM na początku pliku (Excel, Notatnik) nie jest tekstem: inaczej gubi pierwszy nagłówek.
     private static func lines(_ text: String) -> [String] {
-        text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map {
+        var text = text
+        if text.unicodeScalars.first == "\u{FEFF}" { text = String(text.unicodeScalars.dropFirst()) }
+        return text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map {
             $0.trimmingCharacters(in: .whitespaces)
         }
     }
@@ -150,12 +168,6 @@ public enum DictionaryTransfer {
 
     // MARK: Eksport
 
-    /// Tabulator i koniec linii w tekście zepsułyby format; zamieniamy je na spację.
-    /// shortcut: tekst zaczynający się od `#` wróciłby z importu jako komentarz; format nie ma ucieczki, do dodania gdy ktoś wpisze taki Term.
-    private static func flat(_ s: String) -> String {
-        String(s.map { $0 == "\t" || $0.isNewline ? " " : $0 })
-    }
-
     public static func exportReplacements(_ d: UserDictionary) -> String {
         let sections: [(header: String, risky: Bool, enabled: Bool)] = [
             ("# ---------- Replacements ----------", false, true),
@@ -167,7 +179,7 @@ public enum DictionaryTransfer {
         for s in sections {
             var body: [String] = []
             for t in d.terms {
-                for a in t.aliases where a.risky == s.risky && a.enabled == s.enabled { body.append("\(flat(a.text))\t\(flat(t.text))") }
+                for a in t.aliases where a.risky == s.risky && a.enabled == s.enabled { body.append("\(a.text)\t\(t.text)") }
             }
             if !body.isEmpty { out += [s.header] + body + [""] }
         }
@@ -183,7 +195,7 @@ public enum DictionaryTransfer {
         var out: [String] = []
         for (priority, header) in tiers {
             let terms = d.terms.filter { $0.priority == priority }
-            if !terms.isEmpty { out += [header] + terms.map { flat($0.text) } + [""] }
+            if !terms.isEmpty { out += [header] + terms.map { $0.text } + [""] }
         }
         return out.joined(separator: "\n")
     }

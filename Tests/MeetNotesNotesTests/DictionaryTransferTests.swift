@@ -27,7 +27,7 @@ import Testing
         #expect(term(r.dictionary, "Orbit")?.priority == .high)
         #expect(r.report.termsAdded == 1)
         #expect(r.report.aliasesAdded == 2)
-        #expect(r.report.summary == "1 terms, 2 aliases, 0 risky left off, 0 conflicts")
+        #expect(r.report.summary == "1 terms, 2 aliases, 0 risky left off, 0 conflicts, 0 rejected")
     }
 
     @Test func termsOnlyInReplacementsGetLowPriority() {
@@ -79,7 +79,7 @@ import Testing
         let second = import1(vocab, repl, into: first.dictionary)
         #expect(second.dictionary == first.dictionary)
         #expect(second.report == DictionaryImportReport())
-        #expect(second.report.summary == "0 terms, 0 aliases, 0 risky left off, 0 conflicts")
+        #expect(second.report.summary == "0 terms, 0 aliases, 0 risky left off, 0 conflicts, 0 rejected")
     }
 
     @Test func reimportKeepsUserEdits() throws {
@@ -123,5 +123,49 @@ import Testing
         // Plik dla innych narzędzi: zwykły `fraza<TAB>zapis`, a markery sekcji to komentarze.
         #expect(DictionaryTransfer.exportReplacements(d).contains("a1\tAlpha\n"))
         #expect(DictionaryTransfer.exportReplacements(d).contains("#! ---------- RISKY (disabled) ----------\na2\tAlpha\n"))
+    }
+
+    @Test func utf8BOMPreservesTierAndRiskySection() {
+        let vocab = "\u{FEFF}# ====== T1 — core ======\nOrbit\n"
+        let repl = "\u{FEFF}#! ---------- risky ----------\nko pt\tKopt\n"
+        let r = import1(vocab, repl)
+        #expect(term(r.dictionary, "Orbit")?.priority == .high)
+        #expect(term(r.dictionary, "\u{FEFF}# ====== T1 — core ======") == nil)
+        #expect(term(r.dictionary, "Kopt")?.aliases == [DictionaryAlias("ko pt", risky: true, enabled: false)])
+        #expect(r.report.riskyLeftOff == 1)
+    }
+
+    @Test func riskySectionEndsAtNextHeader() {
+        let repl = "#! ---------- risky ----------\n#! note\nko pt\tKopt\n# plain comment\n# ---------- 9. Names ----------\nŻorbit\tOrbit\n"
+        let r = import1(nil, repl)
+        #expect(term(r.dictionary, "Kopt")?.aliases == [DictionaryAlias("ko pt", risky: true, enabled: false)])
+        #expect(term(r.dictionary, "Orbit")?.aliases == [DictionaryAlias("Żorbit")])
+    }
+
+    @Test func exportRoundTripsCommentPrefixes() throws {
+        var d = UserDictionary()
+        try d.upsert(DictionaryTerm("C#", aliases: [DictionaryAlias("si szarp"), DictionaryAlias("F#")]))
+        #expect(throws: DictionaryError.invalidCharacters("#!literal")) {
+            try d.upsert(DictionaryTerm("Other", aliases: [DictionaryAlias("#!literal")]))
+        }
+        #expect(throws: DictionaryError.invalidCharacters("#tag")) { try d.upsert(DictionaryTerm("#tag")) }
+        let r = import1(DictionaryTransfer.exportVocabulary(d), DictionaryTransfer.exportReplacements(d))
+        #expect(shape(r.dictionary) == shape(d))
+        #expect(r.report.rejected == 0)
+    }
+
+    @Test func exportDoesNotSilentlyFlattenDistinctTexts() throws {
+        var d = UserDictionary()
+        try d.upsert(DictionaryTerm("a b"))
+        #expect(throws: DictionaryError.invalidCharacters("a\tb")) { try d.upsert(DictionaryTerm("a\tb")) }
+        #expect(throws: DictionaryError.invalidCharacters("x\u{2028}y")) {
+            try d.upsert(DictionaryTerm("Ok", aliases: [DictionaryAlias("x\u{2028}y")]))
+        }
+        #expect(d.terms.map(\.text) == ["a b"])
+        // Import też nie gubi ich po cichu: raport liczy odrzucone (tabulator w linii vocab, `#` jako cel).
+        let r = import1("good\nbad\tterm\n", "x\t#target\n")
+        #expect(r.dictionary.terms.map(\.text) == ["good"])
+        #expect(r.report.rejected == 2)
+        #expect(r.report.summary == "1 terms, 0 aliases, 0 risky left off, 0 conflicts, 2 rejected")
     }
 }
