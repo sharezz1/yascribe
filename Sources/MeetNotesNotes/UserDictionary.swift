@@ -38,6 +38,8 @@ public enum DictionaryError: Error, Equatable {
     case aliasTaken(alias: String, by: String)
     case aliasIsTerm(alias: String, term: String)
     case emptyAlias
+    /// Tekst zaczyna się od `#` albo zawiera tabulator / koniec linii: eksport TSV i `vocab_core.txt` nie odtworzyłby go (komentarz, rozdzielacz).
+    case invalidCharacters(String)
 }
 
 public struct UserDictionary: Codable, Equatable, Sendable {
@@ -49,6 +51,11 @@ public struct UserDictionary: Codable, Equatable, Sendable {
     /// „ς" ≡ „σ". Samo `lowercased()` ich nie zrównuje, więc Alias „STRASSE" innego Terma przepisałby „Straße" przy drugim przejściu (R11).
     static func key(_ s: String) -> String {
         s.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil).precomposedStringWithCanonicalMapping
+    }
+
+    /// `#` na początku (komentarz w plikach importu) albo tabulator / koniec linii w środku (rozdzielacz pól i linii); tekst już po `clean`.
+    static func isReserved(_ s: String) -> Bool {
+        s.hasPrefix("#") || s.unicodeScalars.contains { "\t\r\n\u{2028}\u{2029}\u{85}".unicodeScalars.contains($0) }
     }
 
     static func clean(_ s: String) -> String {
@@ -68,12 +75,14 @@ public struct UserDictionary: Codable, Equatable, Sendable {
         var term = t
         term.text = Self.clean(t.text)
         guard !term.text.isEmpty else { throw .emptyTerm }
+        guard !Self.isReserved(term.text) else { throw .invalidCharacters(term.text) }
 
         var seen = Set<String>()
         var aliases: [DictionaryAlias] = []
         for var alias in t.aliases {
             alias.text = Self.clean(alias.text)
             guard !alias.text.isEmpty else { throw .emptyAlias }
+            guard !Self.isReserved(alias.text) else { throw .invalidCharacters(alias.text) }
             if alias.text == term.text || !seen.insert(Self.key(alias.text)).inserted { continue }
             aliases.append(alias)
         }

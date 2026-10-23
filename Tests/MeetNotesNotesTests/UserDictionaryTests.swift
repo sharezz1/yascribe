@@ -41,6 +41,19 @@ import MeetNotesProviders
         }
     }
 
+    @Test func upsertRejectsReservedCharacters() throws {
+        var dictionary = UserDictionary()
+        #expect(throws: DictionaryError.invalidCharacters("#Zowie")) { try dictionary.upsert(DictionaryTerm(" #Zowie ")) }
+        for bad in ["a\tb", "a\nb", "a\rb", "a\u{2028}b", "a\u{2029}b", "a\u{85}b", "#x"] {
+            #expect(throws: DictionaryError.invalidCharacters(bad)) {
+                try dictionary.upsert(DictionaryTerm("Zowie", aliases: [DictionaryAlias(bad)]))
+            }
+        }
+        #expect(dictionary.terms.isEmpty)
+        try dictionary.upsert(DictionaryTerm("C#", aliases: [DictionaryAlias("F#"), DictionaryAlias("a # b")]))
+        #expect(dictionary.terms.count == 1)
+    }
+
     @Test func upsertNormalizesToNFC() throws {
         var dictionary = UserDictionary()
         try dictionary.upsert(DictionaryTerm(" Genesys ", aliases: [DictionaryAlias("Dz\u{0307}enesis")]))
