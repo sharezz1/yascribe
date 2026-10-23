@@ -173,7 +173,8 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         switch gate.decide(now: now) {
         case .now:
             lock.unlock()
-            rebuild()
+            // Jedna kolejka na wszystkie przebudowy: bramka pilnuje odstępu, ale nie tego, że poprzednia już skończyła.
+            rebuildQueue.async { [weak self] in self?.rebuild() }
         case .deferred(let until):
             rebuildPending = true
             lock.unlock()

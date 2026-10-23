@@ -30,6 +30,8 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     private var preferredUID: String?
     private var inputUID: String?
     private var inputName: String?
+    /// `reconsider` z dwóch obserwatorów i `select` z wątku głównego otwierałyby mikrofon równolegle (dwa capture na jeden tor).
+    private let reopenQueue = DispatchQueue(label: "meetnotes.mic.reopen")
 
     public init() {}
 
@@ -40,7 +42,7 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     /// Ręczny wybór wejścia w pigułce; nil wraca do domyślnego systemu. Dotyczy tylko bieżącego nagrania.
     public func select(deviceUID: String?) {
         lock.lock(); preferredUID = deviceUID; lock.unlock()
-        reopen()
+        reopenQueue.sync { reopen() }
     }
 
     public func prepare() throws -> TrackFormat {
@@ -52,8 +54,8 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     public func start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws {
         lock.lock(); self.handler = handler; lock.unlock()
         try open()
-        watcher.start { [weak self] in self?.reconsider() }
-        listWatcher.start { [weak self] in self?.reconsider() }
+        watcher.start { [weak self] in self?.reopenQueue.async { self?.reconsider() } }
+        listWatcher.start { [weak self] in self?.reopenQueue.async { self?.reconsider() } }
     }
 
     public func stop() {
