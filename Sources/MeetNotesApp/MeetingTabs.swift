@@ -139,6 +139,8 @@ struct TranscriptTab: View {
     let onJump: (Utterance) -> Void
     private var busy: Bool { model.isTranscribing(item) }
     private var moving: Bool { model.recordingsMove != nil }
+    /// Wznowienie w trakcie korekty dałoby drugą korektę tego samego przebiegu (F2).
+    private var correcting: Bool { model.notes.isCorrecting(item.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -215,7 +217,7 @@ struct TranscriptTab: View {
                     WarnLabel("\(what) didn't finish — showing \(from).").help(Self.why(a.reason))
                     if !busy, a.snapshot != nil {
                         Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }
-                            .buttonStyle(.pill).disabled(moving)
+                            .buttonStyle(.pill).disabled(moving || correcting)
                             .help("Continues that transcription; finished parts aren't paid for again")
                     }
                 }
@@ -253,7 +255,7 @@ struct TranscriptTab: View {
                 if !t.failedChunks.isEmpty {
                     Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item, runID: item.runID) }
                         .buttonStyle(.pillSmall)
-                        .disabled(busy || moving)
+                        .disabled(busy || moving || correcting)
                         .help("Sends only the parts that failed; finished parts aren't paid for again")
                         .padding(.bottom, 8)
                 }
@@ -288,7 +290,9 @@ struct TranscriptTab: View {
                         if let p = model.presetFor(sessionURL: item.url) {
                             Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }.buttonStyle(.pillPrimary)
                         }
-                        if item.latestAttemptID != nil { Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }.buttonStyle(.pill) }
+                        if item.latestAttemptID != nil {
+                            Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }.buttonStyle(.pill).disabled(correcting)
+                        }
                     }
                     .disabled(moving)
                 }
