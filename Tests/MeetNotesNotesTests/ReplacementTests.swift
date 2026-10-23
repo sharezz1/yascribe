@@ -44,6 +44,29 @@ import Testing
         #expect(r.apply(to: r.apply(to: "b")) == "A")
     }
 
+    @Test func termTextContainingOwnAliasIsNotReplacedAgain() {
+        let r = rules(DictionaryTerm("Kopt Max", aliases: [DictionaryAlias("kopt")]))
+        #expect(r.apply(to: "kopt") == "Kopt Max")
+        #expect(r.apply(to: r.apply(to: "kopt")) == r.apply(to: "kopt"))
+    }
+
+    @Test func termTextContainingOtherTermsAliasIsNotReplacedAgain() throws {
+        var d = UserDictionary()
+        try d.upsert(DictionaryTerm("KOPT", aliases: [DictionaryAlias("Kopt")]))
+        try d.upsert(DictionaryTerm("Dorn Kopt", aliases: [DictionaryAlias("dornkopt")]))
+        let r = ReplacementRules(d)
+        #expect(r.apply(to: "dornkopt") == "Dorn Kopt")
+        #expect(r.apply(to: r.apply(to: "dornkopt")) == "Dorn Kopt")
+        #expect(r.apply(to: "Dorn Kopt i Kopt") == "Dorn Kopt i KOPT")
+    }
+
+    @Test func termIdentityIsCaseSensitive() {
+        let r = rules(DictionaryTerm("queue"), DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")]))
+        #expect(!r.isEmpty)
+        #expect(r.apply(to: "Queue i Rokm") == "Queue i Nimbu")
+        #expect(r.apply(to: "Queue stoi") == "Queue stoi")
+    }
+
     @Test func disabledAliasIsIgnored() {
         let r = rules(DictionaryTerm("KOPT", aliases: [DictionaryAlias("ko pt", risky: true, enabled: false)]))
         #expect(r.isEmpty)

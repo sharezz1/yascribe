@@ -6,22 +6,25 @@ import MeetNotesTranscription
 /// `@unchecked`: `NSRegularExpression` jest niezmienny i bezpieczny wątkowo, ale nie jest oznaczony jako `Sendable`.
 public struct ReplacementRules: @unchecked Sendable {
     private let regex: NSRegularExpression?
-    /// Zapis Terma dla grupy przechwytującej `i + 1` (jedna grupa na Alias, w kolejności alternacji).
+    /// Zapis Terma dla grupy przechwytującej `i + 1` (jedna grupa na wpis, w kolejności alternacji).
     private let terms: [String]
 
     /// Aliasy włączone i niepuste (plik `dictionary.json` mógł ominąć `upsert`: pusty Alias wstawiałby Term na każdej granicy słowa),
     /// w NFC, od najdłuższego: alternacja bierze pierwszą pasującą gałąź, więc „on track" musi stać przed „in".
     public init(_ d: UserDictionary) {
-        let pairs = d.terms.flatMap { term in
-            term.aliases.filter { $0.enabled }.map { (alias: Self.nfc($0.text), term: Self.nfc(term.text)) }
-        }.filter { !$0.alias.isEmpty }
-        .sorted { $0.alias.count > $1.alias.count }
-        terms = pairs.map(\.term)
-        guard !pairs.isEmpty else { regex = nil; return }
+        let aliases = d.terms.flatMap { term in
+            term.aliases.filter { $0.enabled }.map { (text: Self.nfc($0.text), caseless: true, term: Self.nfc(term.text)) }
+        }.filter { !$0.text.isEmpty }
+        guard !aliases.isEmpty else { terms = []; regex = nil; return }
+        // Tekst każdego Terma jako wpis tożsamościowy (z wielkością liter, R9): „Kopt Max" dopasowany w całości nie jest skanowany
+        // dalej, więc zawarty w nim Alias „kopt" nie zrobi z niego „Kopt Max Max" przy drugim zastosowaniu (idempotencja).
+        let identities = d.terms.map { (text: Self.nfc($0.text), caseless: false, term: Self.nfc($0.text)) }.filter { !$0.text.isEmpty }
+        let entries = (aliases + identities).sorted { $0.text.count > $1.text.count }
+        terms = entries.map(\.term)
         // Literały (bez znaczenia `.`, `+`, `(`) i granice słów Unicode: litera, cyfra albo znak łączący (akcent) przedłuża słowo.
-        let alternation = pairs.map { "(" + NSRegularExpression.escapedPattern(for: $0.alias) + ")" }.joined(separator: "|")
-        regex = try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}\\p{M}])(?:\(alternation))(?![\\p{L}\\p{N}\\p{M}])",
-                                         options: [.caseInsensitive])
+        let alternation = entries.map { "(" + ($0.caseless ? "(?i:" : "(?:") + NSRegularExpression.escapedPattern(for: $0.text) + "))" }
+            .joined(separator: "|")
+        regex = try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}\\p{M}])(?:\(alternation))(?![\\p{L}\\p{N}\\p{M}])")
     }
 
     /// Brak włączonych Aliasów: Replacement nic nie robi (transkrypt i polecenia bajt w bajt jak bez słownika).
