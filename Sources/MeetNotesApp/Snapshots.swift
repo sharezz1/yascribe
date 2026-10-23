@@ -170,6 +170,18 @@ enum Snapshots {
                         try render("transcribe-again-popover", size: CGSize(width: 340, height: 330), dark: dark, model: model) { TranscribeAgainButton(item: picked, inlinePopover: true) }
                         var noAudio = picked; noAudio.audioDeletedAfterDays = 30
                         try render("meeting-transcript-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: noAudio, state: transcriptView) }
+                        // Task 10b (R23): nowa próba z lukami nie zasłania starego transkryptu — baner i „Resume Transcription with …".
+                        if let p = model.presets.presets.first {
+                            var retried = picked
+                            retried.runSnapshot = try RunSnapshot(preset: p.withASR(RoleAssignment(providerID: cloud.id, model: "microsoft/mai-transcribe-2"), language: .polish),
+                                                                  provider: cloud, probe: nil)
+                            retried.latestAttemptID = "snapshot-run-2"
+                            retried.attemptNotPromoted = RunSelection.Attempt(
+                                snapshot: try RunSnapshot(preset: p.withASR(RoleAssignment(providerID: cloud.id, model: "openai/gpt-4o-transcribe"), language: .english),
+                                                          provider: cloud, probe: nil),
+                                reason: .gaps(3))
+                            try render("meeting-transcript-attempt-failed", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: retried, state: transcriptView) }
+                        }
                     }
                     var unwritten = split; unwritten.notes.summary = nil
                     model.notes.setPreview(unwritten.id, generating: .condensing(pass: 1, part: 3, of: 6))

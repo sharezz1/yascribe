@@ -41,11 +41,14 @@ public struct RunDirectory: Sendable {
     /// sortuje się chronologicznie. Decyduje o kasowaniu audio (`AudioRetention`), dlatego nazwy spoza wzorca
     /// (`--run debug` z CLI, `notes.txt`, `.DS_Store`) są pomijane — inaczej `debug` wygrywałby jako „najnowszy”.
     /// Katalogi obok `runs/` (jak `notes/`) tu nie wchodzą w ogóle.
-    public static func latestRunID(in session: URL) -> String? {
+    public static func latestRunID(in session: URL) -> String? { runIDs(in: session).last }
+
+    /// Przebiegi aplikacji od najstarszego do najnowszego (ten sam filtr nazw co `latestRunID`).
+    public static func runIDs(in session: URL) -> [String] {
         let runs = session.appendingPathComponent("runs")
         return ((try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? [])
             .filter { $0.range(of: #"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-[0-9a-f]{4}$"#, options: .regularExpression) != nil }
-            .sorted().last
+            .sorted()
     }
 
     public func chunk(_ track: String, _ i: Int) -> URL { url.appendingPathComponent("chunks/\(track)-\(i).json") }

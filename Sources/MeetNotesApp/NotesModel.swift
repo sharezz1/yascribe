@@ -122,7 +122,8 @@ final class NotesModel {
               let runID = item.runID, let t = item.transcript else { return }
         reportStaleOverride(.correction, for: item)
         let url = item.url
-        let language = presetFor(url)?.language
+        // Język przebiegu, który się poprawia (I2): po „Transcribe again…" inny niż w `preset.json` sesji.
+        let language = RunLanguage.of(item.runSnapshot, fallback: presetFor(url)).language
         Task { _ = await runCorrection(sessionURL: url, runID: runID, assignment: c, language: language, transcript: t) }
     }
 
