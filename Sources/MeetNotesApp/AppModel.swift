@@ -659,6 +659,12 @@ final class AppModel {
         }
     }
 
+    /// „Transcribe again…" (D13): to samo nagranie innym modelem ASR i językiem; kopia presetu tylko na ten przebieg,
+    /// zapisany `preset.json` bez zmian. Nowy przebieg (`runs/<id>`) staje się bieżącym transkryptem, stary zostaje na dysku.
+    func transcribe(sessionURL: URL, preset: Preset, asr: RoleAssignment, language: LanguageCode?) {
+        transcribe(sessionURL: sessionURL, preset: preset.withASR(asr, language: language))
+    }
+
     /// ChatGPT #17: wznowienie w aplikacji, także po restarcie — ten sam runID i ta sama
     /// migawka z `input.json`, więc opłacone okna nie idą drugi raz (P5).
     func resume(_ item: SessionItem) {
