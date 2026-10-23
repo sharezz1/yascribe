@@ -298,3 +298,26 @@ import MeetNotesSessionFormat
         #expect(RunLanguage.of(nil, fallback: nil) == RunLanguage(language: nil, isAuto: false))
     }
 }
+
+/// F7 (R26 odwołane): identyfikatory przebiegów ściśle rosnące w sesji — o kolejności nigdy nie decyduje losowy sufiks.
+@Suite struct RunIDTests {
+    let now = ISO8601DateFormatter().date(from: "2026-10-23T09:00:00Z")! + 0.7
+
+    @Test func nextRunIDIsStrictlyIncreasing() throws {
+        let first = RunDirectory.nextRunID(latest: nil, now: now, suffix: "ffff")
+        #expect(first == "2026-10-23T09-00-00Z-ffff")
+        // Próba 1 pada od razu (błąd HTTP, CAF); próba 2 w tej samej sekundzie z „mniejszym" sufiksem — i tak nowsza.
+        let second = RunDirectory.nextRunID(latest: first, now: now, suffix: "0000")
+        #expect(second == "2026-10-23T09-00-01Z-0000" && second > first)
+        // Najnowszy istniejący w przyszłości (zegar cofnięty, restart): następna sekunda po nim, także przez granicę minuty.
+        #expect(RunDirectory.nextRunID(latest: "2026-10-23T10-00-59Z-aaaa", now: now, suffix: "0000") == "2026-10-23T10-01-00Z-0000")
+        // Starszy najnowszy: zwykły znacznik „teraz".
+        #expect(RunDirectory.nextRunID(latest: "2026-10-23T08-59-00Z-ffff", now: now, suffix: "0000") == "2026-10-23T09-00-00Z-0000")
+        // Po restarcie z dysku: nowy katalog przechodzi filtr `runIDs` i jest najnowszą próbą.
+        let s = FileManager.default.temporaryDirectory.appendingPathComponent("runid-\(UUID().uuidString)")
+        for id in [first, second] { try FileManager.default.createDirectory(at: RunDirectory(session: s, runID: id).url, withIntermediateDirectories: true) }
+        let third = RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: s), now: now, suffix: "0000")
+        try FileManager.default.createDirectory(at: RunDirectory(session: s, runID: third).url, withIntermediateDirectories: true)
+        #expect(RunDirectory.runIDs(in: s) == [first, second, third])
+    }
+}

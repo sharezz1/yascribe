@@ -657,7 +657,8 @@ final class AppModel {
         do {
             let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
                                            modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: localASR.store))
-            run(sessionURL: sessionURL, runID: Self.sessionName(Date()), snapshot: snapshot, client: c)
+            run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
+                snapshot: snapshot, client: c)
         } catch RunSnapshotError.chatShapeNotForMeetings {
             lastError = "This model returns no word timings, so it can't be used for meetings."
         } catch {
