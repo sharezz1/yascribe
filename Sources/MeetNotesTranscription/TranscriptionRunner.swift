@@ -51,6 +51,21 @@ public struct RunDirectory: Sendable {
             .sorted()
     }
 
+    /// Identyfikator nowego przebiegu (F7): znacznik UTC do sekundy + sufiks, ściśle większy leksykalnie od najnowszego istniejącego
+    /// (`latest`, z dysku — także po restarcie i przy cofniętym zegarze). Sekunda = max(teraz, najnowszy + 1 s), więc o kolejności
+    /// dwóch prób z tej samej sekundy nie decyduje losowy sufiks.
+    public static func nextRunID(latest: String?, now: Date, suffix: String = String(UUID().uuidString.prefix(4)).lowercased()) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd'T'HH-mm-ss'Z'"
+        var stamp = f.string(from: now)
+        if let last = latest.map({ String($0.prefix(stamp.count)) }), stamp <= last, let date = f.date(from: last) {
+            stamp = f.string(from: date + 1)
+        }
+        return stamp + "-" + suffix
+    }
+
     public func chunk(_ track: String, _ i: Int) -> URL { url.appendingPathComponent("chunks/\(track)-\(i).json") }
 }
 
