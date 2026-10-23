@@ -51,7 +51,7 @@ public struct UserDictionary: Codable, Equatable, Sendable {
         s.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil).precomposedStringWithCanonicalMapping
     }
 
-    private static func clean(_ s: String) -> String {
+    static func clean(_ s: String) -> String {
         s.trimmingCharacters(in: .whitespacesAndNewlines).precomposedStringWithCanonicalMapping
     }
 

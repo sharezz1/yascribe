@@ -49,6 +49,11 @@ import MeetNotesProviders
         #expect(term.aliases.map(\.text) == ["Żorbit"])
         // `==` w Swift uznaje równoważność kanoniczną, więc NFC sprawdzamy na skalarach: „ż" ma być jednym skalarem.
         #expect(term.aliases.first?.text.unicodeScalars.count == 8)
+
+        // Term wpisany w NFD też ląduje jako NFC.
+        var nfd = UserDictionary()
+        try nfd.upsert(DictionaryTerm("Z\u{0307}orbit"))
+        #expect(nfd.terms.first?.text.unicodeScalars.count == 8)
     }
 
     @Test func upsertDropsAliasIdenticalToItsTerm() throws {
