@@ -35,6 +35,9 @@ final class NotesModel {
     var summaryThinking: () -> Bool = { true }
     /// Przerywniki do usunięcia z poprawionego tekstu (F20 P2); pusta lista = nic nie usuwamy.
     var fillerWords: () -> [String] = { [] }
+    /// Słownik użytkownika i jego reguły Replacement (F21); przebieg czyta je razem, przed pierwszym `await`.
+    var dictionary: () -> UserDictionary = { UserDictionary() }
+    var replacementRules: () -> ReplacementRules = { ReplacementRules(UserDictionary()) }
     var onChange: () -> Void = {}
     /// Komunikaty dla użytkownika (np. nieczytelny plik notatek odłożony na bok) — podłączane do `AppModel.lastError`.
     var report: (String) -> Void = { _ in }
@@ -132,6 +135,11 @@ final class NotesModel {
             onChange()
             return transcript
         }
+        // Słownik, reguły i uczestnicy z jednej chwili, przed pierwszym `await`: edycja słownika w trakcie sondy kontekstu
+        // nie miesza wersji wejścia i polecenia. Uczestnicy z `meta.json` teraz, więc późne powiązanie wydarzenia też się liczy.
+        let dict = dictionary(), rules = replacementRules()
+        let link = NotesStore(session: sessionURL).readMeta().calendarEvent
+        let input = Replacement.apply(transcript, rules: rules)
         correctionFailure[id] = nil
         correcting.insert(id)
         onChange()
@@ -139,9 +147,11 @@ final class NotesModel {
         // Kontekst lokalnego serwera sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); API: bez budżetu.
         let budget = client.provider.isLocal
             ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: assignment.model)) : nil
+        let vocabulary = DictionaryPrompt.make(dict, link: link, maxChars: DictionaryPrompt.maxChars(budget: budget))
+        let used = vocabulary.isEmpty ? nil : vocabulary
         let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
-                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords())
-            .correct(transcript, language: language)
+                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used)
+            .correct(input, language: language)
         correcting.remove(id)
         defer { onChange() }
         if result.failedCompletely {
@@ -149,7 +159,12 @@ final class NotesModel {
             return transcript
         }
         if result.batches > 0 {
-            try? JSONFile.save(result, to: RunDirectory(session: sessionURL, runID: runID).corrected)
+            let run = RunDirectory(session: sessionURL, runID: runID)
+            try? JSONFile.save(result, to: run.corrected)
+            // Ślad do odbioru §8.4: linie słownictwa z polecenia korektora. Bez słownictwa nie zostawiamy śladu poprzedniej korekty.
+            let trace = run.url.appendingPathComponent("vocabulary.txt")
+            if let lines = used?.promptLines { try? lines.write(to: trace, atomically: true, encoding: .utf8) }
+            else { try? FileManager.default.removeItem(at: trace) }
             return result.transcript
         }
         return transcript
@@ -163,7 +178,7 @@ final class NotesModel {
         guard state(id) != .generating else { return }
         // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
         guard !correcting.contains(id) else { return }
-        guard let transcript = item.transcript(corrected: useCorrected) else {
+        guard let source = item.transcript(corrected: useCorrected) else {
             generation[id] = .failed("This meeting has no transcript yet.")
             return
         }
@@ -184,6 +199,9 @@ final class NotesModel {
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url
+        // Słownik, reguły i uczestnicy z chwili kliknięcia, przed pierwszym `await` (sonda kontekstu); Replacement idempotentny.
+        let dict = dictionary(), link = item.notes.meta.calendarEvent
+        let transcript = Replacement.apply(source, rules: replacementRules())
         let token = UUID()
         let task = Task {
             do {
@@ -191,8 +209,10 @@ final class NotesModel {
                 // API nie dostaje budżetu, więc nigdy nie dzieli transkryptu.
                 let budget = client.provider.isLocal
                     ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: choice.assignment.model)) : nil
+                let vocabulary = DictionaryPrompt.make(dict, link: link, maxChars: DictionaryPrompt.maxChars(budget: budget))
                 _ = try await generator.generate(session: session, template: template, transcript: transcript,
                                                  context: context, notesLanguage: language, budget: budget,
+                                                 vocabulary: vocabulary.isEmpty ? nil : vocabulary,
                                                  onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } },
                                                  progress: { [weak self] p in
                                                      Task { @MainActor in if self?.generationRuns[id]?.token == token { self?.progress[id] = p } }
@@ -258,7 +278,9 @@ final class NotesModel {
             titling.insert(id)
             onChange()
             let limits = ChatLimits.for(client.provider, call: .title)
-            _ = await AutoTitle.generate(client: client, model: choice.assignment.model, transcript: working,
+            // Tytuł z tekstu po Replacement — także bez korekty w presecie i po jej porażce (wtedy `working` jest surowy).
+            _ = await AutoTitle.generate(client: client, model: choice.assignment.model,
+                                         transcript: Replacement.apply(working, rules: replacementRules()),
                                          notesLanguage: snapshot.preset.effectiveNotesLanguage,
                                          store: NotesStore(session: sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
                                          maxTokens: limits.maxTokens, onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })

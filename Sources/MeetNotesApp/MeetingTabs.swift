@@ -196,7 +196,7 @@ struct TranscriptTab: View {
     }
 
     private var modelName: String? { model.presetFor(sessionURL: item.url)?.correction?.model }
-    private var shown: Transcript? { item.transcript(corrected: state.useCorrected) }
+    private var shown: Transcript? { model.transcript(of: item, corrected: state.useCorrected) }
     /// Preset Auto: jedyna flaga to „obcy alfabet" (T1), więc etykieta mówi to wprost.
     private var isAuto: Bool { model.presetFor(sessionURL: item.url)?.isAutoLanguage == true }
 
@@ -306,7 +306,7 @@ struct SummaryTab: View {
         return "Made with \(made) (preset: \(preset))"
     }
     private var hasText: Bool {
-        guard let t = item.transcript(corrected: state.useCorrected) else { return false }
+        guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return false }
         return !NotePromptBuilder.transcriptLines(t).isEmpty
     }
     /// Powód, dla którego „Generate notes" jest nieaktywne: brak transkryptu to coś innego niż transkrypt bez treści.

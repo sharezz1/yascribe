@@ -73,6 +73,19 @@ final class AppModel {
     var presets = PresetsFile()
     var settings = GlobalSettings()
     var probeCache = ProbeCache()
+    /// Słownik użytkownika (F21): Termy do poleceń, Aliasy do Replacement. Zapis przez `saveDictionary()`.
+    var dictionary = UserDictionary() {
+        didSet {
+            replacementRules = ReplacementRules(dictionary)
+            replaced = [:]
+        }
+    }
+    /// Reguły skompilowane raz na wersję słownika. Obserwowane: zmiana słownika odświeża otwarte widoki transkryptu.
+    private(set) var replacementRules = ReplacementRules(UserDictionary())
+    /// Wynik Replacement (klucz: sesja i wariant transkryptu) razem ze źródłem, z którego powstał. Bez obserwacji, bo
+    /// zapisywany w trakcie liczenia widoku.
+    @ObservationIgnored private var replaced: [ReplacedKey: (source: Transcript, result: Transcript)] = [:]
+    private struct ReplacedKey: Hashable { var id: String; var corrected: Bool }
     var sessions: [SessionItem] = []
     var selectedSessionID: String?
     var activePresetID: UUID?
@@ -105,6 +118,8 @@ final class AppModel {
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
         notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }
+        notes.dictionary = { [weak self] in self?.dictionary ?? UserDictionary() }
+        notes.replacementRules = { [weak self] in self?.replacementRules ?? ReplacementRules(UserDictionary()) }
         notes.fillerWords = { [weak self] in
             guard let s = self?.settings, s.removeFillersEnabled else { return [] }
             return s.fillerWords ?? FillerWords.defaults
@@ -147,6 +162,7 @@ final class AppModel {
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())
         notes.templates = read(paths.templates, TemplatesFile())
+        dictionary = read(paths.dictionary, UserDictionary())
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
     }
@@ -282,6 +298,28 @@ final class AppModel {
                                       summary: (try? store.readSummary()) ?? nil, problems: store.problems())
             return item
         }.sorted { $0.startedAt > $1.startedAt }
+        // Pamięć Replacement: zostają wpisy, których źródło się nie zmieniło (ze świeżą kopią źródła, żeby następne porównanie
+        // skończyło się na tożsamości buforów); reszta znika. Czyszczenie wszystkiego przy każdym `onChange` kosztowałoby
+        // sekundy na następnym znaku wpisanym w wyszukiwarkę.
+        let byID = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        replaced = replaced.reduce(into: [:]) { kept, entry in
+            if let fresh = byID[entry.key.id]?.transcript(corrected: entry.key.corrected), fresh == entry.value.source {
+                kept[entry.key] = (fresh, entry.value.result)
+            }
+        }
+    }
+
+    /// Jedyny punkt odczytu transkryptu do wyświetlania, wyszukiwania i notatki (F21, D8): `SessionItem.transcript(corrected:)`
+    /// po Replacement. Wynik zostaje w pamięci, dopóki źródło jest równe temu, z którego powstał — rewizją jest treść, bo korekta
+    /// może zmienić tekst bez zmiany liczby wypowiedzi. Statusy (`!= nil`, „original/corrected") czytają surowe pola.
+    func transcript(of item: SessionItem, corrected: Bool) -> Transcript? {
+        let rules = replacementRules // odczyt obserwowany także przy trafieniu w pamięć: zmiana słownika odświeża widok
+        guard let source = item.transcript(corrected: corrected) else { return nil }
+        let key = ReplacedKey(id: item.id, corrected: corrected)
+        if let hit = replaced[key], hit.source == source { return hit.result }
+        let result = Replacement.apply(source, rules: rules)
+        replaced[key] = (source, result)
+        return result
     }
 
     func latestRun(in session: URL) -> (id: String, transcript: Transcript?)? {
@@ -487,6 +525,11 @@ final class AppModel {
         } catch {
             return "\(error)"
         }
+    }
+
+    /// Zapis słownika po zmianie w zakładce Dictionary; `nil` = zapisano, tekst = powód.
+    func saveDictionary() -> String? {
+        do { try JSONFile.save(dictionary, to: paths.dictionary); return nil } catch { return "Couldn't save the dictionary: \(error)" }
     }
 
     // MARK: Nagrywanie i transkrypcja

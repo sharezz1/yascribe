@@ -22,7 +22,7 @@ struct MeetingsView: View {
         let cal = Calendar.current
         let filtered = model.sessions.filter { s in
             SessionSearch.matches(state.query, title: s.title, myNotes: s.notes.myNotes, summary: s.notes.summary?.markdown,
-                                  transcript: s.transcript(corrected: true))
+                                  transcript: model.transcript(of: s, corrected: true))
         }
         let groups = Dictionary(grouping: filtered) { cal.startOfDay(for: $0.startedAt) }
         return groups.keys.sorted(by: >).map { ($0, groups[$0]!) }
