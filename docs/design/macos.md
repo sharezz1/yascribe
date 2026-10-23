@@ -462,6 +462,7 @@ w dolnym pasku, jak na `b-add.png`.
   Save & verify. **Decyzja użytkownika z 2026-10-15:** kafelki z uwagi 7 i arkusz z
   spec §5.4 zostają zastąpione, a funkcja się nie zmienia. Pod spodem karta Archive search
   i zdanie z odnośnikiem „Open Presets”.
+- **Dictionary** (faza 2.1a, **makiety do akceptacji użytkownika**: `dictionary-empty.png`, `dictionary-list.png`, `dictionary-edit.png`, `dictionary-import-report.png`; źródło: `ekrany-b.html?s=dictEmpty|dictList|dictEdit|dictImport`): pozycja w dolnej grupie paska bocznego między Templates a Settings; lista Termów (kolejność wg Priority) z Aliasami w drugiej linii, wyszukiwarka, Import… / Export… / New term w nagłówku, pasek `sunk` z licznikiem „N terms don't fit the correction prompt" i nazwą modelu; edycja Terma i raport importu w arkuszu (Alias: pole, checkbox Risky, `Toggle` On).
 - **Pigułka** (`b-pill.png`): `NSPanel` z Liquid Glass (`.glassEffect()` ⚠️, macOS 26+, wariant
   regular). Przed startem: preset ⌄ + Record. Zwinięta: kropka, poziom, licznik, Stop
   (kapsuła z czerwonym kwadratem i słowem), ⌃. Rozwinięta (tylko odczyt): stan i licznik,
