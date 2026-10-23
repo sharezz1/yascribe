@@ -24,16 +24,30 @@ public struct ReplacementRules: @unchecked Sendable {
         // Literały (bez znaczenia `.`, `+`, `(`) i granice słów Unicode: litera, cyfra albo znak łączący (akcent) przedłuża słowo.
         let alternation = entries.map { "(" + ($0.caseless ? "(?i:" : "(?:") + NSRegularExpression.escapedPattern(for: $0.text) + "))" }
             .joined(separator: "|")
+        // `try?`: wzorzec składa się z ucieczkowanych literałów i stałych granic, więc kompilacja nie może zawieść.
         regex = try? NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}\\p{M}])(?:\(alternation))(?![\\p{L}\\p{N}\\p{M}])")
     }
 
     /// Brak włączonych Aliasów: Replacement nic nie robi (transkrypt i polecenia bajt w bajt jak bez słownika).
     public var isEmpty: Bool { regex == nil }
 
-    /// Jedno przejście, bez ponownego skanowania wstawionych Termów. Dopasowanie na tekście w NFC (Alias z NFD ze schowka trafia
-    /// w tekst NFC i odwrotnie); tekst bez dopasowań wraca nietknięty, z dopasowaniem — w NFC.
+    /// Przejścia aż do punktu stałego (R10), najwyżej 5; bez zbieżności zwraca ostatni wynik. Wstawiony Term może razem z sąsiednim
+    /// tekstem utworzyć nowy Alias („x y" → „A y", a „A y" to Alias B), więc jedno przejście nie jest idempotentne. Tekst bez zmian
+    /// kosztuje jedno przejście.
     public func apply(to text: String) -> String {
         guard let regex else { return text }
+        var current = text
+        for _ in 0..<5 {
+            let next = Self.once(current, regex, terms)
+            if next == current { return next }
+            current = next
+        }
+        return current
+    }
+
+    /// Jedno przejście, bez ponownego skanowania wstawionych Termów. Dopasowanie na tekście w NFC (Alias z NFD ze schowka trafia
+    /// w tekst NFC i odwrotnie); tekst bez dopasowań wraca nietknięty, z dopasowaniem — w NFC.
+    private static func once(_ text: String, _ regex: NSRegularExpression, _ terms: [String]) -> String {
         let source = text.precomposedStringWithCanonicalMapping as NSString
         let matches = regex.matches(in: source as String, range: NSRange(location: 0, length: source.length))
         guard !matches.isEmpty else { return text }

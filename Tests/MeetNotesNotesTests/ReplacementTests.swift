@@ -60,6 +60,47 @@ import Testing
         #expect(r.apply(to: "Jarl Pudo i Pudo") == "Jarl Pudo i PUDO")
     }
 
+    private func upserted(_ terms: DictionaryTerm...) throws -> ReplacementRules {
+        var d = UserDictionary()
+        for t in terms { try d.upsert(t) }
+        return ReplacementRules(d)
+    }
+
+    @Test func replacementDoesNotCreateAliasAcrossBoundary() throws {
+        let r1 = try upserted(DictionaryTerm("A", aliases: [DictionaryAlias("x")]), DictionaryTerm("B", aliases: [DictionaryAlias("A y")]))
+        #expect(r1.apply(to: "x y") == "B")
+        #expect(r1.apply(to: r1.apply(to: "x y")) == r1.apply(to: "x y"))
+        let r2 = try upserted(DictionaryTerm("New York", aliases: [DictionaryAlias("nyc")]),
+                              DictionaryTerm("City", aliases: [DictionaryAlias("in New")]))
+        #expect(r2.apply(to: "in nyc") == "City York")
+        #expect(r2.apply(to: r2.apply(to: "in nyc")) == r2.apply(to: "in nyc"))
+    }
+
+    @Test func overlappingTermIdentitiesRemainStable() throws {
+        let r3 = try upserted(DictionaryTerm("A B", aliases: [DictionaryAlias("x")]), DictionaryTerm("B C", aliases: [DictionaryAlias("y")]),
+                              DictionaryTerm("Z", aliases: [DictionaryAlias("C")]))
+        #expect(r3.apply(to: "A y") == "A B Z")
+        #expect(r3.apply(to: r3.apply(to: "A y")) == r3.apply(to: "A y"))
+        let r4 = try upserted(DictionaryTerm("A", aliases: [DictionaryAlias("A B")]))
+        #expect(r4.apply(to: "A B B") == "A")
+        #expect(r4.apply(to: r4.apply(to: "A B B")) == r4.apply(to: "A B B"))
+    }
+
+    /// Klucz `UserDictionary` składa wielkość liter jak ICU `(?i:)`: bez tego „strase" → „Straße" → „Other" (Alias „STRASSE").
+    @Test func caseFoldEquivalentAliasCannotRewriteTerm() throws {
+        var d = UserDictionary()
+        try d.upsert(DictionaryTerm("Straße", aliases: [DictionaryAlias("strase"), DictionaryAlias("Maßnahme")]))
+        #expect(throws: DictionaryError.aliasIsTerm(alias: "STRASSE", term: "Straße")) {
+            try d.upsert(DictionaryTerm("Other", aliases: [DictionaryAlias("STRASSE")]))
+        }
+        #expect(throws: DictionaryError.duplicateTerm("STRASSE")) { try d.upsert(DictionaryTerm("STRASSE")) }
+        #expect(throws: DictionaryError.aliasTaken(alias: "MASSNAHME", by: "Straße")) {
+            try d.upsert(DictionaryTerm("Other", aliases: [DictionaryAlias("MASSNAHME")]))
+        }
+        #expect(throws: DictionaryError.aliasIsTerm(alias: "MASSNAHME", term: "Straße")) { try d.upsert(DictionaryTerm("MASSNAHME")) }
+        #expect(ReplacementRules(d).apply(to: "strase") == "Straße")
+    }
+
     @Test func termIdentityIsCaseSensitive() {
         let r = rules(DictionaryTerm("queue"), DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")]))
         #expect(!r.isEmpty)
