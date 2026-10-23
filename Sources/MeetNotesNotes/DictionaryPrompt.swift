@@ -85,3 +85,22 @@ public enum DictionaryPrompt {
         return String(collapsed.prefix(maxItemLength)).trimmingCharacters(in: .whitespaces)
     }
 }
+
+/// Ślad `<run>/vocabulary.txt` do odbioru §8.4: linie słownictwa, które poszły do polecenia korektora (F21, R18).
+/// Zmieniany tylko po udanym zapisie `corrected.json`, żeby ślad zawsze opisywał korektę leżącą obok niego.
+public enum VocabularyTrace {
+    /// `nil` = ślad zgodny z korektą albo nietknięty (korekta niezapisana); błąd = ślad mógł zostać po poprzedniej korekcie.
+    /// Bez słownictwa plik jest usuwany; brak pliku to nie błąd.
+    public static func update(promptLines: String?, at url: URL, correctionSaved: Bool) -> Error? {
+        guard correctionSaved else { return nil }
+        do {
+            if let promptLines { try promptLines.write(to: url, atomically: true, encoding: .utf8) }
+            else { try FileManager.default.removeItem(at: url) }
+            return nil
+        } catch CocoaError.fileNoSuchFile where promptLines == nil {
+            return nil
+        } catch {
+            return error
+        }
+    }
+}

@@ -160,11 +160,12 @@ final class NotesModel {
         }
         if result.batches > 0 {
             let run = RunDirectory(session: sessionURL, runID: runID)
-            try? JSONFile.save(result, to: run.corrected)
-            // Ślad do odbioru §8.4: linie słownictwa z polecenia korektora. Bez słownictwa nie zostawiamy śladu poprzedniej korekty.
-            let trace = run.url.appendingPathComponent("vocabulary.txt")
-            if let lines = used?.promptLines { try? lines.write(to: trace, atomically: true, encoding: .utf8) }
-            else { try? FileManager.default.removeItem(at: trace) }
+            let saved = (try? JSONFile.save(result, to: run.corrected)) != nil
+            // Ślad do odbioru §8.4 tylko po zapisanej korekcie (R18): stary ślad obok nowego `corrected.json` kłamałby.
+            if let error = VocabularyTrace.update(promptLines: used?.promptLines, at: run.url.appendingPathComponent("vocabulary.txt"),
+                                                  correctionSaved: saved) {
+                report("Couldn't save the vocabulary trace: \(error)")
+            }
             return result.transcript
         }
         return transcript
