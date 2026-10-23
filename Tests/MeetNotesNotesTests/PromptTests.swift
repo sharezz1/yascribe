@@ -102,3 +102,68 @@ private func build(_ t: Transcript, myNotes: String = "", context: String = "", 
     #expect(!p.system.contains("own notes") && !p.user.contains("own notes"))
     #expect(!p.system.contains("Structure:")) // szablon notatki tylko w reduce
 }
+
+// MARK: Słownik w poleceniach podsumowania (F21 T6)
+
+private func isMapCall(_ c: ChatStub.Call) -> Bool { c.system.contains("You condense part") }
+
+/// Mapa „po ludzku": każda linia wejścia → ta sama etykieta `[m:ss] Me|Them:` i krótka treść.
+private func condensed(_ user: String) -> String {
+    user.components(separatedBy: "\n").map { line in
+        guard let r = line.range(of: ": ") else { return line }
+        return String(line[..<r.upperBound]) + "short"
+    }.joined(separator: "\n")
+}
+
+private func occurrences(of needle: String, in s: String) -> Int { s.components(separatedBy: needle).count - 1 }
+
+extension VocabularyInPromptTests {
+    @Test func summaryPromptIncludesVocabularyLines() throws {
+        let t = transcript([utt("Cześć.")])
+        let p = try #require(NotePromptBuilder.build(template: .standard, transcript: t, myNotes: "", context: "", notesLanguage: .polish,
+                                                     vocabulary: Self.vocabulary))
+        #expect(p.system.contains(Self.vocabulary.promptLines!))
+        #expect(!p.user.contains("Known names and terms"))
+        // Po regułach i zdaniu o języku, przed szablonem.
+        #expect(p.system.range(of: "Write the notes in Polish.")!.upperBound < p.system.range(of: "Known names and terms")!.lowerBound)
+        #expect(p.system.range(of: "Meeting attendees")!.upperBound < p.system.range(of: "Structure:")!.lowerBound)
+    }
+
+    @Test func summaryPromptUnchangedWithoutVocabulary() throws {
+        let t = transcript([utt("Cześć.")])
+        let plain = build(t, myNotes: "n", context: "c")
+        #expect(NotePromptBuilder.build(template: .standard, transcript: t, myNotes: "n", context: "c", notesLanguage: .polish, vocabulary: nil) == plain)
+        #expect(NotePromptBuilder.build(template: .standard, transcript: t, myNotes: "n", context: "c", notesLanguage: .polish,
+                                        vocabulary: PromptVocabulary()) == plain)
+        let map = NotePromptBuilder.mapPrompt(part: ["[0:05] Me: x"], index: 1, count: 2, notesLanguage: nil)
+        #expect(NotePromptBuilder.mapPrompt(part: ["[0:05] Me: x"], index: 1, count: 2, notesLanguage: nil, vocabulary: nil) == map)
+    }
+
+    @Test func mapPartsBudgetIncludesVocabularyLines() async throws {
+        let budget = ContextBudget(tokens: 4_096)
+        let v = DictionaryPrompt.make(Self.dictionary(150), link: nil, maxChars: DictionaryPrompt.maxChars(budget: budget))
+        let words = String(repeating: "word ", count: 500)
+        let t = transcript((0..<6).map { utt(String(words.prefix(2_500)), $0 % 2 == 0 ? .them : .me, at: Double($0) * 10) })
+        func run(_ vocabulary: PromptVocabulary?) async throws -> [ChatStub.Call] {
+            let session = tempDir()
+            defer { try? FileManager.default.removeItem(at: session) }
+            let stub = ChatStub { c in isMapCall(c) ? condensed(c.user) : "# T\nbody" }
+            let gen = NoteGenerator(client: localChatClient(stub), model: "local-model")
+            _ = try await gen.generate(session: session, template: .standard, transcript: t, context: "", notesLanguage: .polish,
+                                       budget: budget, vocabulary: vocabulary, now: Date(timeIntervalSince1970: 5_000))
+            return stub.calls
+        }
+        let plain = try await run(nil), with = try await run(v)
+        let plainMaps = plain.filter(isMapCall), withMaps = with.filter(isMapCall)
+        // Części są krótsze o koszt linii (system mapy jest dłuższy o `promptLines`, a `pairedInputChars` liczy z rzeczywistej długości).
+        let cost = NotePromptBuilder.mapSystemChars(vocabulary: v) - NotePromptBuilder.mapSystemChars(vocabulary: nil)
+        #expect(cost >= v.promptLines!.count)
+        #expect(withMaps.map { $0.user.count }.max()! < plainMaps.map { $0.user.count }.max()!)
+        #expect(withMaps.count > plainMaps.count)
+        // Linie są w `system` każdego wywołania (mapa i reduce) dokładnie raz, nigdy w `user`; bez słownika ich nie ma.
+        let lines = v.promptLines!
+        #expect(with.allSatisfy { occurrences(of: lines, in: $0.system) == 1 && !$0.user.contains("Known names and terms") })
+        #expect(with.count == withMaps.count + 1) // ostatnie wywołanie to reduce
+        #expect(plain.allSatisfy { !$0.system.contains("Known names and terms") })
+    }
+}

@@ -95,10 +95,14 @@ public struct Corrector: Sendable {
     public var budget: ContextBudget?
     /// Przerywniki do usunięcia (F20 P2): lista idzie do polecenia dla modelu (A) i do filtra po korekcie (B). Pusta = nic nie usuwamy.
     public var fillerWords: [String]
+    /// Termy i uczestnicy do polecenia (F21, D6): dane dla modelu, nie instrukcje. `nil` = polecenie bajt w bajt jak dotąd.
+    public var vocabulary: PromptVocabulary?
 
     public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120,
-                chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil, fillerWords: [String] = []) {
+                chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil, fillerWords: [String] = [],
+                vocabulary: PromptVocabulary? = nil) {
         self.fillerWords = fillerWords
+        self.vocabulary = vocabulary
         self.budget = budget
         self.client = client
         self.assignment = assignment
@@ -120,6 +124,7 @@ public struct Corrector: Sendable {
                 + "Keep every word that carries meaning."
         }
         if let language { s += "\nThe transcript language is \(language.englishName)." }
+        if let lines = vocabulary?.promptLines { s += "\n\(lines)" }
         if let extra = assignment.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !extra.isEmpty {
             s += "\nExtra instructions from the user: \(extra)"
         }
