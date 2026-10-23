@@ -276,16 +276,15 @@ struct SessionRow: View {
                          hasNotes: item.notes.summary != nil, correctionFailed: model.notes.correctionFailureMessage(item.id) != nil)
     }
 
-    /// „14:02 · 42 min · Polish". Język z presetu zamrożonego przy starcie (`presetFor`); preset Auto → „Auto".
+    /// „14:02 · 42 min · Polish". Język bieżącego przebiegu (`runLanguage`, I2), bez przebiegu z presetu zamrożonego przy starcie; Auto → „Auto".
     private var meta: String {
         var parts = [item.startedAt.formatted(date: .omitted, time: .shortened)]
         if let d = item.duration { parts.append(Duration.seconds(d).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))) }
-        if let p = model.presetFor(sessionURL: item.url) {
-            if p.isAutoLanguage {
-                parts.append("Auto")
-            } else if let l = p.language {
-                parts.append(Locale(identifier: "en").localizedString(forLanguageCode: l.rawValue) ?? l.rawValue.uppercased())
-            }
+        let lang = model.runLanguage(item)
+        if lang.isAuto {
+            parts.append("Auto")
+        } else if let l = lang.language {
+            parts.append(Locale(identifier: "en").localizedString(forLanguageCode: l.rawValue) ?? l.rawValue.uppercased())
         }
         return parts.joined(separator: " · ")
     }

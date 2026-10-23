@@ -153,8 +153,10 @@ struct TranscriptTab: View {
                 ErrorLine(message: "Correction failed: \(why)", retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
                     .disabled(moving)
             }
-            // „Transcribe again…": stary transkrypt zostaje widoczny do końca nowego przebiegu.
-            if busy, item.transcript != nil { StateLabel(.progress(nil), "Transcribing again…") }
+            // „Transcribe again…": stary transkrypt zostaje widoczny, dopóki nowy przebieg się nie zakwalifikuje (R23). Linia ogólna
+            // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
+            if busy, item.transcript != nil, item.attemptNotPromoted == nil { StateLabel(.progress(nil), "Transcribing again…") }
+            attemptBanner
             // Uwaga 7: jedna linia nad listą — wersja (pole-popup) po lewej, Improve transcript i Copy po prawej.
             if item.transcript != nil {
                 HStack(spacing: 8) {
@@ -198,17 +200,58 @@ struct TranscriptTab: View {
         Button { copy() } label: { Label("Copy", systemImage: "doc.on.doc") }.buttonStyle(.pill).help("Copy the transcript")
     }
 
+    /// Baner R23: najnowsza próba nie jest bieżącym przebiegiem (trwa, padła, z lukami albo pusta).
+    @ViewBuilder private var attemptBanner: some View {
+        if let a = item.attemptNotPromoted {
+            let what = a.snapshot.map { "Transcription with \(Self.runLabel($0))" } ?? "The new transcription"
+            let from = item.runSnapshot.map { "the transcript from \(Self.runLabel($0))" } ?? "the previous transcript"
+            // W toku także przy wznowieniu próby z lukami (na dysku wciąż `.gaps`); tuż po starcie nowej próby baner może do
+            // pierwszego przeładowania nazywać model poprzedniej.
+            if busy {
+                StateLabel(.progress(nil), "\(what) is in progress — showing \(from).").wrapping()
+            } else {
+                // Przycisk pod komunikatem: w jednej linii etykieta z nazwą modelu ucinała się przy 900 pt.
+                VStack(alignment: .leading, spacing: 6) {
+                    WarnLabel("\(what) didn't finish — showing \(from).").help(Self.why(a.reason))
+                    if !busy, a.snapshot != nil {
+                        Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }
+                            .buttonStyle(.pill).disabled(moving)
+                            .help("Continues that transcription; finished parts aren't paid for again")
+                    }
+                }
+            }
+        }
+    }
+
+    /// „nvidia/parakeet-tdt (EN)" — model i język przebiegu.
+    static func runLabel(_ s: RunSnapshot) -> String {
+        "\(s.model) (\(s.preset.isAutoLanguage ? "Auto" : s.language?.rawValue.uppercased() ?? "?"))"
+    }
+
+    private static func why(_ r: RunSelection.Reason) -> String {
+        switch r {
+        case .unfinished: "It stopped before the end (failed, cancelled or the app was closed)."
+        case .gaps(let n): "\(n) part\(n == 1 ? "" : "s") couldn't be transcribed."
+        case .empty: "No speech was recognized."
+        }
+    }
+
+    /// Wznowienie zawsze idzie do najnowszej próby; etykieta mówi, którą, gdy to nie bieżący przebieg.
+    private var resumeLabel: String {
+        item.attemptNotPromoted?.snapshot.map { "Resume Transcription with \(Self.runLabel($0))" } ?? "Resume Transcription"
+    }
+
     private var modelName: String? { model.presetFor(sessionURL: item.url)?.correction?.model }
     private var shown: Transcript? { model.transcript(of: item, corrected: state.useCorrected) }
-    /// Preset Auto: jedyna flaga to „obcy alfabet" (T1), więc etykieta mówi to wprost.
-    private var isAuto: Bool { model.presetFor(sessionURL: item.url)?.isAutoLanguage == true }
+    /// Przebieg w Auto: jedyna flaga to „obcy alfabet" (T1), więc etykieta mówi to wprost. Z migawki przebiegu (I2).
+    private var isAuto: Bool { model.runLanguage(item).isAuto }
 
     @ViewBuilder private var content: some View {
         if let t = shown {
             // Uwaga 7: lista rośnie z treścią (przewija strona), separator `line2` między wierszami.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !t.failedChunks.isEmpty {
-                    Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item) }
+                    Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item, runID: item.runID) }
                         .buttonStyle(.pillSmall)
                         .disabled(busy || moving)
                         .help("Sends only the parts that failed; finished parts aren't paid for again")
@@ -245,7 +288,7 @@ struct TranscriptTab: View {
                         if let p = model.presetFor(sessionURL: item.url) {
                             Button("Transcribe with \(p.name)") { model.transcribe(sessionURL: item.url, preset: p) }.buttonStyle(.pillPrimary)
                         }
-                        if item.runID != nil { Button("Resume Transcription") { model.resume(item) }.buttonStyle(.pill) }
+                        if item.latestAttemptID != nil { Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }.buttonStyle(.pill) }
                     }
                     .disabled(moving)
                 }
@@ -376,7 +419,7 @@ struct SummaryTab: View {
         let kind = state.useCorrected && item.corrected != nil ? "corrected" : "original"
         let details = [
             item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) },
-            model.presetFor(sessionURL: item.url)?.language?.englishName,
+            model.runLanguage(item).language?.englishName,
         ].compactMap { $0 }
         return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
     }
