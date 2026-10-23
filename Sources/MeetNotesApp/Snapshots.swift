@@ -449,10 +449,10 @@ enum Snapshots {
                              term("Zoom", .normal, [DictionaryAlias("Doomem"), DictionaryAlias("Zoomem")]),
                              term("WFM", .normal),
                              term("Terraform", .low, [DictionaryAlias("teraform")])]
-                // Wypełniacz niskiej rangi: przy kontekście 2048 większość nie zmieści się w poleceniu, więc licznik jest widoczny.
-                terms += (1...60).map { term("Acme-\(String(format: "%03d", $0))", .low) }
+                // Wypełniacz niskiej rangi (spec §8.3): przy kontekście 4096 budżet to 983 znaki (`DictionaryPrompt.maxChars`), a 120 Termów po ~10 znaków go przekracza, więc licznik jest widoczny.
+                terms += (1...120).map { term("Acme-\(String(format: "%03d", $0))", .low) }
                 model.dictionary = UserDictionary(terms: terms)
-                let local = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!, contextTokens: 2_048)
+                let local = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!, contextTokens: 4_096)
                 model.providers.providers.append(local)
                 let dictPreset = Preset(name: "Polish, local correction", language: .polish,
                                         asr: RoleAssignment(providerID: local.id, model: "unused"),

@@ -304,6 +304,10 @@ struct CLI {
         }
         let vocab = try value(args, "--vocabulary").map { try String(contentsOfFile: $0, encoding: .utf8) }
         let (dictionary, report) = DictionaryTransfer.importFiles(vocabulary: vocab, replacements: try String(contentsOfFile: replPath, encoding: .utf8), into: UserDictionary())
+        // Pusty słownik (pusty plik, same odrzucone wpisy) nie sprawdza niczego, więc nie może kończyć się „OK".
+        guard !dictionary.terms.isEmpty else {
+            FileHandle.standardError.write(Data("brak Termów po imporcie (\(report.summary)) — nie ma czego sprawdzać\n".utf8)); exit(1)
+        }
         let run = RunSelection.of(session: dir)
         guard let raw = run.transcript else {
             FileHandle.standardError.write(Data("\(dir.path): brak transkryptu\n".utf8)); exit(1)

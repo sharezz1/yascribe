@@ -97,10 +97,17 @@ public enum VocabularyTrace {
             if let promptLines { try promptLines.write(to: url, atomically: true, encoding: .utf8) }
             else { try FileManager.default.removeItem(at: url) }
             return nil
-        } catch CocoaError.fileNoSuchFile where promptLines == nil {
+        } catch where promptLines == nil && isMissingFile(error) {
             return nil
         } catch {
             return error
         }
+    }
+
+    /// „Brak pliku" w obu dialektach: `CocoaError.fileNoSuchFile` i POSIX `ENOENT` (R20).
+    static func isMissingFile(_ error: Error) -> Bool {
+        let e = error as NSError
+        return (e.domain == NSCocoaErrorDomain && e.code == CocoaError.fileNoSuchFile.rawValue)
+            || (e.domain == NSPOSIXErrorDomain && e.code == Int(ENOENT))
     }
 }

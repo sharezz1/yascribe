@@ -58,6 +58,8 @@ public enum DictionaryTransfer {
         var phrase: String
         var target: String
         var mode: Mode
+        /// Niepusta trzecia (lub dalsza) kolumna: plik nie jest w formacie `fraza<TAB>zapis`, więc wiersz idzie do `rejected` (R15b).
+        var extraColumns = false
     }
 
     public static func importFiles(vocabulary: String?, replacements: String?, into d: UserDictionary)
@@ -72,7 +74,9 @@ public enum DictionaryTransfer {
         var dict = d
         var report = DictionaryImportReport()
         let vocab = vocabularies.flatMap(parseVocabulary)
-        let rows = replacements.flatMap(parseReplacements)
+        let parsed = replacements.flatMap(parseReplacements)
+        let rows = parsed.filter { !$0.extraColumns }
+        report.rejected += parsed.count - rows.count
 
         // Przebieg 1: wszystkie Termy (najpierw z vocab, potem cele spoza niego jako Low), żeby wynik nie zależał od kolejności linii.
         // Cele z replacements, które odrzuca `isReserved`, liczy przebieg 2 (raz na wiersz), z vocab liczymy tu.
@@ -167,7 +171,8 @@ public enum DictionaryTransfer {
                 let parts = line.components(separatedBy: "\t")
                 guard parts.count >= 2 else { continue }
                 let phrase = UserDictionary.clean(parts[0]), target = UserDictionary.clean(parts[1])
-                if !phrase.isEmpty, !target.isEmpty { out.append(Row(phrase: phrase, target: target, mode: mode)) }
+                let extra = parts.dropFirst(2).contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                if !phrase.isEmpty, !target.isEmpty { out.append(Row(phrase: phrase, target: target, mode: mode, extraColumns: extra)) }
             }
         }
         return out
