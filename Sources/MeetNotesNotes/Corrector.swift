@@ -141,19 +141,22 @@ public struct Corrector: Sendable {
     public func correct(_ original: Transcript, language: LanguageCode?) async -> CorrectedTranscript {
         var out = original
         // Numer linii = indeks wypowiedzi + 1; tylko niepuste i niezaflagowane.
-        let lines: [(n: Int, text: String)] = original.utterances.enumerated().compactMap { i, u in
+        let all: [(n: Int, text: String)] = original.utterances.enumerated().compactMap { i, u in
             u.excludedFromNotes || u.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : (i + 1, u.text)
         }
         let limit = batchLimit(language: language)
-        if limit <= 0, !lines.isEmpty, let budget {
-            // Kontekst za mały nawet na prompt: jawny błąd, nigdy wysyłka.
+        // F5: z budżetem wypowiedź, która sama nie mieści się w partii (miarą `split`; np. po dopisaniu słownika do polecenia),
+        // nie idzie do modelu — zostaje oryginalna i liczy się jako odrzucona. API (bez budżetu) bez zmian.
+        let lines = budget == nil ? all : all.filter { "[1] ".count + $0.text.count + 1 <= limit }
+        if lines.isEmpty, !all.isEmpty, let budget {
+            // Kontekst za mały nawet na prompt albo na każdą wypowiedź: jawny błąd, nigdy wysyłka.
             return CorrectedTranscript(transcript: out, model: assignment.model, batches: 1, failedBatches: 1, rejectedLines: 0,
                                        firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction.")
         }
         let batches = CorrectionBatches.split(lines, maxChars: limit)
         let system = system(language: language)
         var failed = 0
-        var rejected = 0
+        var rejected = all.count - lines.count
         var firstError: String?
         for batch in batches {
             if Task.isCancelled { break }
