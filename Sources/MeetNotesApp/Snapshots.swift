@@ -166,6 +166,10 @@ enum Snapshots {
                         picked.notes.meta.modelOverrides = ModelOverrides(correction: RoleOverride(providerID: cloud.id, model: "anthropic/claude-haiku-4.5"))
                         let transcriptView = MeetingViewState(); transcriptView.tab = .transcript
                         try render("meeting-transcript-model", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: picked, state: transcriptView) }
+                        // Faza 2.1 D13: „Transcribe again…" — popover wprost (domyślnie model i język nagrania) i przycisk wyłączony po usunięciu audio.
+                        try render("transcribe-again-popover", size: CGSize(width: 340, height: 330), dark: dark, model: model) { TranscribeAgainButton(item: picked, inlinePopover: true) }
+                        var noAudio = picked; noAudio.audioDeletedAfterDays = 30
+                        try render("meeting-transcript-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: noAudio, state: transcriptView) }
                     }
                     var unwritten = split; unwritten.notes.summary = nil
                     model.notes.setPreview(unwritten.id, generating: .condensing(pass: 1, part: 3, of: 6))

@@ -153,6 +153,8 @@ struct TranscriptTab: View {
                 ErrorLine(message: "Correction failed: \(why)", retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
                     .disabled(moving)
             }
+            // „Transcribe again…": stary transkrypt zostaje widoczny do końca nowego przebiegu.
+            if busy, item.transcript != nil { StateLabel(.progress(nil), "Transcribing again…") }
             // Uwaga 7: jedna linia nad listą — wersja (pole-popup) po lewej, Improve transcript i Copy po prawej.
             if item.transcript != nil {
                 HStack(spacing: 8) {
@@ -183,6 +185,7 @@ struct TranscriptTab: View {
                             .disabled(moving)
                             .help("Run the correction model on this transcript")
                     }
+                    TranscribeAgainButton(item: item)
                     copyButton
                 }
                 .padding(.bottom, 4)
