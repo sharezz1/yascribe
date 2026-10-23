@@ -148,6 +148,9 @@ public enum CoreAudioDevices {
         return transport == kAudioDeviceTransportTypeBluetooth || transport == kAudioDeviceTransportTypeBluetoothLE
     }
 
+    /// Bluetooth wejścia o danym UID (faktycznie nagrywane wejście, które po ręcznym wyborze nie jest już domyślne).
+    public static func isBluetooth(uid: String) -> Bool { (try? deviceID(forUID: uid)).map(isBluetooth) ?? false }
+
     public static func defaultInputIsBluetooth() -> Bool { (try? defaultInputDevice()).map(isBluetooth) ?? false }
 
     /// Nazwa mikrofonu, który nagrywa `RawMicrophoneSource` (domyślne wejście systemu; wybór urządzenia: faza 2).

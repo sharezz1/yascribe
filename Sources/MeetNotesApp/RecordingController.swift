@@ -30,6 +30,12 @@ final class RecordingController {
     private(set) var micUID = ""
     private(set) var outputUID = ""
     private(set) var micIsBluetooth = false
+    /// Wejście wybrane w pigułce (nil = domyślne systemu); dotyczy tylko bieżącego nagrania (faza 2.0.2, D2/D3).
+    private(set) var selectedInputUID: String?
+    @ObservationIgnored private var mic: RawMicrophoneSource?
+    /// Migawki: lista wejść bez pytania sprzętu.
+    @ObservationIgnored var snapshotInputs: [InputDevice]?
+    var inputDevices: [InputDevice] { snapshotInputs ?? CoreAudioDevices.inputDevices() }
     var stallHint: String? {
         PillHint.systemStalled(stalled: systemStalled, micUID: micUID, outputUID: outputUID, isBluetooth: micIsBluetooth)
     }
@@ -53,8 +59,9 @@ final class RecordingController {
 
     func start(directory: URL, presetLabel: String, eventTitle: String? = nil, onEnded: @escaping @MainActor (EndReason) -> Void) throws {
         guard recorder == nil else { throw StartError.alreadyRecording }
+        let mic = RawMicrophoneSource()
         let r = SessionRecorder(directory: directory,
-                                sources: [SystemTapSource(), RawMicrophoneSource()]) // bez VP: ściszałby Teams przez całe nagranie (S5, spec rdzenia §2 korekta 2026-09-29)
+                                sources: [SystemTapSource(), mic]) // bez VP: ściszałby Teams przez całe nagranie (S5, spec rdzenia §2 korekta 2026-09-29)
         r.onEnded = { [weak r] reason in
             Task { @MainActor in
                 // Tylko bieżący rejestrator kończy stan — spóźnione zakończenie innego go nie zeruje.
@@ -65,6 +72,8 @@ final class RecordingController {
         }
         try r.start()
         recorder = r
+        self.mic = mic
+        selectedInputUID = nil
         self.directory = directory
         self.presetLabel = presetLabel
         self.eventTitle = eventTitle
@@ -82,7 +91,7 @@ final class RecordingController {
             Task { @MainActor in
                 self.elapsed = Date().timeIntervalSince(self.started)
                 // Źródło mikrofonu podąża za domyślnym wejściem systemu (np. AirPods podłączone w trakcie) — nazwa też.
-                self.micName = CoreAudioDevices.defaultInputName() ?? self.micName
+                self.micName = self.mic?.currentInputName ?? CoreAudioDevices.defaultInputName() ?? self.micName
                 self.outputName = CoreAudioDevices.defaultOutputName() ?? self.outputName
                 self.refreshDeviceIdentity()
                 self.recorder?.tick()
@@ -95,9 +104,18 @@ final class RecordingController {
     }
 
     private func refreshDeviceIdentity() {
-        micUID = CoreAudioDevices.defaultInputUID() ?? ""
+        // Faktycznie nagrywane wejście (po ręcznym wyborze nie jest domyślne), żeby podpowiedź nie obwiniała cudzych słuchawek.
+        micUID = mic?.currentInputUID ?? CoreAudioDevices.defaultInputUID() ?? ""
         outputUID = CoreAudioDevices.defaultOutputUID() ?? ""
-        micIsBluetooth = CoreAudioDevices.defaultInputIsBluetooth()
+        micIsBluetooth = mic?.currentInputUID.map { CoreAudioDevices.isBluetooth(uid: $0) } ?? CoreAudioDevices.defaultInputIsBluetooth()
+    }
+
+    /// Ręczny wybór wejścia z menu w pigułce; nil wraca do domyślnego systemu.
+    func selectInput(uid: String?) {
+        selectedInputUID = uid
+        mic?.select(deviceUID: uid)
+        micName = mic?.currentInputName ?? micName
+        refreshDeviceIdentity()
     }
 
     func stop() { recorder?.stop(reason: .button) }
@@ -137,6 +155,7 @@ final class RecordingController {
         r.levels = ["system": systemStalled || headsetStall ? -160 : -22, "mic_raw": -41]
         r.muted = muted
         r.muteWarning = muteWarning
+        r.snapshotInputs = [InputDevice(uid: "mic", name: "MacBook Air Microphone"), InputDevice(uid: "jam", name: "Sound Blaster JAM V2")]
         return r
     }
 
@@ -247,7 +266,9 @@ private final class PillHostingView<Content: View>: NSHostingView<Content> {
         // Menu w ofercie (wybór presetu) zostawiało pigułkę nieprzesuwalną: po śledzeniu menu stan gestu `WindowDragGesture` się zacinał.
         menuObserver = NotificationCenter.default.addObserver(forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, case .offer = self.pill.mode else { return }
+                guard let self else { return }
+                // Menu wejścia w pigułce nagrania też zacina gest przeciągania po zamknięciu (jak menu presetu w ofercie).
+                switch self.pill.mode { case .offer, .recording: break; case .endPrompt: return }
                 DispatchQueue.main.async { self.pill.rev += 1 }
             }
         }
@@ -488,7 +509,8 @@ struct RecordingPanelView: View {
                      muted: rec.muted.contains("system")) { rec.toggleMute("system") }
             // Nazwa mikrofonu wyraźnie — żeby od razu było widać, gdy nagrywa nie ten (decyzja użytkownika).
             LevelRow(title: "Microphone: \(rec.micName)", db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion,
-                     muted: rec.muted.contains("mic_raw")) { rec.toggleMute("mic_raw") }
+                     muted: rec.muted.contains("mic_raw"), onToggleMute: { rec.toggleMute("mic_raw") },
+                     inputMenu: InputMenu(devices: rec.inputDevices, selectedUID: rec.selectedInputUID) { rec.selectInput(uid: $0) })
                 .padding(.top, 10)
             HStack(spacing: 8) {
                 Button { openNote(rec) } label: { Text("Open note").lineLimit(1).fixedSize() }
@@ -546,6 +568,13 @@ private struct LevelBars: View {
 /// wyciszony tor ma ikonę `…slash`, szary pasek (rzeczywisty poziom — widać, że mówisz przy wyciszeniu, decyzja 3)
 /// i słowo „Muted” zamiast ✓, a „Unmute” jest wypełnione kolorem ostrzeżenia.
 /// Tytuł „Microphone: nazwa” dzieli się na etykietę w wierszu i nazwę pogrubioną pod spodem (nazwa nie może być ucięta).
+/// Menu zmiany wejścia przy nazwie mikrofonu (faza 2.0.2): „System default" i lista urządzeń; nieinwazyjne, domyślnie bez zmian.
+struct InputMenu {
+    var devices: [InputDevice]
+    var selectedUID: String?
+    var onSelect: (String?) -> Void
+}
+
 struct LevelRow: View {
     let title: String
     let db: Double?
@@ -553,6 +582,7 @@ struct LevelRow: View {
     var animated = true
     var muted = false
     var onToggleMute: (() -> Void)?
+    var inputMenu: InputMenu?
 
     static func fraction(db: Double?) -> Double { max(0, min(1, ((db ?? -60) + 60) / 60)) }
 
@@ -600,7 +630,27 @@ struct LevelRow: View {
                 muteButton
             }
             if let detail = parts.detail {
-                Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2, reservesSpace: true).padding(.leading, 22) // dwa wiersze zawsze: rozmiar rozwiniętej pigułki nie zależy od nazwy mikrofonu
+                let text = Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2, reservesSpace: true)
+                if let menu = inputMenu {
+                    // Ukryty tekst rezerwuje dwa wiersze jak bez menu: rozmiar rozwiniętej pigułki nie zależy od menu.
+                    ZStack(alignment: .topLeading) {
+                        text.hidden()
+                        Menu {
+                            Button { menu.onSelect(nil) } label: { Label("System default", systemImage: menu.selectedUID == nil ? "checkmark" : "") }
+                            ForEach(menu.devices, id: \.uid) { d in
+                                Button { menu.onSelect(d.uid) } label: { Label(d.name, systemImage: menu.selectedUID == d.uid ? "checkmark" : "") }
+                            }
+                        } label: {
+                            Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(1)
+                        }
+                        .menuStyle(.borderlessButton).fixedSize()
+                        .accessibilityLabel("Microphone input: \(detail)")
+                        .help("Choose another input for this recording")
+                    }
+                    .padding(.leading, 22)
+                } else {
+                    text.padding(.leading, 22) // dwa wiersze zawsze: rozmiar rozwiniętej pigułki nie zależy od nazwy mikrofonu
+                }
             }
         }
     }
