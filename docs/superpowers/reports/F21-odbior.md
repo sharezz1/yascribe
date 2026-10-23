@@ -13,8 +13,8 @@
 | 8.1 Sesja `62de` pod słownikiem testowym (CLI, surowy i poprawiony) | **zaliczone** — po Replacement 0 wystąpień wszystkich Aliasów, niezerowe `Zowie`, `Jarek`, `Zoom` w obu wariantach |
 | 8.1 w UI (migawki: widok surowy, poprawiony, preset bez korekty) | **zaliczone** na wymyślonym krótkim transkrypcie; **mutacja kontrolna** (Replacement wyłączony w `AppModel.transcript(of:corrected:)`) przywraca stare zapisy we wszystkich trzech scenach |
 | 8.2 Testy jednostkowe (risky, idempotencja, granice słów PL, najdłuższy Alias, import idempotentny) | **zaliczone** — `ReplacementTests`, `UserDictionaryTests`, `DictionaryTransferTests` w pełnym przebiegu |
-| 8.3 Przycinanie do kontekstu 4096 i licznik „N terms don't fit” | **zaliczone** — test `capturedCorrectorRequestListsExactlyThePrunedTerms` (Task 6) + scena `dictionary-list` (60 Termów wypełniacza przy kontekście 2048; Task 8) |
-| Pełny przebieg `scripts/test.sh` | **704/704** (te zmiany nie dodały testów: CLI i sceny migawek nie mają własnych `@Test`) |
+| 8.3 Przycinanie do kontekstu 4096 i licznik „N terms don't fit” | **zaliczone** — test `capturedCorrectorRequestListsExactlyThePrunedTerms` (Task 6) + scena `dictionary-list` (128 Termów, kontekst 4096, budżet 983 znaków: „28 terms don’t fit the correction prompt”, `gemma-3-4b · context 4096`; poprawka końcowa) |
+| Pełny przebieg `scripts/test.sh` | **719/719** po poprawce końcowej (704 w chwili odbioru agenta; 711 po `dd78443`, +8 testów w poprawce końcowej) |
 | 8.4, 8.5 (nagranie, Termy w zakładce, „Transcribe again…”, panele systemowe) | **czeka na użytkownika** — §4 |
 
 ## 1. §8.1 — sesja `62de` i słownik testowy (CLI)
@@ -66,10 +66,11 @@ punkt odczytu, a nie fixture z gotowymi poprawnymi zapisami.
 
 ## 3. §8.2, §8.3 i pełny przebieg
 
-- `scripts/test.sh` (pełny, na HEAD z `4bfb2fa`): `test.sh: 704/704 testów uruchomionych i zaliczonych.`, `check-bundle: OK`.
+- `scripts/test.sh` (pełny): przy odbiorze agenta (HEAD `4bfb2fa`) 704/704; po poprawce końcowej `test.sh: 719/719 testów uruchomionych i zaliczonych.`, `check-bundle: OK`.
 - §8.3: przycinanie polecenia korektora do budżetu dowodzi `capturedCorrectorRequestListsExactlyThePrunedTerms` (`Tests/MeetNotesNotesTests/CorrectorTests.swift`);
-  licznik „N terms don’t fit” w zakładce — scena `dictionary-list` z Task 8 (słownik > 100 Termów, lokalny dostawca z Context window 2048; spec mówił 4096,
-  scena używa 2048, żeby licznik był widoczny przy 60 wypełniaczach). Tu nie dubluję zrzutów.
+  licznik „N terms don’t fit” w zakładce — scena `dictionary-list` (Task 8, w poprawce końcowej przestawiona ze 2048 na **4096** zgodnie ze specem §8.3): 128 Termów
+  (8 prawdziwych + 120 wypełniaczy `Acme-NNN`), lokalny dostawca `gemma-3-4b` z Context window 4096, budżet `DictionaryPrompt.maxChars` = 983 znaki;
+  obejrzany PNG (light): „28 terms don’t fit the correction prompt · gemma-3-4b · context 4096”, nagłówek „128 terms · 13 aliases".
 - Zrobione i zmierzone w trakcie zadań (ledger SDD): Replacement ok. 0,19 ms na wypowiedź po filtrze wstępnym (debug, 215 Termów / 212 Aliasów, 56 sesji),
   zimne wyszukiwanie po 56 sesjach 363 ms; **pomiar tylko w debugu**, w release niezmierzony.
 
@@ -96,3 +97,15 @@ punkt odczytu, a nie fixture z gotowymi poprawnymi zapisami.
 - Odłożone drobiazgi i zaparkowane uwagi recenzentów: BACKLOG „Z fazy 2.1”. Zaparkowane z uzasadnieniem w ledgerze SDD: R12 (egzotyczna para Greek
   dialytika+tonos po NFC), R19 (filtr wstępny zwraca tekst bez NFC, gdy nic się nie zmienia — kanonicznie równy), I3 (`try?` przy kompilacji wyrażenia, wzorzec z ucieczkowanych literałów).
 - Znalezisko poza zakresem: pliki `ruvector.db` w `Sources/MeetNotesSessionFormat` i `Sources/MeetNotesRecording` (nieśledzone, ignorowane; pochodzą z hooka wtyczki) — do usunięcia przez użytkownika.
+
+## 6. Poprawka końcowa (R27)
+
+Po przeglądzie odbioru (Codex) i z odłożonych minorów: (1) `dictionary-check` z zerem Termów po imporcie (pusty plik, same odrzucone wiersze) kończy się teraz błędem i kodem 1 zamiast „OK":
+`empty.tsv` → „brak Termów po imporcie (0 terms, … 0 rejected) — nie ma czego sprawdzać", exit 1; plik z jedynym wierszem z nadmiarem kolumn → ten sam komunikat z „1 rejected", exit 1;
+nieistniejąca ścieżka → „błąd: …no such file…", exit 1; fixture `62de` → „OK", exit 0. (Mutacja: usunięcie straży → pusty plik daje „OK", exit 0.)
+(2) Licznik w scenie ustawiony na 4096 (§2 wyżej). (3) Import: wiersz `replacements.tsv` z niepustą trzecią kolumną jest odrzucony (`rejected`), nie czytany jako dwie pierwsze kolumny;
+puste ogony tabulatora nadal dozwolone, linie z `#` nadal komentarze. (4) `VocabularyTrace` uznaje za „brak pliku" także POSIX `ENOENT`; test na odmowę dostępu (katalog 0o500, pomijany dla roota).
+(5) Nowe testy: U+037E na granicy 60 znaków, znaki sterujące U+001C–1F, uczestnik pusty po sanityzacji, budżety zerowe/ujemne/minimalne, suma konfliktów i odrzuceń przy imporcie wielu plików.
+Mutacje po commicie (każda cofnięta `git checkout`): bez gałęzi POSIX w `isMissingFile` pada `missingFileIsRecognizedInBothErrorDomains`; bez odrzucenia nadmiarowych kolumn padają
+`replacementsRowWithExtraColumnsIsRejected` i `multiFileImportSumsConflictsAndRejectionsAcrossFiles`; bez straży zero-Termów CLI zwraca „OK" i exit 0 (pomiar wyżej).
+Pełny przebieg: **719/719**.

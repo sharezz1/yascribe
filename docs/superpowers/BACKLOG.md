@@ -214,18 +214,16 @@ nie są tu kopiowane.
 - [ ] **`generate()` bierze język notatki z presetu sesji**, a autotytuł i korekta z migawki bieżącego przebiegu (I2); po „Transcribe again…" z innym językiem notatka może mieć język starego presetu. Powinien pochodzić z migawki przebiegu.
 - [ ] **Identyfikatory przebiegów monotoniczne** (R25) — dwa przebiegi w tej samej sekundzie mogą sortować się w złej kolejności (`RunDirectory.runIDs` sortuje leksykalnie); wymusić rosnący sufiks.
 - [ ] **Baner na karcie Transcript przypisuje aktywność najnowszej próbie** (R26), gdy użytkownik wznawia luki bieżącego przebiegu („Retry Failed Parts"); komunikat powinien nazywać przebieg, na którym trwa praca.
-- [ ] **Import: nadmiarowe kolumny TSV** (więcej niż dwa tabulatory) są czytane po cichu jako pierwsze dwie; zgłosić jako `rejected`. Linia bez tabulatora też jest pomijana bez raportu (R15b).
+- [ ] **Import: linia bez tabulatora** jest pomijana bez raportu (R15b; nadmiar kolumn jest już zgłaszany jako `rejected`).
 - [ ] **Import: konflikty powtarzają się** przy każdym imporcie tego samego pliku (judged acceptable w T4) — rozważyć zapamiętanie już zgłoszonych.
-- [ ] **Hartowanie `vocabulary.txt`** (R20): usuwanie ignoruje tylko `CocoaError.fileNoSuchFile`; dopisać też `NSPOSIXErrorDomain` ENOENT i prawdziwy test odmowy dostępu (permission denied).
 - [ ] **Brak błędu specyficznego dla słownika**, gdy prompt reduce w map-reduce przekracza budżet (T6); komunikat jest ogólny.
 - [ ] **Replacement i wyszukiwanie zmierzone tylko w debugu** (0,19 ms na wypowiedź, zimne wyszukiwanie po 56 sesjach 363 ms; best-of-3, 28 sesji zdublowanych do 56) — przemierzyć w release. Pierwsze otwarcie dużego spotkania liczy Replacement na głównym wątku.
 - [ ] **Egzotyczne zaparkowane** (R12, R19): para Greek dialytika+tonos w NFC vs NFD; filtr wstępny zwraca tekst bez NFC, gdy nic się nie zmienia (kanonicznie równy, bez różnicy dla użytkownika).
 
 **Brakujące testy (z recenzji, odłożone)**
 - [ ] `UserDictionary`: test NFC używa Terma ASCII, więc usunięcie normalizacji Terma nie wychodzi — dodać Term w NFD (T2).
-- [ ] `PromptVocabulary` (T5): U+037E na granicy 60 znaków, U+001C–1F, uczestnik pusty po sanityzacji; `nonPositiveAndTinyBudgetsOmitCandidates` (budżety zerowe, ujemne, minimalne).
 - [ ] Test map-reduce z przekazaniem słownika (T6) prawdopodobnie sięga 2, nie 3 poziomów (wymagane ≥ 2, nie blokuje).
-- [ ] `DictionaryEdit` (T8) nie sprawdza stanu arkusza UI; test importu wielu plików nie sprawdza agregacji konfliktów i odrzuceń.
+- [ ] `DictionaryEdit` (T8) nie sprawdza stanu arkusza UI.
 
 ## Zapisane (dla kroniki)
 
