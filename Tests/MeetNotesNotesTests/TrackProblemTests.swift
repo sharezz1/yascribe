@@ -1,5 +1,5 @@
 import Foundation
-import MeetNotesSessionFormat
+@testable import MeetNotesSessionFormat
 import Testing
 @testable import MeetNotesNotes
 @testable import MeetNotesTranscription
@@ -96,4 +96,48 @@ private func silentStart(_ id: String = "system") -> SessionSummary.Track {
     #expect(try #require(TrackProblem.of(tracks: [late, mic], transcript: nil).first).isWarning)
     var denied = system; denied.permissionDenied = "audioCapture"
     #expect(try #require(TrackProblem.of(tracks: [denied, mic], transcript: nil).first).isWarning)
+}
+
+/// Tor jak `ec0b` (2026-10-22): 16 kHz zapisane jako 48 kHz, kotwice zegara obejmują 20 s.
+private func slowTrack(id: String = "system", failure: String? = nil) -> SessionSummary.Track {
+    SessionSummary.Track(id: id, sampleRate: 48_000, channels: 2, deviceUIDs: ["00-02-3C-8D-E0-50:output"], frames: 16_913_280,
+                         clock: [.init(frameIndex: 0, hostTime: 0), .init(frameIndex: 330_000, hostTime: 20_000_000_000)],
+                         failure: failure, effectiveSampleRate: 16_500)
+}
+
+@Test func wrongSpeedTrackIsAWarning() throws {
+    let p = try #require(TrackProblem.of(tracks: [slowTrack()], transcript: nil).first)
+    #expect(p.isWarning)
+    #expect(p.line == "System audio was recorded at the wrong speed.")
+    #expect(p.detail.contains("34%") && p.detail.contains("00-02-3C-8D-E0-50:output"))
+    let mic = try #require(TrackProblem.of(tracks: [slowTrack(id: "mic_raw")], transcript: nil).first)
+    #expect(mic.line == "Microphone was recorded at the wrong speed.")
+}
+
+@Test func healthyRateGivesNoProblem() {
+    var t = slowTrack()
+    t.effectiveSampleRate = 47_998
+    #expect(TrackProblem.of(tracks: [t], transcript: nil).isEmpty)
+}
+
+@Test func wrongSpeedDoesNotMaskAFailure() throws {
+    let p = try #require(TrackProblem.of(tracks: [slowTrack(failure: "stalled30s")], transcript: nil).first)
+    #expect(p.line == "System audio had a problem: stalled30s.")
+}
+
+private func neverStartedPair(systemUID: String, micUID: String) -> [SessionSummary.Track] {
+    [SessionSummary.Track(id: "system", sampleRate: 48_000, channels: 2, deviceUIDs: [systemUID], frames: 0, failure: "stalled30s"),
+     SessionSummary.Track(id: "mic_raw", sampleRate: 16_000, channels: 1, deviceUIDs: [micUID], frames: 2_130_432)]
+}
+
+@Test func neverStartedOnTheSameHeadsetMentionsCallMode() throws {
+    let p = try #require(TrackProblem.of(tracks: neverStartedPair(systemUID: "00-02-3C-8D-E0-50:output",
+                                                                   micUID: "00-02-3C-8D-E0-50:input"), transcript: nil).first)
+    #expect(p.detail.contains("same headset"))
+}
+
+@Test func neverStartedOnDifferentDevicesKeepsTheOldText() throws {
+    let p = try #require(TrackProblem.of(tracks: neverStartedPair(systemUID: "BuiltInSpeakerDevice",
+                                                                   micUID: "BuiltInMicrophoneDevice"), transcript: nil).first)
+    #expect(!p.detail.contains("same headset"))
 }

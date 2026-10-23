@@ -17,6 +17,7 @@ struct CLI {
       summarize <katalog>                                         odtwarza session.json z dziennika
       fit <wzorzec> <nagranie.caf> [--max-lag-ms N]              T1/T3/T4: dopasowanie nagranie ≈ a·wzorzec
       check-system-audio                                          sprawdza, czy tap słyszy dźwięk systemowy
+      tap-rate [--seconds N] [--with-mic] [--with-output]                         mierzy częstotliwości tapa i rzeczywiste dostarczanie (faza 2.0.2)
       models <baseURL>                                            lista modeli (klucz: MEETNOTES_API_KEY)
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
@@ -27,7 +28,7 @@ struct CLI {
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
     static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store"]
-    static let known = valued.union(["--aec", "--no-aec", "--no-system"])
+    static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output"])
 
     static func main() async {
         var args = Array(CommandLine.arguments.dropFirst())
@@ -43,6 +44,7 @@ struct CLI {
             case "summarize": try summarize(args)
             case "fit": try fit(args)
             case "check-system-audio": print(await SystemAudioCheck.run())
+            case "tap-rate": try await tapRate(args)
             case "models": try await models(args)
             case "probe": try await probe(args)
             case "transcribe": try await transcribe(args)
@@ -118,6 +120,61 @@ struct CLI {
         sigint.cancel()
         signal(SIGINT, SIG_DFL)
         try summarize([dir.path])
+    }
+
+    /// Suma klatek i energia porcji toru `system` w jednym oknie pomiarowym.
+    final class TapStats: @unchecked Sendable {
+        private let lock = NSLock()
+        private var frames = 0, lastFrames = 0
+        private var first: UInt64?, last: UInt64 = 0
+        private var sumSquares = 0.0, samples = 0
+
+        func add(_ c: AudioChunk, channels: Int) {
+            lock.lock(); defer { lock.unlock() }
+            let f = c.samples.count / max(channels, 1)
+            if first == nil { first = c.hostTime }
+            frames += f; lastFrames = f; last = c.hostTime
+            for v in c.samples { sumSquares += Double(v) * Double(v) }
+            samples += c.samples.count
+        }
+
+        /// Zmierzona częstotliwość: klatki bez ostatniej porcji / czas między pierwszą a ostatnią (czas porcji = jej pierwsza próbka).
+        func takeLine() -> String {
+            lock.lock(); defer { lock.unlock() }
+            defer { frames = 0; lastFrames = 0; first = nil; sumSquares = 0; samples = 0 }
+            guard let first, last > first else { return "zmierzone=brak porcji (0 klatek)" }
+            let secs = Timebase.current.secondsBetween(last, first)
+            let rate = Double(frames - lastFrames) / secs
+            let rms = samples > 0 ? 20 * log10(max((sumSquares / Double(samples)).squareRoot(), 1) / 32768) : -160
+            return String(format: "zmierzone=%.0f Hz (ramek %d w %.1f s) rms=%.1f dBFS", rate, frames, secs, rms)
+        }
+    }
+
+    /// Faza 2.0.2, bramka M1: trzy częstotliwości tapa kontra to, co naprawdę dociera do IOProc.
+    static func tapRate(_ args: [String]) async throws {
+        let seconds = number(args, "--seconds") ?? 10
+        let tap = SystemTapSource(layout: args.contains("--with-output") ? .withOutputSubdevice : SystemTapSource.defaultLayout)
+        let format = try tap.prepare()
+        let stats = TapStats()
+        try tap.start { if case .chunk(let c) = $0 { stats.add(c, channels: format.channels) } }
+        func report(_ label: String) {
+            let r = tap.rates()
+            print("[\(label)] wejście=\"\(CoreAudioDevices.defaultInputName() ?? "?")\" wyjście=\"\(CoreAudioDevices.defaultOutputName() ?? "?")\" tapFormat=\(r.map { String(Int($0.tapFormat)) } ?? "?") aggregateNominal=\(r.map { String(Int($0.aggregateNominal)) } ?? "?") "
+                  + "outputNominal=\(r.map { String(Int($0.outputNominal)) } ?? "?") deklarowane=\(Int(format.sampleRate)) \(stats.takeLine())")
+        }
+        let half = args.contains("--with-mic") ? seconds / 2 : seconds
+        try await Task.sleep(for: .seconds(half))
+        report(args.contains("--with-mic") ? "bez mikrofonu" : "tap")
+        if args.contains("--with-mic") {
+            // Jak w aplikacji: mikrofon dochodzi po tapie; słuchawki mogą wtedy przełączyć profil (hipoteza S0b).
+            let mic = RawMicrophoneSource()
+            _ = try mic.prepare()
+            try mic.start { _ in }
+            try await Task.sleep(for: .seconds(seconds - half))
+            report("po otwarciu mikrofonu")
+            mic.stop()
+        }
+        tap.stop()
     }
 
     static func summarize(_ args: [String]) throws {

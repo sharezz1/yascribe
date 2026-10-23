@@ -209,3 +209,13 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         try e.encode(self).write(to: url, options: .atomic)
     }
 }
+
+public extension SessionSummary.Track {
+    var rateMismatch: Double? {
+        guard let effectiveSampleRate, clock.count >= 2,
+              let first = clock.first, let last = clock.last,
+              Double(last.frameIndex - first.frameIndex) / effectiveSampleRate >= 20 else { return nil }
+        let ratio = effectiveSampleRate / sampleRate
+        return abs(ratio - 1) > 0.05 ? ratio : nil
+    }
+}
