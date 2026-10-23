@@ -101,6 +101,67 @@ import Testing
         #expect(ReplacementRules(d).apply(to: "strase") == "Straße")
     }
 
+    /// „ς" (końcowa sigma) i „σ" mają ten sam klucz, jak w ICU `(?i:)`; samo `lowercased()` ich nie zrównuje.
+    @Test func finalSigmaFoldsLikeSigma() throws {
+        var d = UserDictionary()
+        try d.upsert(DictionaryTerm("λόγος", aliases: [DictionaryAlias("logos")]))
+        #expect(throws: DictionaryError.aliasIsTerm(alias: "λόγοσ", term: "λόγος")) {
+            try d.upsert(DictionaryTerm("Other", aliases: [DictionaryAlias("λόγοσ")]))
+        }
+        #expect(ReplacementRules(d).apply(to: "logos") == "λόγος")
+    }
+
+    /// Łańcuch dłuższy niż 5 rund (R10): wynik po 5 rundach, bez gwarancji idempotencji dalej.
+    @Test func fixpointStopsAfterFiveRounds() throws {
+        let r = try upserted(DictionaryTerm("P1", aliases: [DictionaryAlias("x")]), DictionaryTerm("P2", aliases: [DictionaryAlias("P1 y")]),
+                             DictionaryTerm("P3", aliases: [DictionaryAlias("P2 y")]), DictionaryTerm("P4", aliases: [DictionaryAlias("P3 y")]),
+                             DictionaryTerm("P5", aliases: [DictionaryAlias("P4 y")]), DictionaryTerm("P6", aliases: [DictionaryAlias("P5 y")]))
+        #expect(r.apply(to: "x y y y y y") == "P5 y")
+        #expect(r.apply(to: "P5 y") == "P6")
+    }
+
+    /// Filtr wstępny (R17) nie zmienia wyniku: każda para słownik × tekst daje to samo z filtrem i bez (porównanie skalarów).
+    @Test func preFilterNeverChangesResults() throws {
+        func t(_ text: String, _ aliases: String...) -> DictionaryTerm { DictionaryTerm(text, aliases: aliases.map { DictionaryAlias($0) }) }
+        let nfd = { (s: String) in s.decomposedStringWithCanonicalMapping }
+        let dictionaries: [[DictionaryTerm]] = [
+            [],
+            [t("Hash", "#tag"), t("Nimbu", "Rokm")],                      // Alias od symbolu: filtr wyłączony
+            [t("Strasse", "straße"), t("Fuß", "fuss")],                     // ß ≡ SS
+            [t("Logos", "λόγοσ")],                                          // ς ≡ σ
+            [t("Orbit", "Żorbit"), t("Żuraw", nfd("żuraw"))],           // NFD/NFC
+            [t("Y", "x")],                                                  // znak łączący po słowie
+            [t("KOPT", "ko pt", "Kopt"), t("Dorn", "Dorna")],               // wielowyrazowy
+            [t("e-mail", "e-mejl"), t("OnTrack", "in", "on track")],          // z łącznikiem, najdłuższy
+            [t("Kopt Max", "kopt")],                                        // ochrona tekstu Terma
+            [t("KOPT", "Kopt"), t("Dorn Kopt", "dornkopt")],
+            [t("A", "x"), t("B", "A y")], [t("A B", "x"), t("B C", "y"), t("Z", "C")],
+            [t("Nimbu", "Rokm"), t("queue")],                               // wielkość liter
+            [t(".NET", "dotnet"), t("Core", "kor")],                         // Term od symbolu: filtr wyłączony
+        ]
+        let texts = ["", "   ", "...!?", "a #tag b", "#TAG", "tag", "STRASSE i Straße", "strasse x", "FUSS", "Fuß", "λόγος", "ΛΌΓΟΣ", "λόγοι",
+                     nfd("o Żorbit"), "o Żorbit", "dżenesisy", "ŻURAW", nfd("Żuraw"), "x\u{0301}yz", "x\u{0301}", "x y", "ko pt.", "pu dowolny",
+                     "KO PT", "Koptwski", "Dornań", "wyślij e-mejl", "e-mejla", "e mejl", "on track i in", "kopt", "Kopt Max", "dornkopt",
+                     "Dorn Kopt i Kopt", "x y", "A y", "A B B", "rOkM i ROKM", "Queue i Rokm", "nic tu nie ma", "dotnet i kor", ".NET kor"]
+        for terms in dictionaries {
+            let r = ReplacementRules(UserDictionary(terms: terms))
+            for x in texts {
+                #expect(scalars(r.apply(to: x)) == scalars(r.apply(to: x, preFilter: false)), "\(terms.map(\.text)) \(x)")
+            }
+        }
+        #expect(ReplacementRules(UserDictionary(terms: dictionaries[1])).mayMatch("nic tu nie ma"))
+        #expect(ReplacementRules(UserDictionary(terms: dictionaries[13])).mayMatch("nic tu nie ma"))
+    }
+
+    @Test func preFilterSkipsRegexWhenNoCandidateToken() {
+        let r = rules(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")]))
+        let runs = ReplacementRules.RegexRuns()
+        ReplacementRules.$regexRuns.withValue(runs) { #expect(r.apply(to: "nic tu nie ma") == "nic tu nie ma") }
+        #expect(runs.count == 0)
+        ReplacementRules.$regexRuns.withValue(runs) { #expect(r.apply(to: "ROKM mówi") == "Nimbu mówi") }
+        #expect(runs.count == 2)
+    }
+
     @Test func termIdentityIsCaseSensitive() {
         let r = rules(DictionaryTerm("queue"), DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")]))
         #expect(!r.isEmpty)
