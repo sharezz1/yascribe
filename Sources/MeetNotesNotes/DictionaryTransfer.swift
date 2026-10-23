@@ -62,10 +62,17 @@ public enum DictionaryTransfer {
 
     public static func importFiles(vocabulary: String?, replacements: String?, into d: UserDictionary)
         -> (dictionary: UserDictionary, report: DictionaryImportReport) {
+        importFiles(vocabularies: vocabulary.map { [$0] } ?? [], replacements: replacements.map { [$0] } ?? [], into: d)
+    }
+
+    /// Wiele plików naraz (R22): każdy parsowany osobno (stan sekcji `#!`/tier i BOM nie przechodzą z pliku do pliku), potem jeden przebieg
+    /// scalania jak dla pojedynczych plików, więc wynik i raport nie zależą od tego, jak pliki podzielono.
+    public static func importFiles(vocabularies: [String], replacements: [String], into d: UserDictionary)
+        -> (dictionary: UserDictionary, report: DictionaryImportReport) {
         var dict = d
         var report = DictionaryImportReport()
-        let vocab = vocabulary.map(parseVocabulary) ?? []
-        let rows = replacements.map(parseReplacements) ?? []
+        let vocab = vocabularies.flatMap(parseVocabulary)
+        let rows = replacements.flatMap(parseReplacements)
 
         // Przebieg 1: wszystkie Termy (najpierw z vocab, potem cele spoza niego jako Low), żeby wynik nie zależał od kolejności linii.
         // Cele z replacements, które odrzuca `isReserved`, liczy przebieg 2 (raz na wiersz), z vocab liczymy tu.

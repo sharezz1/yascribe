@@ -135,6 +135,19 @@ import Testing
         #expect(r.report.riskyLeftOff == 1)
     }
 
+    @Test func multiFileImportResetsSectionsAndHandlesEachBOM() {
+        let r = DictionaryTransfer.importFiles(
+            vocabularies: ["# ====== T3 — tail ======\nNimbu\n", "\u{FEFF}Orbit\n"],
+            replacements: ["#! ---------- risky ----------\nko pt\tKopt\n", "\u{FEFF}Żorbit\tOrbit\n"],
+            into: UserDictionary())
+        // Tier i sekcja risky z pierwszego pliku nie przechodzą do drugiego; BOM drugiego pliku nie psuje pierwszej linii.
+        #expect(term(r.dictionary, "Nimbu")?.priority == .low)
+        #expect(term(r.dictionary, "Orbit")?.priority == .normal)
+        #expect(term(r.dictionary, "Kopt")?.aliases == [DictionaryAlias("ko pt", risky: true, enabled: false)])
+        #expect(term(r.dictionary, "Orbit")?.aliases == [DictionaryAlias("Żorbit")])
+        #expect(r.report.riskyLeftOff == 1)
+    }
+
     @Test func riskySectionEndsAtNextHeader() {
         let repl = "#! ---------- risky ----------\n#! note\nko pt\tKopt\n# plain comment\n# ---------- 9. Names ----------\nŻorbit\tOrbit\n"
         let r = import1(nil, repl)
