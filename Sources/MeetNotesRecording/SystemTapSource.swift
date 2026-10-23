@@ -2,6 +2,20 @@ import AVFoundation
 import CoreAudio
 import Foundation
 
+/// Układ urządzenia zbiorczego tapa (faza 2.0.2). `.tapOnly` bez wyjścia jako podurządzenia robią OpenWhispr i Chromium;
+/// jest domyślny od D4 (pomiary M2b). `.withOutputSubdevice` to układ sprzed fazy 2.0.2, zostaje do porównań (`tap-rate`).
+public enum AggregateLayout: Sendable, Equatable {
+    case withOutputSubdevice, tapOnly
+}
+
+/// Trzy częstotliwości, które mogą się rozjechać na słuchawkach Bluetooth (faza 2.0.2): format tapa,
+/// nominalna częstotliwość urządzenia zbiorczego i bieżącego wyjścia. 0 = nie udało się odczytać.
+public struct TapRates: Equatable, Sendable {
+    public var tapFormat: Double
+    public var aggregateNominal: Double
+    public var outputNominal: Double
+}
+
 /// Kanał „Oni": process tap Core Audio na całym wyjściu systemu, przez urządzenie
 /// zbiorcze związane z bieżącym wyjściem (spec rdzenia §2, droga Narady).
 /// Przy zmianie domyślnego wyjścia przebudowuje tap na nowym urządzeniu; luka
@@ -16,12 +30,25 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
     private var aggregate = AudioObjectID(kAudioObjectUnknown)
     private var capture: HALCapture?
     private var format: TrackFormat?
+    private var tapRate = 0.0
     private var handler: (@Sendable (AudioSourceEvent) -> Void)?
     /// Po `stop()` przebudowa z kolejki obserwatora nie może zostawić capture ani tapu (P8).
     private var stopped = false
     private let watcher = DeviceWatcher(selector: kAudioHardwarePropertyDefaultOutputDevice)
+    /// Nasłuchy nominalnej częstotliwości urządzenia zbiorczego i wyjścia; nowe urządzenie zbiorcze po `rebuild()` ma nowy
+    /// `AudioObjectID`, więc zakładamy je od nowa po każdej przebudowie (faza 2.0.2: w A częstotliwość spada do 16 kHz w trakcie nagrania).
+    private var rateWatchers: [DeviceWatcher] = []
+    private var gate = RebuildGate()
+    private var rebuildPending = false
+    private let rebuildQueue = DispatchQueue(label: "meetnotes.tap.rebuild")
 
-    public init() {}
+    private let layout: AggregateLayout
+
+    /// D4 (2026-10-23): bez wyjścia jako podurządzenia zegar tapa nie idzie za częstotliwością słuchawek (M2b: 48 000 Hz
+    /// przy wyjściu 44 100 i 16 000), tak samo buduje tap Chromium (Wispr Flow).
+    public static let defaultLayout: AggregateLayout = .tapOnly
+
+    public init(layout: AggregateLayout = SystemTapSource.defaultLayout) { self.layout = layout }
 
     public func prepare() throws -> TrackFormat {
         let (tapFmt, uid) = try build()
@@ -30,17 +57,46 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         return f
     }
 
+    /// Częstotliwości do pomiaru (`meetnotes-cli tap-rate`); `nil` przed `prepare()`.
+    public func rates() -> TapRates? {
+        lock.lock(); let agg = aggregate, rate = tapRate; lock.unlock()
+        guard agg != kAudioObjectUnknown else { return nil }
+        let out = (try? CoreAudioDevices.defaultOutputDevice()).flatMap { try? CoreAudioDevices.nominalSampleRate(of: $0) } ?? 0
+        return TapRates(tapFormat: rate, aggregateNominal: (try? CoreAudioDevices.nominalSampleRate(of: agg)) ?? 0, outputNominal: out)
+    }
+
     public func start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws {
         lock.lock(); self.handler = handler; lock.unlock()
         try startCapture()
-        watcher.start { [weak self] in self?.rebuild() }
+        installRateListeners()
+        watcher.start { [weak self] in self?.requestRebuild() }
     }
 
     public func stop() {
         watcher.stop()
+        removeRateListeners()
         lock.lock(); stopped = true; let c = capture; capture = nil; lock.unlock()
         c?.stop()
         teardown()
+    }
+
+    static func aggregateDescription(layout: AggregateLayout, outputUID: String, tapUUID: String) -> [String: Any] {
+        var d: [String: Any] = [
+            kAudioAggregateDeviceNameKey: "meetnotes-tap",
+            kAudioAggregateDeviceUIDKey: "meetnotes-tap-\(UUID().uuidString)",
+            kAudioAggregateDeviceIsPrivateKey: true,
+            kAudioAggregateDeviceIsStackedKey: false,
+            kAudioAggregateDeviceTapAutoStartKey: true,
+            kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: true, kAudioSubTapUIDKey: tapUUID]],
+        ]
+        switch layout {
+        case .withOutputSubdevice:
+            d[kAudioAggregateDeviceMainSubDeviceKey] = outputUID
+            d[kAudioAggregateDeviceSubDeviceListKey] = [[kAudioSubDeviceUIDKey: outputUID]]
+        case .tapOnly:
+            d[kAudioAggregateDeviceSubDeviceListKey] = [] as [[String: Any]]
+        }
+        return d
     }
 
     /// Tworzy tap i urządzenie zbiorcze na bieżącym wyjściu. Zwraca format tapu i UID wyjścia.
@@ -55,17 +111,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         var tapID = AudioObjectID(kAudioObjectUnknown)
         let st = AudioHardwareCreateProcessTap(desc, &tapID)
         guard st == noErr else { throw AudioSourceError.coreAudio("CreateProcessTap", st) }
-        let agg: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "meetnotes-tap",
-            kAudioAggregateDeviceUIDKey: "meetnotes-tap-\(UUID().uuidString)",
-            kAudioAggregateDeviceMainSubDeviceKey: outputUID,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceIsStackedKey: false,
-            kAudioAggregateDeviceTapAutoStartKey: true,
-            kAudioAggregateDeviceSubDeviceListKey: [[kAudioSubDeviceUIDKey: outputUID]],
-            kAudioAggregateDeviceTapListKey: [[kAudioSubTapDriftCompensationKey: true,
-                                               kAudioSubTapUIDKey: desc.uuid.uuidString]],
-        ]
+        let agg = Self.aggregateDescription(layout: layout, outputUID: outputUID, tapUUID: desc.uuid.uuidString)
         var aggID = AudioObjectID(kAudioObjectUnknown)
         let st2 = AudioHardwareCreateAggregateDevice(agg as CFDictionary, &aggID)
         guard st2 == noErr else {
@@ -80,7 +126,9 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
             AudioHardwareDestroyProcessTap(tapID)
             throw error
         }
-        lock.lock(); tap = tapID; aggregate = aggID; lock.unlock()
+        // Jak Chromium: częstotliwość urządzenia zbiorczego ustawiona jawnie na format tapa (M2b zmierzył 48 000 bez tego).
+        if layout == .tapOnly { CoreAudioDevices.setNominalSampleRate(of: aggID, to: fmt.sampleRate) }
+        lock.lock(); tap = tapID; aggregate = aggID; tapRate = fmt.sampleRate; lock.unlock()
         return (fmt, outputUID)
     }
 
@@ -89,7 +137,9 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         guard let f = format, let h = handler, !stopped else { lock.unlock(); return }
         let agg = aggregate, tapID = tap
         lock.unlock()
-        let c = try HALCapture(device: agg, inputFormat: try CoreAudioDevices.tapFormat(of: tapID),
+        let deviceRate = (try? CoreAudioDevices.nominalSampleRate(of: agg)) ?? 0
+        let input = CoreAudioDevices.captureFormat(tap: try CoreAudioDevices.tapFormat(of: tapID), deviceRate: deviceRate)
+        let c = try HALCapture(device: agg, inputFormat: input,
                                sampleRate: f.sampleRate, channels: f.channels,
                                onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
@@ -97,7 +147,47 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         if late { c.stop() }
     }
 
+    private func installRateListeners() {
+        removeRateListeners()
+        lock.lock(); let agg = aggregate; lock.unlock()
+        var objects = [agg]
+        // Przy tapOnly zegar nie zależy od wyjścia, więc jego zmiana częstotliwości (np. do 16 kHz) nie wymaga przebudowy.
+        if layout == .withOutputSubdevice, let out = try? CoreAudioDevices.defaultOutputDevice() { objects.append(out) }
+        let watchers = objects.filter { $0 != kAudioObjectUnknown }
+            .map { DeviceWatcher(object: $0, selector: kAudioDevicePropertyNominalSampleRate) }
+        for w in watchers { w.start { [weak self] in self?.requestRebuild() } }
+        lock.lock(); rateWatchers = watchers; lock.unlock()
+    }
+
+    private func removeRateListeners() {
+        lock.lock(); let ws = rateWatchers; rateWatchers = []; lock.unlock()
+        for w in ws { w.stop() }
+    }
+
+    /// Wszystkie powody przebudowy (zmiana domyślnego wyjścia, zmiana częstotliwości) idą przez bramkę. Odroczone ponowienie
+    /// jest jedno naraz, a stan czyta w chwili wykonania, więc nie ginie ostatnia zmiana w serii.
+    private func requestRebuild() {
+        lock.lock()
+        if stopped || rebuildPending { lock.unlock(); return }
+        let now = ProcessInfo.processInfo.systemUptime
+        switch gate.decide(now: now) {
+        case .now:
+            lock.unlock()
+            // Jedna kolejka na wszystkie przebudowy: bramka pilnuje odstępu, ale nie tego, że poprzednia już skończyła.
+            rebuildQueue.async { [weak self] in self?.rebuild() }
+        case .deferred(let until):
+            rebuildPending = true
+            lock.unlock()
+            rebuildQueue.asyncAfter(deadline: .now() + max(until - now, 0)) { [weak self] in
+                guard let self else { return }
+                self.lock.lock(); self.rebuildPending = false; self.lock.unlock()
+                self.requestRebuild()
+            }
+        }
+    }
+
     private func teardown() {
+        removeRateListeners()
         lock.lock()
         let agg = aggregate, tapID = tap
         aggregate = AudioObjectID(kAudioObjectUnknown)
@@ -114,6 +204,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
         do {
             let (_, uid) = try build()
             try startCapture()
+            installRateListeners()
             h?(.deviceChanged(uid))
         } catch {
             h?(.failed("rebuild: \(error)"))

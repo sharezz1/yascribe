@@ -24,8 +24,26 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     /// Po `stop()` przebudowa z kolejki obserwatora nie może podpiąć nowego capture (P8).
     private var stopped = false
     private let watcher = DeviceWatcher(selector: kAudioHardwarePropertyDefaultInputDevice)
+    /// Lista urządzeń: wybrane ręcznie wejście znika, gdy odłączysz słuchawki, a domyślne wejście się wtedy nie zmienia.
+    private let listWatcher = DeviceWatcher(selector: kAudioHardwarePropertyDevices)
+    /// Wybór z pigułki (nil = domyślne wejście systemu) i faktycznie otwarte wejście; oba pod `lock`.
+    private var preferredUID: String?
+    private var inputUID: String?
+    private var inputName: String?
+    /// `reconsider` z dwóch obserwatorów i `select` z wątku głównego otwierałyby mikrofon równolegle (dwa capture na jeden tor).
+    private let reopenQueue = DispatchQueue(label: "meetnotes.mic.reopen")
 
     public init() {}
+
+    /// UID i nazwa wejścia, które nagrywa teraz ten tor (nie zawsze domyślne systemu).
+    public var currentInputUID: String? { lock.lock(); defer { lock.unlock() }; return inputUID }
+    public var currentInputName: String? { lock.lock(); defer { lock.unlock() }; return inputName }
+
+    /// Ręczny wybór wejścia w pigułce; nil wraca do domyślnego systemu. Dotyczy tylko bieżącego nagrania.
+    public func select(deviceUID: String?) {
+        lock.lock(); preferredUID = deviceUID; lock.unlock()
+        reopenQueue.sync { reopen() }
+    }
 
     public func prepare() throws -> TrackFormat {
         try MicrophonePermission.check()
@@ -36,27 +54,48 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     public func start(_ handler: @escaping @Sendable (AudioSourceEvent) -> Void) throws {
         lock.lock(); self.handler = handler; lock.unlock()
         try open()
-        watcher.start { [weak self] in self?.reopen() }
+        watcher.start { [weak self] in self?.reopenQueue.async { self?.reconsider() } }
+        listWatcher.start { [weak self] in self?.reopenQueue.async { self?.reconsider() } }
     }
 
     public func stop() {
         watcher.stop()
+        listWatcher.stop()
         lock.lock(); stopped = true; let c = capture; capture = nil; lock.unlock()
         c?.stop()
     }
 
+    /// Wybrane wejście, a gdy go brak (albo nic nie wybrano), domyślne systemu.
+    private func resolveDevice() throws -> AudioObjectID {
+        lock.lock(); let preferred = preferredUID; lock.unlock()
+        let uid = InputChoice.resolve(preferred: preferred, available: CoreAudioDevices.inputDevices(),
+                                      defaultUID: CoreAudioDevices.defaultInputUID())
+        if let uid, let id = try? CoreAudioDevices.deviceID(forUID: uid) { return id }
+        return try CoreAudioDevices.defaultInputDevice()
+    }
+
+    /// Zmiana domyślnego wejścia albo listy urządzeń: otwórz od nowa tylko gdy wynik wyboru jest inny niż to, co nagrywamy.
+    private func reconsider() {
+        lock.lock(); let current = inputUID, preferred = preferredUID; lock.unlock()
+        if InputChoice.needsReopen(current: current, preferred: preferred, available: CoreAudioDevices.inputDevices(),
+                                   defaultUID: CoreAudioDevices.defaultInputUID()) { reopen() }
+    }
+
     @discardableResult
     private func open() throws -> String {
-        let dev = try CoreAudioDevices.defaultInputDevice()
+        let dev = try resolveDevice()
         lock.lock(); let h = handler, late = stopped; lock.unlock()
         guard let h, !late else { return "" }
         let c = try HALCapture(device: dev, inputFormat: try CoreAudioDevices.inputFormat(of: dev),
                                sampleRate: Self.sampleRate, channels: 1, arrayGain: pow(10, Self.arrayGainDB / 20),
                                onChunk: { h(.chunk($0)) }, onFailure: { h(.failed($0)) })
         try c.start()
-        lock.lock(); let lateStop = stopped; if !lateStop { capture = c }; lock.unlock()
+        let uid = try CoreAudioDevices.uid(of: dev)
+        lock.lock(); let lateStop = stopped
+        if !lateStop { capture = c; inputUID = uid; inputName = try? CoreAudioDevices.name(of: dev) }
+        lock.unlock()
         if lateStop { c.stop(); return "" }
-        return try CoreAudioDevices.uid(of: dev)
+        return uid
     }
 
     private func reopen() {

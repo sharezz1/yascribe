@@ -5,22 +5,30 @@ import Foundation
 /// przepięcie słuchawek urywa nagranie (W§1 🆕). Narada instaluje trzy takie.
 final class DeviceWatcher: @unchecked Sendable {
     private var addr: AudioObjectPropertyAddress
+    private let object: AudioObjectID
     private let queue = DispatchQueue(label: "meetnotes.devicewatcher")
     private var block: AudioObjectPropertyListenerBlock?
 
     init(selector: AudioObjectPropertySelector) {
         addr = CoreAudioDevices.address(selector)
+        object = AudioObjectID(kAudioObjectSystemObject)
+    }
+
+    /// Nasłuch właściwości konkretnego urządzenia (np. nominalnej częstotliwości urządzenia zbiorczego).
+    init(object: AudioObjectID, selector: AudioObjectPropertySelector) {
+        addr = CoreAudioDevices.address(selector)
+        self.object = object
     }
 
     func start(_ onChange: @escaping @Sendable () -> Void) {
         let b: AudioObjectPropertyListenerBlock = { _, _ in onChange() }
         block = b
-        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, queue, b)
+        AudioObjectAddPropertyListenerBlock(object, &addr, queue, b)
     }
 
     func stop() {
         guard let b = block else { return }
-        AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, queue, b)
+        AudioObjectRemovePropertyListenerBlock(object, &addr, queue, b)
         block = nil
     }
 }
