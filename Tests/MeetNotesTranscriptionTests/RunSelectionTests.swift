@@ -10,7 +10,8 @@ import MeetNotesSessionFormat
     let old = "2026-10-21T10-00-00Z-aaaa"
     let new = "2026-10-23T09-00-00Z-bbbb"
 
-    enum State { case running, thrown, partial, empty, complete }
+    /// `noFinish`: transkrypt i `run.json` bez `finishedAt`; `legacy`: sam `transcript.json` (bez `run.json` i `input.json`).
+    enum State { case running, thrown, partial, empty, complete, noFinish, legacy }
 
     func session() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("runsel-\(UUID().uuidString)")
@@ -27,13 +28,14 @@ import MeetNotesSessionFormat
         let dir = RunDirectory(session: session, runID: id)
         try FileManager.default.createDirectory(at: dir.url.appendingPathComponent("chunks"), withIntermediateDirectories: true)
         if state == .thrown { return } // padło zaraz po utworzeniu katalogu
+        if state == .legacy { return try JSONFile.save(Transcript(utterances: [line(text)], failedChunks: []), to: dir.transcript) }
         try JSONFile.save(RunInput(snapshot: s, gate: EnergyGate().config, maxChunkSeconds: 59, crosstalk: CrosstalkFilter(),
                                    trackFrames: ["system": 100]), to: dir.input)
         if state == .running { return }
         let gap = ChunkFailure(track: "system", index: 0, start: 0, end: 59, error: "offline")
         let t = Transcript(utterances: state == .empty ? [] : [line(text)], failedChunks: state == .partial ? [gap] : [])
         try JSONFile.save(t, to: dir.transcript)
-        try JSONFile.save(RunMetadata(runID: id, snapshot: s, startedAt: Date(), finishedAt: Date(), chunkCount: 1, requestCount: 1,
+        try JSONFile.save(RunMetadata(runID: id, snapshot: s, startedAt: Date(), finishedAt: state == .noFinish ? nil : Date(), chunkCount: 1, requestCount: 1,
                                       audioSecondsSent: 59, failedChunkCount: t.failedChunks.count, languageFlagCount: 0),
                           to: dir.metadata)
     }
@@ -148,6 +150,83 @@ import MeetNotesSessionFormat
         #expect(try gate(.partial, .complete))
         #expect(try gate(.complete, .complete))
         #expect(try !gate(.complete, .complete, finished: old)) // wznowiony starszy, nowszy już bieżący
+    }
+
+    @Test func runWithoutFinishedAtIsNotPromoted() throws {
+        let s = try session()
+        try write(s, old, .complete, snapshot: try snapshot())
+        try write(s, new, .noFinish, snapshot: try snapshot())
+        let sel = RunSelection.of(session: s)
+        #expect(sel.currentID == old)
+        #expect(sel.notPromoted?.reason == .unfinished)
+        #expect(!RunSelection.shouldPostProcess(session: s, runID: new))
+    }
+
+    @Test func garbageFilesAreTreatedAsUnavailable() throws {
+        let s = try session()
+        try write(s, old, .complete, snapshot: try snapshot(), text: "old")
+        try write(s, new, .complete, snapshot: try snapshot())
+        let dir = RunDirectory(session: s, runID: new)
+        try Data("{not json".utf8).write(to: dir.transcript)
+        try Data("garbage".utf8).write(to: dir.metadata)
+        try Data("[]".utf8).write(to: dir.input)
+        let sel = RunSelection.of(session: s)
+        #expect(sel.currentID == old)
+        #expect(sel.transcript?.utterances.first?.text == "old")
+        #expect(sel.notPromoted == RunSelection.Attempt(snapshot: nil, reason: .unfinished))
+        // Sam uszkodzony przebieg: najnowszy katalog, bez transkryptu i migawki.
+        let t = try session()
+        try write(t, new, .thrown, snapshot: try snapshot())
+        try Data("{".utf8).write(to: RunDirectory(session: t, runID: new).transcript)
+        let lone = RunSelection.of(session: t)
+        #expect(lone.currentID == new && lone.transcript == nil && lone.snapshot == nil)
+    }
+
+    @Test func legacyRunWithoutMetadataIsSelectableByFallback() throws {
+        let s = try session()
+        try write(s, old, .legacy, snapshot: try snapshot(), text: "legacy")
+        let sel = RunSelection.of(session: s)
+        #expect(sel.currentID == old && !sel.currentIsComplete && sel.snapshot == nil)
+        #expect(sel.transcript?.utterances.first?.text == "legacy")
+        #expect(RunSelection.shouldPostProcess(session: s, runID: old))
+        // Obok ukończonego nowszego — nowszy.
+        try write(s, new, .complete, snapshot: try snapshot())
+        #expect(RunSelection.of(session: s).currentID == new)
+    }
+
+    @Test func resumedRejectedAttemptPromotesAndPostProcessesOnce() throws {
+        let s = try session()
+        try write(s, old, .complete, snapshot: try snapshot())
+        try write(s, new, .partial, snapshot: try snapshot(language: .english))
+        #expect(!RunSelection.shouldPostProcess(session: s, runID: new))
+        // „Resume Transcription with …": ten sam katalog kończy się bez luk.
+        try write(s, new, .complete, snapshot: try snapshot(language: .english))
+        #expect(RunSelection.of(session: s).currentID == new)
+        #expect(RunSelection.shouldPostProcess(session: s, runID: new))
+        #expect(!RunSelection.shouldPostProcess(session: s, runID: old))
+    }
+
+    @Test func olderCorrectionCannotTitleNewCurrentRun() throws {
+        // A zakwalifikowany, korekta trwa; w tym czasie B kończy się i zostaje bieżącym — bramka przed autotytułem A: nie.
+        let s = try session()
+        try write(s, old, .complete, snapshot: try snapshot())
+        #expect(RunSelection.shouldPostProcess(session: s, runID: old)) // start łańcucha A
+        try write(s, new, .complete, snapshot: try snapshot(language: .english))
+        #expect(!RunSelection.shouldPostProcess(session: s, runID: old)) // autotytuł A
+        #expect(RunSelection.shouldPostProcess(session: s, runID: new))
+    }
+
+    @Test func retryCorrectionUsesSelectedRunLanguageAfterReload() throws {
+        // `retryCorrection` = `RunLanguage.of(item.runSnapshot, fallback: preset)`, a `runSnapshot` pochodzi z `RunSelection.of`.
+        let s = try session()
+        let sessionPreset = try snapshot().preset // preset.json sesji: polski
+        try write(s, old, .complete, snapshot: try snapshot())
+        try write(s, new, .complete, snapshot: try snapshot(language: .english))
+        for _ in 0..<2 { #expect(RunLanguage.of(RunSelection.of(session: s).snapshot, fallback: sessionPreset).language == .english) }
+        let t = try session()
+        try write(t, old, .complete, snapshot: try snapshot())
+        try write(t, new, .complete, snapshot: try autoSnapshot())
+        #expect(RunLanguage.of(RunSelection.of(session: t).snapshot, fallback: sessionPreset) == RunLanguage(language: nil, isAuto: true))
     }
 
     @Test func reloadGivesTheSameSelection() throws {

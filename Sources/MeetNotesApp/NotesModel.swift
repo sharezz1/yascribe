@@ -19,7 +19,8 @@ final class NotesModel {
     var generation: [String: GenState] = [:]
     /// Bieżący krok generowania (klucz: id sesji) — „Condensing part 2 of 6 (pass 1)…"; `nil` poza generowaniem.
     private(set) var progress: [String: NoteProgress] = [:]
-    private(set) var correcting: Set<String> = []
+    /// Sesja → przebieg, którego korekta trwa. Starsza korekta, kończąc się, nie zdejmuje stanu nowszej (fix round 1, I2).
+    private(set) var correcting: [String: String] = [:]
     private(set) var titling: Set<String> = []
     /// Powód ostatniego nieudanego przebiegu korekty (klucz: id sesji). Znika po udanym ponowieniu.
     private(set) var correctionFailure: [String: String] = [:]
@@ -100,7 +101,7 @@ final class NotesModel {
         onChange()
     }
 
-    func isCorrecting(_ id: String) -> Bool { correcting.contains(id) }
+    func isCorrecting(_ id: String) -> Bool { correcting[id] != nil }
     func isTitling(_ id: String) -> Bool { titling.contains(id) }
     func correctionFailureMessage(_ id: String) -> String? { correctionFailure[id] }
 
@@ -108,7 +109,7 @@ final class NotesModel {
     /// albo padła (całkiem lub z częścią partii: „N parts kept as heard”), albo jej nie ma (np. aplikacja zamknięta w trakcie).
     func canRetryCorrection(_ item: SessionItem) -> Bool {
         // Bez wypowiedzi (np. wszystkie okna padły offline) nie ma czego poprawiać: przycisk nic by nie zrobił; wtedy jest „Retry Failed Parts”.
-        guard !correcting.contains(item.id), state(item.id) != .generating, item.runID != nil,
+        guard correcting[item.id] == nil, state(item.id) != .generating, item.runID != nil,
               let transcript = item.transcript, !transcript.utterances.isEmpty else { return false }
         guard correctionAssignment(for: item) != nil else { return false }
         // Własny model korekty pozwala puścić ją jeszcze raz także po udanej, żeby porównać modele (nadpisuje corrected.json).
@@ -142,7 +143,7 @@ final class NotesModel {
         let link = NotesStore(session: sessionURL).readMeta().calendarEvent
         let input = Replacement.apply(transcript, rules: rules)
         correctionFailure[id] = nil
-        correcting.insert(id)
+        correcting[id] = runID
         onChange()
         let limits = ChatLimits.for(client.provider, call: .correctionBatch)
         // Kontekst lokalnego serwera sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); API: bez budżetu.
@@ -153,10 +154,12 @@ final class NotesModel {
         let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
                                      temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used)
             .correct(input, language: language)
-        correcting.remove(id)
+        // Stan sesji należy do najnowszej korekty: starsza ani go nie zdejmuje, ani nie zgłasza porażki za nowszy przebieg.
+        let owner = correcting[id] == runID
+        if owner { correcting[id] = nil }
         defer { onChange() }
         if result.failedCompletely {
-            correctionFailure[id] = result.firstError ?? "The correction didn't go through."
+            if owner { correctionFailure[id] = result.firstError ?? "The correction didn't go through." }
             return transcript
         }
         if result.batches > 0 {
@@ -179,7 +182,7 @@ final class NotesModel {
         guard !isMoving() else { report(Self.movingMessage); return }
         guard state(id) != .generating else { return }
         // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
-        guard !correcting.contains(id) else { return }
+        guard correcting[id] == nil else { return }
         guard let source = item.transcript(corrected: useCorrected) else {
             generation[id] = .failed("This meeting has no transcript yet.")
             return
@@ -238,7 +241,7 @@ final class NotesModel {
     func setPreview(_ id: String, generating: NoteProgress? = nil, correcting isCorrecting: Bool = false) {
         generation[id] = generating == nil ? nil : .generating
         progress[id] = generating
-        if isCorrecting { correcting.insert(id) } else { correcting.remove(id) }
+        correcting[id] = isCorrecting ? "preview" : nil
     }
 
     /// „Cancel" przy generowaniu: zatrzymuje kolejne wywołania serwera i od razu zwalnia sesję (bez błędu, bez notatki).
@@ -272,6 +275,8 @@ final class NotesModel {
             working = await runCorrection(sessionURL: sessionURL, runID: runID, assignment: corr,
                                           language: snapshot.language, transcript: transcript)
         }
+        // Korekta bywa wolna: w tym czasie nowszy przebieg mógł zostać bieżącym — wtedy autotytuł z tego tekstu nie powstaje (R23).
+        guard RunSelection.shouldPostProcess(session: sessionURL, runID: runID) else { return }
         // Ten sam wybór modelu co przy „Generate notes": preset nagrania → domyślny → dowolny z `summary` (`SummaryModel`).
         let info = presetsInfo()
         if let choice = SummaryModel.resolve(frozen: snapshot.preset, override: saved?.usable(.summary, knownProviders: known),
@@ -285,7 +290,9 @@ final class NotesModel {
                                          transcript: Replacement.apply(working, rules: replacementRules()),
                                          notesLanguage: snapshot.preset.effectiveNotesLanguage,
                                          store: NotesStore(session: sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
-                                         maxTokens: limits.maxTokens, onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
+                                         maxTokens: limits.maxTokens,
+                                         stillCurrent: { RunSelection.shouldPostProcess(session: sessionURL, runID: runID) },
+                                         onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
             titling.remove(id)
             onChange()
         }

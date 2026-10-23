@@ -4,9 +4,9 @@ import MeetNotesSessionFormat
 
 /// Który przebieg sesji jest bieżący (R23, Task 10b). Bieżący = wyświetlany, przeszukiwany, poprawiany i streszczany:
 /// najnowszy UKOŃCZONY (`run.json` z `finishedAt`), z niepustym transkryptem i bez luk. Nieudana, przerwana, częściowa
-/// albo trwająca próba („Transcribe again…") nie zasłania działającego transkryptu. Gdy żaden przebieg się nie kwalifikuje —
-/// najnowszy z niepustym transkryptem (pusta próba nie zasłania starego tekstu z lukami), potem jak przed 2.1: najnowszy
-/// z transkryptem, a bez transkryptów najnowszy katalog.
+/// albo trwająca próba („Transcribe again…") nie zasłania działającego transkryptu. Kolejność (R23 z poprawką R25):
+/// 1) najnowszy kwalifikujący się, 2) najnowszy z NIEPUSTYM transkryptem (pusta próba nie zasłania starego tekstu z lukami),
+/// 3) najnowszy z jakimkolwiek transkryptem, 4) najnowszy katalog.
 /// Najnowsza próba (leksykalnie najnowszy katalog) zostaje celem wznowienia i odniesieniem retencji audio (`latestRunID`).
 public struct RunSelection: Equatable, Sendable {
     /// Dlaczego najnowsza próba nie została bieżącą. „W toku" rozpoznaje dopiero aplikacja (dysk tego nie wie).
@@ -79,7 +79,8 @@ public struct RunSelection: Equatable, Sendable {
 
     /// Czy po zakończeniu przebiegu `runID` puścić łańcuch korekta → autotytuł (R23 pkt 4): tylko gdy został bieżącym i się
     /// kwalifikuje. Wyjątek: pierwsza transkrypcja nagrania (żaden inny przebieg nie ma transkryptu) — bieżąca z luką dostaje
-    /// łańcuch jak przed 2.1. Próba z lukami albo pusta obok wcześniejszego transkryptu — nie.
+    /// łańcuch jak przed 2.1. Próba z lukami albo pusta obok wcześniejszego transkryptu — nie. Wołane ponownie przed autotytułem
+    /// i przed jego zapisem: w trakcie wolnej korekty nowszy przebieg mógł zostać bieżącym (fix round 1, I2).
     public static func shouldPostProcess(session: URL, runID: String) -> Bool {
         let sel = of(session: session)
         guard sel.currentID == runID else { return false }
