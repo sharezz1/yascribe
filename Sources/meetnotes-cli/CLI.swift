@@ -329,8 +329,10 @@ struct CLI {
             for (text, kind) in rows {
                 let cells = views.map { name, t -> String in
                     let before = count(text, in: t), after = count(text, in: Replacement.apply(t, rules: rules))
-                    if kind == "Alias" ? after > 0 : after == 0 { failed = true }
-                    return "\(name) \(before) -> \(after)"
+                    // Alias różniący się od Terma tylko wielkością liter (np. Kopt → KOPT) jest podmieniany poprawnie, ale licznik go nie odróżni (F9).
+                    let caseOnly = kind == "Alias" && UserDictionary.aliasOnlyNormalizesCase(alias: text, term: term.text)
+                    if kind == "Alias" ? (after > 0 && !caseOnly) : after == 0 { failed = true }
+                    return "\(name) \(before) -> \(after)" + (caseOnly ? " (tylko wielkość liter)" : "")
                 }
                 print("\(kind.padding(toLength: 5, withPad: " ", startingAt: 0)) \(text.padding(toLength: 8, withPad: " ", startingAt: 0)) " + cells.joined(separator: "  |  "))
             }
