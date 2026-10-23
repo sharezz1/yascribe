@@ -148,6 +148,30 @@ import Testing
         #expect(r.report.riskyLeftOff == 1)
     }
 
+    @Test func replacementsRowWithExtraColumnsIsRejected() {
+        // R15b: trzecia niepusta kolumna = wiersz poza formatem `fraza<TAB>zapis`: nie jest czytany jako dwie pierwsze kolumny.
+        let r = import1(nil, "Rokm\tNimbu\tnote\nDorna\tDorek\t\nRoky\tNimbu\n")
+        #expect(term(r.dictionary, "Nimbu")?.aliases == [DictionaryAlias("Roky")])
+        #expect(term(r.dictionary, "Dorek")?.aliases == [DictionaryAlias("Dorna")]) // pusta trzecia kolumna (ogon tabulatora) jest dozwolona
+        #expect(r.report.rejected == 1)
+        #expect(r.report.aliasesAdded == 2)
+        #expect(r.report.summary == "2 terms, 2 aliases, 0 risky left off, 0 conflicts, 1 rejected")
+        // Cel odrzuconego wiersza nie powstaje jako Term.
+        #expect(import1(nil, "x\tOnlyHere\textra\n").dictionary.terms.isEmpty)
+    }
+
+    @Test func multiFileImportSumsConflictsAndRejectionsAcrossFiles() {
+        let r = DictionaryTransfer.importFiles(
+            vocabularies: ["Alpha\nBeta\n#Tag\n"],
+            replacements: ["x\tAlpha\nX\tBeta\nbad\tGamma\tcol\n", "y\tBeta\nY\tAlpha\nz\t#Hash\n"],
+            into: UserDictionary())
+        // Plik 1: konflikt X (Alpha ma x) i odrzucony wiersz z nadmiarem kolumn; plik 2: konflikt Y (Beta ma y) i odrzucony cel z `#`; (`#Tag` w vocab to komentarz, nie wpis).
+        #expect(r.report.conflicts == [.init(alias: "X", keptBy: "Alpha", skippedFor: "Beta"), .init(alias: "Y", keptBy: "Beta", skippedFor: "Alpha")])
+        #expect(r.report.rejected == 2)
+        #expect(term(r.dictionary, "Alpha")?.aliases == [DictionaryAlias("x")])
+        #expect(term(r.dictionary, "Beta")?.aliases == [DictionaryAlias("y")])
+    }
+
     @Test func riskySectionEndsAtNextHeader() {
         let repl = "#! ---------- risky ----------\n#! note\nko pt\tKopt\n# plain comment\n# ---------- 9. Names ----------\nŻorbit\tOrbit\n"
         let r = import1(nil, repl)
