@@ -475,6 +475,34 @@ enum Snapshots {
                 try render("dictionary-import-report", size: CGSize(width: 500, height: 480), dark: dark, model: model) {
                     DictionaryImportSheet(report: report, files: ["vocab_core.txt", "replacements.tsv"], onDone: {})
                 }
+                // Faza 2.1 T9 (odbiór §8.1 w UI): wymyślony transkrypt ze starymi zapisami (Rokm, Dorna, Doomem) pod słownikiem z Aliasami —
+                // widok surowy, poprawiony i preset bez korekty pokazują Termy, a pliki na dysku zostają nietknięte.
+                if var item = model.sessions.first(where: { $0.id.hasSuffix("bb22") }) {
+                    let fixture = """
+                    {"utterances":[
+                      {"speaker":"them","start":3,"end":8,"text":"Rokm will send the invoice, and Dorna checks it before we close the month","words":[],"approximateTiming":false},
+                      {"speaker":"me","start":10,"end":14,"text":"We can talk on Doomem tomorrow, Rokm has the link","words":[],"approximateTiming":false},
+                      {"speaker":"them","start":16,"end":20,"text":"Great, Dorna will join at ten","words":[],"approximateTiming":false}
+                    ],"failedChunks":[]}
+                    """
+                    let raw = try JSONDecoder().decode(Transcript.self, from: Data(fixture.utf8))
+                    model.dictionary = UserDictionary(terms: [term("Nimbu", .high, [DictionaryAlias("Rokm")]), term("Dorek", .normal, [DictionaryAlias("Dorna")]),
+                                                              term("Zoom", .normal, [DictionaryAlias("Doomem")])])
+                    item.runID = "snapshot-run"
+                    item.transcript = raw
+                    var proofread = raw
+                    proofread.utterances[1].text = "We can talk on Doomem tomorrow. Rokm has the link."
+                    let dictTranscript = MeetingViewState(); dictTranscript.tab = .transcript
+                    var withCorrection = item
+                    withCorrection.corrected = CorrectedTranscript(transcript: proofread, model: "deepseek/deepseek-v4.1-flash", batches: 1, failedBatches: 0, rejectedLines: 0)
+                    dictTranscript.useCorrected = false
+                    try render("dictionary-transcript-raw", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: withCorrection, state: dictTranscript) }
+                    dictTranscript.useCorrected = true
+                    try render("dictionary-transcript-corrected", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: withCorrection, state: dictTranscript) }
+                    // Preset bez roli korekty (summary-only „Polish"): brak przełącznika wersji i chipa modelu korekty, Replacement działa tak samo.
+                    if let plain = model.presets.presets.first(where: { $0.correction == nil }) { model.activePresetID = plain.id }
+                    try render("dictionary-transcript-no-correction", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: item, state: dictTranscript) }
+                }
                 (model.dictionary, model.presets, model.providers.providers, model.activePresetID) = dictBefore
                 // Auto + rola korekty: ostrzeżenie o języku i pole „Extra instructions" (nowy, niezapisany preset = „Unsaved").
                 // Uwaga (T3): całe okno (`ContentView` z `NavigationSplitView`) renderuje się poza ekranem jako pusta plansza —
