@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-23-faza21-slownik-design.md` (pojęcia: `GLOSSARY.md`). Gałąź: `faza21-slownik`.
 
-**Przydział modeli (propozycja, jak w planach 1.5):** T1 Sonnet · T2 Haiku · T3 Opus · T4 Sonnet · T5 Sonnet · T6 Sonnet · T7 Opus · T8 Sonnet · T9 Haiku.
+**Przydział modeli (propozycja, jak w planach 1.5):** T1 Sonnet · T2 Haiku · T3 Opus · T4 Sonnet · T5 Sonnet · T6 Sonnet · T7 Opus · T8 Sonnet · T10 Sonnet (dodane 2026-10-23, D13; kolejność wykonania: po T8, przed T9) · T9 Haiku.
 
 ## Global Constraints
 
@@ -220,6 +220,28 @@
 - [ ] **Step 3: Sprawdź** `swift build --disable-keychain --product MeetNotesApp` i `scripts/test.sh` (zielone, bez zmiany liczby testów).
 - [ ] **Step 4: Scena migawek:** dodaj w `Snapshots.swift` cztery sceny (pusty, lista, edycja, raport importu) i uruchom `scripts/snapshot.sh`; porównaj z makietą, drugą rundę poprawek zrób jedną partią (`macos.md` §9).
 - [ ] **Step 5: Commit** `git add Sources/MeetNotesApp/DictionaryView.swift Sources/MeetNotesApp/DictionaryViewState.swift Sources/MeetNotesApp/MeetNotesApp.swift Sources/MeetNotesApp/Snapshots.swift` · „Faza 2.1: zakładka Dictionary".
+
+### Task 10: Transcribe again — zmiana modelu transkrypcji (D13)
+
+**Files:**
+- Modify: `Sources/MeetNotesProviders/Preset.swift` (dodaj `Preset.withASR(_:language:) -> Preset`)
+- Modify: `Sources/MeetNotesApp/AppModel.swift` (`transcribe(sessionURL:preset:asr:language:)` — nowy wariant obok istniejącego `transcribe(sessionURL:preset:)` z linii ~601, który zostaje dla wywołań bez zmiany)
+- Create: `Sources/MeetNotesApp/TranscribeAgainButton.swift` (przycisk + popover, wzór: `MeetingModelChip.swift`; stan w `ObservableObject`, bez `@State`)
+- Modify: `Sources/MeetNotesApp/MeetingTabs.swift` (nagłówek karty Transcript, obok istniejących akcji, ok. linii 157–180)
+- Modify: `Sources/MeetNotesApp/Snapshots.swift` (scena: karta Transcript z przyciskiem i otwartym popoverem)
+- Test: `Tests/MeetNotesProvidersTests/PresetASROverrideTests.swift`
+
+**Interfaces:**
+- Consumes: `Preset` (`asr: RoleAssignment?`, `language: LanguageCode?`, `validate()`), `RoleProviders.choices(_:role:current:)`, `AppModel.probeCache`, `RunSnapshot(preset:provider:probe:modelFingerprint:)`, `AppModel.run` (prywatne; wywoływane z nowego wariantu `transcribe`), `SessionItem.audioDeletedAfterDays`, `AppModel.transcribing`.
+- Produces: `public func Preset.withASR(_ asr: RoleAssignment, language: LanguageCode?) -> Preset` (kopia z podmienionym `asr` i `language`, reszta pól bez zmian, `id` i `name` bez zmian); `AppModel.transcribe(sessionURL: URL, preset: Preset, asr: RoleAssignment, language: LanguageCode?)`.
+
+- [ ] **Step 1: Napisz testy** (w `@Suite struct PresetASROverrideTests`): `withASRReplacesOnlyASRAndLanguage` (id, name, correction, summary, notesLanguage, promptów i pozostałych pól równe oryginałowi; `asr` i `language` nowe) oraz `withASRResultStillValidates` (wynik przechodzi `validate()`; z pustym modelem `validate()` rzuca jak dla zwykłego presetu).
+- [ ] **Step 2: Uruchom** `scripts/test.sh --filter PresetASROverrideTests`; oczekiwane: FAIL.
+- [ ] **Step 3: Zaimplementuj** `Preset.withASR`; w `AppModel` nowy wariant `transcribe` budujący `RunSnapshot` z `preset.withASR(asr, language: language)`, sondą z `probeCache.result(provider:model:role:.asr,language:)` (brak sondy nie blokuje) i `modelFingerprint` jak w istniejącym wariancie; te same bramki co dziś (`transcriptionClient(for:)`, `transcribing`, przenoszenie nagrań).
+- [ ] **Step 4: Uruchom** testy i pełne `scripts/test.sh`; oczekiwane: zielone, liczba testów = poprzednia + 2.
+- [ ] **Step 5: UI:** przycisk „Transcribe again…" na karcie Transcript (widoczny, gdy jest transkrypt); wyłączony z podpowiedzią, gdy `audioDeletedAfterDays != nil` albo trwa transkrypcja; popover: dostawca (`RoleProviders.choices` dla `.asr`), model (jak w `MeetingModelChip`), język (z presetu nagrania jako domyślny), przycisk „Transcribe". Scena migawek; `scripts/snapshot.sh`.
+- [ ] **Step 6: Commit** `git add Sources/MeetNotesProviders/Preset.swift Sources/MeetNotesApp/AppModel.swift Sources/MeetNotesApp/TranscribeAgainButton.swift Sources/MeetNotesApp/MeetingTabs.swift Sources/MeetNotesApp/Snapshots.swift Tests/MeetNotesProvidersTests/PresetASROverrideTests.swift` · „Faza 2.1: Transcribe again — zmiana modelu transkrypcji".
+- [ ] **Step 7: Mutacja bramki** (po commicie): `withASR` ignoruje `language` → `withASRReplacesOnlyASRAndLanguage` pada → `git checkout Sources/MeetNotesProviders/Preset.swift`.
 
 ### Task 9: Odbiór agenta i dokumenty
 

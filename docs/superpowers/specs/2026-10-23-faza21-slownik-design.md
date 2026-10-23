@@ -48,6 +48,7 @@ Wszystkie przyjęte 2026-10-23 („tak" na rekomendacje).
 | D10 | Zakładka Dictionary (osobna, nie sekcja ustawień): lista z wyszukiwaniem, dodaj / edytuj / usuń Term, edytowalna lista Aliasów z przełącznikiem risky, priorytet, Import… i Export…, licznik „N terms don't fit the correction prompt" dla modelu korekty presetu aktywnego dla nowych nagrań (z nazwą modelu; nadpisania modelu w pojedynczym spotkaniu nie są objęte). |
 | D11 | Najpierw jedna statyczna makieta zakładki (stan pusty, lista, edycja Terma, raport importu) w `docs/design/makiety/`, zasady przeglądu z `macos.md` (najwyżej dwie rundy). |
 | D12 | Odbiór: patrz §8. |
+| D13 | Dodane 2026-10-23 na prośbę użytkownika: **„Transcribe again…"** na karcie Transcript — wybór dostawcy, modelu (spośród obsługujących ASR) i języka dla istniejącego nagrania; jednorazowa akcja, nie ustawienie (bez pola `asr` w `ModelOverrides`). Nowy przebieg (`runs/<id>`) staje się bieżącym transkryptem, stary zostaje na dysku, przełącznik przebiegów w BACKLOG. Przycisk wyłączony, gdy retencja usunęła audio albo trwa transkrypcja. Powód: lokalny Parakeet nie poradził sobie z nagraniem z 2026-10-21, użytkownik chce spróbować innego modelu na tym samym nagraniu. |
 
 ## 4. Moje decyzje (nie omawiane; użytkownik może zmienić)
 
@@ -82,6 +83,8 @@ Wszystkie przyjęte 2026-10-23 („tak" na rekomendacje).
 
 **UI.** Zakładka Dictionary w pasku bocznym zastępuje obecny `LaterPhaseView` (`MeetNotesApp.swift:86`). Interfejs po angielsku, dokumenty po polsku (zasada projektu). Szczegóły wyglądu: makieta z D11.
 
+**Transcribe again (D13).** Karta Transcript dostaje przycisk „Transcribe again…" (popover jak `MeetingModelChip`: dostawca z `RoleProviders.choices(…, role: .asr, …)`, model, język). Akcja buduje kopię presetu nagrania z podmienionym `asr` i `language` (`Preset.withASR(_:language:)`), tworzy `RunSnapshot` i uruchamia istniejące `AppModel.transcribe`; po zakończeniu działa zwykły łańcuch korekta → autotytuł. Bez sondy modelu przebieg rusza (kształt domyślny), błędy API pokazuje istniejący mechanizm. Podsumowania wygenerowane wcześniej zostają do ponownego wygenerowania.
+
 ## 6. Ograniczenia projektu (obowiązują wykonawcę)
 
 Toolchain Swift 6.4 na Command Line Tools; testy tylko `scripts/test.sh`; SwiftUI bez `@State`/`@Entry`/`#Preview` (stan lokalny przez `ObservableObject` + `@StateObject`); nowe pola zapisywanych typów tylko opcjonalne; commity z jawnymi ścieżkami, nigdy `git add -A`; mutacja każdej bramki (wprowadź → test pada → `git checkout`); klucze API wpisuje tylko użytkownik. Przy zmianach w `BACKLOG.md`/ROADMAP/postępie prac aktualizacja artefaktu „Mapa faz Yascribe".
@@ -96,6 +99,8 @@ Sesja `.devdata/sessions/2026-10-21T07-29-08Z-62de` (transkrypt zawiera „Zoim"
 2. Test jednostkowy: wyłączony Alias risky nie zmienia tekstu; idempotencja Replacement; granice słów z polskimi znakami; najdłuższy Alias wygrywa; import idempotentny. *(agent)*
 3. Lokalny model z kontekstem 4096 dostaje listę przyciętą do budżetu, a licznik w UI pokazuje, ile Termów nie weszło. *(agent, na danych z `.devdata`)*
 4. Nowe nagranie ze spotkania powiązanego z wydarzeniem, na presecie **z modelem korekty** (bez korekty Attendee hint niczego nie poprawia, bo imiona nie są celami Replacement): imiona uczestników widoczne w poleceniu korektora (log przebiegu lub migawka) i poprawnie zapisane w transkrypcie i notatce; prawdziwe Termy i Aliasy wpisane wcześniej w zakładce. *(użytkownik)*
+
+5. Dla nagrania z 2026-10-21: „Transcribe again…" z innym modelem tworzy drugi przebieg, bieżący transkrypt zmienia się, stary przebieg zostaje w `runs/`. *(użytkownik)*
 
 ## 9. Niewiadome
 
