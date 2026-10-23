@@ -45,8 +45,11 @@ public struct UserDictionary: Codable, Equatable, Sendable {
 
     public init(terms: [DictionaryTerm] = []) { self.terms = terms }
 
-    /// Klucz porównań: NFC, bez rozróżniania wielkości liter.
-    private static func key(_ s: String) -> String { s.precomposedStringWithCanonicalMapping.lowercased() }
+    /// Klucz porównań: NFC i pełne składanie wielkości liter, takie jak w dopasowaniu `(?i:)` Replacement (ICU): „Straße" ≡ „STRASSE",
+    /// „ς" ≡ „σ". Samo `lowercased()` ich nie zrównuje, więc Alias „STRASSE" innego Terma przepisałby „Straße" przy drugim przejściu (R11).
+    static func key(_ s: String) -> String {
+        s.precomposedStringWithCanonicalMapping.folding(options: .caseInsensitive, locale: nil).precomposedStringWithCanonicalMapping
+    }
 
     private static func clean(_ s: String) -> String {
         s.trimmingCharacters(in: .whitespacesAndNewlines).precomposedStringWithCanonicalMapping
