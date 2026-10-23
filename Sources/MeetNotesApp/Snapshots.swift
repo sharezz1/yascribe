@@ -170,6 +170,10 @@ enum Snapshots {
                         try render("transcribe-again-popover", size: CGSize(width: 340, height: 330), dark: dark, model: model) { TranscribeAgainButton(item: picked, inlinePopover: true) }
                         var noAudio = picked; noAudio.audioDeletedAfterDays = 30
                         try render("meeting-transcript-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: noAudio, state: transcriptView) }
+                        // F6 (D13): pierwsza próba bez transkryptu — w stanie „No transcript yet" także „Transcribe again…".
+                        var noTranscript = picked
+                        noTranscript.transcript = nil; noTranscript.corrected = nil; noTranscript.latestAttemptID = "snapshot-run-2"
+                        try render("meeting-transcript-empty-again", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: noTranscript, state: transcriptView) }
                         // Task 10b (R23): nowa próba z lukami nie zasłania starego transkryptu — baner i „Resume Transcription with …".
                         if let p = model.presets.presets.first {
                             var retried = picked

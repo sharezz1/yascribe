@@ -293,6 +293,8 @@ struct TranscriptTab: View {
                         if item.latestAttemptID != nil {
                             Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }.buttonStyle(.pill).disabled(correcting)
                         }
+                        // D13 (F6): po próbie bez transkryptu inny model i język też do wyboru — ta sama bramka co w nagłówku.
+                        TranscribeAgainButton(item: item)
                     }
                     .disabled(moving)
                 }

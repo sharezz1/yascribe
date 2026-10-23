@@ -1,3 +1,4 @@
+import MeetNotesNotes
 import MeetNotesProviders
 import SwiftUI
 
@@ -20,10 +21,8 @@ struct TranscribeAgainButton: View {
 
     private var preset: Preset? { model.presetFor(sessionURL: item.url) }
     private var blocker: String? {
-        if let n = item.audioDeletedAfterDays { return "Audio was deleted after \(n) days" }
-        if model.isTranscribing(item) { return "This recording is being transcribed" }
-        if model.recordingsMove != nil { return "Meetings are being moved to a new folder" }
-        return nil
+        TranscribeAgain.blocker(audioDeletedAfterDays: item.audioDeletedAfterDays, transcribing: model.isTranscribing(item),
+                                moving: model.recordingsMove != nil)
     }
     private func provider(_ id: UUID?) -> Provider? { model.providers.providers.first { $0.id == id } }
     private var providers: [Provider] {
