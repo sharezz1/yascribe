@@ -95,6 +95,7 @@ import/eksport `vocab_core.txt` i `replacements.tsv`, zakładka Dictionary, Term
 Spec `docs/superpowers/specs/2026-10-23-faza21-slownik-design.md`, plan `docs/superpowers/plans/2026-10-23-faza21-slownik.md`, raport odbioru agenta `docs/superpowers/reports/F21-odbior.md` (kroki użytkownika w §4), odłożone w BACKLOG „Z fazy 2.1".
 **Otwarte:** odbiór użytkownika (prawdziwe Termy/Aliasy, import GCX, nagranie z wydarzeniem na presecie z korektą, „Transcribe again…" na nagraniu z 2026-10-21), **2.1b** (klik na słowo → Alias), spike word boostingu.
 **Minimalizm w Transcript i Summary** (gałąź `faza21-minimalizm` od `faza21-slownik`, niescalona; jedna linia narzędzi + menu ⋯, czytelne nazwy modeli przez `ModelName`/`ModelNameCache`; testy **738/738**; spec `docs/superpowers/specs/2026-10-24-transcript-summary-minimalizm-design.md`, plan `docs/superpowers/plans/2026-10-24-faza21-minimalizm.md`; odbiór użytkownika na żywo zaliczony 2026-10-24).
+**Presets i Templates jak Dictionary** (gałąź `faza21-okna` od `faza21-minimalizm`; lista w karcie + okno edycji (`EditorSheet`), „Advanced" (sonda, Extra instructions) w formularzu presetu, zapis ⌘S/⌘↩ (Return nie zapisuje, pola wieloliniowe); testy **744/744**; spec `docs/superpowers/specs/2026-10-24-presets-templates-okno-design.md`, plan `docs/superpowers/plans/2026-10-24-faza21-okna-presets-templates.md`; do odbioru użytkownika: okno presetu (wysokość, „Advanced"), Return w polach wieloliniowych, ⌘S/⌘↩, Delete/Duplicate/Reset szablonu, ciemny motyw).
 
 ## Twarde zasady
 
