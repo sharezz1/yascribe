@@ -17,6 +17,7 @@ public struct MeetNotesPaths: Sendable {
     public var presets: URL { root.appendingPathComponent("presets.json") }
     public var settings: URL { root.appendingPathComponent("settings.json") }
     public var probeCache: URL { root.appendingPathComponent("probe-cache.json") }
+    public var modelNames: URL { root.appendingPathComponent("model-names.json") }
     public var templates: URL { root.appendingPathComponent("templates.json") }
     public var dictionary: URL { root.appendingPathComponent("dictionary.json") }
     public var sessions: URL { root.appendingPathComponent("sessions") }
