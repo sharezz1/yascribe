@@ -94,6 +94,7 @@ Spec: `docs/superpowers/specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md`, p
 import/eksport `vocab_core.txt` i `replacements.tsv`, zakładka Dictionary, Termy i Attendee hint w poleceniach korektora i podsumowania (ślad `runs/<przebieg>/vocabulary.txt`), **D13 „Transcribe again…"** (kolejny przebieg z innym modelem ASR; bieżący = najnowszy ukończony, niepusty, bez luk).
 Spec `docs/superpowers/specs/2026-10-23-faza21-slownik-design.md`, plan `docs/superpowers/plans/2026-10-23-faza21-slownik.md`, raport odbioru agenta `docs/superpowers/reports/F21-odbior.md` (kroki użytkownika w §4), odłożone w BACKLOG „Z fazy 2.1".
 **Otwarte:** odbiór użytkownika (prawdziwe Termy/Aliasy, import GCX, nagranie z wydarzeniem na presecie z korektą, „Transcribe again…" na nagraniu z 2026-10-21), **2.1b** (klik na słowo → Alias), spike word boostingu.
+**Minimalizm w Transcript i Summary** (gałąź `faza21-minimalizm` od `faza21-slownik`, niescalona; jedna linia narzędzi + menu ⋯, czytelne nazwy modeli przez `ModelName`/`ModelNameCache`; testy **738/738**; spec `docs/superpowers/specs/2026-10-24-transcript-summary-minimalizm-design.md`, plan `docs/superpowers/plans/2026-10-24-faza21-minimalizm.md`; do odbioru użytkownika: popover z ⋯, ciemny motyw, wąskie okno).
 
 ## Twarde zasady
 
