@@ -13,7 +13,9 @@ zajmują to samo miejsce, teksty się ucinają. Summary ma ten sam problem: wnę
 ## Cele
 
 - Jedna linia narzędzi na zakładkę. Stałe elementy: wybór wersji (Transcript) albo szablon i „Add context" (Summary), „Copy", menu `⋯`.
-- Rzadkie akcje w `⋯`: Transcript — „Improve transcript again", „Correction model ›", „Transcribe again…"; Summary — „Summary model ›".
+- Rzadkie akcje w `⋯`: Transcript — „Improve transcript again", „Correction model: <nazwa>…", „Transcribe again…"; Summary — „Summary model: <nazwa>…".
+  Pozycje z wielokropkiem otwierają dotychczasowe popovery (dostawca, model, „Thinking"; język), a nie pod-menu: wybór modelu to kilka pól, nie lista.
+  (Korekta po sprawdzeniu kodu: makieta pokazywała „›" jak pod-menu.)
 - Wyjątki na wierzchu, bo to wtedy akcja główna: „Improve transcript" (wyróżniony) przed pierwszą korektą; „Regenerate" w Summary.
 - Informacje o stanie (kto poprawił, ile części zostało „as heard", „Made with …", „Long meeting: condensed …") jako drobna notka w `⋯`.
 - Stany przejściowe i błędy (korekta trwa, korekta padła, nowa transkrypcja nieukończona) jako **jedna linia** z jednym przyciskiem (Retry, Resume), bez osobnych bloków.
