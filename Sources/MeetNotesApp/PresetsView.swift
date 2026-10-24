@@ -87,54 +87,6 @@ struct PresetSheet: View {
     }
 }
 
-/// Wiersz listy presetów i szablonów: nazwa 13 Medium + metadane 11 pt `text2`; zaznaczenie `selection`, promień 8, bez białego bloku.
-struct PresetRow: View {
-    let title: String
-    let subtitle: String
-    var selected = false
-    var dim = false
-    /// Plakietka „Fully local" pod metadanymi (wszystkie role presetu są lokalne).
-    var fullyLocal = false
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(dim ? .mnText2 : .mnText).lineLimit(1)
-            Text(subtitle).font(.system(size: 11)).italic(dim).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
-            if fullyLocal { FullyLocalBadge().padding(.top, 3) }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(selected ? Color.mnSelection : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Pasek na dole edytora (sticky): stan po lewej, przyciski po prawej. Tło `background`, linia `line2` u góry.
-struct EditorFooter<Buttons: View>: View {
-    let dirty: Bool
-    var error: String?
-    @ViewBuilder var buttons: Buttons
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if let error {
-                StateLabel(.bad, error)
-            } else if dirty {
-                HStack(spacing: 6) {
-                    Circle().fill(.mnText2).frame(width: 6, height: 6).accessibilityHidden(true)
-                    Text("Unsaved changes").foregroundStyle(.mnText2)
-                }
-            }
-            Spacer(minLength: 12)
-            buttons
-        }
-        .padding(.horizontal, 28)
-        .frame(height: 56)
-        .background(.mnBackground)
-        .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
-    }
-}
-
 /// Pole nazwy (15 Medium) w stylu pola z §11.3: tło `field`, obwódka 0,5 pt, promień 7.
 struct EditorNameField: View {
     let placeholder: String
@@ -427,19 +379,5 @@ func languageName(_ c: LanguageChoice) -> String {
     case .unset: "Choose…"
     case .auto: "Auto (mixed languages)"
     case .code(let code): LanguageCode.selectable.first { $0.code == code }?.name ?? "\(code)"
-    }
-}
-
-/// Pusty edytor (nic nie wybrano): dwie linie tekstu na tokenach, bez systemowej ikony (§11.6).
-struct EmptyEditorHint: View {
-    let title: String
-    let text: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
-            Text(text).font(.callout).foregroundStyle(.mnText2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 8)
     }
 }
