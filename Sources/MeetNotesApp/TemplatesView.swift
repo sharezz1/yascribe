@@ -135,7 +135,7 @@ struct TemplateSheet: View {
 
     init(state: TemplateEditorState, meta: String, builtin: Bool, edited: Bool,
          onSave: @escaping () -> Void, onDuplicate: @escaping () -> Void, onReset: @escaping () -> Void,
-         onDelete: @escaping () -> Void = {}) {
+         onDelete: @escaping () -> Void) {
         self.state = state; self.meta = meta; self.builtin = builtin; self.edited = edited
         self.onSave = onSave; self.onDuplicate = onDuplicate; self.onReset = onReset; self.onDelete = onDelete
     }

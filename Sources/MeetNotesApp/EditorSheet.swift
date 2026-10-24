@@ -41,8 +41,8 @@ struct EditorSheet<Leading: View, Content: View>: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
             .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
-            // Drugi skrót zapisu (⌘S): przycisk ma jeden `keyboardShortcut`, więc niewidoczny bliźniak; `.hidden()` wyłączyłby skrót.
-            .background { Button("Save", action: onSave).keyboardShortcut("s", modifiers: .command).disabled(!dirty).opacity(0).accessibilityHidden(true) }
+            // Drugi skrót zapisu (⌘S): przycisk ma jeden `keyboardShortcut`, więc niewidoczny bliźniak; `.hidden()` wyłączyłby skrót; ramka 0×0 zamiast `allowsHitTesting(false)`, żeby bliźniak nie łapał kliknięć, a skrót zostawał.
+            .background { Button("Save", action: onSave).keyboardShortcut("s", modifiers: .command).disabled(!dirty).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }
         }
         .frame(width: 560)
         .frame(minHeight: 360, idealHeight: 640)

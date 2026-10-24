@@ -283,11 +283,11 @@ enum Snapshots {
                 builtin.draft?.sections?[2].instruction += " Keep it to one line."
                 try render("template-sheet-builtin", size: CGSize(width: 560, height: 560), dark: dark, model: model) {
                     TemplateSheet(state: builtin, meta: "Built-in · edited", builtin: true, edited: true,
-                                  onSave: {}, onDuplicate: {}, onReset: {})
+                                  onSave: {}, onDuplicate: {}, onReset: {}, onDelete: {})
                 }
                 let custom = TemplateEditorState(); custom.startNew()
                 try render("template-sheet-new", size: CGSize(width: 560, height: 560), dark: dark, model: model) {
-                    TemplateSheet(state: custom, meta: "Custom", builtin: false, edited: false, onSave: {}, onDuplicate: {}, onReset: {})
+                    TemplateSheet(state: custom, meta: "Custom", builtin: false, edited: false, onSave: {}, onDuplicate: {}, onReset: {}, onDelete: {})
                 }
                 // Odbiór 2026-10-16: pigułka istnieje tylko podczas nagrywania — zwinięta i rozwinięta (kontroler z wymuszonym
                 // stanem; okno, cień i przesuwanie to odbiór na żywo), plus osobno wiersze poziomów torów.
