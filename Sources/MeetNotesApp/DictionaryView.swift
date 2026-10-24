@@ -23,10 +23,10 @@ struct DictionaryView: View {
         }
         .contentBackground()
         .navigationTitle("Dictionary")
-        .sheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.closeEditor() } })) {
+        .dismissibleSheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.closeEditor() } }), onDismiss: { state.closeEditor() }) {
             DictionaryTermSheet(state: state)
         }
-        .sheet(isPresented: Binding(get: { state.importReport != nil }, set: { if !$0 { state.importReport = nil } })) {
+        .dismissibleSheet(isPresented: Binding(get: { state.importReport != nil }, set: { if !$0 { state.importReport = nil } }), onDismiss: { state.importReport = nil }) {
             if let report = state.importReport {
                 DictionaryImportSheet(report: report, files: state.importedNames) { state.importReport = nil }
             }

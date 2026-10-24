@@ -54,7 +54,7 @@ struct TemplatesView: View {
         }
         .contentBackground()
         .navigationTitle("Templates")
-        .sheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.close() } })) {
+        .dismissibleSheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.close() } }), onDismiss: { state.close() }) {
             TemplateSheet(state: state, meta: state.draft.map(meta) ?? "",
                           builtin: state.draft.map { model.notes.templates.isBuiltin(id: $0.id) } ?? false,
                           edited: state.draft.map { model.notes.templates.isEdited(id: $0.id) } ?? false,
