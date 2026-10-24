@@ -60,6 +60,7 @@ struct MeetingModelChip: View {
             Color.clear
                 .popover(isPresented: presented, arrowEdge: .bottom) { content }
                 .onChange(of: presented.wrappedValue) { _, on in if on { prefill() } }
+                .onAppear { if presented.wrappedValue { prefill() } }
         } else {
             chip
         }

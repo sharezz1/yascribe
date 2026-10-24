@@ -188,8 +188,8 @@ struct TranscriptTab: View {
     private var menuNotes: [String] {
         guard let c = item.corrected else { return [] }
         var out: [String] = []
-        if c.model != model.notes.correctionAssignment(for: item)?.model { out.append("Corrected with \(model.modelDisplayName(c.model))") }
-        if c.failedBatches + c.rejectedLines > 0 { out.append("\(c.failedBatches + c.rejectedLines) parts kept as heard") }
+        if c.model != model.notes.correctionAssignment(for: item)?.model { out.append("Corrected with \(model.modelDisplayName(c.model)) (\(c.model))") }
+        if c.failedBatches + c.rejectedLines > 0 { out.append("\(c.failedBatches + c.rejectedLines) parts kept as heard (failed a check)") }
         return out
     }
 
@@ -206,8 +206,9 @@ struct TranscriptTab: View {
                 }
             }
             if canImprove && item.corrected != nil || showsModelItem { Divider() }
-            Button("Transcribe again…") { DispatchQueue.main.async { state.transcribeAgainPopover = true } }
-                .disabled(TranscribeAgainButton.blocker(item: item, model: model) != nil)
+            let blocker = TranscribeAgainButton.blocker(item: item, model: model)
+            Button(blocker.map { "Transcribe again… (\($0))" } ?? "Transcribe again…") { DispatchQueue.main.async { state.transcribeAgainPopover = true } }
+                .disabled(blocker != nil)
             let notes = menuNotes
             if !notes.isEmpty {
                 Divider()
@@ -242,7 +243,7 @@ struct TranscriptTab: View {
                     if a.snapshot != nil {
                         Button("Resume") { model.resume(item, runID: item.latestAttemptID) }
                             .buttonStyle(.pillSmall).fixedSize().disabled(moving || correcting)
-                            .help("\(resumeLabel). Finished parts aren't paid for again.")
+                            .help("\(resumeLabel) — \(a.snapshot?.model ?? ""). Finished parts aren't paid for again.")
                     }
                 }
             }

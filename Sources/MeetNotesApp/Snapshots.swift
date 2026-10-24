@@ -138,9 +138,7 @@ enum Snapshots {
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
                     let summaryTab = MeetingViewState(); summaryTab.tab = .summary
                     try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
-                    // Faza 2.1 minimalizm: jedna linia (Template ▾ · Add context … Regenerate · Copy ⋯), menu zamknięte.
-                    try render("meeting-summary-calm", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
-                    // Faza 2.0.1: chip modelu zmieniony dla tego nagrania (z „changed" i linią pochodzenia), lokalny (bez „Thinking"), popover wprost.
+                    // Faza 2.0.1: model zmieniony (pozycja ⋯) dla tego nagrania (z „changed" i linią pochodzenia), lokalny (bez „Thinking"), popover wprost.
                     if let cloud = model.providers.providers.first(where: { !$0.isLocal }) {
                         var changed = withNotes
                         changed.notes.meta.modelOverrides = ModelOverrides(summary: RoleOverride(providerID: cloud.id, model: "anthropic/claude-sonnet-4.5", thinking: false))
