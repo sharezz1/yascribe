@@ -125,7 +125,7 @@ struct PresetForm: View {
     @ObservedObject var state: PresetEditorState
 
     private var draft: Binding<Preset> {
-        Binding(get: { state.draft ?? Preset(name: "", language: nil, asr: nil) }, set: { state.draft = $0 })
+        Binding(get: { state.draft ?? Preset(name: "", language: nil, asr: nil) }, set: { if state.draft != nil { state.draft = $0 } })
     }
 
     var body: some View {
@@ -259,6 +259,8 @@ struct RoleSection<Extra: View>: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
             .onAppear { if advanced.open == nil { advanced.open = startsExpanded(a) } }
+            // Tylko otwiera, nigdy nie zwija: zmiana dostawcy/modelu/języka na złą sondę nie może ukryć „Doesn't work in this role".
+            .onChange(of: startsExpanded(a)) { _, expanded in if expanded { advanced.open = true } }
         } else if hasExtra {
             RowDivider(); extra
         }
