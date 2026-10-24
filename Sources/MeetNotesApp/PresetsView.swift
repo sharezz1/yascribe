@@ -2,6 +2,7 @@ import MeetNotesProviders
 import SwiftUI
 
 final class PresetEditorState: ObservableObject {
+    /// Edytowana kopia; okno edycji jest otwarte, gdy nie jest `nil` (jak `DictionaryViewState.draft`).
     @Published var draft: Preset?
     /// Zapisana wersja edytowanego presetu; `nil` = nowy, jeszcze niezapisany.
     @Published var original: Preset?
@@ -17,10 +18,11 @@ final class PresetEditorState: ObservableObject {
 
     func select(_ p: Preset?) { draft = p; original = p; error = nil }
     func startNew() { draft = Preset(name: "New preset", language: nil, asr: nil); original = nil; error = nil }
-    func cancel() { draft = original; error = nil }
+    /// Zamyka okno bez zapisu; nowy, niezapisany preset znika razem z oknem.
+    func close() { draft = nil; original = nil; error = nil }
 }
 
-/// Presety (spec fazy 1, §1.5; spec 1.5 §5.4; macos.md §11.5): lista 196 pt + edytor obok, pasek Save/Cancel na dole.
+/// Presety (faza 2.1 „okna", wzorzec Dictionary): lista w karcie, klik w wiersz otwiera okno edycji.
 struct PresetsView: View {
     @Environment(AppModel.self) private var model
     @StateObject private var state: PresetEditorState
@@ -28,63 +30,32 @@ struct PresetsView: View {
     init(state: PresetEditorState = PresetEditorState()) { _state = StateObject(wrappedValue: state) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollPage(700) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        PageTitle("Presets")
-                        Spacer()
-                        Button { state.startNew() } label: { Label("New preset", systemImage: "plus") }
-                            .buttonStyle(.pill)
-                            .disabled(state.isDirty)
-                            .help("New preset")
-                    }
-                    .padding(.bottom, 18)
-                    HStack(alignment: .top, spacing: 18) {
-                        list.frame(width: 196)
-                        Group {
-                            if state.draft != nil {
-                                PresetForm(state: state)
-                            } else {
-                                EmptyEditorHint(title: "Choose a preset",
-                                                text: "A preset ties a language to its models, so they can't drift apart.")
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
+        ScrollPage(640) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    PageTitle("Presets")
+                    Spacer()
+                    Button { state.startNew() } label: { Label("New preset", systemImage: "plus") }
+                        .buttonStyle(.pill)
+                        .help("New preset")
                 }
-            }
-            if state.draft != nil {
-                EditorFooter(dirty: state.isDirty, error: state.error) {
-                    Button("Cancel") { state.cancel() }.buttonStyle(.pill).disabled(!state.isDirty)
-                    Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut("s", modifiers: .command).disabled(!state.isDirty)
+                .padding(.bottom, 18)
+                Card {
+                    ForEach(Array(model.presets.presets.enumerated()), id: \.element.id) { i, p in
+                        if i > 0 { RowDivider() }
+                        Button { state.select(p) } label: {
+                            EditorListRow(title: p.name, subtitle: meta(p),
+                                          trailing: p.isFullyLocal(providers: model.providers.providers) ? FullyLocalBadge() : nil)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
         .contentBackground()
         .navigationTitle("Presets")
-    }
-
-    private var list: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if state.isNew, let d = state.draft {
-                PresetRow(title: d.name.isEmpty ? "New preset" : d.name, subtitle: "unsaved", selected: true, dim: true)
-            }
-            ForEach(model.presets.presets) { p in
-                Button {
-                    guard !state.isDirty else { return } // nie gub niezapisanych zmian
-                    state.select(p)
-                } label: {
-                    PresetRow(title: p.name, subtitle: meta(p), selected: state.draft?.id == p.id,
-                              fullyLocal: p.isFullyLocal(providers: model.providers.providers))
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(state.draft?.id == p.id ? .isSelected : [])
-            }
-            if state.isDirty {
-                Text("Save or cancel your changes to switch presets.")
-                    .font(.system(size: 11)).foregroundStyle(.mnText2).padding(.horizontal, 10).padding(.top, 8)
-            }
+        .sheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.close() } })) {
+            PresetSheet(state: state) { save() }
         }
     }
 
@@ -94,9 +65,25 @@ struct PresetsView: View {
         return parts.joined(separator: " · ")
     }
 
+    /// Błąd zapisu zostawia okno otwarte z komunikatem; sukces je zamyka.
     private func save() {
         state.error = state.draft.flatMap { model.savePreset($0) }
-        if state.error == nil { state.original = state.draft }
+        if state.error == nil { state.close() }
+    }
+}
+
+/// Okno edycji presetu; renderowalne samodzielnie (migawki: `ImageRenderer`/`NSHostingView` nie łapią `.sheet`).
+struct PresetSheet: View {
+    @ObservedObject var state: PresetEditorState
+    var onSave: () -> Void
+
+    var body: some View {
+        EditorSheet(title: state.isNew ? "New preset" : "Edit preset", dirty: state.isDirty, error: state.error,
+                    onCancel: { state.close() }, onSave: onSave) {
+            EmptyView()
+        } content: {
+            PresetForm(state: state)
+        }
     }
 }
 
@@ -198,7 +185,7 @@ struct PresetForm: View {
                 }
                 if state.draft?.isFullyLocal(providers: model.providers.providers) == true { FullyLocalBadge() }
             }
-            RoleSection(title: "Speech to text", role: .asr, assignment: draft.asr, language: draft.wrappedValue.language, extraBeforeProbe: true) {
+            RoleSection(title: "Speech to text", role: .asr, assignment: draft.asr, language: draft.wrappedValue.language) {
                 // 🔴 Bez wartości domyślnej (P7). „Auto" to opcja awaryjna na końcu listy, z ostrzeżeniem.
                 FormRow(label: "Language") {
                     VStack(alignment: .leading, spacing: 6) {
@@ -258,16 +245,19 @@ struct RoleEditor: View {
 }
 
 /// Wspólna sekcja roli: `SectionHeader` (dla korekty z „— optional” i przełącznikiem) + `Card` z `FormRow`.
-/// `extra` to dodatkowe wiersze karty (np. język w ASR); `extraBeforeProbe` ustawia je przed linią wyniku sondy.
+/// `extra` to dodatkowe wiersze karty (np. język w ASR); sonda i własne instrukcje są w zwiniętej sekcji „Advanced".
 struct RoleSection<Extra: View>: View {
+    /// Stan rozwinięcia „Advanced"; `nil` = użytkownik jeszcze nie wybrał, liczy się `RoleAdvanced.startsExpanded`.
+    final class AdvancedState: ObservableObject { @Published var open: Bool? }
+
     @Environment(AppModel.self) private var model
+    @StateObject private var advanced = AdvancedState()
     let title: String
     let role: Role
     @Binding var assignment: RoleAssignment?
     let language: LanguageCode?
     var promptTitle: String?
     var promptHint: String?
-    var extraBeforeProbe = false
     @ViewBuilder var extra: Extra
 
     private var hasExtra: Bool { Extra.self != EmptyView.self }
@@ -322,23 +312,42 @@ struct RoleSection<Extra: View>: View {
                     LocalRoleNote(warnsAboutCorrection: role == .correction)
                 }
             }
-            if extraBeforeProbe && hasExtra { RowDivider(); extra }
-            probeRow(a)
-            if !extraBeforeProbe && hasExtra { RowDivider(); extra }
-            if let promptTitle {
-                RowDivider()
-                // Etykieta przy górnej krawędzi pola (jak w makiecie), nie przy linii bazowej.
-                HStack(alignment: .top, spacing: 12) {
-                    Text(promptTitle).foregroundStyle(.mnText2).frame(width: 130, alignment: .leading).padding(.top, 6)
-                    VStack(alignment: .leading, spacing: 6) {
-                        EditorPromptField(text: Binding(get: { a.prompt ?? "" }, set: { assignment?.prompt = $0 }))
-                        if let promptHint { Text(promptHint).font(.subheadline).foregroundStyle(.mnText2) }
-                    }
+            if hasExtra { RowDivider(); extra }
+            RowDivider()
+            // Wzorzec: „Advanced" w `MeetingSettingsView`. Stan zamrażany przy pojawieniu się, żeby wynik „Test" ani pisanie w polu go nie przełączały.
+            DisclosureGroup("Advanced", isExpanded: advancedOpen(a)) {
+                VStack(alignment: .leading, spacing: 0) {
+                    probeRow(a)
+                    if promptTitle != nil { RowDivider(); promptRow(a) }
                 }
-                .padding(.vertical, 10).padding(.horizontal, 16)
+                .padding(.top, 6).padding(.leading, -16)
             }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .onAppear { if advanced.open == nil { advanced.open = startsExpanded(a) } }
         } else if hasExtra {
             RowDivider(); extra
+        }
+    }
+
+    private func startsExpanded(_ a: RoleAssignment) -> Bool {
+        RoleAdvanced.startsExpanded(probe: model.probeCache.result(provider: a.providerID, model: a.model, role: role, language: language), prompt: a.prompt)
+    }
+
+    private func advancedOpen(_ a: RoleAssignment) -> Binding<Bool> {
+        Binding(get: { advanced.open ?? startsExpanded(a) }, set: { advanced.open = $0 })
+    }
+
+    @ViewBuilder private func promptRow(_ a: RoleAssignment) -> some View {
+        if let promptTitle {
+            // Etykieta przy górnej krawędzi pola (jak w makiecie), nie przy linii bazowej.
+            HStack(alignment: .top, spacing: 12) {
+                Text(promptTitle).foregroundStyle(.mnText2).frame(width: 130, alignment: .leading).padding(.top, 6)
+                VStack(alignment: .leading, spacing: 6) {
+                    EditorPromptField(text: Binding(get: { a.prompt ?? "" }, set: { assignment?.prompt = $0 }))
+                    if let promptHint { Text(promptHint).font(.subheadline).foregroundStyle(.mnText2) }
+                }
+            }
+            .padding(.vertical, 10).padding(.horizontal, 16)
         }
     }
 
