@@ -11,6 +11,7 @@ private struct DismissibleSheet<Sheet: View>: ViewModifier {
     func body(content: Content) -> some View {
         content
             .allowsHitTesting(!isPresented)
+            .disabled(isPresented) // blokuje też klawiaturę i fokus pod przyciemnieniem
             .accessibilityHidden(isPresented)
             .overlay {
                 if isPresented {

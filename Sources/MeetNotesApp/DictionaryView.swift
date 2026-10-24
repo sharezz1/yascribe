@@ -297,6 +297,8 @@ struct DictionaryTermSheet: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+        ScrollView {
         VStack(alignment: .leading, spacing: 0) {
             Text(state.draftIsNew ? "New term" : "Edit term").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
                 .padding(.bottom, 8)
@@ -342,18 +344,20 @@ struct DictionaryTermSheet: View {
             Text("Risky means the alias is also an ordinary word (Zoe is a name). It is added switched off; turn it on only if you accept that it may replace correct text.")
                 .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10).padding(.leading, 2)
-            HStack(spacing: 8) {
-                if !state.draftIsNew {
-                    Button { state.confirmingDelete = true } label: { Text("Delete term").foregroundStyle(.mnRec) }.buttonStyle(.pillSmall)
-                }
-                Spacer()
-                Button("Cancel") { state.closeEditor() }.buttonStyle(.pill).keyboardShortcut(.cancelAction)
-                Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
-            }
-            .padding(.top, 18)
-            if let e = state.saveError { StateLabel(.bad, e).wrapping().padding(.top, 10).padding(.leading, 2) }
         }
-        .padding(.horizontal, 20).padding(.vertical, 20)
+        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
+        }
+        if let e = state.saveError { StateLabel(.bad, e).wrapping().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 8) }
+        HStack(spacing: 8) {
+            if !state.draftIsNew {
+                Button { state.confirmingDelete = true } label: { Text("Delete term").foregroundStyle(.mnRec) }.buttonStyle(.pillSmall)
+            }
+            Spacer()
+            Button("Cancel") { state.closeEditor() }.buttonStyle(.pill).keyboardShortcut(.cancelAction)
+            Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 14)
+        }
         .frame(width: 500)
         .background(.mnCard)
         .tint(.mnAccent) // arkusz nie dziedziczy akcentu z okna (macos.md §10, odstępstwo 5)
@@ -452,6 +456,8 @@ struct DictionaryImportSheet: View {
     private var nothingChanged: Bool { report.termsAdded == 0 && report.aliasesAdded == 0 }
 
     var body: some View {
+        VStack(spacing: 0) {
+        ScrollView {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: nothingChanged ? "minus" : "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.mnAccent)
@@ -488,13 +494,17 @@ struct DictionaryImportSheet: View {
                  ? "Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are."
                  : "Terms and aliases you already had were left as they are.")
                 .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true).padding(.top, 10).padding(.leading, 2)
-            HStack {
-                Spacer()
-                Button("Done") { onDone() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
-            }
-            .padding(.top, 16)
         }
-        .padding(.horizontal, 20).padding(.vertical, 20)
+        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
+        }
+        HStack {
+            Spacer()
+            Button("Done") { onDone() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
+        }
+        .padding(.horizontal, 20).padding(.vertical, 14)
+        // Esc zamykał natywny arkusz; w nakładce potrzebny niewidoczny bliźniak (ramka 0×0, żeby nie łapał kliknięć, a skrót działał).
+        .background { Button("") { onDone() }.keyboardShortcut(.cancelAction).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }
+        }
         .frame(width: 500)
         .background(.mnCard)
         .tint(.mnAccent)
