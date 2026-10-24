@@ -19,23 +19,50 @@ struct MeetingModelChip: View {
     let item: SessionItem
     /// Tylko migawki: popover rysowany w miejscu (ImageRenderer/NSHostingView nie łapie okna popovera).
     var inlinePopover = false
+    /// Tryb „sterowany z zewnątrz" (pozycja w `MoreMenu`): bez chipa, sam popover otwierany flagą; widok kładzie się w `.background` `⋯`.
+    var presented: Binding<Bool>? = nil
 
-    private var assignment: RoleAssignment? {
+    static func assignment(_ role: Role, item: SessionItem, model: AppModel) -> RoleAssignment? {
         role == .summary ? model.notes.summaryChoice(for: item)?.assignment : model.notes.correctionAssignment(for: item)
     }
+    static func override(_ role: Role, item: SessionItem, model: AppModel) -> RoleOverride? {
+        model.notes.overrides(for: item).usable(role, knownProviders: model.notes.knownProviderIDs())
+    }
+    static func stale(_ role: Role, item: SessionItem, model: AppModel) -> Bool {
+        model.notes.overrides(for: item).isStale(role, knownProviders: model.notes.knownProviderIDs())
+    }
+    /// Etykieta pozycji `⋯`: „Correction model: V4.1 Flash · changed…" — czytelna nazwa, pełne `id` zostaje w popoverze.
+    static func menuTitle(_ role: Role, item: SessionItem, model: AppModel) -> String {
+        let name = assignment(role, item: item, model: model).map { model.modelDisplayName($0.model) } ?? "none"
+        let mark = override(role, item: item, model: model) != nil ? " · changed" : stale(role, item: item, model: model) ? " · unavailable" : ""
+        return "\(role == .summary ? "Summary" : "Correction") model: \(name)\(mark)…"
+    }
+
+    private var assignment: RoleAssignment? { Self.assignment(role, item: item, model: model) }
     private var presetModel: String? {
         (role == .summary ? model.notes.presetSummaryChoice(for: item)?.assignment : model.notes.presetCorrection(for: item))?.model
     }
-    private var override: RoleOverride? {
-        model.notes.overrides(for: item).usable(role, knownProviders: model.notes.knownProviderIDs())
-    }
+    private var override: RoleOverride? { Self.override(role, item: item, model: model) }
     /// Wybór zapisany, ale dostawca zniknął: chip pokazuje to i nadal pozwala wrócić do presetu.
-    private var stale: Bool { model.notes.overrides(for: item).isStale(role, knownProviders: model.notes.knownProviderIDs()) }
+    private var stale: Bool { Self.stale(role, item: item, model: model) }
+    /// Popover otwarty: własna flaga chipa albo przekazana z zewnątrz.
+    private var isShown: Binding<Bool> {
+        Binding(get: { presented?.wrappedValue ?? state.showing },
+                set: { if let presented { presented.wrappedValue = $0 } else { state.showing = $0 } })
+    }
     private func provider(_ id: UUID?) -> Provider? { model.providers.providers.first { $0.id == id } }
     private var title: String { role == .summary ? "summary" : "correction" }
 
     var body: some View {
-        if inlinePopover { content.onAppear { open() } } else { chip }
+        if inlinePopover {
+            content.onAppear { open() }
+        } else if let presented {
+            Color.clear
+                .popover(isPresented: presented, arrowEdge: .bottom) { content }
+                .onChange(of: presented.wrappedValue) { _, on in if on { prefill() } }
+        } else {
+            chip
+        }
     }
 
     private var chip: some View {
@@ -60,11 +87,15 @@ struct MeetingModelChip: View {
     }
 
     private func open() {
+        prefill()
+        state.showing = true
+    }
+
+    private func prefill() {
         let o = override
         state.providerID = o?.providerID ?? assignment?.providerID
         state.model = o?.model ?? assignment?.model ?? ""
         state.thinking = o?.thinking
-        state.showing = true
     }
 
     private var providers: [Provider] {
@@ -81,7 +112,7 @@ struct MeetingModelChip: View {
             if override != nil || stale {
                 Button("Use preset (\(presetModel ?? "none"))") {
                     model.notes.setOverride(role, nil, item: item)
-                    state.showing = false
+                    isShown.wrappedValue = false
                 }
                 .buttonStyle(.pillSmall)
             }

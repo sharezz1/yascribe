@@ -18,12 +18,17 @@ struct TranscribeAgainButton: View {
     let item: SessionItem
     /// Tylko migawki: popover rysowany w miejscu (ImageRenderer/NSHostingView nie łapie okna popovera).
     var inlinePopover = false
+    /// Tryb „sterowany z zewnątrz" (pozycja w `MoreMenu`): bez przycisku, sam popover otwierany flagą; widok kładzie się w `.background` `⋯`.
+    var presented: Binding<Bool>? = nil
 
-    private var preset: Preset? { model.presetFor(sessionURL: item.url) }
-    private var blocker: String? {
+    /// Powód, dla którego akcja jest niedostępna (`nil` = można); ta sama bramka dla przycisku i pozycji `⋯`.
+    static func blocker(item: SessionItem, model: AppModel) -> String? {
         TranscribeAgain.blocker(audioDeletedAfterDays: item.audioDeletedAfterDays, transcribing: model.isTranscribing(item),
                                 moving: model.recordingsMove != nil)
     }
+
+    private var preset: Preset? { model.presetFor(sessionURL: item.url) }
+    private var blocker: String? { Self.blocker(item: item, model: model) }
     private func provider(_ id: UUID?) -> Provider? { model.providers.providers.first { $0.id == id } }
     private var providers: [Provider] {
         RoleProviders.choices(model.providers.providers, role: .asr, current: state.providerID)
@@ -41,7 +46,15 @@ struct TranscribeAgainButton: View {
     }
 
     var body: some View {
-        if inlinePopover { content.onAppear { open() } } else { button }
+        if inlinePopover {
+            content.onAppear { open() }
+        } else if let presented {
+            Color.clear
+                .popover(isPresented: presented, arrowEdge: .bottom) { content }
+                .onChange(of: presented.wrappedValue) { _, on in if on { prefill() } }
+        } else {
+            button
+        }
     }
 
     private var button: some View {
@@ -55,10 +68,14 @@ struct TranscribeAgainButton: View {
 
     /// Domyślnie to, czego użyto przy nagraniu — zmienia się jedno pole, nie wszystkie.
     private func open() {
+        prefill()
+        state.showing = true
+    }
+
+    private func prefill() {
         state.providerID = preset?.asr?.providerID
         state.model = preset?.asr?.model ?? ""
         state.language = preset?.languageChoice ?? .unset
-        state.showing = true
     }
 
     private var content: some View {
@@ -105,7 +122,7 @@ struct TranscribeAgainButton: View {
 
     private func submit() {
         guard let pid = state.providerID, let language = chosenLanguage, let preset else { return }
-        state.showing = false
+        if let presented { presented.wrappedValue = false } else { state.showing = false }
         model.transcribe(sessionURL: item.url, preset: preset, asr: RoleAssignment(providerID: pid, model: state.model), language: language)
     }
 }
