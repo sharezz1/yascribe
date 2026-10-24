@@ -54,7 +54,7 @@ struct PresetsView: View {
         }
         .contentBackground()
         .navigationTitle("Presets")
-        .sheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.close() } })) {
+        .dismissibleSheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.close() } }), onDismiss: { state.close() }) {
             PresetSheet(state: state) { save() }
         }
     }
