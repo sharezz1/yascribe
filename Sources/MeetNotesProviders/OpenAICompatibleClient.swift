@@ -12,6 +12,8 @@ public struct ModelInfo: Codable, Equatable, Sendable {
     public var id: String
     public var inputModalities: [String]?
     public var outputModalities: [String]?
+    /// Nazwa czytelna dla człowieka z `/models` (`name`); opcjonalna, bo stare pliki jej nie mają.
+    public var name: String?
 }
 
 public struct TranscribedWord: Codable, Equatable, Sendable {
@@ -99,7 +101,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             guard let id = m["id"] as? String else { return nil }
             let arch = m["architecture"] as? [String: Any]
             return ModelInfo(id: id, inputModalities: arch?["input_modalities"] as? [String],
-                             outputModalities: arch?["output_modalities"] as? [String])
+                             outputModalities: arch?["output_modalities"] as? [String], name: m["name"] as? String)
         }
         guard let output else { return all }
         return all.filter { $0.outputModalities.map { $0.contains(output) } ?? true }
