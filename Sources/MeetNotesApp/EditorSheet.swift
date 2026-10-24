@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// Okno edycji (faza 2.1 „okna", wzorzec `DictionaryTermSheet`): nagłówek, przewijana treść, stały pasek na dole.
-/// Po lewej paska akcje `leading`, po prawej Cancel (Esc) i Save (⌘S, Return); błąd zapisu nad paskiem, nie w przewijanej treści.
+/// Po lewej paska akcje `leading`, po prawej Cancel (Esc) i Save (⌘S, ⌘↩); błąd zapisu nad paskiem, nie w przewijanej treści.
+/// Return celowo nie zapisuje: skrót klawiszowy wygrywa z polem wieloliniowym (instrukcje presetu i szablonu),
+/// więc Return zapisałby niedokończony formularz i zamknął okno zamiast wstawić nową linię.
 struct EditorSheet<Leading: View, Content: View>: View {
     let title: String
     let dirty: Bool
@@ -35,7 +37,7 @@ struct EditorSheet<Leading: View, Content: View>: View {
                 leading
                 Spacer(minLength: 12)
                 Button("Cancel", action: onCancel).buttonStyle(.pill).keyboardShortcut(.cancelAction)
-                Button("Save", action: onSave).buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction).disabled(!dirty)
+                Button("Save", action: onSave).buttonStyle(.pillPrimary).keyboardShortcut(.return, modifiers: .command).disabled(!dirty)
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
             .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }

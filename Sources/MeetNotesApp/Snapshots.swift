@@ -104,7 +104,7 @@ enum Snapshots {
                 }
                 try render("presets", size: CGSize(width: 900, height: 600), dark: dark, model: model) { PresetsView() }
                 try render("meetings", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
-                // Pola tekstowe: PresetsView bez wyboru pokazuje tylko „Choose a preset" (wybór jest lokalny w widoku).
+                // Pola tekstowe: edycja presetu jest w `.sheet`, którego `NSHostingView` nie przechwytuje; T4 renderuje `PresetSheet` bezpośrednio.
                 let form = PresetEditorState()
                 form.draft = model.presets.presets.first
                 try render("preset-form", size: CGSize(width: 700, height: 600), dark: dark, model: model) { PresetForm(state: form).contentBackground() }

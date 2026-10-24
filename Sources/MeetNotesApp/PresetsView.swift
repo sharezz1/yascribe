@@ -227,23 +227,6 @@ struct PresetForm: View {
     }
 }
 
-/// Ostrzeżenie: ikona + słowa w `warn` (nigdy sam kolor).
-/// Dostawca + model z wyszukiwarką + wynik sondy (+ własne instrukcje tylko tam, gdzie mają sens).
-/// Sekcja z nagłówkiem i kartą; używana też w Settings (embedding). Sygnatura bez zmian względem wersji sprzed Designu B.
-struct RoleEditor: View {
-    let title: String
-    let role: Role
-    @Binding var assignment: RoleAssignment?
-    let language: LanguageCode?
-    var promptTitle: String?
-    var promptHint: String?
-
-    var body: some View {
-        RoleSection(title: title, role: role, assignment: $assignment, language: language,
-                    promptTitle: promptTitle, promptHint: promptHint) { EmptyView() }
-    }
-}
-
 /// Wspólna sekcja roli: `SectionHeader` (dla korekty z „— optional” i przełącznikiem) + `Card` z `FormRow`.
 /// `extra` to dodatkowe wiersze karty (np. język w ASR); sonda i własne instrukcje są w zwiniętej sekcji „Advanced".
 struct RoleSection<Extra: View>: View {
