@@ -298,65 +298,70 @@ struct DictionaryTermSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        ScrollView {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(state.draftIsNew ? "New term" : "Edit term").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
-                .padding(.bottom, 8)
-            FormRow(label: "Term", caption: state.termError, isError: true, labelWidth: 70) {
-                TextField("Correct spelling, e.g. Zowie", text: term).textFieldStyle(.plain).fieldBox()
-            }
-            .padding(.horizontal, -16)
-            FormRow(label: "Priority", labelWidth: 70) {
-                HStack(spacing: 12) {
-                    FieldMenu(label: "Priority", value: priority.wrappedValue.label, width: 120) {
-                        Picker("Priority", selection: priority) {
-                            ForEach(TermPriority.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.inline).labelsHidden()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(state.draftIsNew ? "New term" : "Edit term").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
+                        .padding(.bottom, 8)
+                    FormRow(label: "Term", caption: state.termError, isError: true, labelWidth: 70) {
+                        TextField("Correct spelling, e.g. Zowie", text: term).textFieldStyle(.plain).fieldBox()
                     }
-                    Text("Low is left out of the prompt first.").font(.system(size: 11)).foregroundStyle(.mnText2)
+                    .padding(.horizontal, -16)
+                    FormRow(label: "Priority", labelWidth: 70) {
+                        HStack(spacing: 12) {
+                            FieldMenu(label: "Priority", value: priority.wrappedValue.label, width: 120) {
+                                Picker("Priority", selection: priority) {
+                                    ForEach(TermPriority.allCases, id: \.self) { Text($0.label).tag($0) }
+                                }
+                                .pickerStyle(.inline).labelsHidden()
+                            }
+                            Text("Low is left out of the prompt first.").font(.system(size: 11)).foregroundStyle(.mnText2)
+                        }
+                    }
+                    .padding(.horizontal, -16)
+                    SectionHeader("Aliases", note: nil) { Text("replaced in every transcript").font(.system(size: 11)).foregroundStyle(.mnText2) }
+                    Card {
+                        HStack(spacing: 12) {
+                            Text("Alias").frame(maxWidth: .infinity, alignment: .leading)
+                            Text("Risky").frame(width: 62, alignment: .leading)
+                            Text("On").frame(width: 38, alignment: .center)
+                            Color.clear.frame(width: 18, height: 1)
+                        }
+                        .font(.system(size: 11)).foregroundStyle(.mnText2)
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        // Wiele Aliasów (import potrafi dać dziesiątki): od kilku wierszy lista przewija się, a Save/Cancel/Delete zostają na widoku.
+                        if aliases.count > 7 { ScrollView { aliasRows }.frame(maxHeight: 280) } else { aliasRows }
+                        RowDivider(inset: 0)
+                        HStack(spacing: 8) {
+                            TextField("Add alias", text: $state.newAlias).textFieldStyle(.plain).fieldBox()
+                                .onSubmit { _ = addAlias() }
+                                .onChange(of: state.newAlias) { _, _ in state.aliasError = nil }
+                            Button("Add") { _ = addAlias() }.buttonStyle(.pillSmall)
+                                .disabled(state.newAlias.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                        .padding(10)
+                    }
+                    if let e = state.aliasError { StateLabel(.bad, e).wrapping().padding(.top, 8).padding(.leading, 2) }
+                    Text("Risky means the alias is also an ordinary word (Zoe is a name). It is added switched off; turn it on only if you accept that it may replace correct text.")
+                        .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 10).padding(.leading, 2)
                 }
+                .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
             }
-            .padding(.horizontal, -16)
-            SectionHeader("Aliases", note: nil) { Text("replaced in every transcript").font(.system(size: 11)).foregroundStyle(.mnText2) }
-            Card {
-                HStack(spacing: 12) {
-                    Text("Alias").frame(maxWidth: .infinity, alignment: .leading)
-                    Text("Risky").frame(width: 62, alignment: .leading)
-                    Text("On").frame(width: 38, alignment: .center)
-                    Color.clear.frame(width: 18, height: 1)
+            if let e = state.saveError {
+                StateLabel(.bad, e).wrapping().frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 8)
+                    .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
+            }
+            HStack(spacing: 8) {
+                if !state.draftIsNew {
+                    Button { state.confirmingDelete = true } label: { Text("Delete term").foregroundStyle(.mnRec) }.buttonStyle(.pillSmall)
                 }
-                .font(.system(size: 11)).foregroundStyle(.mnText2)
-                .padding(.horizontal, 14).padding(.vertical, 7)
-                // Wiele Aliasów (import potrafi dać dziesiątki): od kilku wierszy lista przewija się, a Save/Cancel/Delete zostają na widoku.
-                if aliases.count > 7 { ScrollView { aliasRows }.frame(maxHeight: 280) } else { aliasRows }
-                RowDivider(inset: 0)
-                HStack(spacing: 8) {
-                    TextField("Add alias", text: $state.newAlias).textFieldStyle(.plain).fieldBox()
-                        .onSubmit { _ = addAlias() }
-                        .onChange(of: state.newAlias) { _, _ in state.aliasError = nil }
-                    Button("Add") { _ = addAlias() }.buttonStyle(.pillSmall)
-                        .disabled(state.newAlias.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-                .padding(10)
+                Spacer()
+                Button("Cancel") { state.closeEditor() }.buttonStyle(.pill).keyboardShortcut(.cancelAction)
+                Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
             }
-            if let e = state.aliasError { StateLabel(.bad, e).wrapping().padding(.top, 8).padding(.leading, 2) }
-            Text("Risky means the alias is also an ordinary word (Zoe is a name). It is added switched off; turn it on only if you accept that it may replace correct text.")
-                .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 10).padding(.leading, 2)
-        }
-        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
-        }
-        if let e = state.saveError { StateLabel(.bad, e).wrapping().frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20).padding(.bottom, 8) }
-        HStack(spacing: 8) {
-            if !state.draftIsNew {
-                Button { state.confirmingDelete = true } label: { Text("Delete term").foregroundStyle(.mnRec) }.buttonStyle(.pillSmall)
-            }
-            Spacer()
-            Button("Cancel") { state.closeEditor() }.buttonStyle(.pill).keyboardShortcut(.cancelAction)
-            Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
-        }
-        .padding(.horizontal, 20).padding(.vertical, 14)
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
         }
         .frame(width: 500)
         .background(.mnCard)
@@ -457,53 +462,54 @@ struct DictionaryImportSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-        ScrollView {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: nothingChanged ? "minus" : "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.mnAccent)
-                    .padding(.top, 3).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(nothingChanged ? "Nothing new to import" : "Import finished").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
-                    if !files.isEmpty { Text(files.joined(separator: " · ")).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: nothingChanged ? "minus" : "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.mnAccent)
+                            .padding(.top, 3).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(nothingChanged ? "Nothing new to import" : "Import finished").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
+                            if !files.isEmpty { Text(files.joined(separator: " · ")).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle) }
+                        }
+                    }
+                    Card {
+                        HStack(alignment: .top, spacing: 0) {
+                            stat(report.termsAdded, "terms added")
+                            stat(report.aliasesAdded, "aliases added")
+                            stat(report.riskyLeftOff, "risky, left off")
+                            stat(report.conflicts.count, "conflicts")
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(report.summary)
+                    }
+                    .padding(.top, 14)
+                    if !report.conflicts.isEmpty {
+                        SectionHeader("Conflicts") { Text("an alias belongs to one term").font(.system(size: 11)).foregroundStyle(.mnText2) }
+                        Card {
+                            // Setki konfliktów przy dużym pliku: od kilku wierszy lista przewija się, arkusz nie rośnie bez końca.
+                            if report.conflicts.count > 4 { ScrollView { conflictRows }.frame(maxHeight: 190) } else { conflictRows }
+                        }
+                    }
+                    if report.rejected > 0 {
+                        Text("\(report.rejected) \(report.rejected == 1 ? "entry was" : "entries were") skipped: text can’t start with # or contain tabs or line breaks.")
+                            .font(.system(size: 11)).foregroundStyle(.mnWarn).fixedSize(horizontal: false, vertical: true).padding(.top, 10).padding(.leading, 2)
+                    }
+                    Text(report.riskyLeftOff > 0
+                         ? "Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are."
+                         : "Terms and aliases you already had were left as they are.")
+                        .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true).padding(.top, 10).padding(.leading, 2)
                 }
+                .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
             }
-            Card {
-                HStack(alignment: .top, spacing: 0) {
-                    stat(report.termsAdded, "terms added")
-                    stat(report.aliasesAdded, "aliases added")
-                    stat(report.riskyLeftOff, "risky, left off")
-                    stat(report.conflicts.count, "conflicts")
-                }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(report.summary)
+            HStack {
+                Spacer()
+                Button("Done") { onDone() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
             }
-            .padding(.top, 14)
-            if !report.conflicts.isEmpty {
-                SectionHeader("Conflicts") { Text("an alias belongs to one term").font(.system(size: 11)).foregroundStyle(.mnText2) }
-                Card {
-                    // Setki konfliktów przy dużym pliku: od kilku wierszy lista przewija się, arkusz nie rośnie bez końca.
-                    if report.conflicts.count > 4 { ScrollView { conflictRows }.frame(maxHeight: 190) } else { conflictRows }
-                }
-            }
-            if report.rejected > 0 {
-                Text("\(report.rejected) \(report.rejected == 1 ? "entry was" : "entries were") skipped: text can’t start with # or contain tabs or line breaks.")
-                    .font(.system(size: 11)).foregroundStyle(.mnWarn).fixedSize(horizontal: false, vertical: true).padding(.top, 10).padding(.leading, 2)
-            }
-            Text(report.riskyLeftOff > 0
-                 ? "Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are."
-                 : "Terms and aliases you already had were left as they are.")
-                .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true).padding(.top, 10).padding(.leading, 2)
-        }
-        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
-        }
-        HStack {
-            Spacer()
-            Button("Done") { onDone() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
-        }
-        .padding(.horizontal, 20).padding(.vertical, 14)
-        // Esc zamykał natywny arkusz; w nakładce potrzebny niewidoczny bliźniak (ramka 0×0, żeby nie łapał kliknięć, a skrót działał).
-        .background { Button("") { onDone() }.keyboardShortcut(.cancelAction).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
+            // Esc zamykał natywny arkusz; w nakładce potrzebny niewidoczny bliźniak (ramka 0×0, żeby nie łapał kliknięć, a skrót działał).
+            .background { Button("") { onDone() }.keyboardShortcut(.cancelAction).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true) }
         }
         .frame(width: 500)
         .background(.mnCard)
