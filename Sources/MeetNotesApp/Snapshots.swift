@@ -108,10 +108,19 @@ enum Snapshots {
                 let form = PresetEditorState()
                 form.draft = model.presets.presets.first
                 try render("preset-form", size: CGSize(width: 700, height: 600), dark: dark, model: model) { PresetForm(state: form).contentBackground() }
-                // T3: preset wybrany (lista + edytor obok siebie) oraz całe okno z sidebarem — bliższe temu, co widać na żywo.
+                // Okno presetu (`PresetSheet`): „Advanced" zwinięte, sonda nieznana (Verified/untested).
                 let editing = PresetEditorState()
                 editing.select(model.presets.presets.first)
-                try render("presets-editing", size: CGSize(width: 900, height: 640), dark: dark, model: model) { PresetsView(state: editing) }
+                try render("preset-sheet", size: CGSize(width: 560, height: 760), dark: dark, model: model) { PresetSheet(state: editing, onSave: {}) }
+                // Zła sonda ASR: „Advanced" startuje rozwinięte (`RoleAdvanced.startsExpanded`); wpis cache wraca po migawce.
+                if let p = model.presets.presets.first, let asr = p.asr {
+                    let probesBefore = model.probeCache
+                    model.probeCache.record(ProbeResult(providerID: asr.providerID, model: asr.model, role: .asr, works: false,
+                                                        failure: "Model doesn't accept audio input.", language: p.language))
+                    let failing = PresetEditorState(); failing.select(p)
+                    try render("preset-sheet-advanced-open", size: CGSize(width: 560, height: 760), dark: dark, model: model) { PresetSheet(state: failing, onSave: {}) }
+                    model.probeCache = probesBefore
+                }
                 // T8: lista z kartą Record i trzy stany spotkania (notatki / karta Generate / My notes bez transkryptu).
                 try render("meetings-full", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
                 // §11.5 „Coming up” (b-cuB2.png): 9:52, standup za 8 min, reszta dnia; całodniowe i OOO odfiltrowane.
@@ -268,11 +277,18 @@ enum Snapshots {
                 try model.notes.templates.upsert(edited)
                 try model.notes.templates.upsert(Template(id: "snapshot-custom", name: "Board update",
                                                           sections: [TemplateSection(title: "Decisions", instruction: "What was decided and by whom.")]))
+                // Lista szablonów (karta bez okna) i okna `TemplateSheet` renderowane bezpośrednio (`.sheet` nie jest w migawce).
+                try render("templates-list", size: CGSize(width: 900, height: 640), dark: dark, model: model) { TemplatesView() }
                 let builtin = TemplateEditorState(); builtin.select(model.notes.templates.all().first)
                 builtin.draft?.sections?[2].instruction += " Keep it to one line."
-                try render("templates-builtin", size: CGSize(width: 900, height: 640), dark: dark, model: model) { TemplatesView(state: builtin) }
+                try render("template-sheet-builtin", size: CGSize(width: 560, height: 560), dark: dark, model: model) {
+                    TemplateSheet(state: builtin, meta: "Built-in · edited", builtin: true, edited: true,
+                                  onSave: {}, onDuplicate: {}, onReset: {})
+                }
                 let custom = TemplateEditorState(); custom.startNew()
-                try render("templates-new", size: CGSize(width: 900, height: 560), dark: dark, model: model) { TemplatesView(state: custom) }
+                try render("template-sheet-new", size: CGSize(width: 560, height: 560), dark: dark, model: model) {
+                    TemplateSheet(state: custom, meta: "Custom", builtin: false, edited: false, onSave: {}, onDuplicate: {}, onReset: {})
+                }
                 // Odbiór 2026-10-16: pigułka istnieje tylko podczas nagrywania — zwinięta i rozwinięta (kontroler z wymuszonym
                 // stanem; okno, cień i przesuwanie to odbiór na żywo), plus osobno wiersze poziomów torów.
                 let live = RecordingController.snapshotPreview(elapsed: 754)
@@ -420,9 +436,9 @@ enum Snapshots {
                 let presetsBefore = model.presets
                 model.presets.presets.append(contentsOf: [fullyLocal, mixed])
                 let localEditing = PresetEditorState(); localEditing.select(fullyLocal)
-                try render("presets-fully-local", size: CGSize(width: 900, height: 900), dark: dark, model: model) { PresetsView(state: localEditing) }
+                try render("preset-sheet-fully-local", size: CGSize(width: 560, height: 1000), dark: dark, model: model) { PresetSheet(state: localEditing, onSave: {}) }
                 let mixedEditing = PresetEditorState(); mixedEditing.select(mixed)
-                try render("presets-local-notes-only", size: CGSize(width: 900, height: 900), dark: dark, model: model) { PresetsView(state: mixedEditing) }
+                try render("preset-sheet-local-notes-only", size: CGSize(width: 560, height: 1000), dark: dark, model: model) { PresetSheet(state: mixedEditing, onSave: {}) }
                 model.presets = presetsBefore
                 model.providers.providers.removeAll { p in (localServers + [parakeetLocal]).contains { $0.id == p.id } }
                 for p in localServers + [parakeetLocal] { model.providerChecks[p.id] = nil }
@@ -521,7 +537,7 @@ enum Snapshots {
                     let a = RoleAssignment(providerID: pid, model: "deepseek/deepseek-v4.1-flash", prompt: "Keep product names unchanged.")
                     let auto = PresetEditorState(draft: Preset(name: "Mixed meetings", language: nil, asr: RoleAssignment(providerID: pid, model: "microsoft/mai-transcribe-2"),
                                                                 correction: a, languageAuto: true), original: nil)
-                    try render("presets-auto", size: CGSize(width: 900, height: 780), dark: dark, model: model) { PresetsView(state: auto) }
+                    try render("preset-sheet-auto", size: CGSize(width: 560, height: 1000), dark: dark, model: model) { PresetSheet(state: auto, onSave: {}) }
                 }
             }
             print("snapshots: \(directory!.path)")
