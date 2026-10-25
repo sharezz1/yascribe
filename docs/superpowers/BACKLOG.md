@@ -205,6 +205,28 @@ nie są tu kopiowane.
   **Przegląd gałęzi 2.0.2 (2026-10-23), odłożone drobne:** tekst „same headset / call mode” w `TrackProblem` nie sprawdza Bluetooth (USB-owy zestaw też ma jeden UID na wejście i wyjście); po zniknięciu wybranego wejścia `preferredUID` zostaje, więc ponowne podłączenie słuchawek cicho wraca na nie (decyzja D2 do potwierdzenia); `inputDevices` listuje urządzenia przy każdym odświeżeniu widoku (ok. 4 razy na sekundę); `RawMicrophoneSource.select` otwiera urządzenie synchronicznie na wątku głównym (przy przełączeniu HFP może zawiesić interfejs); brak migawki otwartego menu wejścia.
   - **Faza 2.0.2 „Nagrywanie na słuchawkach"** (decyzja użytkownika 2026-10-22). W zakresie: pomiar na słuchawkach, format tapa czytany raz (`SystemTapSource.swift:77`, `:92`), ostrzeżenie, gdy tor ma wyraźnie mniej audio niż trwa sesja; pigułka z PR #17 jest pierwszym krokiem tej fazy. Do ustalenia z użytkownikiem: czy wybór mikrofonu i wyjścia przed startem (spec 1.5 decyzja 4) wchodzi do 2.0.2, czy ma osobną fazę. **Pomiar S0 wykonany 2026-10-22:** `spikes/2026-10-22-f202-s0-sluchawki.md` (wejście+wyjście na słuchawkach: tor `system` bez klatek; samo wyjście na słuchawkach: 44,1 kHz zapisane jako 48 kHz, plik ok. 8,8 % za szybki; samo wejście na słuchawkach: tor zdrowy). Specyfikacji i planu jeszcze nie ma. Powiązane: wybór mikrofonu, AEC offline.
 
+## Z fazy 2.1 (2026-10-23, gałąź `faza21-slownik`; źródła: [F21-odbior](reports/F21-odbior.md), recenzje zadań T2–T10b w ledgerze SDD) — bez rundy poprawek
+
+**Funkcje i decyzje**
+- [ ] **Odmiany Aliasów** (polska fleksja: „Zoomem", „Zoomie"…) — dziś każda forma to osobny Alias; rozważyć dopasowanie po rdzeniu (ryzyko fałszywych trafień) albo podpowiedź przy dopisywaniu.
+- [ ] **Licznik „N terms don't fit" z sondą kontekstu** — licznik liczy z pola „Context window" dostawcy, nie z sondy `/api/ps`; dla API (`ContextBudget.resolve` = `nil`) liczy z stałego limitu 3000 znaków (`DictionaryPrompt.apiMaxChars`), a nie z okna modelu.
+- [ ] **Przełącznik przebiegów w UI** — stare przebiegi zostają w `runs/`, ale nie da się ich wybrać ani porównać (bieżący jest wyliczany, R23).
+- [ ] **`generate()` bierze język notatki z presetu sesji**, a autotytuł i korekta z migawki bieżącego przebiegu (I2); po „Transcribe again…" z innym językiem notatka może mieć język starego presetu. Powinien pochodzić z migawki przebiegu.
+- [ ] **Baner na karcie Transcript przypisuje aktywność najnowszej próbie** (R26), gdy użytkownik wznawia luki bieżącego przebiegu („Retry Failed Parts"); komunikat powinien nazywać przebieg, na którym trwa praca.
+- [ ] **Retencja audio trzyma nagranie bez końca**, gdy najnowszy przebieg jest pusty (cisza, „No speech") albo bez `run.json` — kryterium ukończenia jak w `RunSelection` (fala A, F1); rozważyć osobną regułę dla pustych nagrań.
+- [ ] **Etykieta „Transcribe again…" w stanie „No transcript yet"** brzmi dziwnie dla nagrania, które jeszcze nigdy nie miało transkryptu; rozważyć „Transcribe with another model…".
+- [ ] **Starsza korekta trzyma sesję zajętą**, dopóki się nie skończy, choć jej wynik zostanie odrzucony (F2/F3; informacyjnie — blokuje Improve/Generate i przenoszenie).
+- [ ] **Brak testów integracyjnych `NotesModel`** dla wyścigów korekt i autotytułów (cel `MeetNotesApp` nie ma testów jednostkowych; logika przeniesiona do `RunOperations` jest pokryta, okablowanie nie).
+- [ ] **Import: linia bez tabulatora** jest pomijana bez raportu (R15b; nadmiar kolumn jest już zgłaszany jako `rejected`).
+- [ ] **Import: konflikty powtarzają się** przy każdym imporcie tego samego pliku (judged acceptable w T4) — rozważyć zapamiętanie już zgłoszonych.
+- [ ] **Brak błędu specyficznego dla słownika**, gdy prompt reduce w map-reduce przekracza budżet (T6); komunikat jest ogólny.
+- [ ] **Replacement i wyszukiwanie zmierzone tylko w debugu** (0,19 ms na wypowiedź, zimne wyszukiwanie po 56 sesjach 363 ms; best-of-3, 28 sesji zdublowanych do 56) — przemierzyć w release. Pierwsze otwarcie dużego spotkania liczy Replacement na głównym wątku.
+- [ ] **Egzotyczne zaparkowane** (R12, R19): para Greek dialytika+tonos w NFC vs NFD; filtr wstępny zwraca tekst bez NFC, gdy nic się nie zmienia (kanonicznie równy, bez różnicy dla użytkownika).
+
+**Brakujące testy (z recenzji, odłożone)**
+- [ ] Test map-reduce z przekazaniem słownika (T6) prawdopodobnie sięga 2, nie 3 poziomów (wymagane ≥ 2, nie blokuje).
+- [ ] `DictionaryEdit` (T8) nie sprawdza stanu arkusza UI.
+
 ## Zapisane (dla kroniki)
 
 - 2026-10-12 — `RunError.inputMismatch`: komentarz + „progi przesłuchu" → `0dd84ef`.

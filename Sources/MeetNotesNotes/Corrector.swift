@@ -95,10 +95,14 @@ public struct Corrector: Sendable {
     public var budget: ContextBudget?
     /// Przerywniki do usunięcia (F20 P2): lista idzie do polecenia dla modelu (A) i do filtra po korekcie (B). Pusta = nic nie usuwamy.
     public var fillerWords: [String]
+    /// Termy i uczestnicy do polecenia (F21, D6): dane dla modelu, nie instrukcje. `nil` = polecenie bajt w bajt jak dotąd.
+    public var vocabulary: PromptVocabulary?
 
     public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120,
-                chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil, fillerWords: [String] = []) {
+                chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil, fillerWords: [String] = [],
+                vocabulary: PromptVocabulary? = nil) {
         self.fillerWords = fillerWords
+        self.vocabulary = vocabulary
         self.budget = budget
         self.client = client
         self.assignment = assignment
@@ -120,6 +124,7 @@ public struct Corrector: Sendable {
                 + "Keep every word that carries meaning."
         }
         if let language { s += "\nThe transcript language is \(language.englishName)." }
+        if let lines = vocabulary?.promptLines { s += "\n\(lines)" }
         if let extra = assignment.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !extra.isEmpty {
             s += "\nExtra instructions from the user: \(extra)"
         }
@@ -136,19 +141,22 @@ public struct Corrector: Sendable {
     public func correct(_ original: Transcript, language: LanguageCode?) async -> CorrectedTranscript {
         var out = original
         // Numer linii = indeks wypowiedzi + 1; tylko niepuste i niezaflagowane.
-        let lines: [(n: Int, text: String)] = original.utterances.enumerated().compactMap { i, u in
+        let all: [(n: Int, text: String)] = original.utterances.enumerated().compactMap { i, u in
             u.excludedFromNotes || u.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : (i + 1, u.text)
         }
         let limit = batchLimit(language: language)
-        if limit <= 0, !lines.isEmpty, let budget {
-            // Kontekst za mały nawet na prompt: jawny błąd, nigdy wysyłka.
+        // F5: z budżetem wypowiedź, która sama nie mieści się w partii (miarą `split`; np. po dopisaniu słownika do polecenia),
+        // nie idzie do modelu — zostaje oryginalna i liczy się jako odrzucona. API (bez budżetu) bez zmian.
+        let lines = budget == nil ? all : all.filter { "[1] ".count + $0.text.count + 1 <= limit }
+        if lines.isEmpty, !all.isEmpty, let budget {
+            // Kontekst za mały nawet na prompt albo na każdą wypowiedź: jawny błąd, nigdy wysyłka.
             return CorrectedTranscript(transcript: out, model: assignment.model, batches: 1, failedBatches: 1, rejectedLines: 0,
                                        firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction.")
         }
         let batches = CorrectionBatches.split(lines, maxChars: limit)
         let system = system(language: language)
         var failed = 0
-        var rejected = 0
+        var rejected = all.count - lines.count
         var firstError: String?
         for batch in batches {
             if Task.isCancelled { break }

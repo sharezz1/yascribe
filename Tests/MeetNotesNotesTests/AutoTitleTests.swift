@@ -27,6 +27,18 @@ import MeetNotesProviders
     #expect(store2.readMeta().autoTitle == nil && store2.readMeta().manualTitle == "Mine")
 }
 
+@Test func autoTitleIsNotStoredWhenItsRunIsNoLongerCurrent() async {
+    // R23 fix round 1: w czasie wywołania modelu nowszy przebieg został bieżącym — odpowiedź przepada, `meta.json` bez tytułu.
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let store = NotesStore(session: session)
+    let stub = ChatStub { _ in "Old run title" }
+    let r = await AutoTitle.generate(client: chatClient(stub), model: "m", transcript: transcript([utt("Prognoza na sobotę.")]),
+                                     notesLanguage: .polish, store: store, stillCurrent: { false })
+    #expect(r == nil && stub.calls.count == 1)
+    #expect(store.readMeta().autoTitle == nil)
+}
+
 @Test func autoTitleSkipsAnEmptyTranscript() async {
     // Review Focus #1: bez treści nie wołamy modelu.
     let session = tempDir()

@@ -37,8 +37,14 @@ struct SessionItem: Identifiable, Equatable {
     var startedAt: Date
     var transcript: Transcript?
     var progress: Double?
-    /// Ostatni przebieg transkrypcji — do wznowienia po przerwie albo restarcie (ChatGPT #17).
+    /// Bieżący przebieg (`RunSelection`, R23): z niego transkrypt, korekta, wyszukiwanie i notatka; „Retry Failed Parts" wznawia ten.
     var runID: String?
+    /// Migawka bieżącego przebiegu — język korekty i etykiet (I2); `nil` dla przebiegów bez `run.json` i `input.json`.
+    var runSnapshot: RunSnapshot?
+    /// Najnowsza próba — do wznowienia po przerwie albo restarcie (ChatGPT #17); bywa inna niż `runID` po „Transcribe again…".
+    var latestAttemptID: String?
+    /// Najnowsza próba, która nie została bieżącym przebiegiem (trwa, padła, z lukami albo pusta) — baner na karcie Transcript.
+    var attemptNotPromoted: RunSelection.Attempt?
     var corrected: CorrectedTranscript?
     var notes = SessionNotes()
     /// Retencja usunęła audio po tylu dniach (`<sesja>/audio-deleted.json`); `nil` = audio nie było kasowane.
@@ -73,6 +79,19 @@ final class AppModel {
     var presets = PresetsFile()
     var settings = GlobalSettings()
     var probeCache = ProbeCache()
+    /// Słownik użytkownika (F21): Termy do poleceń, Aliasy do Replacement. Zapis przez `saveDictionary()`.
+    var dictionary = UserDictionary() {
+        didSet {
+            replacementRules = ReplacementRules(dictionary)
+            replaced = [:]
+        }
+    }
+    /// Reguły skompilowane raz na wersję słownika. Obserwowane: zmiana słownika odświeża otwarte widoki transkryptu.
+    private(set) var replacementRules = ReplacementRules(UserDictionary())
+    /// Wynik Replacement (klucz: sesja i wariant transkryptu) razem ze źródłem, z którego powstał. Bez obserwacji, bo
+    /// zapisywany w trakcie liczenia widoku.
+    @ObservationIgnored private var replaced: [ReplacedKey: (source: Transcript, result: Transcript)] = [:]
+    private struct ReplacedKey: Hashable { var id: String; var corrected: Bool }
     var sessions: [SessionItem] = []
     var selectedSessionID: String?
     var activePresetID: UUID?
@@ -105,6 +124,8 @@ final class AppModel {
         notes.report = { [weak self] in self?.lastError = $0 }
         notes.presetsInfo = { [weak self] in (self?.presets.presets ?? [], self?.settings.defaultPresetID) }
         notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }
+        notes.dictionary = { [weak self] in self?.dictionary ?? UserDictionary() }
+        notes.replacementRules = { [weak self] in self?.replacementRules ?? ReplacementRules(UserDictionary()) }
         notes.fillerWords = { [weak self] in
             guard let s = self?.settings, s.removeFillersEnabled else { return [] }
             return s.fillerWords ?? FillerWords.defaults
@@ -147,6 +168,7 @@ final class AppModel {
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())
         notes.templates = read(paths.templates, TemplatesFile())
+        dictionary = read(paths.dictionary, UserDictionary())
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
     }
@@ -164,7 +186,7 @@ final class AppModel {
 
     /// Sesje, których katalogi są w użyciu (nagrywanie, transkrypcja, korekta, tytuł, notatka).
     private var busySessions: Set<String> {
-        var s = transcribing.union(notes.correcting).union(notes.titling)
+        var s = transcribing.union(notes.corrections.sessions).union(notes.titles.sessions)
         s.formUnion(notes.generation.filter { $0.value == .generating }.keys)
         if let d = recording.directory { s.insert(d.lastPathComponent) }
         return s
@@ -172,7 +194,7 @@ final class AppModel {
 
     /// Powód, dla którego teraz nie wolno zmienić lokalizacji; `nil` = wolno.
     var recordingsMoveBlocked: String? {
-        let busy = !transcribing.isEmpty || !notes.correcting.isEmpty || !notes.titling.isEmpty
+        let busy = !transcribing.isEmpty || !notes.corrections.sessions.isEmpty || !notes.titles.sessions.isEmpty
             || notes.generation.values.contains(.generating)
         return RecordingsMove.blocked(recording: recording.isRecording, busy: busy, moving: recordingsMove != nil)
     }
@@ -272,24 +294,46 @@ final class AppModel {
             let sd = SessionDirectory(url: url)
             guard fm.fileExists(atPath: sd.journalURL.path) else { return nil }
             let summary = try? sd.summarize()
-            let run = latestRun(in: url)
+            let run = RunSelection.of(session: url)
             let store = NotesStore(session: url)
+            // Echo oznaczamy też na starszych transkryptach (idempotentne, bez zapisu pliku).
             var item = SessionItem(url: url, summary: summary, startedAt: summary?.wallClock ?? .distantPast,
-                                   transcript: run?.transcript, runID: run?.id)
-            item.corrected = Self.loadCorrected(url, run?.id)
+                                   transcript: run.transcript?.echoMarked(), runID: run.currentID)
+            item.runSnapshot = run.snapshot
+            item.latestAttemptID = run.latestAttemptID
+            item.attemptNotPromoted = run.notPromoted
+            item.corrected = Self.loadCorrected(url, run.currentID)
             item.audioDeletedAfterDays = AudioDeletion.read(url)?.afterDays
             item.notes = SessionNotes(myNotes: store.readMyNotes(), meta: store.readMeta(),
                                       summary: (try? store.readSummary()) ?? nil, problems: store.problems())
             return item
         }.sorted { $0.startedAt > $1.startedAt }
+        // Pamięć Replacement: zostają wpisy, których źródło się nie zmieniło (ze świeżą kopią źródła, żeby następne porównanie
+        // skończyło się na tożsamości buforów); reszta znika. Czyszczenie wszystkiego przy każdym `onChange` kosztowałoby
+        // sekundy na następnym znaku wpisanym w wyszukiwarkę.
+        let byID = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        replaced = replaced.reduce(into: [:]) { kept, entry in
+            if let fresh = byID[entry.key.id]?.transcript(corrected: entry.key.corrected), fresh == entry.value.source {
+                kept[entry.key] = (fresh, entry.value.result)
+            }
+        }
     }
 
-    func latestRun(in session: URL) -> (id: String, transcript: Transcript?)? {
-        guard let id = RunDirectory.latestRunID(in: session) else { return nil }
-        // Echo oznaczamy też na starszych transkryptach (idempotentne, bez zapisu pliku).
-        let t = (try? JSONFile.load(Transcript?.self, from: RunDirectory(session: session, runID: id).transcript, default: nil)) ?? nil
-        return (id, t?.echoMarked())
+    /// Jedyny punkt odczytu transkryptu do wyświetlania, wyszukiwania i notatki (F21, D8): `SessionItem.transcript(corrected:)`
+    /// po Replacement. Wynik zostaje w pamięci, dopóki źródło jest równe temu, z którego powstał — rewizją jest treść, bo korekta
+    /// może zmienić tekst bez zmiany liczby wypowiedzi. Statusy (`!= nil`, „original/corrected") czytają surowe pola.
+    func transcript(of item: SessionItem, corrected: Bool) -> Transcript? {
+        let rules = replacementRules // odczyt obserwowany także przy trafieniu w pamięć: zmiana słownika odświeża widok
+        guard let source = item.transcript(corrected: corrected) else { return nil }
+        let key = ReplacedKey(id: item.id, corrected: corrected)
+        if let hit = replaced[key], hit.source == source { return hit.result }
+        let result = Replacement.apply(source, rules: rules)
+        replaced[key] = (source, result)
+        return result
     }
+
+    /// Język bieżącego przebiegu (I2): z jego migawki, preset sesji tylko dla przebiegów bez migawki.
+    func runLanguage(_ item: SessionItem) -> RunLanguage { RunLanguage.of(item.runSnapshot, fallback: presetFor(sessionURL: item.url)) }
 
     static func loadCorrected(_ session: URL, _ runID: String?) -> CorrectedTranscript? {
         guard let runID, RunDirectory.isValid(runID: runID) else { return nil }
@@ -489,6 +533,11 @@ final class AppModel {
         }
     }
 
+    /// Zapis słownika po zmianie w zakładce Dictionary; `nil` = zapisano, tekst = powód.
+    func saveDictionary() -> String? {
+        do { try JSONFile.save(dictionary, to: paths.dictionary); return nil } catch { return "Couldn't save the dictionary: \(error)" }
+    }
+
     // MARK: Nagrywanie i transkrypcja
 
     /// Ręczny start (menu, przycisk): wywołania w ternarnych wyrażeniach typu `()` nie znoszą wyniku `Bool`.
@@ -608,7 +657,8 @@ final class AppModel {
         do {
             let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
                                            modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: localASR.store))
-            run(sessionURL: sessionURL, runID: Self.sessionName(Date()), snapshot: snapshot, client: c)
+            run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
+                snapshot: snapshot, client: c)
         } catch RunSnapshotError.chatShapeNotForMeetings {
             lastError = "This model returns no word timings, so it can't be used for meetings."
         } catch {
@@ -616,10 +666,23 @@ final class AppModel {
         }
     }
 
+    /// „Transcribe again…" (D13): to samo nagranie innym modelem ASR i językiem; kopia presetu tylko na ten przebieg,
+    /// zapisany `preset.json` bez zmian. Nowy przebieg (`runs/<id>`) staje się bieżącym transkryptem dopiero ukończony, niepusty
+    /// i bez luk (`RunSelection`, R23); stary zostaje na dysku.
+    func transcribe(sessionURL: URL, preset: Preset, asr: RoleAssignment, language: LanguageCode?) {
+        transcribe(sessionURL: sessionURL, preset: preset.withASR(asr, language: language))
+    }
+
     /// ChatGPT #17: wznowienie w aplikacji, także po restarcie — ten sam runID i ta sama
-    /// migawka z `input.json`, więc opłacone okna nie idą drugi raz (P5).
-    func resume(_ item: SessionItem) {
-        guard let runID = item.runID,
+    /// migawka z `input.json`, więc opłacone okna nie idą drugi raz (P5). `runID`: najnowsza próba („Resume Transcription")
+    /// albo bieżący przebieg z lukami na ekranie („Retry Failed Parts").
+    func resume(_ item: SessionItem, runID: String?) {
+        // F2: wznowienie z korektą w toku dałoby drugą korektę tego samego przebiegu (blokada także poza interfejsem, jak R3).
+        guard !notes.isCorrecting(item.id) else {
+            lastError = "This transcript is being corrected. Try again when that finishes."
+            return
+        }
+        guard let runID,
               let input = try? JSONFile.load(RunInput?.self, from: RunDirectory(session: item.url, runID: runID).input, default: nil) else {
             lastError = "Nothing to resume for this recording."
             return
@@ -644,7 +707,7 @@ final class AppModel {
             lastError = "Meetings are being moved to a new folder. Transcribe when that finishes."
             return
         }
-        // Bez audio przebieg utworzyłby pusty `runs/<id>/`, który przesłoniłby gotowy transkrypt (najnowszy przebieg wygrywa).
+        // Bez audio przebieg utworzyłby pusty `runs/<id>/` jako najnowszą próbę (wznowienie, retencja) bez szans na transkrypt.
         guard !AudioRetention.audioFiles(sessionURL).isEmpty else {
             let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""
             lastError = "This meeting's audio was deleted\(days), so it can't be transcribed again."
@@ -656,6 +719,8 @@ final class AppModel {
             do {
                 finished = try await TranscriptionRunner(session: sessionURL, runID: runID, snapshot: snapshot, client: c).run { p in
                     Task { @MainActor in
+                        // Pierwszy postęp: `input.json` już leży, więc baner nowej próby zna jej model.
+                        if p.done == 0 { self.reloadSessions() }
                         if let i = self.sessions.firstIndex(where: { $0.id == id }) { self.sessions[i].progress = p.fraction }
                     }
                 }
@@ -667,7 +732,9 @@ final class AppModel {
             self.localASR.endRun()
             self.transcribing.remove(id)
             self.reloadSessions()
-            if let finished {
+            // Łańcuch korekta → autotytuł tylko dla przebiegu, który został bieżącym i się kwalifikuje (R23); wyjątek: pierwsza
+            // transkrypcja z luką. Próba z lukami albo pusta obok wcześniejszego transkryptu nie dostaje automatycznej obróbki.
+            if let finished, RunSelection.shouldPostProcess(session: sessionURL, runID: runID) {
                 await self.notes.afterTranscription(sessionURL: sessionURL, runID: runID, snapshot: snapshot, transcript: finished)
             }
             self.reloadSessions()

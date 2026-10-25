@@ -81,6 +81,15 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
         return !assigned.isEmpty && assigned.allSatisfy { a in providers.first { $0.id == a.providerID }?.isLocal ?? false }
     }
 
+    /// Kopia do jednorazowego „Transcribe again": podmienia tylko `asr` i język (`id`, `name`, korekta, podsumowanie bez zmian).
+    /// `language == nil` = jawny wybór „Auto" (opcja awaryjna), nie brak wyboru — wynik nadal przechodzi `validate()`.
+    public func withASR(_ asr: RoleAssignment, language: LanguageCode?) -> Preset {
+        var copy = self
+        copy.asr = asr
+        copy.languageChoice = language.map { .code($0) } ?? .auto
+        return copy
+    }
+
     public func validate() throws {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { throw PresetError.missingName }
         guard language != nil || isAutoLanguage else { throw PresetError.missingLanguage }

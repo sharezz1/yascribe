@@ -17,7 +17,7 @@
 - **Faza 2.0 „Lokalne modele"** — **scalona do `master` 2026-10-20 przez PR #1** (commit scalenia `7eebaea`, `--merge`, tag `faza-2.0`), 580/580, wraz z poprawkami P1–P7 po odbiorach (`reports/F20-lista-poprawek.md`). Cofnięcie: `git revert -m 1 7eebaea`. Zostają kroki wyłącznie użytkownika (sekcja niżej).
 - **Faza 2.0.1 „Zmiana modelu w spotkaniu"** — scalona do `master` 2026-10-22 (PR #19 `bed13d5`, PR #20 `0409a3f`), 592/592; wybór modelu podsumowania i korekty przy sesji (`notes/meta.json`). Odbiór na żywo zaliczony przez użytkownika 2026-10-22 (regeneracja Summary i transkryptu, restart, „Use preset”, zagnieżdżony popover, wznowienie z własnym modelem korekty) ([spec](specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md), [plan](plans/2026-10-22-faza201-zmiana-modelu.md)).
 - **Faza 2.0.2 „Nagrywanie na słuchawkach"** — przypisana 2026-10-22, scalona do `master` 2026-10-23 (PR #23, `c33bd48`), odbiór M4 2026-10-23 zaliczony dla przypadku A (słuchawki jako wejście i wyjście): tor `system` poprawny. Zakres: format tapa, układ `tapOnly`, ostrzeżenia, podpowiedź i menu wejścia w pigułce. Poza zakresem: ScreenCaptureKit (Task 10 pominięty), przypadek `08f6`. Źródło: BACKLOG „PRIORYTET WYSOKI … słuchawki Bluetooth".
-- **Faza 2.1 „Słownik"** — decyzja użytkownika 2026-10-21: obowiązkowa następna faza (sekcja niżej).
+- **Faza 2.1 „Słownik"** — decyzja użytkownika 2026-10-21: obowiązkowa następna faza (sekcja niżej). **2.1a zamknięta w kodzie 2026-10-23 na gałęzi `faza21-slownik`** (730/730, nie scalona; czeka na odbiór użytkownika i PR): [raport odbioru agenta](reports/F21-odbior.md), [spec](specs/2026-10-23-faza21-slownik-design.md), [plan](plans/2026-10-23-faza21-slownik.md). Otwarte: 2.1b (klik na słowo → Alias) i spike word boostingu.
 
 ## Faza 1.5b (zostało: T11 i drobne)
 
@@ -70,7 +70,19 @@ Powód: test korekty na żywo (sesja z 2026-10-21, [lista poprawek](reports/F20-
 |---|---|
 | **Własny słownik** (terminy + aliasy „co usłyszał → co miało być", format = `replacements.tsv`, 166 terminów i 223 pary w `GCX/dictation/`), zakładka Dictionary, pętla „klik na słowo → poprawka → alias" | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
 | **Word boosting** w lokalnym ASR (FluidAudio ma `customVocabulary`; dla ścieżki API boosting nie istnieje, tam zostaje podmiana po transkrypcji i słownik w poleceniu korektora) | [wymagania §3](../wymagania.md) |
-| Do rozstrzygnięcia w specyfikacji (nie ustalone): gdzie słownik działa (po ASR, w poleceniu korektora, w podsumowaniu), czy uczestnicy z wydarzenia kalendarza trafiają do kontekstu automatycznie, czy słownik jest globalny czy per preset | — |
+| **Rozstrzygnięte w [specu 2.1](specs/2026-10-23-faza21-slownik-design.md):** słownik jest globalny (D2), podmiana działa po transkrypcji, przy odczycie (D3, D8), Termy i imiona uczestników wydarzenia trafiają automatycznie do poleceń korektora i podsumowania (D3, D5; bez adresów e-mail) | [spec 2.1](specs/2026-10-23-faza21-slownik-design.md) |
+
+**Stan 2.1a (2026-10-23, gałąź `faza21-slownik`, 730/730, [raport odbioru agenta](reports/F21-odbior.md)):** zrobione — model i magazyn Dictionary (`dictionary.json`, globalny), Replacement po transkrypcji przy odczycie (D8; surowy `transcript.json` nietknięty),
+import/eksport `vocab_core.txt` i `replacements.tsv`, zakładka Dictionary (czwarty wiersz dolnej grupy, arkusz Terma, Risky + On, licznik „N terms don't fit"), Termy i imiona uczestników (Attendee hint) w poleceniach korektora i podsumowania
+z ładem budżetu kontekstu, ślad `runs/<przebieg>/vocabulary.txt`, CLI `dictionary-check`, oraz **D13 „Transcribe again…"** (zmiana modelu transkrypcji dla nagrania, Task 10/10b: bieżący przebieg = najnowszy ukończony, niepusty i bez luk, R23).
+**Otwarte:** **2.1b** — klik na słowo → poprawka → Alias; **spike boostingu** (`VocabularyBoostingSession`, osobny model CTC; go/no-go na sesji `62de`, spec §9); odbiór użytkownika (§4 raportu); PR i scalenie.
+
+| Pozycja | Stan |
+|---|---|
+| Dictionary, Replacement, import/eksport, zakładka, słownik w poleceniach, D13 „Transcribe again…" | ✅ w kodzie (gałąź `faza21-slownik`), czeka na odbiór użytkownika |
+| Klik na słowo → Alias (2.1b) | otwarte |
+| Word boosting w lokalnym ASR (spike z progiem go/no-go) | otwarte |
+| Odłożone z 2.1a (odmiany Aliasów, licznik z sondą kontekstu, przełącznik przebiegów w UI, drobiazgi z przeglądów) | [BACKLOG „Z fazy 2.1”](BACKLOG.md) |
 
 ## Faza 2.1+ (kandydaci po 2.0; fazę wybiera użytkownik)
 
@@ -107,7 +119,7 @@ Powód: test korekty na żywo (sesja z 2026-10-21, [lista poprawek](reports/F20-
 |---|---|
 | ✅ Lokalny ASR w procesie: FluidAudio + Parakeet v3 — kod w 2.0a na gałęzi `faza20` (S1 i odbiór T8 wykonane; kroki użytkownika otwarte). **Zostaje:** Cohere Transcribe lokalnie | [wymagania §0, §2](../wymagania.md) |
 | Diaryzacja lokalna z nastawialnym progiem, edycja rozmówców, automatyczne nazwiska; tożsamość mówcy aż do zadań | [wymagania §4, §5](../wymagania.md) |
-| **→ Faza 2.1.** Słownik i word boosting (format aliasów = `replacements.tsv`), klik na słowo → poprawka → alias (zakładka Dictionary) | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
+| **→ Faza 2.1.** Słownik i word boosting (format aliasów = `replacements.tsv`), klik na słowo → poprawka → alias (zakładka Dictionary). 2.1a w kodzie na gałęzi `faza21-slownik`; klik na słowo i boosting otwarte | [wymagania §3](../wymagania.md), [macos.md §9](../design/macos.md) |
 | Kalendarz Apple: „Coming up” na stronie głównej — **design gotowy 2026-10-19** (wariant B: karta najbliższego spotkania ≤ 60 min + mały Record ad hoc w nagłówku, [macos.md §11.5](../design/macos.md)); **wdrożone 2026-10-19** na gałęzi `claude/infallible-wu-2aef0e` ([F16-coming-up](reports/F16-coming-up.md); D1 potwierdzone, D2–D9 u użytkownika; scalone do `faza15` i z nią do `master` 2026-10-19) (sam EventKit i wykrywanie → faza 1.6; koniec sesji z kalendarza **uchylony**) | [wymagania §5](../wymagania.md), [spec 1.6](specs/2026-10-16-faza16-kalendarz-design.md) |
 | Chat nad spotkaniem i nad archiwum (RAG, „Ask anything”) | [wymagania §4](../wymagania.md), [spec 1.5 §2](specs/2026-10-14-faza15-design.md) |
 | Zakładka zadań (zależna od tożsamości mówcy) | [wymagania §4](../wymagania.md) |
