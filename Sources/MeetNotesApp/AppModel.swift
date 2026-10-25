@@ -79,6 +79,8 @@ final class AppModel {
     var presets = PresetsFile()
     var settings = GlobalSettings()
     var probeCache = ProbeCache()
+    /// Tabela id modelu -> nazwa z listy dostawcy; zapełnia się przy pobraniu listy modeli.
+    var modelNames = ModelNameCache()
     /// Słownik użytkownika (F21): Termy do poleceń, Aliasy do Replacement. Zapis przez `saveDictionary()`.
     var dictionary = UserDictionary() {
         didSet {
@@ -167,6 +169,7 @@ final class AppModel {
         presets = read(paths.presets, PresetsFile())
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())
+        modelNames = read(paths.modelNames, ModelNameCache())
         notes.templates = read(paths.templates, TemplatesFile())
         dictionary = read(paths.dictionary, UserDictionary())
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
@@ -493,10 +496,17 @@ final class AppModel {
         guard force || modelLists[k] == nil, !loadingModels.contains(k), let c = client(for: provider) else { return }
         loadingModels.insert(k)
         defer { loadingModels.remove(k) }
-        do { modelLists[k] = try await c.listModels(output: ModelCatalog.outputFilter(for: role)) } catch {
+        do {
+            let list = try await c.listModels(output: ModelCatalog.outputFilter(for: role))
+            modelLists[k] = list
+            if modelNames.record(list) { try? JSONFile.save(modelNames, to: paths.modelNames) }
+        } catch {
             lastError = "Couldn't load models: \(error)"
         }
     }
+
+    /// Nazwa modelu do wyświetlenia (bez dostawcy).
+    func modelDisplayName(_ id: String) -> String { modelNames.display(id) }
 
     /// Przycisk „Refresh Models" w Settings: transkrypcja, embeddingi i lista tekstowa.
     func refreshModels(_ id: UUID) async {

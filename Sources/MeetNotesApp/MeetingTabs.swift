@@ -22,6 +22,11 @@ final class MeetingViewState: ObservableObject {
     @Published var context = ""
     @Published var contextPrefilled = false
     @Published var showContext = false
+    /// Popovery otwierane z `⋯` w Transcript (kotwiczą się do `⋯`).
+    @Published var correctionModelPopover = false
+    @Published var transcribeAgainPopover = false
+    /// Popover modelu podsumowania otwierany z `⋯` w Summary.
+    @Published var summaryModelPopover = false
 }
 
 // MARK: Zakładki tekstowe (macos.md §11.5)
@@ -50,21 +55,6 @@ struct MeetingTabBar: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(alignment: .bottom) { Rectangle().fill(.mnLine).frame(height: 0.5) }
-    }
-}
-
-/// Okrągły przycisk ikony 28 pt (`.icon-btn` w makiecie) — Copy w pasku generowania.
-private struct CircleIconButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(isEnabled ? Color.mnText : Color.mnText3)
-            .frame(width: 28, height: 28)
-            .background(.mnCard, in: Circle())
-            .overlay(Circle().strokeBorder(.mnLine, lineWidth: 0.5))
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .contentShape(Circle())
     }
 }
 
@@ -149,7 +139,8 @@ struct TranscriptTab: View {
                 if p.isWarning { WarnLabel(p.line) } else { StateLabel(.neutral, p.line) }
             }
             if model.notes.isCorrecting(item.id) {
-                StateLabel(.progress(nil), "After the meeting, we improve the transcript\(modelName.map { " with \($0)" } ?? "")…")
+                StateLabel(.progress(nil), "After the meeting, we improve the transcript\(modelName.map { " with \(model.modelDisplayName($0))" } ?? "")…")
+                    .help(modelName ?? "")
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
                 ErrorLine(message: "Correction failed: \(why)", retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
@@ -159,7 +150,7 @@ struct TranscriptTab: View {
             // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
             if busy, item.transcript != nil, item.attemptNotPromoted == nil { StateLabel(.progress(nil), "Transcribing again…") }
             attemptBanner
-            // Uwaga 7: jedna linia nad listą — wersja (pole-popup) po lewej, Improve transcript i Copy po prawej.
+            // Jedna linia nad listą: wersja po lewej; „Improve transcript" (tylko przed pierwszą korektą), Copy i `⋯` po prawej.
             if item.transcript != nil {
                 HStack(spacing: 8) {
                     if item.corrected != nil {
@@ -170,31 +161,65 @@ struct TranscriptTab: View {
                             }
                             .pickerStyle(.inline).labelsHidden()
                         }
-                        if let c = item.corrected, c.failedBatches > 0 || c.rejectedLines > 0 {
-                            Label("\(c.failedBatches + c.rejectedLines) parts kept as heard", systemImage: "info.circle")
-                                .font(.callout).foregroundStyle(.mnText2).lineLimit(1)
-                                .help("Corrections that failed a check were left as the model heard them")
-                        }
-                    }
-                    if let c = item.corrected, c.model != model.notes.correctionAssignment(for: item)?.model {
-                        Text("Corrected with \(c.model)").font(.callout).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle)
                     }
                     Spacer(minLength: 0)
-                    // Chip także przy gotowej korekcie: bez niego nie dałoby się wybrać innego modelu, a dopiero wtedy pojawia się przycisk.
-                    if item.runID != nil, item.transcript?.utterances.isEmpty == false { MeetingModelChip(role: .correction, item: item) }
-                    if model.notes.correctionFailureMessage(item.id) == nil, model.notes.canRetryCorrection(item) {
+                    if canImprove, item.corrected == nil {
                         Button("Improve transcript") { model.notes.retryCorrection(item) }
-                            .buttonStyle(.pill)
+                            .buttonStyle(.pillPrimary)
                             .layoutPriority(2)
                             .disabled(moving)
                             .help("Run the correction model on this transcript")
                     }
-                    TranscribeAgainButton(item: item)
                     copyButton
+                    moreMenu
                 }
                 .padding(.bottom, 4)
             }
             content
+        }
+    }
+
+    /// Bez wyświetlonego błędu korekty (ten ma własne Retry) — ten sam warunek co dawny przycisk na pasku.
+    private var canImprove: Bool { model.notes.correctionFailureMessage(item.id) == nil && model.notes.canRetryCorrection(item) }
+    /// Chip modelu był tylko przy niepustym transkrypcie przebiegu; ten sam warunek dla pozycji `⋯`.
+    private var showsModelItem: Bool { item.runID != nil && item.transcript?.utterances.isEmpty == false }
+
+    /// „Corrected with …" i „N parts kept as heard" — informacje przeniesione z paska do notki w `⋯`.
+    private var menuNotes: [String] {
+        guard let c = item.corrected else { return [] }
+        var out: [String] = []
+        if c.model != model.notes.correctionAssignment(for: item)?.model { out.append("Corrected with \(model.modelDisplayName(c.model)) (\(c.model))") }
+        if c.failedBatches + c.rejectedLines > 0 { out.append("\(c.failedBatches + c.rejectedLines) parts kept as heard (failed a check)") }
+        return out
+    }
+
+    /// `⋯` zawsze ma „Transcribe again…", więc przy transkrypcie nigdy nie jest puste.
+    /// NSMenu ignoruje własną czcionkę i kolor: notka to wyłączone pozycje systemowe, nie 11 pt `mnText2`.
+    private var moreMenu: some View {
+        MoreMenu {
+            if canImprove, item.corrected != nil {
+                Button("Improve transcript again") { model.notes.retryCorrection(item) }.disabled(moving)
+            }
+            if showsModelItem {
+                Button(MeetingModelChip.menuTitle(.correction, item: item, model: model)) {
+                    DispatchQueue.main.async { state.correctionModelPopover = true }
+                }
+            }
+            if canImprove && item.corrected != nil || showsModelItem { Divider() }
+            let blocker = TranscribeAgainButton.blocker(item: item, model: model)
+            Button(blocker.map { "Transcribe again… (\($0))" } ?? "Transcribe again…") { DispatchQueue.main.async { state.transcribeAgainPopover = true } }
+                .disabled(blocker != nil)
+            let notes = menuNotes
+            if !notes.isEmpty {
+                Divider()
+                ForEach(notes, id: \.self) { Text($0) }
+            }
+        }
+        .background {
+            MeetingModelChip(role: .correction, item: item, presented: $state.correctionModelPopover)
+        }
+        .background {
+            TranscribeAgainButton(item: item, presented: $state.transcribeAgainPopover)
         }
     }
 
@@ -205,29 +230,29 @@ struct TranscriptTab: View {
     /// Baner R23: najnowsza próba nie jest bieżącym przebiegiem (trwa, padła, z lukami albo pusta).
     @ViewBuilder private var attemptBanner: some View {
         if let a = item.attemptNotPromoted {
-            let what = a.snapshot.map { "Transcription with \(Self.runLabel($0))" } ?? "The new transcription"
-            let from = item.runSnapshot.map { "the transcript from \(Self.runLabel($0))" } ?? "the previous transcript"
+            let what = a.snapshot.map { "Transcription with \(runLabel($0))" } ?? "The new transcription"
+            let from = item.runSnapshot.map { "the transcript from \(runLabel($0))" } ?? "the previous transcript"
             // W toku także przy wznowieniu próby z lukami (na dysku wciąż `.gaps`); tuż po starcie nowej próby baner może do
             // pierwszego przeładowania nazywać model poprzedniej.
             if busy {
                 StateLabel(.progress(nil), "\(what) is in progress — showing \(from).").wrapping()
             } else {
-                // Przycisk pod komunikatem: w jednej linii etykieta z nazwą modelu ucinała się przy 900 pt.
-                VStack(alignment: .leading, spacing: 6) {
+                // Jedna linia: krótkie „Resume" obok komunikatu (pełna etykieta z modelem ucinała się przy 900 pt).
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
                     WarnLabel("\(what) didn't finish — showing \(from).").help(Self.why(a.reason))
-                    if !busy, a.snapshot != nil {
-                        Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }
-                            .buttonStyle(.pill).disabled(moving || correcting)
-                            .help("Continues that transcription; finished parts aren't paid for again")
+                    if a.snapshot != nil {
+                        Button("Resume") { model.resume(item, runID: item.latestAttemptID) }
+                            .buttonStyle(.pillSmall).fixedSize().disabled(moving || correcting)
+                            .help("\(resumeLabel) — \(a.snapshot?.model ?? ""). Finished parts aren't paid for again.")
                     }
                 }
             }
         }
     }
 
-    /// „nvidia/parakeet-tdt (EN)" — model i język przebiegu.
-    static func runLabel(_ s: RunSnapshot) -> String {
-        "\(s.model) (\(s.preset.isAutoLanguage ? "Auto" : s.language?.rawValue.uppercased() ?? "?"))"
+    /// „parakeet-tdt (EN)" — czytelna nazwa modelu i język przebiegu.
+    private func runLabel(_ s: RunSnapshot) -> String {
+        "\(model.modelDisplayName(s.model)) (\(s.preset.isAutoLanguage ? "Auto" : s.language?.rawValue.uppercased() ?? "?"))"
     }
 
     private static func why(_ r: RunSelection.Reason) -> String {
@@ -240,7 +265,7 @@ struct TranscriptTab: View {
 
     /// Wznowienie zawsze idzie do najnowszej próby; etykieta mówi, którą, gdy to nie bieżący przebieg.
     private var resumeLabel: String {
-        item.attemptNotPromoted?.snapshot.map { "Resume Transcription with \(Self.runLabel($0))" } ?? "Resume Transcription"
+        item.attemptNotPromoted?.snapshot.map { "Resume Transcription with \(runLabel($0))" } ?? "Resume Transcription"
     }
 
     private var modelName: String? { model.presetFor(sessionURL: item.url)?.correction?.model }
@@ -351,11 +376,11 @@ struct SummaryTab: View {
                 .font(.callout).foregroundStyle(.mnWarn)
         }
     }
-    /// Spec 6: notatka powstała innym modelem niż ten z presetu — jedna linia, znika po zgodności.
+    /// Spec 6: notatka powstała innym modelem niż ten z presetu — notka w `⋯`, znika po zgodności. Pełne id w tekście.
     private var madeWithLine: String? {
         guard let made = item.notes.summary?.model, let preset = model.notes.presetSummaryChoice(for: item)?.assignment.model,
               made != preset else { return nil }
-        return "Made with \(made) (preset: \(preset))"
+        return "Made with \(model.modelDisplayName(made)) (\(made)); preset: \(model.modelDisplayName(preset)) (\(preset))"
     }
     private var hasText: Bool {
         guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return false }
@@ -372,7 +397,6 @@ struct SummaryTab: View {
         VStack(alignment: .leading, spacing: 12) {
             bar(item.notes.summary)
             if choice?.isFallback == true || choice == nil { modelLine }
-            if let made = madeWithLine { Text(made).font(.subheadline).foregroundStyle(.mnText2) }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
             if gen == .generating { generatingRow }
             if correcting, gen != .generating, hasText {
@@ -380,9 +404,6 @@ struct SummaryTab: View {
             }
             errorView
             if let s = item.notes.summary {
-                if let parts = s.condensedParts {
-                    Text("Long meeting: condensed in \(parts) parts before summarizing.").font(.subheadline).foregroundStyle(.mnText2)
-                }
                 MarkdownView(blocks: MarkdownBlocks.group(s.markdown)).padding(.top, 8)
             } else if gen != .generating, hasText {
                 emptyState
@@ -430,10 +451,10 @@ struct SummaryTab: View {
         return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
     }
 
-    /// Pasek we wnęce `sunk` (makieta: `.genbar`): szablon ⌄ · kontekst · model · przycisk. „Add context” rozwija pole
-    /// w tej samej wnęce. Przed notatką jedyny primary „Generate notes”, po — „Regenerate” + Copy.
+    /// Jedna linia bez wnęki: szablon · kontekst · przycisk · Copy · `⋯`. „Add context" rozwija pole pod linią.
+    /// Przed notatką jedyny primary „Generate notes", po — „Regenerate" + Copy (oba `.pill`).
     private func bar(_ s: NoteSummary?) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 templateMenu
                 Button { state.showContext.toggle() } label: {
@@ -446,24 +467,24 @@ struct SummaryTab: View {
                 .disabled(moving)
                 .help(state.showContext ? "Hide the context field" : "Add or change the context for the model")
                 .accessibilityValue(state.showContext ? "Expanded" : "Collapsed")
-                MeetingModelChip(role: .summary, item: item)
-                    .layoutPriority(1) // id modelu wygrywa z kontekstem (przegląd migawek: „deepseek/…-fla…”)
                 if let s {
                     Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
                         .buttonStyle(.pill)
-                        .layoutPriority(2) // długi id modelu skraca się sam, przycisk nie
+                        .layoutPriority(2)
                         .disabled(gen == .generating || !hasText || choice == nil || moving || correcting)
-                    Button { copy(s.markdown) } label: { Image(systemName: "doc.on.doc") }
-                        .buttonStyle(CircleIconButtonStyle())
+                    Button { copy(s.markdown) } label: { Label("Copy", systemImage: "doc.on.doc") }
+                        .buttonStyle(.pill)
+                        .layoutPriority(2)
                         .help("Copy the notes")
-                        .accessibilityLabel("Copy the notes")
                 } else {
                     Button("Generate notes") { run() }
                         .buttonStyle(.pillPrimary)
+                        .layoutPriority(2)
                         .disabled(gen == .generating || !hasText || choice == nil || moving || correcting)
                         // ⌘↩, nie sam Return: Return w polu kontekstu ma wstawić nową linię, a nie uruchomić płatne generowanie.
                         .keyboardShortcut(.return, modifiers: .command)
                 }
+                moreMenu
             }
             if state.showContext {
                 if moving {
@@ -476,8 +497,34 @@ struct SummaryTab: View {
                 }
             }
         }
-        .padding(.leading, 8).padding(.trailing, 6).padding(.vertical, 6)
-        .background(.mnSunk, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// Notatki o przebiegu: model inny niż w presecie i długie spotkanie. NSMenu ignoruje czcionkę — to wyłączone pozycje.
+    private var menuNotes: [String] {
+        var out: [String] = []
+        if let made = madeWithLine { out.append(made) }
+        if let parts = item.notes.summary?.condensedParts { out.append("Long meeting: condensed in \(parts) parts before summarizing.") }
+        return out
+    }
+
+    /// `⋯` zawsze ma pozycję modelu (jak dawny chip na pasku).
+    private var moreMenu: some View {
+        MoreMenu {
+            Button(MeetingModelChip.menuTitle(.summary, item: item, model: model)) {
+                DispatchQueue.main.async { state.summaryModelPopover = true }
+            }
+            .help(MeetingModelChip.override(.summary, item: item, model: model) != nil
+                  ? "Chosen for this meeting. The preset uses \(model.notes.presetSummaryChoice(for: item)?.assignment.model ?? "no model")."
+                  : "Choose another summary model for this meeting")
+            let notes = menuNotes
+            if !notes.isEmpty {
+                Divider()
+                ForEach(notes, id: \.self) { Text($0) }
+            }
+        }
+        .background {
+            MeetingModelChip(role: .summary, item: item, presented: $state.summaryModelPopover)
+        }
     }
 
     /// Popup szablonu: pole 130 × 28, promień 7 (makieta: `.field`). Menu zostaje systemowe.
