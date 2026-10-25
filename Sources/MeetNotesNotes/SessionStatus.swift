@@ -41,3 +41,14 @@ public enum SessionStatus: Equatable, Sendable {
         return hasRun ? .interrupted : .notTranscribed
     }
 }
+
+/// Czemu „Transcribe again…" jest teraz niedostępne (D13); `nil` = dostępne. Jedna bramka dla nagłówka transkryptu i stanu
+/// „No transcript yet" (F6): nie zależy od transkryptu, bo po próbie bez transkryptu też trzeba móc wybrać inny model.
+public enum TranscribeAgain {
+    public static func blocker(audioDeletedAfterDays: Int?, transcribing: Bool, moving: Bool) -> String? {
+        if let n = audioDeletedAfterDays { return "Audio was deleted after \(n) days" }
+        if transcribing { return "This recording is being transcribed" }
+        if moving { return "Meetings are being moved to a new folder" }
+        return nil
+    }
+}

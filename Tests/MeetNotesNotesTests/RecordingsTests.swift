@@ -12,6 +12,20 @@ private let day: TimeInterval = 86_400
 private let run1 = "2026-10-01T10-00-00Z-aaaa"
 private let run2 = "2026-10-02T10-00-00Z-bbbb"
 
+/// Przebieg tak, jak go zostawia `TranscriptionRunner`: transkrypt, potem `run.json` z `finishedAt` (`finished == false` = brak `run.json`).
+private func writeRun(_ session: URL, _ id: String, transcript t: Transcript?, finished: Bool = true) throws {
+    let rd = RunDirectory(session: session, runID: id)
+    try FileManager.default.createDirectory(at: rd.url, withIntermediateDirectories: true)
+    guard let t else { return }
+    try JSONFile.save(t, to: rd.transcript)
+    guard finished else { return }
+    let preset = Preset(name: "Polish", language: .polish, asr: RoleAssignment(providerID: testProvider.id, model: "m"))
+    try JSONFile.save(RunMetadata(runID: id, snapshot: try RunSnapshot(preset: preset, provider: testProvider, probe: nil), startedAt: Date(),
+                                  finishedAt: Date(), chunkCount: 1, requestCount: 1, audioSecondsSent: 1,
+                                  failedChunkCount: t.failedChunks.count, languageFlagCount: 0),
+                      to: rd.metadata)
+}
+
 /// Sesja w `root/name`: `system.caf` + dziennik (wallClock = teraz), opcjonalnie przebieg z transkryptem i My notes.
 @discardableResult
 private func seed(_ root: URL, _ name: String, run: String? = run1, transcript t: Transcript? = transcript([utt("hej")]),
@@ -20,11 +34,7 @@ private func seed(_ root: URL, _ name: String, run: String? = run1, transcript t
     let src = FileSource(trackID: "system", samples: [Int16](repeating: 100, count: 16_000), sampleRate: 16_000, channels: 1,
                          startHostTime: 1_000_000_000, timebase: ns1, chunkFrames: 1_600)
     try SessionRecorder(directory: dir, sources: [src], conditions: [], clock: ManualHostClock(), timebase: ns1, zeroWatch: [:]).start()
-    if let run {
-        let rd = RunDirectory(session: dir, runID: run)
-        try FileManager.default.createDirectory(at: rd.url, withIntermediateDirectories: true)
-        if let t { try JSONFile.save(t, to: rd.transcript) }
-    }
+    if let run { try writeRun(dir, run, transcript: t) }
     try NotesStore(session: dir).writeMyNotes(myNotes)
     return dir
 }
@@ -52,6 +62,26 @@ private func files(_ dir: URL) -> Set<String> {
         #expect(AudioRetention.audioFiles(s).count == 1, "\(s.lastPathComponent)")
         #expect(AudioDeletion.read(s) == nil)
     }
+}
+
+@Test func retentionUsesTheSameCompletenessRuleAsRunSelection() throws {
+    // F1: starszy dobry przebieg + nowsza próba, której `RunSelection` nie awansuje — audio zostaje (wznowienie go potrzebuje).
+    let root = tempDir()
+    let noMetadata = try seed(root, "no-metadata")              // transkrypt jest, `run.json` nie (aplikacja padła po zapisie transkryptu)
+    try writeRun(noMetadata, run2, transcript: transcript([utt("nowy")]), finished: false)
+    let empty = try seed(root, "empty")                          // ukończona, bez luk, ale pusta
+    try writeRun(empty, run2, transcript: transcript([]))
+    let done = try seed(root, "done")                            // najnowsza próba pełna — kasowanie jak dotąd
+    try writeRun(done, run2, transcript: transcript([utt("nowy")]))
+    for s in [noMetadata, empty] {
+        #expect(RunSelection.of(session: s).currentID == run1, "\(s.lastPathComponent)")
+        #expect(!AudioRetention.transcriptionFinished(s), "\(s.lastPathComponent)")
+    }
+    #expect(AudioRetention.transcriptionFinished(done))
+    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: [])
+    #expect(r.purged == ["done"])
+    #expect(AudioRetention.audioFiles(noMetadata).count == 1)
+    #expect(AudioRetention.audioFiles(empty).count == 1)
 }
 
 @Test func retentionIgnoresCliRunsWhenAppRunHasGaps() throws {

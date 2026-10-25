@@ -25,13 +25,14 @@ public enum AudioRetention {
             .filter { $0.pathExtension.lowercased() == "caf" }
     }
 
-    /// Ukończona = NAJNOWSZY przebieg ma transkrypt bez luk. Przebieg w toku albo przerwany (bez transkryptu)
-    /// i transkrypt z lukami (do ponowienia okien trzeba audio) to „nieukończona”.
+    /// Ukończona = NAJNOWSZY przebieg kwalifikuje się tak, jak przy wyborze bieżącego (`RunSelection.qualifies`, F1): `run.json`
+    /// z `finishedAt`, niepusty transkrypt bez luk. Przebieg w toku, przerwany (także po zapisie transkryptu, przed `run.json`),
+    /// pusty albo z lukami to „nieukończona” — do wznowienia trzeba audio.
     public static func transcriptionFinished(_ session: URL) -> Bool {
-        guard let id = RunDirectory.latestRunID(in: session),
-              let t = (try? JSONFile.load(Transcript?.self, from: RunDirectory(session: session, runID: id).transcript, default: nil)) ?? nil
-        else { return false }
-        return t.failedChunks.isEmpty
+        guard let id = RunDirectory.latestRunID(in: session) else { return false }
+        let run = RunDirectory(session: session, runID: id)
+        return RunSelection.qualifies((try? JSONFile.load(RunMetadata?.self, from: run.metadata, default: nil)) ?? nil,
+                                      (try? JSONFile.load(Transcript?.self, from: run.transcript, default: nil)) ?? nil)
     }
 
     /// Wiek liczony od `sessionStarted.wallClock` z dziennika: to jedyny zegar ścienny w dzienniku (koniec ma tylko

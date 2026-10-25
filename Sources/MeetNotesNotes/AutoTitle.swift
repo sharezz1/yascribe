@@ -50,16 +50,18 @@ public enum AutoTitle {
         return String(t.prefix(maxLength))
     }
 
-    /// Zwraca zapisany tytuł albo `nil` (nie trzeba / nie ma czego nazywać / model zawiódł).
+    /// Zwraca zapisany tytuł albo `nil` (nie trzeba / nie ma czego nazywać / model zawiódł / przebieg przestał być bieżący).
+    /// `stillCurrent`: sprawdzane tuż przed zapisem — w czasie wywołania modelu nowszy przebieg mógł zostać bieżącym (R23).
     public static func generate(client: OpenAICompatibleClient, model: String, transcript: Transcript,
                                 notesLanguage: LanguageCode?, store: NotesStore,
                                 timeout: Double = 60, chatTimeout: Double = 120, maxTokens: Int? = nil,
+                                stillCurrent: @Sendable () -> Bool = { true },
                                 onProblem: @Sendable (String) -> Void = { _ in }) async -> String? {
         guard shouldRun(meta: store.readMeta()), let p = prompt(transcript: transcript, notesLanguage: notesLanguage),
               let reply = try? await withDeadline(timeout, {
                   try await client.chat(model: model, system: p.system, user: p.user, timeout: chatTimeout, maxTokens: maxTokens)
               }),
-              let title = clean(reply) else { return nil }
+              let title = clean(reply), stillCurrent() else { return nil }
         var stored = false
         do {
             // Ponowne sprawdzenie pod zapisem: w międzyczasie użytkownik mógł wpisać własny tytuł.

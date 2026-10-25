@@ -19,8 +19,10 @@ final class NotesModel {
     var generation: [String: GenState] = [:]
     /// Bieżący krok generowania (klucz: id sesji) — „Condensing part 2 of 6 (pass 1)…"; `nil` poza generowaniem.
     private(set) var progress: [String: NoteProgress] = [:]
-    private(set) var correcting: Set<String> = []
-    private(set) var titling: Set<String> = []
+    /// Wszystkie trwające korekty i autotytuły, każdy z biletem (F2, F3): sesja zajęta, dopóki trwa którykolwiek; komunikat
+    /// i wynik należą do najnowszego (`RunOperations`).
+    private(set) var corrections = RunOperations()
+    private(set) var titles = RunOperations()
     /// Powód ostatniego nieudanego przebiegu korekty (klucz: id sesji). Znika po udanym ponowieniu.
     private(set) var correctionFailure: [String: String] = [:]
     var templates = TemplatesFile()
@@ -35,6 +37,9 @@ final class NotesModel {
     var summaryThinking: () -> Bool = { true }
     /// Przerywniki do usunięcia z poprawionego tekstu (F20 P2); pusta lista = nic nie usuwamy.
     var fillerWords: () -> [String] = { [] }
+    /// Słownik użytkownika i jego reguły Replacement (F21); przebieg czyta je razem, przed pierwszym `await`.
+    var dictionary: () -> UserDictionary = { UserDictionary() }
+    var replacementRules: () -> ReplacementRules = { ReplacementRules(UserDictionary()) }
     var onChange: () -> Void = {}
     /// Komunikaty dla użytkownika (np. nieczytelny plik notatek odłożony na bok) — podłączane do `AppModel.lastError`.
     var report: (String) -> Void = { _ in }
@@ -97,15 +102,15 @@ final class NotesModel {
         onChange()
     }
 
-    func isCorrecting(_ id: String) -> Bool { correcting.contains(id) }
-    func isTitling(_ id: String) -> Bool { titling.contains(id) }
+    func isCorrecting(_ id: String) -> Bool { corrections.isActive(id) }
+    func isTitling(_ id: String) -> Bool { titles.isActive(id) }
     func correctionFailureMessage(_ id: String) -> String? { correctionFailure[id] }
 
     /// „Improve transcript"/Retry: preset nagrania ma model korekty, jest transkrypt i nic nie trwa, a korekta
     /// albo padła (całkiem lub z częścią partii: „N parts kept as heard”), albo jej nie ma (np. aplikacja zamknięta w trakcie).
     func canRetryCorrection(_ item: SessionItem) -> Bool {
         // Bez wypowiedzi (np. wszystkie okna padły offline) nie ma czego poprawiać: przycisk nic by nie zrobił; wtedy jest „Retry Failed Parts”.
-        guard !correcting.contains(item.id), state(item.id) != .generating, item.runID != nil,
+        guard !isCorrecting(item.id), state(item.id) != .generating, item.runID != nil,
               let transcript = item.transcript, !transcript.utterances.isEmpty else { return false }
         guard correctionAssignment(for: item) != nil else { return false }
         // Własny model korekty pozwala puścić ją jeszcze raz także po udanej, żeby porównać modele (nadpisuje corrected.json).
@@ -119,7 +124,8 @@ final class NotesModel {
               let runID = item.runID, let t = item.transcript else { return }
         reportStaleOverride(.correction, for: item)
         let url = item.url
-        let language = presetFor(url)?.language
+        // Język przebiegu, który się poprawia (I2): po „Transcribe again…" inny niż w `preset.json` sesji.
+        let language = RunLanguage.of(item.runSnapshot, fallback: presetFor(url)).language
         Task { _ = await runCorrection(sessionURL: url, runID: runID, assignment: c, language: language, transcript: t) }
     }
 
@@ -127,29 +133,48 @@ final class NotesModel {
     private func runCorrection(sessionURL: URL, runID: String, assignment: RoleAssignment, language: LanguageCode?,
                                transcript: Transcript) async -> Transcript {
         let id = sessionURL.lastPathComponent
+        // Bilet od pierwszej linii, przed każdym wczesnym wyjściem: inaczej starsza korekta, kończąc się, nadpisałaby
+        // porażkę nowszej, która padła bez klienta (fix round 2).
+        let ticket = corrections.start(session: id, runID: runID)
         guard !assignment.model.isEmpty, let client = clientFor(assignment.providerID) else {
-            correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
+            if corrections.finish(ticket).ownsMessage {
+                correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
+            }
             onChange()
             return transcript
         }
+        // Słownik, reguły i uczestnicy z jednej chwili, przed pierwszym `await`: edycja słownika w trakcie sondy kontekstu
+        // nie miesza wersji wejścia i polecenia. Uczestnicy z `meta.json` teraz, więc późne powiązanie wydarzenia też się liczy.
+        let dict = dictionary(), rules = replacementRules()
+        let link = NotesStore(session: sessionURL).readMeta().calendarEvent
+        let input = Replacement.apply(transcript, rules: rules)
         correctionFailure[id] = nil
-        correcting.insert(id)
         onChange()
         let limits = ChatLimits.for(client.provider, call: .correctionBatch)
         // Kontekst lokalnego serwera sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); API: bez budżetu.
         let budget = client.provider.isLocal
             ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: assignment.model)) : nil
+        let vocabulary = DictionaryPrompt.make(dict, link: link, maxChars: DictionaryPrompt.maxChars(budget: budget))
+        let used = vocabulary.isEmpty ? nil : vocabulary
         let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
-                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords())
-            .correct(transcript, language: language)
-        correcting.remove(id)
+                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used)
+            .correct(input, language: language)
+        // Komunikat należy do najnowszej korekty sesji, wynik — do najnowszej korekty tego przebiegu (F2): starsza, kończąc się
+        // później, nie nadpisuje `corrected.json` ani śladu nowszej. Sprawdzenie i zapis bez `await` pomiędzy.
+        let outcome = corrections.finish(ticket)
         defer { onChange() }
         if result.failedCompletely {
-            correctionFailure[id] = result.firstError ?? "The correction didn't go through."
+            if outcome.ownsMessage { correctionFailure[id] = result.firstError ?? "The correction didn't go through." }
             return transcript
         }
-        if result.batches > 0 {
-            try? JSONFile.save(result, to: RunDirectory(session: sessionURL, runID: runID).corrected)
+        if result.batches > 0, outcome.mayPublish {
+            let run = RunDirectory(session: sessionURL, runID: runID)
+            let saved = (try? JSONFile.save(result, to: run.corrected)) != nil
+            // Ślad do odbioru §8.4 tylko po zapisanej korekcie (R18): stary ślad obok nowego `corrected.json` kłamałby.
+            if let error = VocabularyTrace.update(promptLines: used?.promptLines, at: run.url.appendingPathComponent("vocabulary.txt"),
+                                                  correctionSaved: saved) {
+                report("Couldn't save the vocabulary trace: \(error)")
+            }
             return result.transcript
         }
         return transcript
@@ -162,8 +187,8 @@ final class NotesModel {
         guard !isMoving() else { report(Self.movingMessage); return }
         guard state(id) != .generating else { return }
         // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
-        guard !correcting.contains(id) else { return }
-        guard let transcript = item.transcript(corrected: useCorrected) else {
+        guard !isCorrecting(id) else { return }
+        guard let source = item.transcript(corrected: useCorrected) else {
             generation[id] = .failed("This meeting has no transcript yet.")
             return
         }
@@ -184,6 +209,9 @@ final class NotesModel {
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url
+        // Słownik, reguły i uczestnicy z chwili kliknięcia, przed pierwszym `await` (sonda kontekstu); Replacement idempotentny.
+        let dict = dictionary(), link = item.notes.meta.calendarEvent
+        let transcript = Replacement.apply(source, rules: replacementRules())
         let token = UUID()
         let task = Task {
             do {
@@ -191,8 +219,10 @@ final class NotesModel {
                 // API nie dostaje budżetu, więc nigdy nie dzieli transkryptu.
                 let budget = client.provider.isLocal
                     ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: choice.assignment.model)) : nil
+                let vocabulary = DictionaryPrompt.make(dict, link: link, maxChars: DictionaryPrompt.maxChars(budget: budget))
                 _ = try await generator.generate(session: session, template: template, transcript: transcript,
                                                  context: context, notesLanguage: language, budget: budget,
+                                                 vocabulary: vocabulary.isEmpty ? nil : vocabulary,
                                                  onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } },
                                                  progress: { [weak self] p in
                                                      Task { @MainActor in if self?.generationRuns[id]?.token == token { self?.progress[id] = p } }
@@ -216,7 +246,8 @@ final class NotesModel {
     func setPreview(_ id: String, generating: NoteProgress? = nil, correcting isCorrecting: Bool = false) {
         generation[id] = generating == nil ? nil : .generating
         progress[id] = generating
-        if isCorrecting { correcting.insert(id) } else { correcting.remove(id) }
+        // Tylko tryb migawek, w którym nic naprawdę nie trwa: wyczyszczenie rejestru nikomu nie zabiera biletu.
+        if isCorrecting { _ = corrections.start(session: id, runID: "preview") } else { corrections = RunOperations() }
     }
 
     /// „Cancel" przy generowaniu: zatrzymuje kolejne wywołania serwera i od razu zwalnia sesję (bez błędu, bez notatki).
@@ -250,19 +281,25 @@ final class NotesModel {
             working = await runCorrection(sessionURL: sessionURL, runID: runID, assignment: corr,
                                           language: snapshot.language, transcript: transcript)
         }
+        // Korekta bywa wolna: w tym czasie nowszy przebieg mógł zostać bieżącym — wtedy autotytuł z tego tekstu nie powstaje (R23).
+        guard RunSelection.shouldPostProcess(session: sessionURL, runID: runID) else { return }
         // Ten sam wybór modelu co przy „Generate notes": preset nagrania → domyślny → dowolny z `summary` (`SummaryModel`).
         let info = presetsInfo()
         if let choice = SummaryModel.resolve(frozen: snapshot.preset, override: saved?.usable(.summary, knownProviders: known),
                                              defaultPresetID: info.defaultID, presets: info.presets),
            let client = clientFor(choice.assignment.providerID) {
-            titling.insert(id)
+            let ticket = titles.start(session: id, runID: runID)
             onChange()
             let limits = ChatLimits.for(client.provider, call: .title)
-            _ = await AutoTitle.generate(client: client, model: choice.assignment.model, transcript: working,
+            // Tytuł z tekstu po Replacement — także bez korekty w presecie i po jej porażce (wtedy `working` jest surowy).
+            _ = await AutoTitle.generate(client: client, model: choice.assignment.model,
+                                         transcript: Replacement.apply(working, rules: replacementRules()),
                                          notesLanguage: snapshot.preset.effectiveNotesLanguage,
                                          store: NotesStore(session: sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
-                                         maxTokens: limits.maxTokens, onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
-            titling.remove(id)
+                                         maxTokens: limits.maxTokens,
+                                         stillCurrent: { RunSelection.shouldPostProcess(session: sessionURL, runID: runID) },
+                                         onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
+            _ = titles.finish(ticket)
             onChange()
         }
     }

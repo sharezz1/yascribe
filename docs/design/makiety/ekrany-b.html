@@ -192,6 +192,29 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round
 .panel { position: absolute; width: 320px; border-radius: 20px; padding: 14px; }
 .meter { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .meter u { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+/* dictionary (faza 2.1a) */
+.switch.off { background: color-mix(in srgb, var(--text3) 55%, var(--card)); }
+.switch.off::after { right: auto; left: 2px; }
+.cb { width: 14px; height: 14px; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--text3); display: inline-grid; place-items: center; flex: none; }
+.cb.on { background: var(--accent); box-shadow: none; color: var(--card); }
+.cb svg { width: 10px; height: 10px; stroke-width: 2.2; }
+.state.warn { color: var(--warn); }
+.drow .t span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pri { font-size: 12px; color: var(--text2); width: 52px; text-align: right; flex: none; }
+.pri.hi { color: var(--text); font-weight: 500; }
+.lrow.sel { background: var(--sel); }
+.arow { display: grid; grid-template-columns: 1fr 64px 40px; align-items: center; gap: 10px; padding: 6px 14px; position: relative; }
+.arow + .arow::before { content:""; position:absolute; top:0; left:14px; right:14px; height:.5px; background: var(--line2); }
+.arow.head { padding: 8px 14px 4px; font-size: 11px; color: var(--text2); }
+.arow .rk { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+.arow .field { background: transparent; box-shadow: none; padding: 0; }
+.dark .arow .field { background: transparent; }
+.sheet.wide { width: 500px; top: 36px; }
+.sheet .t-cap b { font-weight: 600; color: var(--text); }
+.stat { flex: 1; }
+.stat b { display: block; font: 400 26px/30px "NY"; letter-spacing: -.3px; }
+.stat span { display: block; font-size: 11px; line-height: 14px; color: var(--text2); margin-top: 2px; }
 .ann { position: absolute; font: 500 11px/14px system-ui; color: rgba(255,255,255,.8); }  /* adnotacja makiety, nie UI */
 </style>
 </head>
@@ -213,13 +236,17 @@ const I = {
   redo:'<svg viewBox="0 0 16 16"><path d="M13 3v3.5H9.5"/><path d="M12.6 6.4A5 5 0 1 0 13 10"/></svg>',
   plus:'<svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>',
   speaker:'<svg viewBox="0 0 16 16"><path d="M2.5 6h2.5L8.5 3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4"/></svg>',
+  book:'<svg viewBox="0 0 16 16"><path d="M3 2.5h8.5A1.5 1.5 0 0 1 13 4v9.5H4.5A1.5 1.5 0 0 1 3 12z"/><path d="M3 12a1.5 1.5 0 0 1 1.5-1.5H13"/></svg>',
+  warn:'<svg viewBox="0 0 16 16"><path d="M8 2.5 14 13H2z"/><path d="M8 6.5v3M8 11.3h.01"/></svg>',
   mic:'<svg viewBox="0 0 16 16"><rect x="5.5" y="1.8" width="5" height="8" rx="2.5"/><path d="M3.5 8a4.5 4.5 0 0 0 9 0M8 12.5v2"/></svg>',
 };
+const withDict = (new URLSearchParams(location.search).get('s')||'').startsWith('dict');
 const sz = (svg, n) => svg.replace('<svg', `<svg style="width:${n}px;height:${n}px"`);
 const side = sel => `<div class="side">
   <div class="nav ${sel=='m'?'sel':''}">${I.list}Meetings</div><div class="spacer"></div>
   <div class="nav ${sel=='p'?'sel':''}">${I.sliders}Presets</div>
   <div class="nav ${sel=='t'?'sel':''}">${I.tmpl}Templates</div>
+  ${withDict?`<div class="nav ${sel=='d'?'sel':''}">${I.book}Dictionary</div>`:''}
   <div class="nav ${sel=='s'?'sel':''}">${I.gear}Settings</div></div>`;
 const win = (th, sel, inner) => `<div class="win ${th}"><div class="lights"><i></i><i></i><i></i></div>${side(sel)}${inner}</div>`;
 const popup = (txt, w) => `<div class="field" style="${w?`width:${w}px`:''}"><span class="grow">${txt}</span>${I.chev}</div>`;
@@ -529,7 +556,81 @@ const cuB2none = th => win(th,'m', `<div class="main"><div class="col" style="wi
   ${pastRows}
 </div></div>`);
 
-const S = {home, meeting, presets, settings, add, pill, templates, summary0, transcript, cuA, cuB, cuC, cuEmpty, cuB2, cuB2none};
+
+/* ---------------- Dictionary (faza 2.1a, makieta D11) ---------------- */
+const cbox = on => `<span class="cb ${on?'on':''}">${on?I.check:''}</span>`;
+const dhead = full => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:18px"><div class="t-large" style="flex:1">Dictionary</div>${full
+  ? `<span class="pill">Import…</span><span class="pill">Export…</span><span class="pill">${I.plus}New term</span>` : ''}</div>`;
+const drow = (term, pri, aliases, sel) => `<div class="lrow drow ${sel?'sel':''}"><div class="t"><b>${term}</b><span>${aliases}</span></div><span class="pri ${pri=='High'?'hi':''}">${pri}</span></div>`;
+const off = a => `${a} <i>(risky, off)</i>`;
+const dlist = (selTerm) => `<div class="card" style="overflow:hidden">
+  ${drow('Nimbu','High','Rok <i>(risky, off)</i>, Roky, Rokm', selTerm)}
+  ${drow('KOPT','High',`ko pt, ${off('Kopt')}`)}
+  ${drow('Orbit','High','Orbis, Żorbit')}
+  ${drow('OnTrack','High',`on track, ${off('ontrak')}`)}
+  ${drow('Dorek','Normal','Dorna')}
+  ${drow('Zoom','Normal','Doomem, Zoomem')}
+  ${drow('WFM','Normal','<i>No aliases · hint for the model only</i>')}
+  ${drow('Terraform','Low','teraform')}
+</div>`;
+const dbody = (selTerm) => `<div class="main"><div class="col" style="width:640px">
+  ${dhead(true)}
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+    <div class="field search" style="width:260px">${I.search}Search terms and aliases</div><span style="flex:1"></span>
+    <span class="t-cap num">166 terms · 223 aliases</span></div>
+  <div class="genbar" style="margin-bottom:14px"><span class="state warn" style="gap:8px">${sz(I.warn,13)}<span style="color:var(--text);font-size:13px"><b style="font-weight:600">37 terms</b> don’t fit the correction prompt</span></span>
+    <span class="ctx" style="text-align:right">gemma-3-4b · context 4096</span></div>
+  ${dlist(selTerm)}
+</div></div>`;
+const dictList = th => win(th,'d', dbody(false));
+
+const dictEmpty = th => win(th,'d', `<div class="main"><div class="col" style="width:640px">
+  ${dhead(false)}
+  <div class="card" style="padding:22px 24px 24px">
+    <div class="t-head" style="font-size:15px;line-height:20px;margin-bottom:6px">No terms yet</div>
+    <div class="dim" style="line-height:20px;max-width:520px">Add the names and words your meetings keep getting wrong. A <b style="font-weight:500;color:var(--text)">term</b> is the correct spelling.
+      Its <b style="font-weight:500;color:var(--text)">aliases</b> are the wrong spellings the transcript produces; they are replaced automatically, in every meeting.</div>
+    <div style="margin:16px 0 20px;padding:12px 14px;border-radius:10px;background:var(--sunk);display:flex;align-items:center;gap:10px">
+      <span class="dim">Roky, Rokm</span><span class="faint">→</span><span style="font-weight:600">Nimbu</span></div>
+    <div style="display:flex;align-items:center;gap:10px"><span class="pill primary lg">${I.plus}New term</span><span class="pill lg">Import…</span>
+      <span class="t-cap">Reads vocab_core.txt and replacements.tsv</span></div>
+  </div></div></div>`);
+
+const arow = (a, risky, on) => `<div class="arow"><div class="field"><span class="grow">${a}</span></div>
+  <span class="rk">${cbox(risky)}Risky</span><span class="switch ${on?'':'off'}"></span></div>`;
+const dictEdit = th => win(th,'d', dbody(true) + `<div class="scrim"></div><div class="sheet wide">
+  <div style="margin-bottom:16px"><div class="t-head" style="font-size:15px;line-height:20px">Edit term</div></div>
+  <div class="form-row"><label class="dim">Term</label><div class="field"><span class="grow">Nimbu</span></div></div>
+  <div class="form-row"><label class="dim">Priority</label><div style="display:flex;align-items:center;gap:10px">${popup('High',120)}<span class="t-cap">Low priority is left out of the prompt first.</span></div></div>
+  <div class="sec-h" style="margin:14px 0 6px"><span class="t-head">Aliases</span><span class="t-cap">replaced in every transcript</span></div>
+  <div class="card" style="overflow:hidden">
+    <div class="arow head"><span>Alias</span><span>Risky</span><span style="text-align:right">On</span></div>
+    ${arow('Roky',false,true)}${arow('Rokm',false,true)}${arow('Rok',true,false)}
+    <div class="addrow" style="padding:8px 14px;gap:10px"><div class="field ${th=='light'?'focus':''}" style="flex:1;height:28px"><span class="grow ${th=='light'?'faint':''}">${th=='light'?'Add alias':'Zoomem'}${th=='light'?'':'<span class="caret"></span>'}</span></div>
+      <span class="pill sm off">Add</span></div>
+  </div>
+  ${th=='light'
+    ? `<div class="t-cap" style="margin:8px 2px 0;line-height:15px"><b>Risky</b> means the alias is also an ordinary word (Rok is a name). It is added switched off; turn it on only if you accept that it may replace correct text.</div>`
+    : `<div class="state bad" style="margin:8px 2px 0;white-space:normal;align-items:flex-start">${I.x}<span>“Zoomem” is already an alias of Zoom. An alias belongs to one term.</span></div>`}
+  <div style="display:flex;align-items:center;gap:8px;margin-top:20px"><span class="pill sm" style="color:var(--rec)">Delete term</span><span style="flex:1"></span>
+    <span class="pill">Cancel</span><span class="pill primary">Save</span></div>
+</div>`);
+
+const stat = (n, l) => `<div class="stat"><b class="num">${n}</b><span>${l}</span></div>`;
+const cflt = (a, keep, skip) => `<div class="lrow" style="padding:9px 14px"><div class="t"><b style="font-weight:500">“${a}”</b>
+  <span style="font-size:12px;line-height:16px">Kept for <strong style="font-weight:600;color:var(--text)">${keep}</strong>, skipped for ${skip}.</span></div></div>`;
+const dictImport = th => win(th,'d', dbody(true) + `<div class="scrim"></div><div class="sheet wide">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><span class="state ok" style="font-size:15px">${I.check}</span>
+    <div><div class="t-head" style="font-size:15px;line-height:20px">Import finished</div>
+    <div class="t-cap" style="margin-top:2px">vocab_core.txt · replacements.tsv</div></div></div>
+  <div class="card" style="display:flex;padding:14px 16px">${stat(166,'terms added')}${stat(223,'aliases added')}${stat(12,'risky, left off')}${stat(2,'conflicts')}</div>
+  <div class="sec-h" style="margin:16px 0 6px"><span class="t-head">Conflicts</span><span class="t-cap">an alias belongs to one term</span></div>
+  <div class="card" style="overflow:hidden">${cflt('Dorna','Dorek','Jarosław')}${cflt('on track','OnTrack','Post Office')}</div>
+  <div class="t-cap" style="margin:10px 2px 0;line-height:15px">Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are.</div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><span class="pill primary">Done</span></div>
+</div>`);
+
+const S = {dictEmpty, dictList, dictEdit, dictImport, home, meeting, presets, settings, add, pill, templates, summary0, transcript, cuA, cuB, cuC, cuEmpty, cuB2, cuB2none};
 const s = new URLSearchParams(location.search).get('s') || 'home';
 document.body.innerHTML = S[s]('light') + S[s]('dark');
 </script>

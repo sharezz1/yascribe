@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import MeetNotesLocalASR
+import MeetNotesNotes
 import MeetNotesProviders
 import MeetNotesRecording
 import MeetNotesSessionFormat
@@ -22,12 +23,14 @@ struct CLI {
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
                                                                   <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza)
+      dictionary-check <katalog sesji> --replacements <plik.tsv> [--vocabulary <plik.txt>]
+                                                                  liczy Termy i Aliasy w transkrypcie (surowym i poprawionym) przed i po Replacement (faza 2.1, odbiór §8.1)
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
     Czasy z transcribe są na osi sesji; czas w pliku ścieżki = czas na osi − przesunięcie z summarize.
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
-    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store"]
+    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary"]
     static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output"])
 
     static func main() async {
@@ -48,6 +51,7 @@ struct CLI {
             case "models": try await models(args)
             case "probe": try await probe(args)
             case "transcribe": try await transcribe(args)
+            case "dictionary-check": try dictionaryCheck(args)
             case "session-from-file": try await sessionFromFile(args)
             default: print(usage); exit(64)
             }
@@ -289,6 +293,52 @@ struct CLI {
             print(String(format: "[%7.1f] %@: ", u.start, u.speaker == .me ? "Me" : "Them") + u.text + flag)
         }
         if !t.failedChunks.isEmpty { print("nieudanych okien: \(t.failedChunks.count)") }
+    }
+
+    /// Faza 2.1, odbiór §8.1: słownik z plików (`DictionaryTransfer`) zastosowany do bieżącego przebiegu sesji (`Replacement`), bez UI i sieci.
+    /// Liczy całe słowa, bez względu na wielkość liter, w tekstach wypowiedzi. Kod 1, gdy po Replacement został Alias albo zniknął Term.
+    static func dictionaryCheck(_ args: [String]) throws {
+        let dir = URL(fileURLWithPath: try positional(args, 0))
+        guard let replPath = value(args, "--replacements") else {
+            FileHandle.standardError.write(Data("--replacements <plik.tsv> jest obowiązkowe\n".utf8)); exit(64)
+        }
+        let vocab = try value(args, "--vocabulary").map { try String(contentsOfFile: $0, encoding: .utf8) }
+        let (dictionary, report) = DictionaryTransfer.importFiles(vocabulary: vocab, replacements: try String(contentsOfFile: replPath, encoding: .utf8), into: UserDictionary())
+        // Pusty słownik (pusty plik, same odrzucone wpisy) nie sprawdza niczego, więc nie może kończyć się „OK".
+        guard !dictionary.terms.isEmpty else {
+            FileHandle.standardError.write(Data("brak Termów po imporcie (\(report.summary)) — nie ma czego sprawdzać\n".utf8)); exit(1)
+        }
+        let run = RunSelection.of(session: dir)
+        guard let raw = run.transcript else {
+            FileHandle.standardError.write(Data("\(dir.path): brak transkryptu\n".utf8)); exit(1)
+        }
+        let corrected = try run.currentID.flatMap { id in
+            try JSONFile.load(CorrectedTranscript?.self, from: RunDirectory(session: dir, runID: id).corrected, default: nil)
+        }?.transcript
+        let rules = ReplacementRules(dictionary)
+        let views: [(String, Transcript)] = [("raw", raw)] + (corrected.map { [("corrected", $0)] } ?? [])
+        func count(_ phrase: String, in t: Transcript) -> Int {
+            let re = try! NSRegularExpression(pattern: "(?<![\\p{L}\\p{N}\\p{M}])" + NSRegularExpression.escapedPattern(for: phrase) + "(?![\\p{L}\\p{N}\\p{M}])",
+                                              options: .caseInsensitive)
+            return t.utterances.reduce(0) { $0 + re.numberOfMatches(in: $1.text, range: NSRange($1.text.startIndex..., in: $1.text)) }
+        }
+        print("przebieg: \(run.currentID ?? "-"), import: \(report.summary)")
+        var failed = false
+        for term in dictionary.terms {
+            let rows = [(term.text, "Term")] + term.aliases.filter(\.enabled).map { ($0.text, "Alias") }
+            for (text, kind) in rows {
+                let cells = views.map { name, t -> String in
+                    let before = count(text, in: t), after = count(text, in: Replacement.apply(t, rules: rules))
+                    // Alias różniący się od Terma tylko wielkością liter (np. Kopt → KOPT) jest podmieniany poprawnie, ale licznik go nie odróżni (F9).
+                    let caseOnly = kind == "Alias" && UserDictionary.aliasOnlyNormalizesCase(alias: text, term: term.text)
+                    if kind == "Alias" ? (after > 0 && !caseOnly) : after == 0 { failed = true }
+                    return "\(name) \(before) -> \(after)" + (caseOnly ? " (tylko wielkość liter)" : "")
+                }
+                print("\(kind.padding(toLength: 5, withPad: " ", startingAt: 0)) \(text.padding(toLength: 8, withPad: " ", startingAt: 0)) " + cells.joined(separator: "  |  "))
+            }
+        }
+        print(failed ? "BŁĄD: po Replacement został Alias albo zniknął Term" : "OK: po Replacement 0 wystąpień Aliasów i niezerowe Termy")
+        if failed { exit(1) }
     }
 
     /// Tylko do testów (spec fazy 1, §1.0): sesja z istniejącego pliku, np. z korpusu

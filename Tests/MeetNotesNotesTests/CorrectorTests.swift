@@ -241,3 +241,97 @@ private func longTranscript(_ n: Int = 100) -> Transcript {
     #expect(r.firstError?.contains("fix-model's server cut off the start of the input") == true)
     #expect(r.transcript.utterances[0].text == t.utterances[0].text)
 }
+
+// MARK: Słownik w poleceniach (F21 T6)
+
+/// Zestawy testów w dwóch plikach: korektor tutaj, podsumowanie i mapa w `PromptTests.swift` (`extension VocabularyInPromptTests`).
+@Suite struct VocabularyInPromptTests {
+    static let vocabulary = PromptVocabulary(terms: ["Orbit", "Kopt"], attendees: ["Anna Kowalska"])
+
+    private func withVocabulary(_ v: PromptVocabulary?, budget: ContextBudget? = nil) -> Corrector {
+        Corrector(client: chatClient(ChatStub { capitalizing($0.user) }), assignment: assignment, budget: budget, vocabulary: v)
+    }
+
+    @Test func correctorSystemIncludesVocabularyLines() {
+        let s = withVocabulary(Self.vocabulary).system(language: .polish)
+        #expect(s.contains("Known names and terms") && s.contains("Orbit; Kopt"))
+        #expect(s.contains("Meeting attendees") && s.contains("Anna Kowalska"))
+        // Po zdaniu o języku, przed „Extra instructions".
+        let a = Corrector(client: chatClient(ChatStub { $0.user }), assignment: RoleAssignment(providerID: testProvider.id, model: "m", prompt: "Be brief."),
+                          vocabulary: Self.vocabulary).system(language: .polish)
+        let language = a.range(of: "The transcript language is Polish.")!.upperBound
+        #expect(language < a.range(of: "Known names and terms")!.lowerBound)
+        #expect(a.range(of: "Meeting attendees")!.upperBound < a.range(of: "Extra instructions from the user")!.lowerBound)
+    }
+
+    @Test func correctorSystemUnchangedWithoutVocabulary() {
+        let plain = corrector(ChatStub { $0.user }).system(language: .polish)
+        #expect(withVocabulary(nil).system(language: .polish) == plain)
+        #expect(withVocabulary(PromptVocabulary()).system(language: .polish) == plain) // pusty słownik też nic nie dopisuje
+    }
+
+    @Test func batchLimitAccountsForVocabulary() {
+        let big = DictionaryPrompt.make(Self.dictionary(150), link: nil, maxChars: DictionaryPrompt.maxChars(budget: ContextBudget(tokens: 4_096)))
+        let small = ContextBudget(tokens: 4_096)
+        let plain = withVocabulary(nil, budget: small), with = withVocabulary(big, budget: small)
+        func expected(_ c: Corrector) -> Int {
+            min(ContextBudget.correctionBatchCap, small.pairedInputChars(fixedChars: c.system(language: .polish).count, replyFactor: ContextBudget.correctionReplyFactor))
+        }
+        #expect(plain.batchLimit(language: .polish) == expected(plain))
+        #expect(with.batchLimit(language: .polish) == expected(with))
+        #expect(with.batchLimit(language: .polish) < plain.batchLimit(language: .polish))
+        let huge = ContextBudget(tokens: 16_384)
+        #expect(withVocabulary(nil, budget: huge).batchLimit(language: .polish) == 4_000)
+        #expect(withVocabulary(big, budget: huge).batchLimit(language: .polish) == 4_000)
+    }
+
+    @Test func capturedCorrectorRequestListsExactlyThePrunedTerms() async throws {
+        let budget = ContextBudget(tokens: 4_096)
+        let v = DictionaryPrompt.make(Self.dictionary(150), link: nil, maxChars: DictionaryPrompt.maxChars(budget: budget))
+        #expect(v.omittedTerms > 0 && v.terms.count + v.omittedTerms == 150)
+        let stub = ChatStub { capitalizing($0.user) }
+        let c = Corrector(client: chatClient(stub), assignment: assignment, budget: budget, vocabulary: v)
+        _ = await c.correct(transcript([utt("no to jest test")]), language: .polish)
+        let system = try #require(stub.calls.first?.system)
+        let marker = "spell them exactly like this when they appear): "
+        let line = try #require(system.components(separatedBy: "\n").first { $0.hasPrefix("Known names and terms") })
+        let listed = String(line[line.range(of: marker)!.upperBound...].dropLast()).components(separatedBy: "; ") // bez końcowej kropki
+        #expect(listed == v.terms)
+        let missing = Self.dictionary(150).terms.map(\.text).filter { !system.contains($0) }
+        #expect(missing.count == v.omittedTerms)
+    }
+
+    @Test func utteranceOverTheVocabularyLimitIsKeptAndNeverSent() async {
+        // F5: wypowiedź mieści się w partii bez słownika, ale nie ze słownikiem — nie idzie do modelu, zostaje oryginalna.
+        let budget = ContextBudget(tokens: 4_096)
+        let v = DictionaryPrompt.make(Self.dictionary(150), link: nil, maxChars: DictionaryPrompt.maxChars(budget: budget))
+        let stub = ChatStub { capitalizing($0.user) }
+        let c = Corrector(client: chatClient(stub), assignment: assignment, budget: budget, vocabulary: v)
+        let plainLimit = withVocabulary(nil, budget: budget).batchLimit(language: .polish), limit = c.batchLimit(language: .polish)
+        let long = String(repeating: "x", count: limit) // sama partia `[1] …` miałaby limit + 4 znaki
+        #expect("[1] \(long)\n".count > limit && "[1] \(long)\n".count <= plainLimit)
+        let r = await c.correct(transcript([utt("no to jest test"), utt(long, at: 5), utt("tak dokładnie tak", at: 10)]), language: .polish)
+        #expect(!stub.calls.isEmpty && stub.calls.allSatisfy { !$0.user.contains(long) })
+        for call in stub.calls {
+            #expect(call.user.count <= limit)
+            let tokens = Double(call.system.count + call.user.count) / ContextBudget.charsPerToken + Double(call.maxTokens ?? 0)
+            #expect(tokens + Double(ContextBudget.marginTokens) <= 4_096 + 1)
+        }
+        #expect(r.transcript.utterances.map(\.text) == ["No to jest test.", long, "Tak dokładnie tak."])
+        #expect(r.rejectedLines == 1 && r.failedBatches == 0)
+        // Same za długie wypowiedzi: jawny błąd bez wysyłki (jak za mały kontekst), nie cichy brak korekty.
+        let only = ChatStub { capitalizing($0.user) }
+        let alone = await Corrector(client: chatClient(only), assignment: assignment, budget: budget, vocabulary: v)
+            .correct(transcript([utt(long)]), language: .polish)
+        #expect(only.calls.isEmpty && alone.failedCompletely && alone.transcript.utterances[0].text == long)
+        // API (bez budżetu): bez zmian — ta sama wypowiedź idzie do modelu.
+        let api = ChatStub { capitalizing($0.user) }
+        _ = await Corrector(client: chatClient(api), assignment: assignment, vocabulary: v).correct(transcript([utt(long)]), language: .polish)
+        #expect(api.calls.count == 1)
+    }
+
+    /// `n` Termów „Termin001 …" (bez znaków, które `sanitize` zmienia), wszystkie `.normal`.
+    static func dictionary(_ n: Int) -> UserDictionary {
+        UserDictionary(terms: (1...n).map { DictionaryTerm("Termin\(String(format: "%03d", $0))Alfa") })
+    }
+}

@@ -83,7 +83,7 @@ struct ContentView: View {
             case .settings: SettingsView()
             case .tasks: LaterPhaseView(title: "Tasks", text: "Tasks with owners across meetings arrive with notes and speaker identity.")
             case .dictation: LaterPhaseView(title: "Dictation", text: "Dictation arrives in a later phase.")
-            case .dictionary: LaterPhaseView(title: "Dictionary", text: "Your vocabulary and corrections from transcripts will live here.")
+            case .dictionary: DictionaryView()
             }
         }
         .tint(.mnAccent) // 🔀 odstępstwo 5 (macos.md §10): stały akcent w treści
@@ -100,7 +100,7 @@ struct ContentView: View {
     }
 }
 
-/// Sidebar (D7, macos.md §11.5): Meetings na górze; Presets / Templates / Settings na dole, bez nagłówka sekcji.
+/// Sidebar (D7, macos.md §11.5): Meetings na górze; Presets / Templates / Dictionary / Settings na dole, bez nagłówka sekcji.
 /// Dolna grupa to druga lista z tym samym wyborem, przypięta `safeAreaInset` (lista nie umie dosunąć wierszy do dołu).
 struct SidebarList: View {
     @Binding var selection: Section
@@ -111,12 +111,12 @@ struct SidebarList: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             List(selection: $selection) {
-                ForEach([Section.presets, .templates, .settings]) { s in
+                ForEach([Section.presets, .templates, .dictionary, .settings]) { s in
                     Label(s.rawValue, systemImage: s.symbol).tag(s)
                 }
             }
             .scrollDisabled(true)
-            .frame(height: 3 * 28 + 16)
+            .frame(height: 4 * 28 + 16)
         }
     }
 }
