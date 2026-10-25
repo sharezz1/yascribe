@@ -20,12 +20,12 @@ final class TemplateEditorState: ObservableObject {
         draft = Template(name: "New template", sections: [TemplateSection(title: "", instruction: "")])
         original = nil; error = nil
     }
-    func cancel() { draft = original; error = nil }
+    /// Zamyka okno bez zapisu; nowy, niezapisany szablon znika razem z oknem.
+    func close() { draft = nil; original = nil; error = nil; confirmingDelete = false }
 }
 
-/// Szablony podsumowania (macos.md §11.5, odbiór 2026-10-16 uwaga 2): szablon to lista sekcji; wbudowane edytuje się
-/// w miejscu (zapis jako nadpisanie, „Reset to default" je usuwa); własne można skasować po potwierdzeniu.
-/// Układ jak Presets: lista 196 pt + edytor, pasek na dole.
+/// Szablony podsumowania (macos.md §11.5; faza 2.1 „okna", wzorzec Dictionary): lista w karcie, klik w wiersz otwiera okno edycji.
+/// Wbudowane edytuje się w miejscu (zapis jako nadpisanie, „Reset to default" je usuwa); własne można skasować po potwierdzeniu.
 struct TemplatesView: View {
     @Environment(AppModel.self) private var model
     @StateObject private var state: TemplateEditorState
@@ -33,69 +33,32 @@ struct TemplatesView: View {
     init(state: TemplateEditorState = TemplateEditorState()) { _state = StateObject(wrappedValue: state) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollPage(700) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        PageTitle("Templates")
-                        Spacer()
-                        Button { state.startNew() } label: { Label("New template", systemImage: "plus") }
-                            .buttonStyle(.pill)
-                            .disabled(state.isDirty)
-                            .help("New template")
-                    }
-                    .padding(.bottom, 18)
-                    HStack(alignment: .top, spacing: 18) {
-                        list.frame(width: 196)
-                        Group {
-                            if let d = state.draft {
-                                TemplateForm(state: state, meta: meta(d), builtin: model.notes.templates.isBuiltin(id: d.id),
-                                             edited: model.notes.templates.isEdited(id: d.id),
-                                             onDuplicate: { duplicate(d) }, onReset: { reset(d) })
-                            } else {
-                                EmptyEditorHint(title: "Choose a template",
-                                                text: "A template is a list of sections: the structure of the notes and what to focus on.")
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
+        ScrollPage(640) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    PageTitle("Templates")
+                    Spacer()
+                    Button { state.startNew() } label: { Label("New template", systemImage: "plus") }
+                        .buttonStyle(.pill)
+                        .help("New template")
                 }
-            }
-            if state.draft != nil {
-                EditorFooter(dirty: state.isDirty, error: state.error) {
-                    Button("Cancel") { state.cancel() }.buttonStyle(.pill).disabled(!state.isDirty)
-                    Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut("s", modifiers: .command).disabled(!state.isDirty)
+                .padding(.bottom, 18)
+                Card {
+                    ForEach(Array(model.notes.templates.all().enumerated()), id: \.element.id) { i, t in
+                        if i > 0 { RowDivider() }
+                        Button { state.select(t) } label: { EditorListRow(title: t.name, subtitle: meta(t)) }
+                            .buttonStyle(.plain)
+                    }
                 }
             }
         }
         .contentBackground()
         .navigationTitle("Templates")
-        .confirmationDialog("Delete “\(state.original?.name ?? "this template")”?", isPresented: $state.confirmingDelete) {
-            Button("Delete template", role: .destructive) { if let o = state.original { delete(o) } }
-        } message: {
-            Text("Notes already generated with it keep their text.")
-        }
-    }
-
-    private var list: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if state.isNew, let d = state.draft {
-                PresetRow(title: d.name.isEmpty ? "New template" : d.name, subtitle: "unsaved", selected: true, dim: true)
-            }
-            ForEach(model.notes.templates.all()) { t in
-                Button {
-                    guard !state.isDirty else { return }
-                    state.select(t)
-                } label: {
-                    PresetRow(title: t.name, subtitle: meta(t), selected: state.draft?.id == t.id)
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(state.draft?.id == t.id ? .isSelected : [])
-            }
-            if state.isDirty {
-                Text("Save or cancel your changes to switch templates.")
-                    .font(.system(size: 11)).foregroundStyle(.mnText2).padding(.horizontal, 10).padding(.top, 8)
-            }
+        .dismissibleSheet(isPresented: Binding(get: { state.draft != nil }, set: { if !$0 { state.close() } }), onDismiss: { state.close() }) {
+            TemplateSheet(state: state, meta: state.draft.map(meta) ?? "",
+                          builtin: state.draft.map { model.notes.templates.isBuiltin(id: $0.id) } ?? false,
+                          edited: state.draft.map { model.notes.templates.isEdited(id: $0.id) } ?? false,
+                          onSave: { save() }, onDuplicate: { duplicate() }, onReset: { reset() }, onDelete: { delete() })
         }
     }
 
@@ -106,6 +69,7 @@ struct TemplatesView: View {
         return file.isEdited(id: t.id) ? "Built-in · edited" : "Built-in"
     }
 
+    /// Błąd zapisu zostawia okno otwarte z komunikatem; sukces je zamyka.
     private func save() {
         guard let d = state.draft else { return }
         var file = model.notes.templates
@@ -126,10 +90,12 @@ struct TemplatesView: View {
         }
         model.notes.templates = file
         state.error = model.saveTemplates()
-        if state.error == nil { state.select(file.all().first { $0.id == d.id }) }
+        if state.error == nil { state.close() }
     }
 
-    private func duplicate(_ t: Template) {
+    /// Kopia zostaje otwarta w oknie jako nowy, niezapisany szablon.
+    private func duplicate() {
+        guard let t = state.draft else { return }
         var copy = t.duplicate()
         var n = 2
         let names = Set(model.notes.templates.all().map(\.name))
@@ -139,17 +105,60 @@ struct TemplatesView: View {
         state.error = nil
     }
 
-    /// Wbudowany: usuwa nadpisanie i wraca do domyślnej treści.
-    private func reset(_ t: Template) {
+    /// Wbudowany: usuwa nadpisanie i wraca do domyślnej treści; okno zostaje otwarte.
+    private func reset() {
+        guard let t = state.draft else { return }
         model.notes.templates.reset(id: t.id)
         state.error = model.saveTemplates()
         if state.error == nil { state.select(model.notes.templates.all().first { $0.id == t.id }) }
     }
 
-    private func delete(_ t: Template) {
+    private func delete() {
+        guard let t = state.original else { return }
         do { try model.notes.templates.remove(id: t.id) } catch { state.error = "\(error)"; return }
         state.error = model.saveTemplates()
-        if state.error == nil { state.select(nil) }
+        if state.error == nil { state.close() }
+    }
+}
+
+/// Okno edycji szablonu; renderowalne samodzielnie (jak `PresetSheet`). Akcje dawnego menu `⋯` stoją w lewej części paska.
+/// `confirmationDialog` kasowania wisi na treści okna, nie na liście pod nim.
+struct TemplateSheet: View {
+    @ObservedObject var state: TemplateEditorState
+    let meta: String
+    let builtin: Bool
+    let edited: Bool
+    var onSave: () -> Void
+    var onDuplicate: () -> Void
+    var onReset: () -> Void
+    var onDelete: () -> Void
+
+    init(state: TemplateEditorState, meta: String, builtin: Bool, edited: Bool,
+         onSave: @escaping () -> Void, onDuplicate: @escaping () -> Void, onReset: @escaping () -> Void,
+         onDelete: @escaping () -> Void) {
+        self.state = state; self.meta = meta; self.builtin = builtin; self.edited = edited
+        self.onSave = onSave; self.onDuplicate = onDuplicate; self.onReset = onReset; self.onDelete = onDelete
+    }
+
+    var body: some View {
+        EditorSheet(title: state.isNew ? "New template" : "Edit template", dirty: state.isDirty, error: state.error,
+                    onCancel: { state.close() }, onSave: onSave) {
+            if !state.isNew {
+                Button("Duplicate", action: onDuplicate).buttonStyle(.pill)
+                if builtin {
+                    Button("Reset to default", action: onReset).buttonStyle(.pill).disabled(!edited)
+                } else {
+                    Button("Delete template…", role: .destructive) { state.confirmingDelete = true }.buttonStyle(.pill)
+                }
+            }
+        } content: {
+            TemplateForm(state: state, meta: meta)
+        }
+        .confirmationDialog("Delete “\(state.original?.name ?? "this template")”?", isPresented: $state.confirmingDelete) {
+            Button("Delete template", role: .destructive, action: onDelete)
+        } message: {
+            Text("Notes already generated with it keep their text.")
+        }
     }
 }
 
@@ -162,10 +171,6 @@ struct TemplateForm: View {
     @ObservedObject var state: TemplateEditorState
     /// „Built-in · edited" itp. — obok nazwy.
     let meta: String
-    let builtin: Bool
-    let edited: Bool
-    var onDuplicate: () -> Void
-    var onReset: () -> Void
     @FocusState private var focus: FocusTarget?
 
     private var draftName: Binding<String> {
@@ -184,7 +189,6 @@ struct TemplateForm: View {
                 EditorNameField(placeholder: "Name", text: draftName)
                 if !state.isNew {
                     Text(meta).font(.system(size: 12)).foregroundStyle(.mnText2).lineLimit(1).fixedSize()
-                    actionsMenu
                 }
             }
             SectionHeader("About this meeting type", note: "— optional")
@@ -214,24 +218,6 @@ struct TemplateForm: View {
                 .padding(.top, 10)
                 .help("Add a section")
         }
-    }
-
-    private var actionsMenu: some View {
-        Menu {
-            Button("Duplicate") { onDuplicate() }
-            if builtin {
-                Button("Reset to default") { onReset() }.disabled(!edited)
-            } else {
-                Divider()
-                Button("Delete template…", role: .destructive) { state.confirmingDelete = true }
-            }
-        } label: {
-            Image(systemName: "ellipsis").font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText2)
-                .frame(width: 28, height: 28).contentShape(Rectangle())
-        }
-        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-        .help("More actions")
-        .accessibilityLabel("More actions")
     }
 
     private func add() {
