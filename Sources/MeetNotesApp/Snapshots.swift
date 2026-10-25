@@ -138,7 +138,7 @@ enum Snapshots {
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
                     let summaryTab = MeetingViewState(); summaryTab.tab = .summary
                     try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
-                    // Faza 2.0.1: chip modelu zmieniony dla tego nagrania (z „changed" i linią pochodzenia), lokalny (bez „Thinking"), popover wprost.
+                    // Faza 2.0.1: model zmieniony (pozycja ⋯) dla tego nagrania (z „changed" i linią pochodzenia), lokalny (bez „Thinking"), popover wprost.
                     if let cloud = model.providers.providers.first(where: { !$0.isLocal }) {
                         var changed = withNotes
                         changed.notes.meta.modelOverrides = ModelOverrides(summary: RoleOverride(providerID: cloud.id, model: "anthropic/claude-sonnet-4.5", thinking: false))
@@ -166,6 +166,12 @@ enum Snapshots {
                         picked.notes.meta.modelOverrides = ModelOverrides(correction: RoleOverride(providerID: cloud.id, model: "anthropic/claude-haiku-4.5"))
                         let transcriptView = MeetingViewState(); transcriptView.tab = .transcript
                         try render("meeting-transcript-model", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: picked, state: transcriptView) }
+                        // Faza 2.1 minimalizm: jedna linia narzędzi (Version ▾ … Copy ⋯) po gotowej korekcie.
+                        try render("meeting-transcript-calm", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: picked, state: transcriptView) }
+                        // Bez korekty: „Improve transcript” na wierzchu linii narzędzi (przed pierwszą korektą).
+                        var notCorrected = picked
+                        notCorrected.corrected = nil
+                        try render("meeting-transcript-not-corrected", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: notCorrected, state: transcriptView) }
                         // Faza 2.1 D13: „Transcribe again…" — popover wprost (domyślnie model i język nagrania) i przycisk wyłączony po usunięciu audio.
                         try render("transcribe-again-popover", size: CGSize(width: 340, height: 330), dark: dark, model: model) { TranscribeAgainButton(item: picked, inlinePopover: true) }
                         var noAudio = picked; noAudio.audioDeletedAfterDays = 30
