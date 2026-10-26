@@ -45,8 +45,12 @@ public struct DataDirectoryMigration: Sendable {
                 if !existing.isEmpty { return .failed("unexpected files in \(newRoot.path)") }
             }
             if isOldAppRunning() { return .oldAppRunning }
-            // Pusty katalog nowej aplikacji = nieistniejący: `moveItem` nie nadpisuje.
-            if (try entries(newRoot)) != nil { try FileManager.default.removeItem(at: newRoot) }
+            // Pusty katalog nowej aplikacji = nieistniejący: `moveItem` nie nadpisuje. `rmdir` nie jest rekurencyjne:
+            // gdyby druga instancja zdążyła w międzyczasie przenieść dane, odmówi zamiast je skasować.
+            if (try entries(newRoot)) != nil {
+                try? FileManager.default.removeItem(at: newRoot.appendingPathComponent(".DS_Store"))
+                guard rmdir(newRoot.path) == 0 else { return .failed("couldn't remove empty \(newRoot.path) (errno \(errno))") }
+            }
             try FileManager.default.moveItem(at: oldRoot, to: newRoot)
             return .moved
         } catch {
