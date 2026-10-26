@@ -175,7 +175,7 @@ final class RecordingController {
         selectedInputUID = nil
         directory = nil
         hidePanel()
-        model?.updateGate.activityDidChange() // odroczony restart po aktualizacji rusza dopiero po zapisie
+        model?.recordingFinished() // odroczony restart i oczekujące zamknięcie ruszają dopiero po zapisie
     }
 
     /// Pigułka w trybie nagrania jest widoczna tylko podczas nagrywania (odbiór 2026-10-16): pokazuje ją start nagrania
