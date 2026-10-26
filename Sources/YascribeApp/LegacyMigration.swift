@@ -9,14 +9,15 @@ enum LegacyMigration {
     private nonisolated static let oldBundleID = "io.github.sharezz1.meetnotes"
     private nonisolated static let oldKeychainService = "meetnotes.provider"
 
-    private static var skipped: Bool {
+    /// Uruchomienie deweloperskie, migawki albo sonda: nie ruszamy prawdziwych danych ani pęku, nie startujemy Sparkle.
+    static var isDevRun: Bool {
         let env = ProcessInfo.processInfo.environment
         return YascribePaths.isOverridden(env) || Snapshots.directory != nil || !(env["YASCRIBE_PROBE"] ?? "").isEmpty
     }
 
     /// Przed `AppModel()`: model czyta `providers.json` i zapisuje domyślne pliki, więc musi zobaczyć już przeniesiony katalog.
     static func moveDataIfNeeded() {
-        guard !skipped else { return }
+        guard !isDevRun else { return }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let outcome = DataDirectoryMigration(
             oldRoot: base.appendingPathComponent("MeetNotes"), newRoot: base.appendingPathComponent("Yascribe"),
@@ -46,7 +47,7 @@ enum LegacyMigration {
 
     /// Po `AppModel()`: UUID dostawców są już wczytane. Stara pozycja pęku zostaje; usuwa ją użytkownik.
     static func migrateKeys(model: AppModel) {
-        guard !skipped else { return }
+        guard !isDevRun else { return }
         let ids = model.providers.providers.map(\.id)
         guard !ids.isEmpty else { return }
         let root = model.paths.root
