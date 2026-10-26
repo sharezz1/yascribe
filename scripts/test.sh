@@ -48,4 +48,5 @@ if [ "${RAN:-0}" -ne "$EXPECTED" ]; then
     exit 4
 fi
 scripts/check-bundle.sh || { echo "test.sh: check-bundle nie przeszło (skrypty składania)" >&2; exit 5; }
+scripts/check-release.sh || { echo "test.sh: check-release nie przeszło (bramki release.sh)" >&2; exit 6; }
 echo "test.sh: $RAN/$EXPECTED testów uruchomionych i zaliczonych."
