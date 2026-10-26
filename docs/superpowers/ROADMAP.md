@@ -19,6 +19,10 @@
 - **Faza 2.0.2 „Nagrywanie na słuchawkach"** — przypisana 2026-10-22, scalona do `master` 2026-10-23 (PR #23, `c09f265`), odbiór M4 2026-10-23 zaliczony dla przypadku A (słuchawki jako wejście i wyjście): tor `system` poprawny. Zakres: format tapa, układ `tapOnly`, ostrzeżenia, podpowiedź i menu wejścia w pigułce. Poza zakresem: ScreenCaptureKit (Task 10 pominięty), przypadek `08f6`. Źródło: BACKLOG „PRIORYTET WYSOKI … słuchawki Bluetooth".
 - **Faza 2.1 „Słownik"** — decyzja użytkownika 2026-10-21: obowiązkowa następna faza (sekcja niżej). **2.1a zamknięta w kodzie 2026-10-23 na gałęzi `faza21-slownik`** (730/730, nie scalona; czeka na odbiór użytkownika i PR): [raport odbioru agenta](reports/F21-odbior.md), [spec](specs/2026-10-23-faza21-slownik-design.md), [plan](plans/2026-10-23-faza21-slownik.md). Otwarte: 2.1b (klik na słowo → Alias) i spike word boostingu.
 
+## Yascribe: rename i aktualizacje Sparkle (zrobione 2026-10-26, PR #1–#13)
+
+Rename MeetNotes → Yascribe, nowe publiczne repo `sharezz1/yascribe` z przepisaną historią, migracja danych i kluczy, Sparkle (`RestartGate`), `scripts/release.sh`, wydania `v0.1.0`–`v0.1.3`. Szczegóły: `CLAUDE.md` (sekcja Stan) i `reports/Y-odbior.md`. **Zostaje:** wydanie `0.1.4` z komunikatem odroczonego restartu, decyzje O2 z `reports/Y-audyt-publiczny.md`. **Poza zakresem (kandydaci):** notaryzacja i Developer ID, aktualizacje różnicowe (delta), kanały beta, automatyczna instalacja bez pytania.
+
 ## Faza 1.5b (zostało: T11 i drobne)
 
 | Pozycja | Źródło |

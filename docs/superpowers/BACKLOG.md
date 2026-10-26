@@ -5,6 +5,9 @@ trafiają tutaj i czekają; rundy poprawek dotyczą wyłącznie błędów funkcj
 testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 ## Otwarte
+- [ ] **Z Yascribe (2026-10-26):** notaryzacja i Developer ID (dziś podpis certyfikatem „MeetNotes Dev", Gatekeeper dla zip z Releases wymaga zgody użytkownika); aktualizacje różnicowe (delta) i kanał beta; automatyczne instalacje bez pytania — wszystko poza zakresem planu Yascribe, patrz ROADMAP.
+- [ ] **Z odbioru T9:** wydanie `0.1.4` (komunikat „Update ready" przy odroczonym restarcie jest w `master`); niezmierzone: alerty `bothHaveData`/`oldAppRunning`, okno odmowy dostępu do klucza (kod `OSStatus` umowny), kopiowanie prawdziwych kluczy; zachowanie „Use Yascribe data" nie jest zapamiętywane (alert wraca przy każdym starcie, dopóki jeden z katalogów nie zniknie).
+- [ ] **Z audytu (`reports/Y-audyt-publiczny.md`):** licencja i README (brak = „wszystkie prawa zastrzeżone"), ścieżki `/Users/…`, nazwy firm, adres sprzętowy słuchawek — decyzje O2 użytkownika.
 - [ ] Nazwa karty/dostawcy „Yascribe" vs nazwa aplikacji *(z T2 rename, 2026-10-26)*: karta modelu lokalnego (Parakeet) i etykieta „Yascribe" w menu dostawców (P3/P4 z fazy 2.0) nazywały się tak już przed rename i teraz kolidują z nazwą aplikacji. Poza zakresem rename; decyzja o nowej nazwie należy do użytkownika.
 - [x] `scripts/test.sh` nie pokrywa skryptów składania *(zrobione w T12: `scripts/check-bundle.sh` w `test.sh`, osobna ścieżka .build/check)* (`bundle.sh`/`run.sh`/`Info.plist`) — bramka podpisu była ręczna i jednorazowa; rozważyć w S16/S18. *(check S14 #3)*
   - **Do decyzji przy S18 / faza 2** — pokrycie wymaga podpisu certyfikatem z pęku kluczy i składania paczki — poza `swift test`; decyzja, czy i jak (np. ad-hoc `YASCRIBE_SIGN_IDENTITY=-` + `plutil -lint`), należy do S18.
