@@ -23,6 +23,10 @@
 
 Rename MeetNotes → Yascribe, nowe publiczne repo `sharezz1/yascribe` z przepisaną historią, migracja danych i kluczy, Sparkle (`RestartGate`), `scripts/release.sh`, wydania `v0.1.0`–`v0.1.3`. Szczegóły: `CLAUDE.md` (sekcja Stan) i `reports/Y-odbior.md`. **Zostaje:** wydanie `0.1.4` z komunikatem odroczonego restartu, decyzje O2 z `reports/Y-audyt-publiczny.md`. **Poza zakresem (kandydaci):** notaryzacja i Developer ID, aktualizacje różnicowe (delta), kanały beta, automatyczna instalacja bez pytania.
 
+## Następna wersja: polski interfejs (decyzja użytkownika 2026-10-26)
+
+Aplikacja rozumie po polsku, a jej interfejs jest tylko po angielsku. Zadanie: lokalizacja interfejsu (polska wersja językowa; angielska zostaje), co wymaga m.in. wyniesienia stałych tekstów z widoków do katalogów lokalizacji (`.xcstrings` albo `Localizable.strings` bez Xcode, do sprawdzenia w CLT), tłumaczenia komunikatów błędów i alertów oraz decyzji, czy interfejs podąża za językiem systemu, czy ma osobne ustawienie. Zmienia zasadę „interfejs aplikacji po angielsku" z `CLAUDE.md`. Faza bez numeru, do zaplanowania.
+
 ## Faza 1.5b (zostało: T11 i drobne)
 
 | Pozycja | Źródło |
