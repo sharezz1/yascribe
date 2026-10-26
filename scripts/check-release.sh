@@ -111,6 +111,9 @@ done
 mkrepo bundlever; run_release FAKE_BUILD=999; expect_refused bundle-version-mismatch-rejected
 mkrepo nosig; run_release FAKE_SIGN=empty; expect_refused missing-signature-rejected
 
+# puste źródło feedu (np. 404 przy prywatnym repo) nie wyłącza kontroli, gdy zdalnie są już wydania v*
+mkrepo emptyfeed; git -C "$W" tag v0.0.9; git -C "$W" push -q origin v0.0.9; run_release; expect_refused empty-feed-with-existing-releases-rejected
+
 # appcast: poprawny XML z podpisem i długością zgodną z zipem (dry-run zachowuje wyniki w YASCRIBE_OUT_DIR)
 mkrepo appcast; OUT="$T/appcast/out"
 run_release YASCRIBE_OUT_DIR="$OUT"
