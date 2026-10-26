@@ -78,6 +78,10 @@ release_main() {
     case "$rc" in 0) ;; 22) FEED="" ;; *) die "nie udało się pobrać feedu ($rc)" ;; esac # 22 = HTTP 4xx: pierwsze wydanie
     MAXV="$(printf '%s' "$FEED" | grep -oE 'sparkle:version(="|>)[0-9]+' | grep -oE '[0-9]+$' | sort -n | tail -1 || true)"
     [ -z "$MAXV" ] || [ "$BUILD" -gt "$MAXV" ] || die "numer builda $BUILD nie jest większy od opublikowanego ($MAXV)"
+    # Pusty feed (404 przy prywatnym repo, zła odpowiedź) nie może wyłączać kontroli, gdy wydania v* już istnieją.
+    if [ -z "$MAXV" ] && [ -n "$(git ls-remote --tags origin 'refs/tags/v*')" ]; then
+        die "feed nie zawiera żadnego sparkle:version, a zdalnie są już tagi v*: nie da się sprawdzić numeru builda"
+    fi
 
     # (7) zip, podpis EdDSA, appcast
     local OUT="${YASCRIBE_OUT_DIR:-}" ZIP SIGOUT SIG LENGTH

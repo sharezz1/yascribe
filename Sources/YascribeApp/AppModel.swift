@@ -123,7 +123,9 @@ final class AppModel {
         recording.model = self
         monitor.model = self
         updateGate = RestartGate(activity: self)
-        updater = UpdateController(gate: updateGate, start: !LegacyMigration.isDevRun)
+        // Sparkle startuje tylko w prawdziwym uruchomieniu i z prawdziwym kluczem (placeholder do T8 wywołałby błąd przy starcie).
+        let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
+        updater = UpdateController(gate: updateGate, start: !LegacyMigration.isDevRun && key != nil && key != "REPLACE_WITH_PUBLIC_KEY")
         load()
         // ChatGPT #16: setup także wtedy, gdy dźwięk systemowy nigdy nie przeszedł testu tonem.
         showSetup = AVCaptureDevice.authorizationStatus(for: .audio) != .authorized
