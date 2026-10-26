@@ -24,6 +24,16 @@ default_identity_check() {
     codesign --verify --strict --deep "$app" 2>/dev/null
 }
 
+# Pobranie feedu: 0 = treść na stdout, 22 = HTTP 404 (brak feedu), inny kod = błąd. Z atrapą (YASCRIBE_FETCH) kody idą wprost;
+# domyślnie `curl` oddaje dla 404 po przekierowaniu kod 56, nie 22, więc czytamy kod HTTP z `-w`.
+fetch_feed() {
+    if [ -n "${YASCRIBE_FETCH:-}" ]; then $YASCRIBE_FETCH "$1"; return $?; fi
+    local body code
+    body="$(mktemp "${TMPDIR:-/tmp}/mn-feed.XXXXXX")"
+    code="$(curl -sSL -o "$body" -w '%{http_code}' "$1")" || { rm -f "$body"; return 1; }
+    case "$code" in 200) cat "$body"; rm -f "$body"; return 0 ;; 404) rm -f "$body"; return 22 ;; *) rm -f "$body"; return 1 ;; esac
+}
+
 release_main() {
     unset YASCRIBE_BUILD YASCRIBE_VERSION
     local VERSION="" DRY=0 arg
@@ -74,8 +84,8 @@ release_main() {
     # (6) numer builda większy od opublikowanego
     local FEED_URL FEED rc MAXV
     FEED_URL="$(plutil -extract SUFeedURL raw "$PLIST")"
-    set +e; FEED="$($FETCH "$FEED_URL")"; rc=$?; set -e
-    case "$rc" in 0) ;; 22) FEED="" ;; *) die "nie udało się pobrać feedu ($rc)" ;; esac # 22 = HTTP 4xx: pierwsze wydanie
+    set +e; FEED="$(fetch_feed "$FEED_URL")"; rc=$?; set -e
+    case "$rc" in 0) ;; 22) FEED="" ;; *) die "nie udało się pobrać feedu ($rc)" ;; esac # 22 = HTTP 404: pierwsze wydanie
     MAXV="$(printf '%s' "$FEED" | grep -oE 'sparkle:version(="|>)[0-9]+' | grep -oE '[0-9]+$' | sort -n | tail -1 || true)"
     [ -z "$MAXV" ] || [ "$BUILD" -gt "$MAXV" ] || die "numer builda $BUILD nie jest większy od opublikowanego ($MAXV)"
     # Pusty feed (404 przy prywatnym repo, zła odpowiedź) nie może wyłączać kontroli, gdy wydania v* już istnieją.
