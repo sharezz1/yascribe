@@ -20,7 +20,12 @@ enum LegacyMigration {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let outcome = DataDirectoryMigration(
             oldRoot: base.appendingPathComponent("MeetNotes"), newRoot: base.appendingPathComponent("Yascribe"),
-            isOldAppRunning: { !NSRunningApplication.runningApplications(withBundleIdentifier: oldBundleID).isEmpty }).run()
+            isOldAppRunning: {
+                // Po identyfikatorze paczki albo nazwie pliku wykonywalnego (uruchomienie bez paczki).
+                NSWorkspace.shared.runningApplications.contains {
+                    $0.bundleIdentifier == oldBundleID || $0.executableURL?.lastPathComponent == "MeetNotesApp"
+                }
+            }).run()
         switch outcome {
         case .notNeeded, .moved:
             return
