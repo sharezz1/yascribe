@@ -37,7 +37,7 @@ struct MenuBarMenu: View {
     /// Wyjście w trakcie nagrywania: najpierw Stop (sesja zamknięta czysto, nie "Recovered"), po potwierdzeniu.
     /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
     private func quit() {
-        guard model.confirmTermination() else { return }
+        guard model.terminationDecision() != .cancel else { return }
         NSApplication.shared.terminate(nil)
     }
 

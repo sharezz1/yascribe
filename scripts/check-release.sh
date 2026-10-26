@@ -4,7 +4,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 SRC="$PWD"
-T="$(mktemp -d "${TMPDIR:-/tmp}/mn-relcheck.XXXXXX")"
+T="${TMPDIR:-/tmp}/mn-$(uuidgen)"; mkdir -p "$T" # wzorzec sprzątający test.sh: mn-<UUID>
 trap 'rm -rf "$T"' EXIT
 FAILS=0
 CASES=0
