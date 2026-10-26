@@ -2,7 +2,7 @@
 
 Natywna aplikacja macOS do notatek ze spotkań: nagrywa dwa kanały (dźwięk systemowy przez
 process tap Core Audio + mikrofon), transkrybuje przez API (OpenRouter, `microsoft/mai-transcribe-2`)
-i robi notatkę modelem z presetu. Jeden użytkownik, repo prywatne. Interfejs aplikacji po
+i robi notatkę modelem z presetu. Jeden użytkownik, repo publiczne (od 2026-10-26). Interfejs aplikacji po
 angielsku, dokumenty w repo po polsku.
 Nazwa: Yascribe (do 2026-10-26 MeetNotes). Repo `sharezz1/yascribe`; stare `sharezz1/meetnotes` i `/Users/michalprzytulski/meetnotes` to prywatne archiwum z pełną historią (nic w nim nie zmieniamy).
 
@@ -23,7 +23,7 @@ Nazwa: Yascribe (do 2026-10-26 MeetNotes). Repo `sharezz1/yascribe`; stare `shar
 Kod: `Sources/YascribeRecording` (rdzeń audio), `YascribeSessionFormat` (dziennik, CAF),
 `YascribeProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy; od 2.0 także budżet kontekstu `ContextBudget`/`ContextProbe`,
 limity czatu `ChatLimits`, `ThinkingStripper`, `finish_reason`, lokalność `isLocal`; `chat(thinking:)`, `Provider.supports(_:)`/`RoleProviders` — kto może obsłużyć rolę),
-`YascribeLocalASR` (od 2.0a; **jedyny moduł importujący FluidAudio**: magazyn modelu Parakeet, klient lokalnego ASR, bramka wznowienia, karta modelu),
+`YascribeUpdates` (Sparkle: `RestartGate`, `UpdateController`; **jedyny moduł importujący Sparkle**), `YascribeLocalASR` (od 2.0a; **jedyny moduł importujący FluidAudio**: magazyn modelu Parakeet, klient lokalnego ASR, bramka wznowienia, karta modelu),
 `YascribeTranscription` (bramka, pakowanie okien, wznawianie), `YascribeApp` (SwiftUI),
 `YascribeNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań; od 2.0b map-reduce dla podsumowania i `TranscriptSplitter`; `FillerWords` — filtr przerywników), `YascribeMeetings` (kalendarz, wykrywanie spotkań, Coming up), `yascribe-cli` (narzędzie deweloperskie; `transcribe … local://fluidaudio`).
 
@@ -100,6 +100,13 @@ Odbiór użytkownika fazy 2.1 (Słownik, minimalizm, okna) zaliczony 2026-10-25.
 **Minimalizm w Transcript i Summary** (PR #25, scalony; jedna linia narzędzi + menu ⋯, czytelne nazwy modeli przez `ModelName`/`ModelNameCache`; testy **738/738**; spec `docs/superpowers/specs/2026-10-24-transcript-summary-minimalizm-design.md`, plan `docs/superpowers/plans/2026-10-24-faza21-minimalizm.md`; odbiór użytkownika na żywo zaliczony 2026-10-24).
 **Presets i Templates jak Dictionary** (PR #26, scalony; lista w karcie + okno edycji (`EditorSheet`), „Advanced" (sonda, Extra instructions) w formularzu presetu, zapis ⌘S/⌘↩ (Return nie zapisuje, pola wieloliniowe); testy **744/744**; spec `docs/superpowers/specs/2026-10-24-presets-templates-okno-design.md`, plan `docs/superpowers/plans/2026-10-24-faza21-okna-presets-templates.md`; okna zamykają się i anulują po kliknięciu poza nimi (nakładka `dismissibleSheet` zamiast `.sheet`, także w Dictionary); odbiór użytkownika na żywo zaliczony 2026-10-25).
 
+**Rename na Yascribe i aktualizacje Sparkle — zrobione 2026-10-26** (PR #1–#13 do `master` w nowym repo `sharezz1/yascribe`; testy **767/767**).
+Historia przepisana (autorzy tylko noreply, z historii usunięte zrzuty z danymi osób trzecich); `sharezz1/meetnotes` zostaje prywatnym archiwum. Raporty: `docs/superpowers/reports/Y-przepisanie-historii.md`, `Y-przeglad-T3.md`, `Y-przeglad-T6.md`, `Y-audyt-publiczny.md`, `Y-odbior.md`; spike `docs/superpowers/spikes/2026-10-25-yascribe-s0-sparkle-i-pek.md`; spec i plan `…/specs|plans/2026-10-25-yascribe-rebrand-i-aktualizacje*.md`.
+- **Kod:** moduły `Yascribe*`, bundle ID `io.github.sharezz1.yascribe`, `YASCRIBE_*`; migracja danych i kluczy przy pierwszym starcie (`DataDirectoryMigration`, `KeyMigration`, `LegacyMigration`; pomijana przy `YASCRIBE_DATA_DIR`, migawkach i sondach; stara pozycja pęku `meetnotes.provider` nigdy nie jest usuwana przez aplikację); Sparkle 2.9.2 tylko w `YascribeUpdates` (`RestartGate`: restart po aktualizacji czeka do końca nagrania, nowe nagranie zablokowane w trakcie instalacji, ⌘Q pyta przy nagraniu).
+- **Wydania:** `v0.1.0`–`v0.1.3` (`scripts/release.sh`: podpis EdDSA, szkic → porównanie sum → publikacja); klucz prywatny EdDSA tylko w pęku użytkownika, publiczny w `Resources/Info.plist`; certyfikat podpisu zostaje „MeetNotes Dev". Zainstalowana kopia: `/Applications/Yascribe.app`.
+- **Odbiór T9 (użytkownik, 2026-10-26):** pierwszy start z migracją, aktualizacja 0.1.0 → 0.1.1 → 0.1.2 → 0.1.3, nagranie przeżyło aktualizację (sesja kompletna), ⌘Q w trakcie nagrania działa. Komunikat „Update ready" przy odroczonym restarcie jest w `master` (PR #13), ale **bez wydania** (czeka na „wydaj" dla `0.1.4`).
+- **Niezmierzone/otwarte:** alerty `bothHaveData` i `oldAppRunning`, okno odmowy dostępu do klucza (kod `OSStatus` umowny `-25293`), kopiowanie prawdziwych kluczy API z pęku; decyzje O2 z audytu (licencja i README, ścieżki `/Users/…`, nazwy `InPost`/`Genesys`/`GCX`, adres sprzętowy słuchawek); usunięcie starej pozycji `meetnotes.provider` i `~/Applications/MeetNotes.app` robi użytkownik. Dane ze starego `.devdata` nie są przenoszone (decyzja użytkownika).
+
 ## Twarde zasady
 
 - **Toolchain:** Swift 6.4, tylko Command Line Tools, bez Xcode. XCTest niedostępny — `swift-testing`.
@@ -115,6 +122,8 @@ Odbiór użytkownika fazy 2.1 (Słownik, minimalizm, okna) zaliczony 2026-10-25.
 - **Klucze API wpisuje tylko użytkownik** (w aplikacji albo `read -s` w swoim terminalu). Nie wpisuj,
   nie loguj, nie commituj kluczy; literały testowe nie mogą wyglądać jak klucz (`test-fake-…`).
 - Nie zmieniaj Ustawień systemowych, uprawnień TCC ani pęku kluczy — to robi użytkownik.
+- **Zewnętrzne piny:** FluidAudio importuje wyłącznie `YascribeLocalASR`, Sparkle wyłącznie `YascribeUpdates` (egzekwuje `scripts/check-bundle.sh`).
+- **Wydanie** (`scripts/release.sh <wersja>` bez `--dry-run`), zmiana widoczności repo i force-push tylko na jawne polecenie użytkownika („wydaj", „upublicznij"); własne PR-y do `master` scalaj bez pytania, gdy testy są zielone, a skan commitów (adres służbowy i prywatny Gmail) czysty.
 - Decyzje projektowe i bramki (STOP) należą do użytkownika; wykonawca nie naprawia „na ślepo".
 - **Artefakt „Mapa faz Yascribe"** (https://claude.ai/artifact/NH8mCRJsz9Y8AxVVBz7bKz, prywatny): każda zmiana w `BACKLOG.md`, ROADMAP i w postępie prac
   (zamknięta faza/zadanie, tag, scalony PR, liczba testów, wynik odbioru) ma też zaktualizować ten artefakt (`Artifact` read, edycja, publikacja pod tym samym URL-em; polecenie użytkownika 2026-10-21).
@@ -124,6 +133,7 @@ Odbiór użytkownika fazy 2.1 (Słownik, minimalizm, okna) zaliczony 2026-10-25.
 - `scripts/run.sh` — buduje i uruchamia aplikację z danymi w `.devdata/`.
 - `scripts/bundle.sh` — składa `.build/Yascribe.app`, podpis „MeetNotes Dev" (samopodpisany
   certyfikat w pęku login; stały podpis = macOS pamięta zgody na mikrofon i dźwięk systemowy).
+- `scripts/release.sh <wersja> [--dry-run]` — wydanie (T6): testy, build release, kontrola podpisu i wersji, zip + `sign_update`, appcast, szkic → porównanie sum → publikacja. `VERSION` podbija osobny commit. Po publikacji feed `releases/latest/download/appcast.xml` potrafi serwować stary appcast 1–2 minuty (skrypt ponawia do 3 minut). Instalacja lokalna: `ditto .build/Yascribe.app /Applications/Yascribe.app`.
 - CLI: `B=$(swift build --show-bin-path)/yascribe-cli`, potem `$B --help`.
 - Ostrzeżenia linkera o brakujących search path przy buildzie to szum, nie błąd.
 - SwiftPM: `swift package --disable-keychain resolve` po zmianie `Package.swift` lub `rm -rf .build` — bez flagi pobranie `binaryTarget` FluidAudio wisi na pęku kluczy.

@@ -234,6 +234,11 @@ i nie dają nagrania do ponownego przebiegu.
 - **Czy odsłuch ma mieć wersję zmiksowaną** (obie strony w jednym pliku) — jeśli tak, to
   **po wyrównaniu**, a oryginały zostają.
 
+## Aktualizacje aplikacji (Yascribe, 2026-10-26)
+
+- Aplikacja sprawdza i instaluje aktualizacje przez Sparkle z GitHub Releases (`v<wersja>`, feed `appcast.xml`, podpis EdDSA). Instalacja zawsze na kliknięcie użytkownika; aktualizacja nigdy nie przerywa nagrywania ani zapisu (restart czeka do końca; ⌘Q przy nagraniu pyta).
+- **Przyszłość (poza zakresem):** notaryzacja i Developer ID, aktualizacje różnicowe, kanały beta, instalacja bez pytania.
+
 ## 🆕 Z porównania z Granolą i Wispr Flow (2026-10-13, odbiór D3)
 
 - **Szablony podsumowania** wybierane po spotkaniu (1:1, rekrutacja, cotygodniowe, discovery…), z regeneracją notatki innym szablonem i własnymi szablonami. Szablon to druga oś obok presetu: preset = język + modele, szablon = rodzaj spotkania → prompt i struktura notatki. Dziś prompt podsumowania siedzi w presecie — do przemyślenia w fazie 1.5.

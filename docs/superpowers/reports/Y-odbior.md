@@ -16,7 +16,7 @@ Data: 2026-10-26. Repo `sharezz1/yascribe` (publiczne), `master` po PR #1–#8. 
 
 ## Czego nie zmierzono
 
-- **⌘Q w trakcie nagrania** (alert „Stop recording and quit?"): użytkownik nie zgłosił wyniku; testy jednostkowe `RestartGate` i poprawka zamknięcia po finalizacji (PR #6) pokrywają logikę, ale nie przepływ na żywo.
+- **⌘Q w trakcie nagrania:** użytkownik potwierdził na żywo, że działa zgodnie z planem (alert „Stop recording and quit?"); szczegółów (przyciski, zachowanie po „Cancel") nie zapisano.
 - Nowy komunikat odroczenia działa dopiero od wersji z poprawką; nie sprawdzony na żywo.
 - Alerty migracji `bothHaveData` i `oldAppRunning` oraz okno odmowy dostępu do klucza („Deny", kod `OSStatus` nadal umowny).
 - Samoczynność restartu bez ręcznego ⌘Q: użytkownik zgłosił tylko „wszystko przeszło OK"; nie ma osobnej obserwacji, więc zachowanie niewyjaśnione w S0 pozostaje niepotwierdzone co do szczegółu.
