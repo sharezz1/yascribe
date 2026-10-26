@@ -20,17 +20,35 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
+# Wersja z VERSION, numer builda = liczba commitów (rośnie z każdym commitem; Sparkle porównuje `CFBundleVersion`).
+# Tylko w paczce, nie w Resources/Info.plist; YASCRIBE_VERSION / YASCRIBE_BUILD nadpisują (testy release.sh).
+plutil -replace CFBundleShortVersionString -string "${YASCRIBE_VERSION:-$(tr -d '[:space:]' < VERSION)}" "$APP/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "${YASCRIBE_BUILD:-$(git rev-list --count HEAD)}" "$APP/Contents/Info.plist"
+
+# Sparkle (S0 Yascribe): framework przez ditto (zachowuje symlinki), rpath do Frameworks, bez XPCServices (aplikacja
+# nie jest w sandboxie; usuwamy też dowiązanie na korzeniu frameworka).
+FW_SRC=".build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+[ -d "$FW_SRC" ] || { echo "bundle.sh: brak $FW_SRC (swift package --disable-keychain resolve)" >&2; exit 1; }
+mkdir -p "$APP/Contents/Frameworks"
+ditto "$FW_SRC" "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/YascribeApp"
+FW="$APP/Contents/Frameworks/Sparkle.framework"
+rm -rf "$FW/Versions/B/XPCServices" "$FW/XPCServices"
+
 IDENTITY="${YASCRIBE_SIGN_IDENTITY:-MeetNotes Dev}"
 # Pełny odczyt do zmiennej zamiast `| grep -q`: grep kończy na pierwszym trafieniu,
 # security dostaje SIGPIPE, a pipefail zamienia to w fałsz → cichy podpis ad-hoc.
 CERTS=""
 [ "$IDENTITY" = "-" ] || CERTS="$(security find-identity -p codesigning || true)"
 case "$CERTS" in
-    *"\"$IDENTITY\""*)
-        codesign --force --sign "$IDENTITY" "$APP" ;;
+    *"\"$IDENTITY\""*) SIGN="$IDENTITY" ;;
     *)
         [ "$IDENTITY" != "-" ] && echo "UWAGA: brak certyfikatu \"$IDENTITY\" — podpis ad-hoc; TCC zresetuje uprawnienia po każdej przebudowie" >&2
-        codesign --force --sign - "$APP" ;;
+        SIGN="-" ;;
 esac
-codesign --verify --strict "$APP"
+# Podpis od środka, każdy element osobno, bez --deep: Autoupdate, Updater.app, framework, aplikacja.
+for part in "$FW/Versions/B/Autoupdate" "$FW/Versions/B/Updater.app" "$FW" "$APP"; do
+    codesign --force --sign "$SIGN" "$part" >&2
+done
+codesign --verify --strict --deep "$APP"
 echo "$APP"
