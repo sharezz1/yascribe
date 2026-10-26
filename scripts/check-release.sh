@@ -102,9 +102,12 @@ mkrepo branch; git -C "$W" checkout -q -b feature; run_release; expect_refused w
 mkrepo version; ARGS=(0.2.0 --dry-run); run_release; expect_refused version-mismatch-rejected; ARGS=(0.1.0 --dry-run)
 mkrepo unpushed; echo y > "$W/y.txt"; git -C "$W" add y.txt; git -C "$W" commit -q -m local; run_release; expect_refused head-not-pushed-rejected
 mkrepo adhoc; run_release FAKE_IDENTITY=adhoc; expect_refused adhoc-signature-rejected
-mkrepo build
-echo '<rss xmlns:sparkle="x"><channel><item><sparkle:version>999</sparkle:version></item></channel></rss>' > "$FAKE_DIR/feed"
-run_release; expect_refused non-increasing-build-rejected
+# feed z build równym bieżącemu (granica: `>` nie `>=`) i większym od bieżącego
+for published in 1 999; do
+    mkrepo "build$published"
+    echo "<rss xmlns:sparkle=\"x\"><channel><item><sparkle:version>$published</sparkle:version></item></channel></rss>" > "$FAKE_DIR/feed"
+    run_release; expect_refused "non-increasing-build-rejected (feed=$published)"
+done
 mkrepo bundlever; run_release FAKE_BUILD=999; expect_refused bundle-version-mismatch-rejected
 mkrepo nosig; run_release FAKE_SIGN=empty; expect_refused missing-signature-rejected
 
