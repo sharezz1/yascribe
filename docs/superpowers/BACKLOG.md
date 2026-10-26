@@ -5,6 +5,7 @@ trafiają tutaj i czekają; rundy poprawek dotyczą wyłącznie błędów funkcj
 testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 ## Otwarte
+- [ ] **Polski interfejs aplikacji** *(decyzja użytkownika 2026-10-26, „w kolejnej wersji")*: dziś cały UI i komunikaty są po angielsku, choć aplikacja transkrybuje i robi notatki po polsku. Zmiana zasady „interfejs po angielsku" w `CLAUDE.md`; patrz ROADMAP „Następna wersja: polski interfejs".
 - [ ] **Z Yascribe (2026-10-26):** notaryzacja i Developer ID (dziś podpis certyfikatem „MeetNotes Dev", Gatekeeper dla zip z Releases wymaga zgody użytkownika); aktualizacje różnicowe (delta) i kanał beta; automatyczne instalacje bez pytania — wszystko poza zakresem planu Yascribe, patrz ROADMAP.
 - [ ] **Z odbioru T9:** wydanie `0.1.4` (komunikat „Update ready" przy odroczonym restarcie jest w `master`); niezmierzone: alerty `bothHaveData`/`oldAppRunning`, okno odmowy dostępu do klucza (kod `OSStatus` umowny), kopiowanie prawdziwych kluczy; zachowanie „Use Yascribe data" nie jest zapamiętywane (alert wraca przy każdym starcie, dopóki jeden z katalogów nie zniknie).
 - [ ] **Z audytu (`reports/Y-audyt-publiczny.md`):** licencja i README (brak = „wszystkie prawa zastrzeżone"), ścieżki `/Users/…`, nazwy firm, adres sprzętowy słuchawek — decyzje O2 użytkownika.

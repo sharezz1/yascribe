@@ -13,7 +13,7 @@ Projekt jednoosobowy, w budowie. Interfejs aplikacji jest na razie po angielsku 
 3. Przy pierwszym nagraniu zatwierdź dostęp do mikrofonu, dźwięku systemowego i (opcjonalnie) kalendarza.
 4. Aktualizacje: Yascribe → „Check for Updates…". Instalacja zawsze na Twoje kliknięcie i nigdy nie przerywa trwającego nagrania.
 
-Wymagania: macOS 27 (Apple silicon).
+Wymagania: macOS 27.
 
 ## Dane i klucze
 
