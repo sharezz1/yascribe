@@ -70,7 +70,7 @@ Zestaw 3 jest ostateczny (2026-10-19). Zmiana koloru to: edycja tablicy `V` w `z
   z cieniem systemu, **bez szarego tła** (tło 824 pt w kanwie 1024 mieści się w masce).
 - **Nie sprawdzone na żywo w Docku:** w chwili zmiany działała instancja użytkownika (PID 11254),
   której nie ruszano. Ikona pojawi się po przebudowie `scripts/run.sh` (LaunchServices może
-  trzymać starą w pamięci podręcznej; pomaga `touch .build/MeetNotes.app` albo `killall Dock`).
+  trzymać starą w pamięci podręcznej; pomaga `touch .build/Yascribe.app` albo `killall Dock`).
 - **Warstwy, Dark, Clear, Tinted (sprawdzone 2026-10-19):** ikona to zwykłe `.icns`, jedna płaska warstwa.
   Format warstwowy to pakiet `.icon` (`icon.json` plus SVG-i), ale macOS 26+ czyta go dopiero po
   skompilowaniu `actool`em do `Assets.car` (klucz `CFBundleIconName`). **`/usr/bin/actool` i `ictool`
