@@ -74,3 +74,16 @@ private final class Counter {
     #expect(gate.phase == .restartPostponed)
     #expect(!gate.canStartRecording)
 }
+
+@Test @MainActor func phaseChangesAreReported() {
+    let a = FakeActivity(); a.isBusy = true
+    let gate = RestartGate(activity: a)
+    var seen: [UpdatePhase] = []
+    gate.onPhaseChange = { seen.append($0) }
+    gate.installationStarted()
+    _ = gate.shouldPostpone {}
+    a.isBusy = false
+    gate.activityDidChange()
+    gate.installationEnded()
+    #expect(seen == [.installing, .restartPostponed, .installing, .idle])
+}
