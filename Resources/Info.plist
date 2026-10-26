@@ -37,7 +37,7 @@
     <key>SUFeedURL</key>
     <string>https://github.com/sharezz1/yascribe/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>REPLACE_WITH_PUBLIC_KEY</string>
+    <string>4qINqPfFtmZ95xZ0jGZ6xMj2Jbkn82NjaqiK7dIEnm8=</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUAutomaticallyUpdate</key>
