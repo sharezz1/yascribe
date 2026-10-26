@@ -1,4 +1,5 @@
 import SwiftUI
+import YascribeUpdates
 
 /// 🔴 Bez Xcode nie ma pluginu `SwiftUIMacros`, a w SDK macOS 27 `@State`,
 /// `@Entry`, `@Animatable` i `#Preview` są makrami. Nie używamy ich: model
@@ -6,6 +7,7 @@ import SwiftUI
 /// mieszka w `ObservableObject` pod `@StateObject` (zwykłe opakowanie właściwości).
 @main
 struct YascribeApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     private let model: AppModel
 
     init() {
@@ -13,6 +15,7 @@ struct YascribeApp: App {
         LegacyMigration.moveDataIfNeeded()
         Probes.runIfRequested()
         model = AppModel()
+        AppDelegate.model = model
         LegacyMigration.migrateKeys(model: model)
         if Snapshots.directory != nil {
             let model = self.model
@@ -30,6 +33,8 @@ struct YascribeApp: App {
                 .frame(minWidth: 820, minHeight: 520)
         }
         .commands {
+            // Po „About Yascribe”: Sparkle pyta o nową wersję, a instalacja nigdy nie przerywa nagrania (RestartGate).
+            CommandGroup(after: .appInfo) { CheckForUpdatesButton(updater: model.updater) }
             // 🔀 Odstępstwo 3 (macos.md §10): ustawienia są zakładką, ale Settings… i Cmd-, zostają.
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { model.section = .settings }
@@ -68,6 +73,25 @@ struct YascribeApp: App {
         MenuBarExtra("Yascribe", systemImage: "waveform") {
             MenuBarMenu().environment(model)
         }
+    }
+}
+
+/// Delegat aplikacji: druga bariera przed zakończeniem w trakcie nagrania (⌘Q, wylogowanie, restart Sparkle bez odroczenia).
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    static weak var model: AppModel?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model = Self.model, !model.confirmTermination() else { return .terminateNow }
+        return .terminateCancel
+    }
+}
+
+struct CheckForUpdatesButton: View {
+    @ObservedObject var updater: UpdateController
+
+    var body: some View {
+        Button("Check for Updates…") { updater.checkForUpdates() }.disabled(!updater.canCheck)
     }
 }
 

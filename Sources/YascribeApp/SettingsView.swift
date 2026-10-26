@@ -86,6 +86,7 @@ struct SettingsView: View {
                         }
                     }
                     RecordingsSection() // uwaga 8: między Providers a Archive search
+                    UpdatesSection()
                     MeetingSettingsSections()
                     correctionSection
                     summarySection

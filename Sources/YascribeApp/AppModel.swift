@@ -8,6 +8,7 @@ import YascribeProviders
 import YascribeRecording
 import YascribeSessionFormat
 import YascribeTranscription
+import YascribeUpdates
 import Observation
 
 enum Section: String, CaseIterable, Identifiable {
@@ -107,6 +108,11 @@ final class AppModel {
     private(set) var transcribing: Set<String> = []
 
     let recording = RecordingController()
+    /// Aktualizacje (Sparkle): bramka restartu i kontroler. Tworzone w `init` (bramka potrzebuje `self`).
+    @ObservationIgnored private(set) var updateGate: RestartGate!
+    @ObservationIgnored private(set) var updater: UpdateController!
+    /// Użytkownik już potwierdził zakończenie z nagraniem w toku (menu paska i `applicationShouldTerminate` nie pytają dwa razy).
+    @ObservationIgnored private var quitApproved = false
     /// Wykrywanie spotkań (faza 1.6); startuje `YascribeApp.init`, nie `AppModel.init` (migawki i testy go nie chcą).
     let monitor = MeetingMonitor()
     let notes = NotesModel()
@@ -116,6 +122,8 @@ final class AppModel {
     init() {
         recording.model = self
         monitor.model = self
+        updateGate = RestartGate(activity: self)
+        updater = UpdateController(gate: updateGate, start: !LegacyMigration.isDevRun)
         load()
         // ChatGPT #16: setup także wtedy, gdy dźwięk systemowy nigdy nie przeszedł testu tonem.
         showSetup = AVCaptureDevice.authorizationStatus(for: .audio) != .authorized
@@ -272,6 +280,7 @@ final class AppModel {
             }
             await MainActor.run {
                 self.recordingsMove = nil
+                self.updateGate.activityDidChange()
                 self.recordingsMoveResult = outcome
                 self.reloadSessions()
                 self.refreshRecordingsSize()
@@ -548,6 +557,40 @@ final class AppModel {
         do { try JSONFile.save(dictionary, to: paths.dictionary); return nil } catch { return "Couldn't save the dictionary: \(error)" }
     }
 
+    // MARK: Aktualizacje i zamykanie
+
+    /// Nowe nagranie nie startuje od pierwszego kliknięcia „Install Update” do końca cyklu (także podczas odroczonego restartu).
+    func canBeginRecording() -> Bool {
+        guard updateGate.canStartRecording else {
+            lastError = "Update in progress."
+            return false
+        }
+        return true
+    }
+
+    /// Zakończenie aplikacji (⌘Q, pasek menu, restart Sparkle): z nagraniem w toku pyta, najpierw zatrzymuje je, potem pozwala wyjść.
+    /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
+    func confirmTermination() -> Bool {
+        if quitApproved || updateGate.shouldTerminate() { return true }
+        let alert = NSAlert()
+        NSApp.activate()
+        if recording.isRecording {
+            alert.messageText = "Stop recording and quit?"
+            alert.informativeText = "The recording is saved. Transcribe it the next time you open Yascribe."
+            alert.addButton(withTitle: "Stop and Quit")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return false }
+            quitApproved = true
+            recording.stop()
+            return true
+        }
+        alert.messageText = "Meetings are being moved"
+        alert.informativeText = "Quit when the move to the new folder finishes."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+        return false
+    }
+
     // MARK: Nagrywanie i transkrypcja
 
     /// Ręczny start (menu, przycisk): wywołania w ternarnych wyrażeniach typu `()` nie znoszą wyniku `Bool`.
@@ -560,6 +603,8 @@ final class AppModel {
     /// `event`: nagranie od razu z tytułem i powiązaniem (spec 1.6 §4.7) — z oferty albo z karty „Coming up” (§11.5).
     @discardableResult
     func startRecording(event: CalendarEventInfo?, background: Bool = false) -> Bool {
+        // Jedyna droga do `recording.start`: menu, skróty, pigułka, pasek menu, Coming up i oferty przechodzą tędy.
+        guard canBeginRecording() else { return false }
         guard !recording.isRecording else {
             lastError = "A recording is already in progress."
             return false
@@ -758,4 +803,9 @@ final class AppModel {
         f.dateFormat = "yyyy-MM-dd'T'HH-mm-ss'Z'"
         return f.string(from: d) + "-" + UUID().uuidString.prefix(4).lowercased()
     }
+}
+
+extension AppModel: RecordingActivity {
+    /// Nagrywanie albo przenoszenie nagrań: restart w tym czasie zepsułby dane.
+    var isBusy: Bool { recording.isRecording || recordingsMove != nil }
 }

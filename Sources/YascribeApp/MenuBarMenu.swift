@@ -37,16 +37,7 @@ struct MenuBarMenu: View {
     /// Wyjście w trakcie nagrywania: najpierw Stop (sesja zamknięta czysto, nie "Recovered"), po potwierdzeniu.
     /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
     private func quit() {
-        if model.recording.isRecording {
-            let alert = NSAlert()
-            alert.messageText = "Stop recording and quit?"
-            alert.informativeText = "The recording is saved. Transcribe it the next time you open Yascribe."
-            alert.addButton(withTitle: "Stop and Quit")
-            alert.addButton(withTitle: "Cancel")
-            NSApp.activate()
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-            model.recording.stop()
-        }
+        guard model.confirmTermination() else { return }
         NSApplication.shared.terminate(nil)
     }
 
