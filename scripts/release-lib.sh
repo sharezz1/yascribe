@@ -124,7 +124,13 @@ release_main() {
 
     # (9) po publikacji
     [ "$("$GH" api "repos/$REPO/releases/latest" --jq .tag_name)" = "v$VERSION" ] || die "latest ≠ v$VERSION (wydanie opublikowane, sprawdź ręcznie)"
-    [ "$($FETCH "$FEED_URL")" = "$(cat "$OUT/appcast.xml")" ] || die "feed różni się od lokalnego appcast.xml (wydanie opublikowane, sprawdź ręcznie)"
+    # Feed `releases/latest/download/…` bywa 404 przez kilkanaście sekund po publikacji (propagacja GitHuba): ponawiamy.
+    local tries="${YASCRIBE_FEED_RETRIES:-12}" i=0 same=0
+    while [ "$i" -lt "$tries" ]; do
+        if [ "$(set +e; $FETCH "$FEED_URL" 2>/dev/null)" = "$(cat "$OUT/appcast.xml")" ]; then same=1; break; fi
+        i=$((i + 1)); sleep "${YASCRIBE_FEED_SLEEP:-5}"
+    done
+    [ "$same" -eq 1 ] || die "feed różni się od lokalnego appcast.xml po $tries próbach (wydanie opublikowane, sprawdź ręcznie)"
     $FETCH "https://github.com/$REPO/releases/download/v$VERSION/Yascribe-$VERSION.zip" >/dev/null || die "zasób zip nie odpowiada (wydanie opublikowane, sprawdź ręcznie)"
     echo "release: v$VERSION opublikowane (build $BUILD, $SHA)" >&2
 }
