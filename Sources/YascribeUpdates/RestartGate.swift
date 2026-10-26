@@ -19,7 +19,11 @@ public enum UpdatePhase: Equatable {
 public final class RestartGate {
     private let activity: any RecordingActivity
     private var held: (@MainActor @Sendable () -> Void)?
-    public private(set) var phase: UpdatePhase = .idle
+    public private(set) var phase: UpdatePhase = .idle {
+        didSet { if phase != oldValue { onPhaseChange?(phase) } }
+    }
+    /// Zmiana fazy (np. restart odroczony do końca nagrania): interfejs pokazuje komunikat, zamiast milczeć.
+    public var onPhaseChange: (@MainActor (UpdatePhase) -> Void)?
 
     public init(activity: any RecordingActivity) { self.activity = activity }
 
