@@ -34,5 +34,15 @@
     <string>Yascribe records the other side of the meeting from system audio. It never records your screen.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
     <string>Yascribe reads your calendar to recognise meetings and name your notes. It never changes your events.</string>
+    <key>SUFeedURL</key>
+    <string>https://github.com/sharezz1/yascribe/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>REPLACE_WITH_PUBLIC_KEY</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>SUAllowsAutomaticUpdates</key>
+    <false/>
 </dict>
 </plist>
