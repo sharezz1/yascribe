@@ -4,8 +4,8 @@
 # podpisanego „MeetNotes Dev" (ad-hoc zmienia cdhash i TCC resetuje uprawnienia).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-APP="$(MEETNOTES_APP=.build/check/MeetNotes.app MEETNOTES_SIGN_IDENTITY=- scripts/bundle.sh 2>/dev/null | tail -1)"
-[ "$APP" = ".build/check/MeetNotes.app" ] || { echo "check-bundle: bundle.sh zwrócił nieoczekiwaną ścieżkę: $APP" >&2; exit 1; }
+APP="$(YASCRIBE_APP=.build/check/Yascribe.app YASCRIBE_SIGN_IDENTITY=- scripts/bundle.sh 2>/dev/null | tail -1)"
+[ "$APP" = ".build/check/Yascribe.app" ] || { echo "check-bundle: bundle.sh zwrócił nieoczekiwaną ścieżkę: $APP" >&2; exit 1; }
 [ -d "$APP" ] || { echo "check-bundle: brak paczki $APP" >&2; exit 1; }
 PLIST="$APP/Contents/Info.plist"
 plutil -lint "$PLIST" >/dev/null
