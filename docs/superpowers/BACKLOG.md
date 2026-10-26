@@ -5,20 +5,21 @@ trafiają tutaj i czekają; rundy poprawek dotyczą wyłącznie błędów funkcj
 testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 ## Otwarte
+- [ ] Nazwa karty/dostawcy „Yascribe" vs nazwa aplikacji *(z T2 rename, 2026-10-26)*: karta modelu lokalnego (Parakeet) i etykieta „Yascribe" w menu dostawców (P3/P4 z fazy 2.0) nazywały się tak już przed rename i teraz kolidują z nazwą aplikacji. Poza zakresem rename; decyzja o nowej nazwie należy do użytkownika.
 - [x] `scripts/test.sh` nie pokrywa skryptów składania *(zrobione w T12: `scripts/check-bundle.sh` w `test.sh`, osobna ścieżka .build/check)* (`bundle.sh`/`run.sh`/`Info.plist`) — bramka podpisu była ręczna i jednorazowa; rozważyć w S16/S18. *(check S14 #3)*
-  - **Do decyzji przy S18 / faza 2** — pokrycie wymaga podpisu certyfikatem z pęku kluczy i składania paczki — poza `swift test`; decyzja, czy i jak (np. ad-hoc `MEETNOTES_SIGN_IDENTITY=-` + `plutil -lint`), należy do S18.
+  - **Do decyzji przy S18 / faza 2** — pokrycie wymaga podpisu certyfikatem z pęku kluczy i składania paczki — poza `swift test`; decyzja, czy i jak (np. ad-hoc `YASCRIBE_SIGN_IDENTITY=-` + `plutil -lint`), należy do S18.
 - [ ] D3/Info.plist: process tap (dźwięk systemowy) a klucze TCC — plan D3 krok 1 oczekuje panelu „Nagrywanie ekranu i dźwięku systemowego", a w plist nie ma `NSScreenCaptureUsageDescription`; sprawdzić przy D3, ewentualna poprawka plist wróci do D1. *(check S14 #7)*
   - **Do decyzji przy S18 / faza 2** — zależy od wyniku kroku 1 planu D3 na sprzęcie (który panel TCC się pokaże); zmiana plist bez tego pomiaru byłaby zgadywaniem.
 - [ ] `Package.swift` `.macOS(15.0)` vs `Info.plist` `LSMinimumSystemVersion 27.0` — rozjazd tolerowany, ale niezweryfikowany. *(check S14 #8)*
   - **Do decyzji przy S18 / faza 2** — wymaga decyzji produktowej (minimalna wersja systemu) i weryfikacji na starszym macOS — nie da się tego sprawdzić na tej maszynie.
-- [ ] `MeetNotesApp` nie ma targetu testowego (executable) — logika aplikacji (blokady, `preset.json`, `latestRun`, odtwarzanie) niemieszczalna w testach bez zmiany struktury (biblioteka + testTarget); rozważyć jako zadanie fazy 2 / przy S18. *(check S15 #7)*
+- [ ] `YascribeApp` nie ma targetu testowego (executable) — logika aplikacji (blokady, `preset.json`, `latestRun`, odtwarzanie) niemieszczalna w testach bez zmiany struktury (biblioteka + testTarget); rozważyć jako zadanie fazy 2 / przy S18. *(check S15 #7)*
   - **Do decyzji przy S18 / faza 2** — zmiana struktury pakietu (biblioteka + testTarget) i bramki liczby testów — poza zakresem sesji czyszczącej.
-  - **Stan po 2.0 (gałąź `faza20`):** nadal bez targetu; faza 2.0 dołożyła logikę w `MeetNotesApp`, której testy nie sięgają — `LocalASRSupport` (fazy pobierania,
+  - **Stan po 2.0 (gałąź `faza20`):** nadal bez targetu; faza 2.0 dołożyła logikę w `YascribeApp`, której testy nie sięgają — `LocalASRSupport` (fazy pobierania,
     blokada „Remove"), arkusz dostawcy w `SettingsView` (parsowanie pola „Context window"), Cancel i postęp w `NotesModel`. Cienką logikę stanu karty modelu
-    przeniesiono świadomie do biblioteki (`ModelCardState` w `MeetNotesLocalASR`), żeby miała testy; reszta pozostaje ręczna.
+    przeniesiono świadomie do biblioteki (`ModelCardState` w `YascribeLocalASR`), żeby miała testy; reszta pozostaje ręczna.
 - [ ] `AppModel.reloadSessions()` parsuje journale/transkrypty na MainActorze (init, startRecording, koniec przebiegu) — zawieszenie UI przy pełnym archiwum; `SettingsView.onChange` zapisuje wszystkie pliki przy każdym znaku. *(check S15 #10)*
   - **Do decyzji przy S18 / faza 2** — przeniesienie parsowania poza MainActor i debounce zapisu ustawień to zmiana zachowania aplikacji, nie kosmetyka; przy obecnej liczbie sesji niewidoczne.
-- [ ] **Usprawnienie (użytkownik, 2026-10-13): odzyskiwanie odmówionej zgody TCC.** Po kliknięciu „Nie pozwalaj" macOS nie pyta drugi raz o mikrofon / dźwięk systemowy. Potrzebne: (a) instrukcja ręczna w aplikacji (Ustawienia → Prywatność i ochrona → Mikrofon / Nagrywanie ekranu i dźwięku systemowego; albo `tccutil reset Microphone io.github.sharezz1.meetnotes` i `… AudioCapture …`), (b) opcjonalnie przycisk w setupie „Reset permission", który uruchamia `tccutil reset` dla własnego bundle ID i prosi o restart aplikacji.
+- [ ] **Usprawnienie (użytkownik, 2026-10-13): odzyskiwanie odmówionej zgody TCC.** Po kliknięciu „Nie pozwalaj" macOS nie pyta drugi raz o mikrofon / dźwięk systemowy. Potrzebne: (a) instrukcja ręczna w aplikacji (Ustawienia → Prywatność i ochrona → Mikrofon / Nagrywanie ekranu i dźwięku systemowego; albo `tccutil reset Microphone io.github.sharezz1.yascribe` i `… AudioCapture …`), (b) opcjonalnie przycisk w setupie „Reset permission", który uruchamia `tccutil reset` dla własnego bundle ID i prosi o restart aplikacji.
   - **Faza 2 / po D3** — funkcja produktowa, nie poprawka; wynik D3 pokaże, które panele TCC naprawdę się pojawiają.
 - [ ] **Faza 2 (użytkownik, 2026-10-13, design 1.5): wybór mikrofonu przed startem.** `RawMicrophoneSource` bierze tylko domyślne wejście systemu (`CoreAudioDevices.defaultInputDevice()`); wybór urządzenia to zmiana rdzenia (źródło + dziennik + obserwator urządzeń). W 1.5 pigułka tylko **pokazuje** nazwę mikrofonu, wyraźnie, żeby było widać nagrywanie „nie tego".
 - [ ] **Faza 2 (decyzja 2026-10-13): transkrypt na żywo i „Resume"** (wznowienie nagrywania do tej samej notatki). Resume = drugi segment sesji (zmiana formatu: wiele `session.started/ended`, luka na osi, offsety ścieżek). Zakładki i pigułka 1.5 mają miejsce na oba.
@@ -56,8 +57,8 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 ## Aneks S18 (2026-10-13) — przegląd całej gałęzi (pełny raport: `reports/S18-przeglad.md`)
 
 **Rekomendacje dla pozycji strukturalnych (§3 raportu; do zatwierdzenia przez użytkownika):**
-- pokrycie skryptów składania (`bundle.sh`/`run.sh`/`Info.plist`) w `test.sh` → **faza 1.5** (tanie: ad-hoc `MEETNOTES_SIGN_IDENTITY=-`, `plutil -lint`, grep kluczy `*UsageDescription`; bramka D1/TCC nie ma dziś żadnego zabezpieczenia przed cichą regresją);
-- brak testTargetu aplikacji (`MeetNotesApp`) → **faza 2** (dotyka grafu zależności i bramki liczby testów; blokady i `preset.json` mają pokrycie ręczne z D3);
+- pokrycie skryptów składania (`bundle.sh`/`run.sh`/`Info.plist`) w `test.sh` → **faza 1.5** (tanie: ad-hoc `YASCRIBE_SIGN_IDENTITY=-`, `plutil -lint`, grep kluczy `*UsageDescription`; bramka D1/TCC nie ma dziś żadnego zabezpieczenia przed cichą regresją);
+- brak testTargetu aplikacji (`YascribeApp`) → **faza 2** (dotyka grafu zależności i bramki liczby testów; blokady i `preset.json` mają pokrycie ręczne z D3);
 - `reloadSessions()` na MainActorze + `SettingsView.onChange` → **faza 2** (wydajnościowe, przy obecnej liczbie sesji niewidoczne);
 - `.macOS(15.0)` vs `LSMinimumSystemVersion 27.0` → **faza 2** (wymaga decyzji produktowej i weryfikacji na starszym macOS);
 - `Info.plist`/TCC (mapowanie process tap) → **faza 2**; „TCC — odzyskiwanie odmówionej zgody" → **faza 2** (zgodnie z decyzją użytkownika).
@@ -98,7 +99,7 @@ testów na bramkach. **Przed S18 jedna sesja K czyści ten plik.**
 
 ## Z przeglądu fazy 1.6 (2026-10-19, `reports/F16-przeglad.md`)
 
-- [ ] **Poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji.** Ekran przed dołączeniem może trzymać mikrofon ≥ 12 s; przy włączonym auto-starcie nagranie ruszyłoby przed wejściem na spotkanie. Pomiar sondą audio (`MEETNOTES_PROBE=audio`) albo zapisane odstępstwo. *(uwaga 1)*
+- [ ] **Poczekalnia Teams (spec §6 pkt 2) niezmierzona i bez decyzji.** Ekran przed dołączeniem może trzymać mikrofon ≥ 12 s; przy włączonym auto-starcie nagranie ruszyłoby przed wejściem na spotkanie. Pomiar sondą audio (`YASCRIBE_PROBE=audio`) albo zapisane odstępstwo. *(uwaga 1)*
 - [x] Testy „cisza przez godzinę" (`manualStopSilencesAutoStartForTheSameCall`, `manualStopDuringAMicBlipStaysQuiet`, dwugodzinna część `dismissedOfferStaysQuietForTheWholeMicSession`) mają tiki co 5–60 s, więc od 3c1b94e przerwa > 3 s zeruje ciągłość mikrofonu i przechodzą bez wyciszenia; tiki co 1 s. Luka: Stop w chwili krótkiego zwolnienia mikrofonu (`lastInput.keys` → `active` przechodzi cały zestaw). *(uwaga 2)* *(zrobione w `40ee0f1`: tiki co 1 s w tych testach i w `ignoredAppsNeverOffer`/`unknownAppsNeverOffer`, część po t0+31 w `dismissedOfferStaysQuietAcrossHelperProcessesOfTheSameApp`; mutacja bez `mutedFamilies.formUnion(lastInput.keys)` pada na `manualStopDuringAMicBlipStaysQuiet` i `manualStopSilencesAutoStartForTheSameCall`. Testy `dismissed…` dostały blip mikrofonu w `b6e2c7e`, więc łapią też usunięcie `mutedFamilies.insert(f)` w `dismiss()`, patrz `reports/F15-poprawki-P1-P2-P4.md`)*
 - [ ] Start kończący się od razu (`noSources`): zakolejkowany `finish` chowa ofertę mimo poprawki 79fd410; powstaje pusta sesja. *(uwaga 3)*
 - [ ] Nieudany auto-start zostawia `starting`; gdy rozmowa przechodzi w spotkanie z kalendarza, Start nagra bez powiązanego wydarzenia. *(uwaga 4)*
@@ -216,7 +217,7 @@ nie są tu kopiowane.
 - [ ] **Retencja audio trzyma nagranie bez końca**, gdy najnowszy przebieg jest pusty (cisza, „No speech") albo bez `run.json` — kryterium ukończenia jak w `RunSelection` (fala A, F1); rozważyć osobną regułę dla pustych nagrań.
 - [ ] **Etykieta „Transcribe again…" w stanie „No transcript yet"** brzmi dziwnie dla nagrania, które jeszcze nigdy nie miało transkryptu; rozważyć „Transcribe with another model…".
 - [ ] **Starsza korekta trzyma sesję zajętą**, dopóki się nie skończy, choć jej wynik zostanie odrzucony (F2/F3; informacyjnie — blokuje Improve/Generate i przenoszenie).
-- [ ] **Brak testów integracyjnych `NotesModel`** dla wyścigów korekt i autotytułów (cel `MeetNotesApp` nie ma testów jednostkowych; logika przeniesiona do `RunOperations` jest pokryta, okablowanie nie).
+- [ ] **Brak testów integracyjnych `NotesModel`** dla wyścigów korekt i autotytułów (cel `YascribeApp` nie ma testów jednostkowych; logika przeniesiona do `RunOperations` jest pokryta, okablowanie nie).
 - [ ] **Import: linia bez tabulatora** jest pomijana bez raportu (R15b; nadmiar kolumn jest już zgłaszany jako `rejected`).
 - [ ] **Import: konflikty powtarzają się** przy każdym imporcie tego samego pliku (judged acceptable w T4) — rozważyć zapamiętanie już zgłoszonych.
 - [ ] **Brak błędu specyficznego dla słownika**, gdy prompt reduce w map-reduce przekracza budżet (T6); komunikat jest ogólny.
