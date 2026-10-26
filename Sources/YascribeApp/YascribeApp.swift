@@ -6,10 +6,14 @@ import SwiftUI
 /// mieszka w `ObservableObject` pod `@StateObject` (zwykłe opakowanie właściwości).
 @main
 struct YascribeApp: App {
-    private let model = AppModel()
+    private let model: AppModel
 
     init() {
+        // Migracja katalogu danych przed `AppModel()`: model od razu czyta pliki i zapisuje domyślne.
+        LegacyMigration.moveDataIfNeeded()
         Probes.runIfRequested()
+        model = AppModel()
+        LegacyMigration.migrateKeys(model: model)
         if Snapshots.directory != nil {
             let model = self.model
             DispatchQueue.main.async { MainActor.assumeIsolated { Snapshots.runAll(model: model) } }
