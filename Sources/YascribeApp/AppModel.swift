@@ -123,6 +123,11 @@ final class AppModel {
         recording.model = self
         monitor.model = self
         updateGate = RestartGate(activity: self)
+        updateGate.onPhaseChange = { [weak self] phase in
+            guard let self else { return }
+            recording.updatePending = phase == .restartPostponed
+            if phase == .restartPostponed { announceUpdatePostponed() }
+        }
         // Sparkle startuje tylko w prawdziwym uruchomieniu i z prawdziwym kluczem (placeholder do T8 wywołałby błąd przy starcie).
         let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String
         updater = UpdateController(gate: updateGate, start: !LegacyMigration.isDevRun && key != nil && key != "REPLACE_WITH_PUBLIC_KEY")
@@ -560,6 +565,17 @@ final class AppModel {
     }
 
     // MARK: Aktualizacje i zamykanie
+
+    /// Sparkle czeka (restart odroczony do końca nagrania): bez komunikatu „Install and Relaunch” wygląda jak brak reakcji.
+    /// Arkusz przy oknie głównym, bez blokowania (nagranie trwa); gdy okna nie ma, zostaje podpowiedź w pigułce.
+    private func announceUpdatePostponed() {
+        guard let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) && !$0.isSheet }) else { return }
+        let alert = NSAlert()
+        alert.messageText = "Update ready"
+        alert.informativeText = "Yascribe will install the update and restart as soon as you stop recording. The recording is not interrupted."
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window)
+    }
 
     /// Nowe nagranie nie startuje od pierwszego kliknięcia „Install Update” do końca cyklu (także podczas odroczonego restartu).
     func canBeginRecording() -> Bool {
