@@ -42,7 +42,10 @@ cat > "$T/fake/fetch" <<'EOF'
 #!/bin/bash
 case "$1" in
     *appcast.xml)
-        if [ -f "$FAKE_DIR/feed.published" ]; then cat "$FAKE_DIR/feed.published"
+        if [ -f "$FAKE_DIR/feed.published" ]; then
+            N="$(cat "$FAKE_DIR/fails" 2>/dev/null || echo 0)"
+            if [ "$N" -lt "${FAKE_FEED_FAILS:-0}" ]; then echo $((N + 1)) > "$FAKE_DIR/fails"; exit 22; fi
+            cat "$FAKE_DIR/feed.published"
         elif [ -f "$FAKE_DIR/feed" ]; then cat "$FAKE_DIR/feed"
         else exit 22; fi ;;
     *) exit 0 ;;
@@ -130,6 +133,12 @@ L2="$(grep -n '^release download v0.1.0' "$LOG" | head -1 | cut -d: -f1)"
 L3="$(grep -n '^release edit v0.1.0 .*--draft=false' "$LOG" | head -1 | cut -d: -f1)"
 if [ "$RC" -eq 0 ] && [ -n "$L1" ] && [ -n "$L2" ] && [ -n "$L3" ] && [ "$L1" -lt "$L2" ] && [ "$L2" -lt "$L3" ]; then ok
 else fail "upload-download-validate-publish-order (RC=$RC, linie: ${L1:-?} ${L2:-?} ${L3:-?})"; fi
+
+# feed 404 tuż po publikacji (propagacja) jest ponawiany; stały błąd po wyczerpaniu prób kończy się odmową
+mkrepo feedretry; ARGS=(0.1.0); run_release FAKE_FEED_FAILS=2 YASCRIBE_FEED_SLEEP=0
+if [ "$RC" -eq 0 ]; then ok; else fail "feed-propagation-is-retried (RC=$RC)"; fi
+mkrepo feedgone; ARGS=(0.1.0); run_release FAKE_FEED_FAILS=99 YASCRIBE_FEED_SLEEP=0 YASCRIBE_FEED_RETRIES=3
+if [ "$RC" -ne 0 ]; then ok; else fail "feed-never-matching-fails (RC=$RC)"; fi
 
 # publikacja odmówiona, gdy bajty szkicu się różnią
 mkrepo tamper; ARGS=(0.1.0); run_release FAKE_GH_TAMPER=1
