@@ -7,6 +7,11 @@ public struct YascribePaths: Sendable {
 
     public init(root: URL) { self.root = root }
 
+    /// `YASCRIBE_DATA_DIR` ustawiony i niepusty: katalog deweloperski, migracja ze starej aplikacji go nie dotyczy.
+    public static func isOverridden(_ env: [String: String]) -> Bool {
+        env["YASCRIBE_DATA_DIR"].map { !$0.isEmpty } ?? false
+    }
+
     public static func fromEnvironment(_ env: [String: String] = ProcessInfo.processInfo.environment) -> YascribePaths {
         if let dir = env["YASCRIBE_DATA_DIR"], !dir.isEmpty { return YascribePaths(root: URL(fileURLWithPath: dir)) }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
