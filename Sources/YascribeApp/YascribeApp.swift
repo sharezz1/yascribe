@@ -82,8 +82,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var model: AppModel?
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let model = Self.model, !model.confirmTermination() else { return .terminateNow }
-        return .terminateCancel
+        guard let model = Self.model else { return .terminateNow }
+        switch model.terminationDecision() {
+        case .now: return .terminateNow
+        case .cancel: return .terminateCancel
+        case .afterRecording:
+            // Zamknięcie czeka na koniec finalizacji; zabezpieczenie 15 s, żeby aplikacja nie wisiała przy błędzie rejestratora.
+            var replied = false
+            let reply: @MainActor () -> Void = {
+                guard !replied else { return }
+                replied = true
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+            model.onRecordingEnded = reply
+            DispatchQueue.main.asyncAfter(deadline: .now() + 15) { MainActor.assumeIsolated { reply() } }
+            return .terminateLater
+        }
     }
 }
 

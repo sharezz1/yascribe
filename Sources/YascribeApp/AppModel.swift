@@ -572,8 +572,13 @@ final class AppModel {
 
     /// Zakończenie aplikacji (⌘Q, pasek menu, restart Sparkle): z nagraniem w toku pyta, najpierw zatrzymuje je, potem pozwala wyjść.
     /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
-    func confirmTermination() -> Bool {
-        if quitApproved || updateGate.shouldTerminate() { return true }
+    enum TerminationDecision { case now, cancel, afterRecording }
+
+    /// `afterRecording`: zgoda jest, ale rejestrator jeszcze finalizuje pliki (`stop()` mógł wrócić od razu, gdy
+    /// finalizacja zaczęła się wcześniej na wątku audio); wyjście dopiero po `recordingFinished()`.
+    func terminationDecision() -> TerminationDecision {
+        if quitApproved { return recording.isRecording ? .afterRecording : .now }
+        if updateGate.shouldTerminate() { return .now }
         let alert = NSAlert()
         NSApp.activate()
         if recording.isRecording {
@@ -581,16 +586,27 @@ final class AppModel {
             alert.informativeText = "The recording is saved. Transcribe it the next time you open Yascribe."
             alert.addButton(withTitle: "Stop and Quit")
             alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return false }
+            guard alert.runModal() == .alertFirstButtonReturn else { return .cancel }
             quitApproved = true
             recording.stop()
-            return true
+            return recording.isRecording ? .afterRecording : .now
         }
         alert.messageText = "Meetings are being moved"
         alert.informativeText = "Quit when the move to the new folder finishes."
         alert.addButton(withTitle: "OK")
         alert.runModal()
-        return false
+        return .cancel
+    }
+
+    /// Ustawiane przez `AppDelegate`, gdy zamknięcie czeka na koniec finalizacji nagrania.
+    @ObservationIgnored var onRecordingEnded: (@MainActor () -> Void)?
+
+    /// Wołane z `RecordingController.finish` po zamknięciu plików: odblokowuje odroczony restart i oczekujące zamknięcie.
+    func recordingFinished() {
+        updateGate.activityDidChange()
+        let waiting = onRecordingEnded
+        onRecordingEnded = nil
+        waiting?()
     }
 
     // MARK: Nagrywanie i transkrypcja
