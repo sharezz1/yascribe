@@ -1,9 +1,10 @@
-# MeetNotes
+# Yascribe
 
 Natywna aplikacja macOS do notatek ze spotkań: nagrywa dwa kanały (dźwięk systemowy przez
 process tap Core Audio + mikrofon), transkrybuje przez API (OpenRouter, `microsoft/mai-transcribe-2`)
 i robi notatkę modelem z presetu. Jeden użytkownik, repo prywatne. Interfejs aplikacji po
 angielsku, dokumenty w repo po polsku.
+Nazwa: Yascribe (do 2026-10-26 MeetNotes). Repo `sharezz1/yascribe`; stare `sharezz1/meetnotes` i `/Users/michalprzytulski/meetnotes` to prywatne archiwum z pełną historią (nic w nim nie zmieniamy).
 
 ## Gdzie co jest
 
@@ -19,12 +20,12 @@ angielsku, dokumenty w repo po polsku.
 | `docs/superpowers/BACKLOG.md` | rzeczy odłożone, z adnotacją dokąd idą |
 | `docs/superpowers/ROADMAP.md` | co w 1.5b, fazie 2, 3 i bez przydziału — ze źródłami |
 
-Kod: `Sources/MeetNotesRecording` (rdzeń audio), `MeetNotesSessionFormat` (dziennik, CAF),
-`MeetNotesProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy; od 2.0 także budżet kontekstu `ContextBudget`/`ContextProbe`,
+Kod: `Sources/YascribeRecording` (rdzeń audio), `YascribeSessionFormat` (dziennik, CAF),
+`YascribeProviders` (klient OpenAI-compatible, presety, sondy, pęk kluczy; od 2.0 także budżet kontekstu `ContextBudget`/`ContextProbe`,
 limity czatu `ChatLimits`, `ThinkingStripper`, `finish_reason`, lokalność `isLocal`; `chat(thinking:)`, `Provider.supports(_:)`/`RoleProviders` — kto może obsłużyć rolę),
-`MeetNotesLocalASR` (od 2.0a; **jedyny moduł importujący FluidAudio**: magazyn modelu Parakeet, klient lokalnego ASR, bramka wznowienia, karta modelu),
-`MeetNotesTranscription` (bramka, pakowanie okien, wznawianie), `MeetNotesApp` (SwiftUI),
-`MeetNotesNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań; od 2.0b map-reduce dla podsumowania i `TranscriptSplitter`; `FillerWords` — filtr przerywników), `MeetNotesMeetings` (kalendarz, wykrywanie spotkań, Coming up), `meetnotes-cli` (narzędzie deweloperskie; `transcribe … local://fluidaudio`).
+`YascribeLocalASR` (od 2.0a; **jedyny moduł importujący FluidAudio**: magazyn modelu Parakeet, klient lokalnego ASR, bramka wznowienia, karta modelu),
+`YascribeTranscription` (bramka, pakowanie okien, wznawianie), `YascribeApp` (SwiftUI),
+`YascribeNotes` (notatki, szablony, korekta, retencja i przenoszenie nagrań; od 2.0b map-reduce dla podsumowania i `TranscriptSplitter`; `FillerWords` — filtr przerywników), `YascribeMeetings` (kalendarz, wykrywanie spotkań, Coming up), `yascribe-cli` (narzędzie deweloperskie; `transcribe … local://fluidaudio`).
 
 ## Stan
 
@@ -46,7 +47,7 @@ pełny przebieg `scripts/test.sh`: **580/580** (po poprawkach P6–P10: **581/58
 Poprawki po odbiorach (P1–P5) są w tym samym PR; lista z dowodami i niezweryfikowanym: `docs/superpowers/reports/F20-lista-poprawek.md`.
 Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/superpowers/reports/F20-decyzje-opusa.md` (w tym lista „Do potwierdzenia rano").
 - **2.0a — lokalny ASR** (Parakeet TDT v3 w procesie przez FluidAudio, pin `exact: "0.17.7"`, `.v3`/`.int8`): kod T2–T7 jest na gałęzi
-  (`ProviderKind.fluidAudio`, `MeetNotesLocalASR`, odmowa bez modelu i bez cichego fallbacku do API, karta modelu w Settings).
+  (`ProviderKind.fluidAudio`, `YascribeLocalASR`, odmowa bez modelu i bez cichego fallbacku do API, karta modelu w Settings).
   Model pobiera wyłącznie użytkownik przyciskiem; ładowanie tylko `AsrModels.loadLocal`.
   **S1 wykonany** (`6fc76d7`): kompletność 102,7 % słów FluidVoice, mediana 32 słów/wypowiedź, powtarzalność tekstu i czasów, 0 flag języka na PL,
   RTF ~0,006; wynik to pomiar bez progu go/no-go. **Odbiór T8 wykonany bez kroków użytkownika** (`fe9f7bd`, `59a0d5f`): wszystko, co agent mógł zrobić, przeszło.
@@ -88,7 +89,7 @@ Decyzje fazy podjął Opus z delegacji użytkownika (noc 2026-10-20): `docs/supe
 preset i `RunSnapshot` bez zmian. `master` po PR #17 (pigułka: wyjście i „No system audio yet"): **582/582**; gałąź 2.0.1: **592/592**. Odbiór na żywo zaliczony przez użytkownika 2026-10-22.
 Spec: `docs/superpowers/specs/2026-10-22-zmiana-modelu-w-spotkaniu-design.md`, plan: `docs/superpowers/plans/2026-10-22-faza201-zmiana-modelu.md`.
 
-**Faza 2.0.2 „Nagrywanie na słuchawkach"** (scalona do `master` 2026-10-23 przez PR #23, commit scalenia `c09f265`, `--merge`; testy **622/622**): tor `system` na słuchawkach Bluetooth. Format tapa czytany z urządzenia zbiorczego (`CoreAudioDevices.captureFormat`), układ `AggregateLayout.tapOnly` domyślny (bez podurządzeń, jak w Chromium), nasłuch częstotliwości z `RebuildGate`, ostrzeżenie o złej prędkości toru (`SessionSummary.Track.rateMismatch`), `PillHint.systemStalled` i menu wejścia w pigułce (`InputChoice`, `RawMicrophoneSource.select`). Narzędzie `meetnotes-cli tap-rate`. **Odbiór M4 2026-10-23** (sesja `2f1c`, słuchawki jako wejście i wyjście, 27,5 min): tor `system` 47 998,9 Hz, „Them" kompletny. Niezmierzone: menu wejścia, fałszywy alarm pigułki, B, poczekalnia Teams, przypadek `08f6`. ScreenCaptureKit (Task 10) pominięty. Spec `docs/superpowers/specs/2026-10-22-faza202-sluchawki-design.md`, plan `docs/superpowers/plans/2026-10-22-faza202-sluchawki.md`, pomiary `docs/superpowers/spikes/2026-10-22-f202-s0-sluchawki.md`. **Jakość transkrypcji** (Parakeet myli terminy, korekta bez słownika i uczestników) czeka na fazę 2.1 „Słownik".
+**Faza 2.0.2 „Nagrywanie na słuchawkach"** (scalona do `master` 2026-10-23 przez PR #23, commit scalenia `c09f265`, `--merge`; testy **622/622**): tor `system` na słuchawkach Bluetooth. Format tapa czytany z urządzenia zbiorczego (`CoreAudioDevices.captureFormat`), układ `AggregateLayout.tapOnly` domyślny (bez podurządzeń, jak w Chromium), nasłuch częstotliwości z `RebuildGate`, ostrzeżenie o złej prędkości toru (`SessionSummary.Track.rateMismatch`), `PillHint.systemStalled` i menu wejścia w pigułce (`InputChoice`, `RawMicrophoneSource.select`). Narzędzie `yascribe-cli tap-rate`. **Odbiór M4 2026-10-23** (sesja `2f1c`, słuchawki jako wejście i wyjście, 27,5 min): tor `system` 47 998,9 Hz, „Them" kompletny. Niezmierzone: menu wejścia, fałszywy alarm pigułki, B, poczekalnia Teams, przypadek `08f6`. ScreenCaptureKit (Task 10) pominięty. Spec `docs/superpowers/specs/2026-10-22-faza202-sluchawki-design.md`, plan `docs/superpowers/plans/2026-10-22-faza202-sluchawki.md`, pomiary `docs/superpowers/spikes/2026-10-22-f202-s0-sluchawki.md`. **Jakość transkrypcji** (Parakeet myli terminy, korekta bez słownika i uczestników) czeka na fazę 2.1 „Słownik".
 
 **Faza 2.1 (Słownik, minimalizm, okna) — scalona do `master` 2026-10-25** (PR #27 `a9674a1`, #25 `d24e50f`, #26 `f70915e`, `--merge`; `master`: **744/744**; bez taga, gałęzie `faza21-*` zostają na GitHubie).
 **Faza 2.1a „Słownik"** (PR #27; kod, CLI `dictionary-check`, migawki i raport): Dictionary (Term/Alias, Risky, Priority; `dictionary.json`), Replacement przy odczycie transkryptu (surowy `transcript.json` nietknięty),
@@ -121,11 +122,11 @@ Odbiór użytkownika fazy 2.1 (Słownik, minimalizm, okna) zaliczony 2026-10-25.
 ## Uruchamianie
 
 - `scripts/run.sh` — buduje i uruchamia aplikację z danymi w `.devdata/`.
-- `scripts/bundle.sh` — składa `.build/MeetNotes.app`, podpis „MeetNotes Dev" (samopodpisany
+- `scripts/bundle.sh` — składa `.build/Yascribe.app`, podpis „MeetNotes Dev" (samopodpisany
   certyfikat w pęku login; stały podpis = macOS pamięta zgody na mikrofon i dźwięk systemowy).
-- CLI: `B=$(swift build --show-bin-path)/meetnotes-cli`, potem `$B --help`.
+- CLI: `B=$(swift build --show-bin-path)/yascribe-cli`, potem `$B --help`.
 - Ostrzeżenia linkera o brakujących search path przy buildzie to szum, nie błąd.
 - SwiftPM: `swift package --disable-keychain resolve` po zmianie `Package.swift` lub `rm -rf .build` — bez flagi pobranie `binaryTarget` FluidAudio wisi na pęku kluczy.
   `scripts/test.sh`, `bundle.sh` i `snapshot.sh` same przekazują flagę (wyłącza tylko odczyt poświadczeń SwiftPM z pęku, niczego w nim nie zmienia).
-- Lokalny ASR w buildzie DEBUG: `MEETNOTES_MODEL_STORE` wskazuje kopię magazynu modelu (np. `.devdata/model-store`) zamiast wspólnego
+- Lokalny ASR w buildzie DEBUG: `YASCRIBE_MODEL_STORE` wskazuje kopię magazynu modelu (np. `.devdata/model-store`) zamiast wspólnego
   `~/Library/Application Support/FluidAudio/Models`, który należy do użytkownika i innych aplikacji — nie zapisuj do niego i nie kasuj z niego.
