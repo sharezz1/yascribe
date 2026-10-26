@@ -39,8 +39,18 @@ Uwagi: nazwa Swift to `updater(_:userDidMake:forUpdate:state:)` (nie `userDidMak
 
 **Kontrola tożsamości podpisu dla T6:** `security find-identity -p codesigning` (**bez** `-v`: certyfikat jest `CSSMERR_TP_NOT_TRUSTED`, `-v` pokazuje 0 ważnych tożsamości) daje SHA-1 `7C8CA11F…D29D`; `codesign -dr - <app>` zwraca `designated => identifier "io.github.sharezz1.…" and certificate leaf = H"7c8ca11f4e66100390a76d709b1f116db9bad29d"` — **to** porównujemy (identifier + odcisk, bez wielkości liter). Na tym sprzęcie `codesign -dvv` pokazuje też `Authority=MeetNotes Dev`, ale nie polegamy na nim. Podpis ad-hoc rozpoznajemy po `Signature=adhoc` w `codesign -dv`.
 
-## Część B — pęk po zmianie bundle ID: **czeka na kroki użytkownika**
+## Część B — pęk po zmianie bundle ID: **okno dostępu, po zgodzie odczyt działa**
 
-Przygotowane (w scratchpadzie sesji; ścieżki bezwzględne w skryptach): stara aplikacja `old/MeetNotes.app` (kopia `.build/MeetNotes.app`, ID `io.github.sharezz1.meetnotes`, „MeetNotes Dev"), sonda `kc-probe` w dwóch paczkach (`probe/old`, `probe/new`; ten sam certyfikat, DR odpowiednio `identifier "io.github.sharezz1.meetnotes"` i `…yascribe`, `certificate leaf = H"7c8c…"`; sonda **tylko czyta** i wypisuje status i długość, nigdy wartość), skrypty `start-old-app.sh` i `run-s0.sh`.
+Data pomiaru: 2026-10-26. Wpis testowy utworzyła prawdziwa stara aplikacja (ID `io.github.sharezz1.meetnotes`, „MeetNotes Dev", osobny katalog danych), dostawca „S0 test", usługa `meetnotes.provider`, konto = UUID dostawcy. Sonda `kc-probe` (tylko `SecItemCopyMatching`, wypisuje status i długość) w dwóch paczkach podpisanych tym samym certyfikatem.
 
-Wynik: *do uzupełnienia po uruchomieniu* — macierz: odczyt bez okna / okno i po „Allow" odczyt / odmowa (kod `OSStatus`).
+| Odczyt | Okno dostępu | Wynik po zgodzie |
+|---|---|---|
+| (1) paczka ze starym ID (kontrola) | tak (użytkownik: okno pojawiło się dwukrotnie łącznie dla (1) i (2)) | `OK read, length=13` |
+| (2) paczka z nowym ID `io.github.sharezz1.yascribe` | tak | `OK read, length=13` |
+
+**Wniosek dla T3:** migracja kluczy ze starej usługi **nie jest bezobsługowa** — macOS pyta o zgodę przy pierwszym odczycie klucza zapisanego przez aplikację o innym ID (nawet przy tym samym certyfikacie), a po „Allow" odczyt działa. Treść komunikatu `.unreadable` w T3 dotyczy więc odmowy w oknie lub zamknięcia okna; przed migracją warto powiedzieć użytkownikowi, że okno się pojawi (po jednym na klucz dostawcy).
+
+**Niezmierzone:**
+- kod `OSStatus` odmowy (przycisk „Deny"): nie klikano; test T3 używa `FailingSecretStore` z kodem założonym `-25293` (`errSecAuthFailed`) — do potwierdzenia na sprzęcie w T9;
+- czy użytkownik wybrał „Allow" czy „Always Allow" (wpływa na to, czy okno wraca przy kolejnym odczycie);
+- `length=13` dla klucza `test-fake-s0` (12 znaków) — rozbieżność o 1, przyczyna nieustalona (np. inny wpis w polu); nie wpływa na wniosek.
