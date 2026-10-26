@@ -34,3 +34,9 @@ Data: 2026-10-26. Zakres: commit `ab90750` i poprawka po przeglądzie; pliki `Da
 - Kod odmowy w oknie pęku („Deny") nie był zmierzony w T0; testy używają kodu umownego `-25293`. Aplikacja nie rozgałęzia po kodzie. T9 krok 4 sprawdza komunikat na żywo.
 - Alerty (`NSAlert` w `App.init`) bez testu jednostkowego: pilnuje ich odbiór T9. Ryzyko: alert w `init` przed pierwszym oknem; zmniejszone przez `NSApplication.shared.activate()` przed `runModal`, do potwierdzenia na żywo.
 - Pierwsze uruchomienie z kluczami: macOS zapyta o dostęp do starej pozycji osobno dla każdego dostawcy z kluczem (zmierzone w T0). `unreadable` wraca przy następnym starcie.
+
+## Uzupełnienie (2026-10-26, po T6): gdzie naprawdę leżą dane użytkownika
+
+Sprawdzone read-only po przeglądzie advisora. Katalog `~/Library/Application Support/MeetNotes` zawiera tylko `providers.json` i jedną kopię `.corrupt-`; **prawdziwe dane (30 sesji, presety, ustawienia, szablony, słownik, magazyn modelu, 2,6 GB) leżą w `.devdata` archiwalnego checkoutu** `/Users/michalprzytulski/meetnotes/.devdata`, bo `run.sh` uruchamia aplikację z `YASCRIBE_DATA_DIR=.devdata`. Zainstalowana kopia to `~/Applications/MeetNotes.app` (nie `/Applications`).
+
+Skutki: (1) świeży klon `/Users/michalprzytulski/yascribe` nie ma `.devdata`, więc `run.sh` startuje na pustych danych; (2) migracja T3 przeniesie prawie pusty katalog, a zainstalowane Yascribe w T9 zacznie bez nagrań; (3) klucze z `.devdata` nie są migrowane, bo migracja kluczy pomija `YASCRIBE_DATA_DIR`. Założenie specu (poprawka 2: „`.devdata` zostaje dev-only i nie jest importowane") opiera się więc na fałszywej przesłance. **Decyzja użytkownika** (nic nie kopiowano): czy skopiować `.devdata` do nowego checkoutu, czy zaimportować ją do katalogu danych zainstalowanej aplikacji przed T9 (UUID dostawców zostają, więc migracja kluczy skopiowałaby klucze), czy zdjąć bramkę kluczy dla `.devdata`.
