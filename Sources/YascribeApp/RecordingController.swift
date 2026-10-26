@@ -36,8 +36,11 @@ final class RecordingController {
     /// Migawki: lista wejść bez pytania sprzętu.
     @ObservationIgnored var snapshotInputs: [InputDevice]?
     var inputDevices: [InputDevice] { snapshotInputs ?? CoreAudioDevices.inputDevices() }
+    /// Aktualizacja gotowa, restart czeka na koniec nagrania (ustawia `AppModel` z `RestartGate.onPhaseChange`).
+    var updatePending = false
     var stallHint: String? {
         PillHint.systemStalled(stalled: systemStalled, micUID: micUID, outputUID: outputUID, isBluetooth: micIsBluetooth)
+            ?? (updatePending ? "Update installs when you stop." : nil)
     }
     /// Tory wyciszone w pigułce (macos.md §11.5); każde nagranie startuje bez wyciszenia.
     private(set) var muted: Set<String> = []
