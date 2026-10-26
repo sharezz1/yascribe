@@ -11,7 +11,7 @@ private final class Counter {
     var calls = 0
 }
 
-@MainActor @Test func postponesWhileBusy() {
+@Test @MainActor func postponesWhileBusy() {
     let a = FakeActivity(); a.isBusy = true
     let gate = RestartGate(activity: a), c = Counter()
     #expect(gate.shouldPostpone { c.calls += 1 })
@@ -19,7 +19,7 @@ private final class Counter {
     #expect(gate.phase == .restartPostponed)
 }
 
-@MainActor @Test func proceedsWhenIdle() {
+@Test @MainActor func proceedsWhenIdle() {
     let a = FakeActivity()
     let gate = RestartGate(activity: a), c = Counter()
     #expect(!gate.shouldPostpone { c.calls += 1 })
@@ -27,7 +27,7 @@ private final class Counter {
     #expect(gate.phase == .idle)
 }
 
-@MainActor @Test func releasesBlockExactlyOnceWhenActivityEnds() {
+@Test @MainActor func releasesBlockExactlyOnceWhenActivityEnds() {
     let a = FakeActivity(); a.isBusy = true
     let gate = RestartGate(activity: a), c = Counter()
     _ = gate.shouldPostpone { c.calls += 1 }
@@ -39,7 +39,7 @@ private final class Counter {
     #expect(c.calls == 1)
 }
 
-@MainActor @Test func terminationIsRefusedWhileBusy() {
+@Test @MainActor func terminationIsRefusedWhileBusy() {
     let a = FakeActivity(); a.isBusy = true
     let gate = RestartGate(activity: a)
     #expect(!gate.shouldTerminate())
@@ -47,14 +47,14 @@ private final class Counter {
     #expect(gate.shouldTerminate())
 }
 
-@MainActor @Test func installingBlocksNewRecording() {
+@Test @MainActor func installingBlocksNewRecording() {
     let gate = RestartGate(activity: FakeActivity())
     #expect(gate.canStartRecording)
     gate.installationStarted()
     #expect(!gate.canStartRecording)
 }
 
-@MainActor @Test func installFailureReleasesRecordingBlock() {
+@Test @MainActor func installFailureReleasesRecordingBlock() {
     let a = FakeActivity(); a.isBusy = true
     let gate = RestartGate(activity: a), c = Counter()
     gate.installationStarted()
@@ -66,7 +66,7 @@ private final class Counter {
     #expect(c.calls == 0) // porzucony blok nie wraca
 }
 
-@MainActor @Test func recordingStartBlockedDuringPostponedRestart() {
+@Test @MainActor func recordingStartBlockedDuringPostponedRestart() {
     let a = FakeActivity(); a.isBusy = true
     let gate = RestartGate(activity: a)
     gate.installationStarted()
