@@ -1,7 +1,7 @@
 # macOS: referencja platformy dla designu
 
 > Status: **wymaganie wstępne**, 2026-09-24, uzgadniane w specach. Do czytania przed każdą
-> pracą nad interfejsem meetnotes.
+> pracą nad interfejsem Yascribe.
 > Wzorowane na `reference/ios.md` z [impeccable](https://github.com/pbakaus/impeccable)
 > (Apache-2.0), który nie obsługuje macOS: nasza aplikacja trafiłaby tam do kategorii `ios`
 > i dostałaby reguły dotyku, paska zakładek i symulatora iPhone'a.
@@ -533,7 +533,7 @@ w dolnym pasku, jak na `b-add.png`.
   - każde nagranie startuje **bez wyciszenia**; okresy wyciszenia w dzienniku sesji, w transkrypcie
     linia „Microphone muted 0:05–0:12”;
   - nie da się wyciszyć obu torów naraz — przy próbie ostrzeżenie „Nothing is being recorded”;
-  - zmiana w rdzeniu (`MeetNotesRecording`): testy + mutacja (cisza w wyciszonym zakresie, wyrównanie
+  - zmiana w rdzeniu (`YascribeRecording`): testy + mutacja (cisza w wyciszonym zakresie, wyrównanie
     długości torów, zakaz wyciszenia obu).
   - **Wdrożone 2026-10-19** (raport `docs/superpowers/reports/F15b-wyciszanie.md`), decyzje użytkownika:
     (1) ostrzeżenie zastępuje linię presetu na 4 s; (2) miejsce na `mic.slash` w zwiniętej pigułce zarezerwowane na
@@ -646,7 +646,7 @@ Pewność oznaczona: **mocne** (ogłoszenie producenta, recenzja wydanej wersji)
 - O „generatywnym UI” i nawigacji rozmową piszą głównie agencje, twardych danych nie ma.
 - Ciepła typografia redakcyjna raczej zostanie, ale to opinia, nie pomiar.
 
-**Wnioski dla MeetNotes**
+**Wnioski dla Yascribe**
 
 1. Kierunek B jest zgodny z tym, co w 2026 robią najlepsze narzędzia do notatek. Test
    „slop” idzie w tę samą stronę co Linear. Nic do zmiany w palecie ani typografii.

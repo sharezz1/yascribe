@@ -5,15 +5,15 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleIdentifier</key>
-    <string>io.github.sharezz1.meetnotes</string>
+    <string>io.github.sharezz1.yascribe</string>
     <key>CFBundleName</key>
-    <string>MeetNotes</string>
+    <string>Yascribe</string>
     <key>CFBundleDisplayName</key>
-    <string>MeetNotes</string>
+    <string>Yascribe</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleExecutable</key>
-    <string>MeetNotesApp</string>
+    <string>YascribeApp</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -29,10 +29,10 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>MeetNotes records your side of the meeting from the microphone.</string>
+    <string>Yascribe records your side of the meeting from the microphone.</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>MeetNotes records the other side of the meeting from system audio. It never records your screen.</string>
+    <string>Yascribe records the other side of the meeting from system audio. It never records your screen.</string>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>MeetNotes reads your calendar to recognise meetings and name your notes. It never changes your events.</string>
+    <string>Yascribe reads your calendar to recognise meetings and name your notes. It never changes your events.</string>
 </dict>
 </plist>

@@ -1,4 +1,4 @@
-# MeetNotes
+# Yascribe
 
 Natywna aplikacja macOS do notatek ze spotkań. Ten słownik obejmuje na razie pojęcia fazy 2.1 „Słownik" (w tym przebiegi transkrypcji); reszta projektu dopisywana, gdy będzie rozstrzygana.
 
