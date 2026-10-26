@@ -125,7 +125,7 @@ release_main() {
     # (9) po publikacji
     [ "$("$GH" api "repos/$REPO/releases/latest" --jq .tag_name)" = "v$VERSION" ] || die "latest ≠ v$VERSION (wydanie opublikowane, sprawdź ręcznie)"
     # Feed `releases/latest/download/…` bywa 404 przez kilkanaście sekund po publikacji (propagacja GitHuba): ponawiamy.
-    local tries="${YASCRIBE_FEED_RETRIES:-12}" i=0 same=0
+    local tries="${YASCRIBE_FEED_RETRIES:-36}" i=0 same=0
     while [ "$i" -lt "$tries" ]; do
         if [ "$(set +e; $FETCH "$FEED_URL" 2>/dev/null)" = "$(cat "$OUT/appcast.xml")" ]; then same=1; break; fi
         i=$((i + 1)); sleep "${YASCRIBE_FEED_SLEEP:-5}"
