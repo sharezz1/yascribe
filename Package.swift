@@ -2,35 +2,35 @@
 import PackageDescription
 
 let package = Package(
-    name: "MeetNotes",
+    name: "Yascribe",
     platforms: [.macOS("15.0")],
     products: [
-        .executable(name: "MeetNotesApp", targets: ["MeetNotesApp"]),
-        .executable(name: "meetnotes-cli", targets: ["meetnotes-cli"]),
+        .executable(name: "YascribeApp", targets: ["YascribeApp"]),
+        .executable(name: "yascribe-cli", targets: ["yascribe-cli"]),
     ],
     dependencies: [
-        // Jedyny pin zewnętrzny (F20 S0 §2); FluidAudio importuje wyłącznie MeetNotesLocalASR.
+        // Jedyny pin zewnętrzny (F20 S0 §2); FluidAudio importuje wyłącznie YascribeLocalASR.
         .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7"),
     ],
     targets: [
-        .target(name: "MeetNotesSessionFormat"),
-        .target(name: "MeetNotesRecording", dependencies: ["MeetNotesSessionFormat"]),
-        .target(name: "MeetNotesProviders"),
-        .target(name: "MeetNotesLocalASR", dependencies: ["MeetNotesProviders", "MeetNotesTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
-        .target(name: "MeetNotesTranscription", dependencies: ["MeetNotesSessionFormat", "MeetNotesProviders"]),
-        .target(name: "MeetNotesMeetings"),
-        .target(name: "MeetNotesNotes", dependencies: ["MeetNotesSessionFormat", "MeetNotesProviders", "MeetNotesTranscription",
-                                                       "MeetNotesMeetings"]),
-        .executableTarget(name: "meetnotes-cli", dependencies: ["MeetNotesRecording", "MeetNotesProviders", "MeetNotesTranscription", "MeetNotesLocalASR", "MeetNotesNotes"]),
-        .executableTarget(name: "MeetNotesApp", dependencies: ["MeetNotesRecording", "MeetNotesProviders", "MeetNotesTranscription", "MeetNotesNotes",
-                                                       "MeetNotesMeetings", "MeetNotesLocalASR"]),
-        .testTarget(name: "MeetNotesSessionFormatTests", dependencies: ["MeetNotesSessionFormat"]),
-        .testTarget(name: "MeetNotesRecordingTests", dependencies: ["MeetNotesRecording"]),
-        .testTarget(name: "MeetNotesProvidersTests", dependencies: ["MeetNotesProviders"], exclude: ["Fixtures"]),
-        .testTarget(name: "MeetNotesTranscriptionTests", dependencies: ["MeetNotesTranscription", "MeetNotesRecording"], exclude: ["Fixtures"]),
-        .testTarget(name: "MeetNotesNotesTests", dependencies: ["MeetNotesNotes", "MeetNotesTranscription", "MeetNotesProviders",
-                                                                "MeetNotesSessionFormat", "MeetNotesRecording", "MeetNotesMeetings"]),
-        .testTarget(name: "MeetNotesLocalASRTests", dependencies: ["MeetNotesLocalASR", "MeetNotesProviders", "MeetNotesTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
-        .testTarget(name: "MeetNotesMeetingsTests", dependencies: ["MeetNotesMeetings"]),
+        .target(name: "YascribeSessionFormat"),
+        .target(name: "YascribeRecording", dependencies: ["YascribeSessionFormat"]),
+        .target(name: "YascribeProviders"),
+        .target(name: "YascribeLocalASR", dependencies: ["YascribeProviders", "YascribeTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
+        .target(name: "YascribeTranscription", dependencies: ["YascribeSessionFormat", "YascribeProviders"]),
+        .target(name: "YascribeMeetings"),
+        .target(name: "YascribeNotes", dependencies: ["YascribeSessionFormat", "YascribeProviders", "YascribeTranscription",
+                                                       "YascribeMeetings"]),
+        .executableTarget(name: "yascribe-cli", dependencies: ["YascribeRecording", "YascribeProviders", "YascribeTranscription", "YascribeLocalASR", "YascribeNotes"]),
+        .executableTarget(name: "YascribeApp", dependencies: ["YascribeRecording", "YascribeProviders", "YascribeTranscription", "YascribeNotes",
+                                                       "YascribeMeetings", "YascribeLocalASR"]),
+        .testTarget(name: "YascribeSessionFormatTests", dependencies: ["YascribeSessionFormat"]),
+        .testTarget(name: "YascribeRecordingTests", dependencies: ["YascribeRecording"]),
+        .testTarget(name: "YascribeProvidersTests", dependencies: ["YascribeProviders"], exclude: ["Fixtures"]),
+        .testTarget(name: "YascribeTranscriptionTests", dependencies: ["YascribeTranscription", "YascribeRecording"], exclude: ["Fixtures"]),
+        .testTarget(name: "YascribeNotesTests", dependencies: ["YascribeNotes", "YascribeTranscription", "YascribeProviders",
+                                                                "YascribeSessionFormat", "YascribeRecording", "YascribeMeetings"]),
+        .testTarget(name: "YascribeLocalASRTests", dependencies: ["YascribeLocalASR", "YascribeProviders", "YascribeTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
+        .testTarget(name: "YascribeMeetingsTests", dependencies: ["YascribeMeetings"]),
     ]
 )

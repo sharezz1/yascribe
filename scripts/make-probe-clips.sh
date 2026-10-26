@@ -10,7 +10,7 @@ say -v Zosia -o "$T/pl.aiff" "raz, dwa, trzy"
 say -v Samantha -o "$T/en.aiff" "one, two, three"
 afconvert -f WAVE -d LEI16@16000 -c 1 "$T/pl.aiff" "$T/pl.wav"
 afconvert -f WAVE -d LEI16@16000 -c 1 "$T/en.aiff" "$T/en.wav"
-OUT=Sources/MeetNotesProviders/ProbeClips+Data.swift
+OUT=Sources/YascribeProviders/ProbeClips+Data.swift
 {
   echo "// WYGENEROWANE przez scripts/make-probe-clips.sh — nie edytuj ręcznie."
   echo "extension ProbeClips {"
