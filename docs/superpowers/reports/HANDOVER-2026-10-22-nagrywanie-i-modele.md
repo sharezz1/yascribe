@@ -5,7 +5,7 @@ Dokumenty po polsku, interfejs aplikacji po angielsku. Zmiany do `master` tylko 
 
 ## Stan na koniec sesji
 
-- `master` = `00e45b9` (po PR #1–#15), 581/581 (`scripts/test.sh`). Faza 2.0 scalona (tag `faza-2.0` → `7eebaea`).
+- `master` = `86e7316` (po PR #1–#15), 581/581 (`scripts/test.sh`). Faza 2.0 scalona (tag `faza-2.0` → `62f40b1`).
 - PR #15 scalony: wpis w `BACKLOG.md` o torze `system` na słuchawkach Bluetooth + ten plik. Brak otwartych PR.
 - Artefakt „Mapa faz Yascribe": https://claude.ai/artifact/NH8mCRJsz9Y8AxVVBz7bKz (wersja 20). Każda zmiana w BACKLOG/ROADMAP/postępie ma go aktualizować: `Artifact read`, edycja, publikacja pod tym samym `url`.
 - Aplikacja uruchomiona z `scripts/run.sh` (build z `master`); dane w `.devdata/`. Nie zamykaj jej (zamyka użytkownik); `run.sh` odmówi, gdy działa.
@@ -54,7 +54,7 @@ Dokumenty po polsku, interfejs aplikacji po angielsku. Zmiany do `master` tylko 
 
 ## Pozostałe otwarte wątki (skrót)
 
-- **oMLX:** pole „API key" jest (od `fb12fe2`), użytkownik się połączył; brak pomiaru z modelem mieszczącym się w pamięci (jedyny model MLX dawał HTTP 507). BACKLOG: nie da się wyczyścić zapisanego klucza oMLX (`replaceKey` przy pustym polu).
+- **oMLX:** pole „API key" jest (od `84eacc7`), użytkownik się połączył; brak pomiaru z modelem mieszczącym się w pamięci (jedyny model MLX dawał HTTP 507). BACKLOG: nie da się wyczyścić zapisanego klucza oMLX (`replaceKey` przy pustym polu).
 - **Faza 2.1 „Słownik"** (obowiązkowo, decyzja użytkownika): brak specyfikacji. **AEC offline** (priorytet wysoki): faza do wyboru. **Dokąd przenieść pierwotną fazę 2.0:** decyzja użytkownika (stara sekcja „Faza 2" w ROADMAP).
 - Testy użytkownika: nagranie na żywo (kryterium 3.1), para PL+EN (T11, Auto), baseline API (tylko na polecenie), test odmowy bez modelu, więcej prób podsumowania z myśleniem i bez.
 - Retencja audio B7: pierwsze audio zniknie ok. 2026-11-12.

@@ -1,6 +1,6 @@
 # F15 — poprawki D1 i D2 po przeglądach (na polecenie użytkownika, 2026-10-15)
 
-- **Commit:** `d2ce82c`
+- **Commit:** `a6a7c0c`
 - **`scripts/test.sh`:** `test.sh: 183/183 testów uruchomionych i zaliczonych.` (182 + 1 nowy `@Test`: `multiLineUtteranceIsSentAsOneLineSoItsTailIsNotLost`)
 - **Mutacja:** usunięcie zamiany `\n` → spacja w `CorrectionBatches.render` → test pada na dwóch asercjach (jedna wypowiedź = jedna linia; `render` skleja `\r\n`/`\n`). Po cofnięciu `183/183`. Wykonane bezpośrednio, nie przez podagenta.
 

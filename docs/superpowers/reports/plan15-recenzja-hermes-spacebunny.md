@@ -1,6 +1,6 @@
 # Recenzja planu fazy 1.5 MeetNotes — Hermes (space-bunny)
 
-> Recenzja bez wykonania i bez zmian w planie ani kodzie. Stan: gałąź `faza15`, commit `5f4d8ce`.
+> Recenzja bez wykonania i bez zmian w planie ani kodzie. Stan: gałąź `faza15`, commit `2e9df0d`.
 > Sprawdzone: `Spec §3` (decyzje 1–25), `§8` (bramki 1–18), plany `00`–`04`, `scripts/test.sh`,
 > `Package.swift`, `Sources/` (Providers, Transcription, Recording, SessionFormat, App), `Tests/`.
 > Weryfikacje wykonane: odpalony `swift build --build-tests` (Build complete), policzone `@Test`

@@ -4,7 +4,7 @@
 
 > **Stan 2026-10-20:** T0 zakończony — **GO dla 2.0a** (decyzja Opusa z delegacji użytkownika, `docs/superpowers/reports/F20-decyzje-opusa.md`; spec §13 rozstrzygnięty).
 > Kolejność 2.0a: **T2 → T3 → T4 → T5 → T6 → T1 (S1 przez CLI) → T7 → T8**. Zmiany po S0 są wpisane w T1, T3, T4, T6, T7, T8 (oznaczenie „**[po S0]**”).
-> **Stan 2026-10-20 (noc), po S2:** T9 zakończony (commit `38ac47f`); STOP T9 rozstrzygnął Opus z delegacji użytkownika — spec **§14**, log
+> **Stan 2026-10-20 (noc), po S2:** T9 zakończony (commit `32f7a75`); STOP T9 rozstrzygnął Opus z delegacji użytkownika — spec **§14**, log
 > `docs/superpowers/reports/F20-decyzje-opusa.md`. Zmiany w T10–T14 oznaczone „**[po S2]**”; wartości liczbowe 2.0b nie są już szkicem. T10–T13 nie czekają
 > na kroki użytkownika z T8; T14 czeka.
 

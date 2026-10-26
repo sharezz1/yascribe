@@ -13,7 +13,7 @@ Narzędzie pomocnicze napisane w tej sesji: `~/.hermes/meetnotes-orchestrator/to
 
 ✅ — szczegóły uwag: `reports/S17-uwagi-uzytkownika.md`. Sesja dowodowa
 `.devdata/sessions/2026-10-13T07-39-44Z-ee07` (przebieg 3 okna, 0 nieudanych, 15 wypowiedzi),
-komity użytkownika `228e091`, `1f3552c`, `55c7e49`.
+komity użytkownika `67de1f2`, `4a3085f`, `1c38338`.
 
 ## Krok 7 — Cmd-, i klawiatura
 

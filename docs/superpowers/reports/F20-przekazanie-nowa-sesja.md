@@ -4,7 +4,7 @@
 
 ## 1. Stan w jednym akapicie
 
-Faza 2.0 jest **zaimplementowana i zielona na gałęzi `faza20`** (HEAD `9059aeb` + commit dokumentów z tego przekazania; `scripts/test.sh` **561/561**, exit 0, sprawdzone osobnym przebiegiem
+Faza 2.0 jest **zaimplementowana i zielona na gałęzi `faza20`** (HEAD `b73d858` + commit dokumentów z tego przekazania; `scripts/test.sh` **561/561**, exit 0, sprawdzone osobnym przebiegiem
 po ostatnim scaleniu). **Nie jest scalona do `master` i nie ma tagu** — to decyzja użytkownika. Żaden agent nie pracuje w tle. 2.0a = lokalny ASR Parakeet TDT v3 (FluidAudio, moduł
 `MeetNotesLocalASR`, nowy `ProviderKind.fluidAudio`). 2.0b = Ollama / llama.cpp / oMLX jako lokalni dostawcy tekstu (limity czatu, `finish_reason: "length"` = błąd, `reasoning_effort: "none"`,
 budżet kontekstu „Context window", numeracja partii korekty 1..N, map-reduce notatki z anulowaniem i postępem, jawny błąd zamiast cichego obcięcia wejścia). Wbudowany model tekstowy to 2.1+.

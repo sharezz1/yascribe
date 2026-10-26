@@ -800,7 +800,7 @@ git commit -m "Transkrypcja: progi przeslucha w input.json, test prawdziwej mowy
 
 ### Zadanie E4: Aplikacja — preset przy starcie, pływające okno, odtwarzanie, wznowienie
 
-Status: ✅ wykonane (2026-10-12, S15 `6915a71`): bez poprawek kompilacji, `scripts/test.sh` 109/109; po checku S15 runda S15fix (blokady startu nagrania i transkrypcji, odczyt `preset.json`, odtwarzanie i klucz bez cichych awarii — `reports/S15.md`). Wcześniej przebieg kontrolny 2026-09-25 (kopia spike'a, Sonnet): 99/99 po całym planie E. Źródła: ChatGPT #2, #3, #7, #8, #16, #17; Hermes 1.1, 4.5, 4.8. Testów automatycznych nie ma (interfejs) — sprawdza D3.
+Status: ✅ wykonane (2026-10-12, S15 `d9d4ee2`): bez poprawek kompilacji, `scripts/test.sh` 109/109; po checku S15 runda S15fix (blokady startu nagrania i transkrypcji, odczyt `preset.json`, odtwarzanie i klucz bez cichych awarii — `reports/S15.md`). Wcześniej przebieg kontrolny 2026-09-25 (kopia spike'a, Sonnet): 99/99 po całym planie E. Źródła: ChatGPT #2, #3, #7, #8, #16, #17; Hermes 1.1, 4.5, 4.8. Testów automatycznych nie ma (interfejs) — sprawdza D3.
 
 **Pliki:**
 - Zamień w całości: `Sources/MeetNotesApp/RecordingController.swift`

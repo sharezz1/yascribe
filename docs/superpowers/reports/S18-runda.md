@@ -1,8 +1,8 @@
 # S18-runda — poprawki po przeglądzie S18 (jedna runda, bez re-checku)
 
 **Wejście:** `docs/superpowers/reports/S18-przeglad.md` (§1 BLOKUJĄCE #1, §2 poz. 1, §6 Q3), odpowiedzi w
-`BACKLOG.md` („Aneks S18"). HEAD przed sesją: `b453e7d` (zlecenie mówiło `c187638`; nad nim jest jeszcze
-commit runbooka `b453e7d` — tylko dokumentacja, kodu nie dotyka). Testy przed: 109/109.
+`BACKLOG.md` („Aneks S18"). HEAD przed sesją: `c2f1a06` (zlecenie mówiło `45e91be`; nad nim jest jeszcze
+commit runbooka `c2f1a06` — tylko dokumentacja, kodu nie dotyka). Testy przed: 109/109.
 Aplikacja nieuruchamiana (GUI); `swift build --product MeetNotesApp` → `Build complete!` (C się kompiluje —
 `swift test` nie buduje targetu aplikacji).
 

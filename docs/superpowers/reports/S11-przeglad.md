@@ -1,6 +1,6 @@
-# Przegląd S11 — E3 (c6a72f8) + E5 (e841c9e)
+# Przegląd S11 — E3 (a2a82f6) + E5 (f188934)
 
-**Zakres:** `git diff a2c2213..HEAD` (E3 = `c6a72f8`, E5 = `e841c9e`), raport `S11.md`, plan 00 §4, plan 05 §E3/E5.
+**Zakres:** `git diff c1ccf56..HEAD` (E3 = `a2a82f6`, E5 = `f188934`), raport `S11.md`, plan 00 §4, plan 05 §E3/E5.
 **Testy:** `scripts/test.sh` → ostatnia linia: `test.sh: 109/109 testów uruchomionych i zaliczonych.` (kod 0). Liczba deklaracji `@Test` w `Tests/` = 109 — zgadza się z raportem i z runbookiem.
 
 **Zgodność kod ↔ plan:** bloki literalne E3 (kroki 1–2, 4–6, (a)–(i)) i E5 krok 1 weszły znak w znak (porównane z planem 05 linia po linii). Kod spoza literali (E5 krok 2 — testy pisane samodzielnie) zgadza się z tabelą luk. Diff planu 05 to wyłącznie `- [ ]` → `- [x]`; diff runbooka zgodny z E5 krokiem 4 (S11 → `106, po E5: 109`, S12/S14/S15/S16/S18 → `109`, dopisek `> +3 po E5`). Odstępstwa 1–5 z raportu potwierdzone w diffie. Zapisy `run()` (input.json, chunks/, transcript.json, run.json) wszystkie w `sesja/runs/<runID>/`; walidacja `runID` idzie przed jakimkolwiek zapisem. Surowe bajty diffu skanowane pod literałami-podobnymi-do-tajemnic: tylko stałe UUID `000…001`/`000…002` i kontekst testowy (`key: "k"` w fixture, poza diftem) — nic kluczopodobnego.

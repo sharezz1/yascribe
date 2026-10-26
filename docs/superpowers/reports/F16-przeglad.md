@@ -1,4 +1,4 @@
-# Faza 1.6 — niezależny przegląd (`faza15..faza16`, HEAD 6269d72)
+# Faza 1.6 — niezależny przegląd (`faza15..faza16`, HEAD f752b79)
 
 2026-10-19. Przegląd tylko do odczytu: bez poprawek i bez commitów. Wejścia to spec `2026-10-16-faza16-kalendarz-design.md`
 (§4, §6), plan `2026-10-16-faza16-kalendarz.md`, spike `2026-10-16-faza16-wykrywanie.md` i `F16-odbior.md`.
@@ -17,7 +17,7 @@
   - jawny wpis odstępstwa z decyzją w `F16-odbior.md`;
   - dłuższy, osobny próg ciągłości dla `.startRecording`.
 
-### 2. Ważna: część testów „cisza przez godzinę” po 44e586f nic nie sprawdza
+### 2. Ważna: część testów „cisza przez godzinę” po 3c1b94e nic nie sprawdza
 
 - **Gdzie:** `Tests/MeetNotesMeetingsTests/OfferDetectorTests.swift`:
   - `manualStopSilencesAutoStartForTheSameCall` (`every: 10`);
@@ -25,7 +25,7 @@
   - `manualStopDuringAMicBlipStaysQuiet`, część po t0+36 (`every: 5`);
   - `dismissedOfferStaysQuietAcrossHelperProcessesOfTheSameApp`, część po t0+31 (`every: 5`);
   - `ignoredAppsNeverOffer` i `unknownAppsNeverOffer` (`every: 5`).
-- **Problem:** commit 44e586f dodał `maxTickGap = 3`: przerwa między tikami większa niż 3 s zeruje `micSince`. Przy tikach co 5–60 s licznik ciągłości zeruje się w każdym kroku, więc oferta rozmowy nie może powstać w ogóle. Te asercje przechodzą nawet po usunięciu każdego wyciszenia.
+- **Problem:** commit 3c1b94e dodał `maxTickGap = 3`: przerwa między tikami większa niż 3 s zeruje `micSince`. Przy tikach co 5–60 s licznik ciągłości zeruje się w każdym kroku, więc oferta rozmowy nie może powstać w ogóle. Te asercje przechodzą nawet po usunięciu każdego wyciszenia.
 - **Skutek dla mutacji z planu (T3, krok 4):**
   - Mutacja (e) nie zabija już testu, który plan dla niej wskazuje. Zabijają ją `afterManualStopANewCallOffersAgain` (60 s tików co 1 s) i `retuningKeepsTheMuteAfterManualStop` (600 s).
   - Mutację (c) zabija `dismissedOfferReturnsForANewMicSession`.
@@ -34,7 +34,7 @@
 - **Dlaczego ważne:** to ścieżka kryterium 6a. Auto-start po Stop to błąd, którego użytkownik najbardziej nie chce.
 - **Propozycja:** w tych przebiegach tiki co 1 s (albo ≤ 3 s), potem ponowić mutację (e) i mutację `lastInput.keys` → `active`.
 
-### 3. Drobna: po nieudanym starcie typu `noSources` oferta i tak znika (poprawka z 14ceaa7 jest niepełna)
+### 3. Drobna: po nieudanym starcie typu `noSources` oferta i tak znika (poprawka z 79fd410 jest niepełna)
 
 - **Gdzie:**
   - `MeetingMonitor.accept`, czyli `if !model.startRecording(offer:) { present(offer) }`;
@@ -81,14 +81,14 @@
 
 ## Sprawdzone bez uwag (pkt 4 zlecenia)
 
-- **`.id(pill.rev)` (631a812):**
+- **`.id(pill.rev)` (99df124):**
   - `rev` rośnie tylko przy `mode == .offer`.
   - Wyścig, w którym asynchroniczne podbicie trafia już w tryb `.recording` (menu zamknięte, a zaraz potem Start z menu aplikacji), przebudowuje `RecordingPanelView` raz, tuż po starcie. Nic przy tym nie ginie: ten widok, `LevelRow` i `PillIconButton` nie mają stanu lokalnego (`@StateObject`/`@State`), a stan żyje w `PillState` i `RecordingController`.
   - Klucz rozmiaru (`LayoutKey`) nie zależy od `rev`.
 - **Obserwator `NSMenu.didEndTrackingNotification`:**
   - Ma `[weak self]` i nie jest zdejmowany, ale panel powstaje raz (`isReleasedWhenClosed = false`), więc w praktyce nie przecieka.
   - Działa w obrębie całej aplikacji (`object: nil`): każde zamknięte menu przy widocznej ofercie przebudowuje widok oferty. To nieszkodliwe.
-- **Menu Preset w ofercie (e3fb58a):** pisze ten sam `activePresetID`, a `startRecording(offer:)` waliduje preset przed startem.
+- **Menu Preset w ofercie (5e07211):** pisze ten sam `activePresetID`, a `startRecording(offer:)` waliduje preset przed startem.
 - **Pola zapisywane:**
   - `NoteMeta.calendarEvent`, `GlobalSettings.meetings` i wszystkie pola `MeetingSettings` są opcjonalne.
   - Typy nie mają własnego `init(from:)`, a stare pliki dekodują się poprawnie (testy `linkRoundTripsAndOldMetaWithoutItDecodes` i `oldSettingsJSONWithoutMeetingsDecodes`).

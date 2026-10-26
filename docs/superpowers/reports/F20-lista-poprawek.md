@@ -1,14 +1,14 @@
 # F20 — lista poprawek zgłoszonych przez użytkownika
 
-Błędy i zmiany zgłoszone przez użytkownika na gałęzi `faza20` po odbiorach T8/T14 (stan kodu: `79f3e6b`, 561/561).
+Błędy i zmiany zgłoszone przez użytkownika na gałęzi `faza20` po odbiorach T8/T14 (stan kodu: `f9c1867`, 561/561).
 Pozycje dopisywane w kolejności zgłoszenia; decyzje są użytkownika, zapis niżej to ustalenia z rozmowy 2026-10-20.
-**Stan (2026-10-20, wieczór):** P1, P3 i P4 zrobione na gałęzi `faza20-poprawki` (odgałęzienie od `79f3e6b`, cztery commity, **571/571**,
+**Stan (2026-10-20, wieczór):** P1, P3 i P4 zrobione na gałęzi `faza20-poprawki` (odgałęzienie od `f9c1867`, cztery commity, **571/571**,
 bez scalenia i bez pushu). P2 i P5 celowo bez kodu: czekają na decyzję (P2) i pomiar na działającej aplikacji (P5).
 Aplikacja uruchomiona u użytkownika to **stary build** — poprawki zobaczy po `scripts/bundle.sh` albo `scripts/run.sh` (nie podmieniałem `~/Applications/MeetNotes.app`).
 
 ## P1 — „Correction failed: the model didn't answer within 120 s" (API, OpenRouter)
 
-**Stan: zrobione w `9602466`** (przyczyna ustalona wcześniej, poniżej).
+**Stan: zrobione w `853fbf8`** (przyczyna ustalona wcześniej, poniżej).
 
 **Co zmieniono.** `OpenAICompatibleClient.chat(thinking:)`: dla API wysyła `reasoning: {"enabled": false}`, z jednym ponowieniem bez pola po 400/422
 wspominającym „reasoning" albo „think" (ścieżka lokalna bez zmian: `reasoning_effort: "none"`). Korekta zawsze `thinking: false`; sonda korekty też
@@ -64,7 +64,7 @@ słów z listy (um, uh, er, ah, hmm, mm…), bez modelu, natychmiast. Lista Flui
 2. Dodatkowo można mieć filtr **w backendzie** (deterministyczny, jak w FluidVoice).
 3. Otwarte: czy lista jest edytowalna w Settings, jaka jest domyślna lista polska (yyy, eee, mhm…) i czy filtr backendowy jest domyślnie włączony.
 
-**Stan: zrobione w `2765a9b` (opcje A i B, decyzja użytkownika 2026-10-20: „rób A i B z domyślną polską listą").**
+**Stan: zrobione w `517a197` (opcje A i B, decyzja użytkownika 2026-10-20: „rób A i B z domyślną polską listą").**
 
 **Co zrobiono.** Jedno ustawienie steruje obiema częściami: Settings → Correction → Filler sounds (przełącznik, domyślnie włączony) i pole Words (lista po przecinku, Return zapisuje, Reset wraca do domyślnej).
 **A:** lista (pierwsze 8 słów) trafia do polecenia systemowego korektora („Exception: remove filler sounds and hesitations…"). **B:** `FillerWords.remove` po odpowiedzi modelu, także dla linii z nieudanych
@@ -85,7 +85,7 @@ Rekomendacja: A od razu (zero ryzyka), B po decyzji o liście domyślnej i miejs
 
 ## P3 — Settings: Parakeet to model Yascribe, nie dostawca
 
-**Stan: zrobione w `148d9ea`.** Pierwotny zakres: `Sources/MeetNotesApp/SettingsView.swift`, `ModelCardView.swift`, `ProviderLogos.swift`,
+**Stan: zrobione w `c53eb15`.** Pierwotny zakres: `Sources/MeetNotesApp/SettingsView.swift`, `ModelCardView.swift`, `ProviderLogos.swift`,
 `Sources/MeetNotesProviders/ProviderSetup.swift`.
 
 **Ustalenia użytkownika.**
@@ -118,7 +118,7 @@ mutacja (zdjęcie filtra `.fluidAudio` z wierszy) wywróciła test, plik przywr�
 
 ## P4 — Edytor presetu: dostawcy w rolach
 
-**Stan: zrobione w `8736c68` i `849e25f`.** `Sources/MeetNotesApp/PresetsView.swift` (`RoleSection`, `providers` na linii 275 to dziś **wszyscy** dostawcy w każdej roli).
+**Stan: zrobione w `4a20caf` i `9e14f0f`.** `Sources/MeetNotesApp/PresetsView.swift` (`RoleSection`, `providers` na linii 275 to dziś **wszyscy** dostawcy w każdej roli).
 
 **Ustalenia użytkownika.**
 1. Rola **Speech to text → Provider:** zamiast „On this Mac · Parakeet" pokazać **„Yascribe"**. Model zostaje ten sam (jest jeden: `parakeet-tdt-0.6b-v3`).
@@ -183,7 +183,7 @@ sprawdzić, czy to samo dzieje się przy samych przyciskach paska (bez wypychani
 ## Odpowiedzi użytkownika (2026-10-20, wieczór)
 
 1. **ElevenLabs znika z Correction i Summary** — potwierdzone.
-2. **Podsumowanie: przełącznik on/off, porównamy różnicę** — to jest już w kodzie (Settings → Summary → Thinking, `9602466`); test jakości jeszcze przed nami.
+2. **Podsumowanie: przełącznik on/off, porównamy różnicę** — to jest już w kodzie (Settings → Summary → Thinking, `853fbf8`); test jakości jeszcze przed nami.
 3. **Rekord Yascribe wraca przy starcie** — „jest ok".
 4. **Ikona llama.cpp jednobarwna** — potwierdzone, zostaje.
 5. **Embedding (P3):** „nie pojawiają się". Stan `.devdata/providers.json` (zmieniony ostatnio 14:09) to tylko OpenRouter i rekord Yascribe, więc nie ma jeszcze nikogo innego do pokazania.
@@ -195,7 +195,7 @@ sprawdzić, czy to samo dzieje się przy samych przyciskach paska (bez wypychani
 
 ## Wyniki testów na żywo (2026-10-21, wieczór)
 
-Aplikacja zbudowana z `master` (`6074560`) przez `scripts/run.sh`, dane z `.devdata/`. Treści spotkań nie cytuję; sesja `2026-10-21T07-29-08Z-62de`.
+Aplikacja zbudowana z `master` (`fc180da`) przez `scripts/run.sh`, dane z `.devdata/`. Treści spotkań nie cytuję; sesja `2026-10-21T07-29-08Z-62de`.
 
 ### Podsumowanie z myśleniem i bez (P1)
 Ta sama sesja (135 wypowiedzi, 20 097 znaków po korekcie), ten sam model `deepseek/deepseek-v4.1-flash` przez OpenRouter, ten sam szablon `standard`; zmienia się tylko Settings → Summary → Thinking.

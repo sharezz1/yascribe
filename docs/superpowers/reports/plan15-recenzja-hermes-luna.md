@@ -1,6 +1,6 @@
 # Recenzja planu fazy 1.5 MeetNotes
 
-**Werdykt: do przeróbki. Recenzent: gpt-6-luna (`opencode-go`).** Stan sprawdzony: gałąź `faza15`, HEAD `5f4d8cefa3cd1a466214210378134f0dede8908c`. Nie wykonywałem zadań, builda, testów ani mutacji; plan i kod bez zmian. Warunki hosta: Swift 6.4, `xcode-select` wskazuje `/Library/Developer/CommandLineTools`. Statyczne sprawdzenie planów: brak deklaracji `@State`, `@Entry`, `@Animatable`, `#Preview`; używane jest `@StateObject`. Nie potwierdzam kompilacji całości bez builda.
+**Werdykt: do przeróbki. Recenzent: gpt-6-luna (`opencode-go`).** Stan sprawdzony: gałąź `faza15`, HEAD `2e9df0d154042a201b3805fc5428918d506562cc`. Nie wykonywałem zadań, builda, testów ani mutacji; plan i kod bez zmian. Warunki hosta: Swift 6.4, `xcode-select` wskazuje `/Library/Developer/CommandLineTools`. Statyczne sprawdzenie planów: brak deklaracji `@State`, `@Entry`, `@Animatable`, `#Preview`; używane jest `@StateObject`. Nie potwierdzam kompilacji całości bez builda.
 
 ## Co jest dobre
 

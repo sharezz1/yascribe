@@ -1,6 +1,6 @@
 # F15-T13 — uwagi użytkownika z odbioru (2026-10-15)
 
-Zebrał autor planu z odbioru na żywo (aplikacja z `scripts/run.sh`, stan `5fecb1c`, 183/183).
+Zebrał autor planu z odbioru na żywo (aplikacja z `scripts/run.sh`, stan `6122288`, 183/183).
 Sesja testowa: `.devdata/sessions/2026-10-15T13-07-49Z-f184` (YouTube z głośników + mikrofon).
 
 ## A. Funkcjonalne — partia poprawek

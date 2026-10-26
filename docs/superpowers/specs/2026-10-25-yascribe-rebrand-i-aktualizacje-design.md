@@ -1,6 +1,6 @@
 # Yascribe: pełny rename i aktualizacje przez Sparkle — projekt
 
-Data: 2026-10-25. Punkt startowy: `master` po scaleniu Fazy 2.1 (`d2a5f88`).
+Data: 2026-10-25. Punkt startowy: `master` po scaleniu Fazy 2.1 (`fb6477a`).
 
 ## Po co
 
@@ -114,7 +114,7 @@ Na kopii bieżącego kodu, bez rename: Sparkle w `bundle.sh` przy samych CLT, bu
 
 ## Kolejność
 
-Faza 2.1 jest scalona i odebrana (PR #26, #28, #29; `master` = `d2a5f88` w dniu decyzji), więc rename nie rozjeżdża żadnych gałęzi.
+Faza 2.1 jest scalona i odebrana (PR #26, #28, #29; `master` = `fb6477a` w dniu decyzji), więc rename nie rozjeżdża żadnych gałęzi.
 
 0. S0 (spike Sparkle + test pęku kluczy). 1. Przepisanie historii (usunięcie adresu służbowego) i **nowe repo** `sharezz1/yascribe`. 2. Rename + migracja. 3. Sparkle w aplikacji i `release.sh`. 4. Upublicznienie nowego repo. 5. Wydanie `v0.1.0`, instalacja w `/Applications`, drugie wydanie `v0.1.1` jako próba aktualizacji.
 

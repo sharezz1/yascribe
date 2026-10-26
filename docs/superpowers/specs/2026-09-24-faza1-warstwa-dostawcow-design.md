@@ -311,7 +311,7 @@ Preset jest zamrażany przy starcie nagrania (<sesja>/preset.json) i to on idzie
 
 | Ustalenie | Dowód |
 |---|---|
-| 🔴 Ollama i oMLX **nie robią ASR** | rozdz. 19; commit `65a262e`; oMLX issue #301 zamknięte jako nieplanowane |
+| 🔴 Ollama i oMLX **nie robią ASR** | rozdz. 19; commit `36bd671`; oMLX issue #301 zamknięte jako nieplanowane |
 | 📐 LM Studio **nie robi ASR** | zgłoszenie `lmstudio-ai/lmstudio-bug-tracker#1715` otwarte od 2026-03-31 |
 | 📐 llama.cpp **robi ASR, ale tylko przez czat** | Qwen3-ASR, Voxtral, Ultravox przez `/chat/completions`; brak `/v1/audio/transcriptions` |
 | 🔴 Katalog myli w obie strony | OpenRouter `/api/v1/models` **pomija** MAI-Transcribe-2; rejestr Ollamy **pokazuje** `whisper-tiny`, którego runtime nie uruchomi (rozdz. 19) |

@@ -1,7 +1,7 @@
 # Poprawki po przeglądach S3 i S4 — przegląd (niezależny)
 
-**Zakres:** `git diff 4b8025a..93b68cc` (commity: `6241e9c` raporty, `7885c8a` S3-1…S3-9,
-`93b68cc` P1–P9, P12 + spec + po amendzie P10 i raport poprawek), raport wykonawcy
+**Zakres:** `git diff 236d42b..13612d9` (commity: `e2b4bf9` raporty, `2b90cf8` S3-1…S3-9,
+`13612d9` P1–P9, P12 + spec + po amendzie P10 i raport poprawek), raport wykonawcy
 `docs/superpowers/reports/S3-S4-poprawki.md`, punkty źródłowe: `S3-przeglad.md` (1–9),
 `S4-przeglad.md` (P1–P12), plan `2026-09-24-faza1-00-przeglad.md` §4.
 **Gałąź:** `faza1`, bez przełączania. **Tryb:** przegląd — niczego nie naprawiono; kontrole
@@ -143,7 +143,7 @@ Zgodne z raportem poprawek (52). Smoke CLI powtórzony na binarce debug (bez spr
 | P7 30 s od startu sesji | `SessionRecorder.swift:70–73`, `:84–87` | OK — `lastChunkByTrack[trackID]` = czas `track.opened` (dosłownie propozycja); `?? startedAt` zostaje jako martwy fallback, bez wpływu | Brak |
 | P8 wyścig `stop()`/przebudowa | `MicrophoneSources.swift:21–22, 48–57`, `SystemTapSource.swift:20–21, 87–98, 121–122` | OK — flaga `stopped` + podwójna kontrola (przed budową i przy przypisaniu `capture`), `rebuild()` po `stop()` sprząta tap/urządzenie zbiorcze (analiza przeplotów pokryta: każdy spóźniony `build()` jest sprzątany przez `teardown` w ścieżce `late` albo w `stop()`). Bez testu — wymaga Core Audio, zgodnie z raportem. Drobna zastrzeżenie — **U7** | Patrz U7 |
 | P9 CAF otwarty po błędzie dziennika | `TrackWriter.swift:60–68` | OK w kodzie (`do/catch`, CAF zamknięty, wyjątek propagowany dalej; kolejność „dziennik, potem plik" utrzymana świadomie). Uzasadnienie decyzji odwrócone — **U5** | Patrz U5 |
-| P10 hash w `S4.md` | `docs/superpowers/reports/S4.md` (tabela „Commity" + akapit o zakresie) | OK — `006e69b` → `4b8025a` z opisem amendu, „9 plików" → 10; `git show 4b8025a --stat` = 10 plików (6 źródeł, 2 testy, plan, raport) — zgadza się; `006e69b` i `823dc51` istnieją jako obiekty sprzed amendu | Brak |
+| P10 hash w `S4.md` | `docs/superpowers/reports/S4.md` (tabela „Commity" + akapit o zakresie) | OK — `006e69b` → `236d42b` z opisem amendu, „9 plików" → 10; `git show 236d42b --stat` = 10 plików (6 źródeł, 2 testy, plan, raport) — zgadza się; `006e69b` i `823dc51` istnieją jako obiekty sprzed amendu | Brak |
 | P11 fsync pod blokadą | `SessionRecorder.swift:120–121` (komentarz `ponytail:`) | OK — odłożenie świadome, uzasadnienie **poprawne**: `SessionJournal.append` ma własną blokadę i robi `write` + `synchronize`, a `finish()` zamyka dziennik pod blokadą rejestratora — przeniesienie appendów poza blokadę otwiera wyścig z `finish()` (zapis po `close()` to wyjątek ObjC `NSFileHandleOperationException`, nie do złapania w Swift) i kolejność `track.failed` po `session.ended`. Zysk pomijalny (≤ 1 zdarzenie na tor na sesję; `handle()` robi ten sam fsync przy każdej luce i kotwicy). Wyzwalacz z konsultacji (luki/kotwice w T6/T8) — rozsądny | Utrzymać w backlogu; wrócić przy A10, jeśli T6/T8 pokażą luki |
 | P12 niesanityzowany `trackID` | `SessionRecorder.swift:61–65`, `:218–220`, test `unsafeTrackIDNeverLeavesSessionDirectory` | OK — walidacja `[A-Za-z0-9_-]+` w `start()` przed `prepare()` (wariant z propozycji; brak zmiany sygnatury `SessionDirectory.trackURL` zgodny z decyzją), zły tor → `track.failed("invalidTrackID")`, plik nie powstaje; test sprawdza brak `evil.caf` poza katalogiem i `.noSources`. Dwie drobiazgi bez wpływu: (a) tor odrzucony nie pojawia się w `session.json` (brak `trackOpened` → `index` go nie ma; `track.failed` zostaje tylko w dzienniku); (b) `isSafeTrackID` zgadza się z regexem `[A-Za-z0-9_-]+` | Brak; (a) rozważyć przy okazji widoczności błędów torów w UI (E4) |
 
@@ -194,6 +194,6 @@ Zgodne z raportem poprawek (52). Smoke CLI powtórzony na binarce debug (bez spr
 
 - W drzewie roboczym leży nieśledzony `docs/superpowers/reports/S3-S4-poprawki-decyzje.md`
   (konsultacja odpowiadająca na 4 pytania z raportu poprawek, „nic nie wdrożone"). Nie jest częścią
-  diffu `4b8025a..93b68cc` ani tego przeglądu — odnotowuję dla porządku; jej wnioski (pkt 3+4 przed
+  diffu `236d42b..13612d9` ani tego przeglądu — odnotowuję dla porządku; jej wnioski (pkt 3+4 przed
   pkt 1, P11 do backlogu z wyzwalaczem A10) są spójne z oceną P11 powyżej.
 - Raport poprawek nie zawiera odwołań do nieistniejących kroków; cytowane hashe sprawdzone w `git`.

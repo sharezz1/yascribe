@@ -1,10 +1,10 @@
 # Faza 1.5 (+1.5b, 1.6, Coming up) — przegląd całości przed scaleniem do `master`
 
-2026-10-19, Opus. Zakres: `master..faza15` (`762c18d..02ca8ae`), 179 commitów, 203 pliki, w tym `Sources/`
+2026-10-19, Opus. Zakres: `master..faza15` (`6b1560d..d071c85`), 179 commitów, 203 pliki, w tym `Sources/`
 80 plików (+7847/−386) i `Tests/` 46 plików (+3341/−3). Pkt 13 speca 1.5 (§9) i pozycja 1.5b w `ROADMAP.md`. Przegląd tylko do odczytu;
 poprawek w kodzie nie ma (mutacje cofnięte `git checkout`).
 
-`scripts/test.sh` na `02ca8ae` (ostatnia linia): `test.sh: 353/353 testów uruchomionych i zaliczonych.` (`check-bundle: OK`)
+`scripts/test.sh` na `d071c85` (ostatnia linia): `test.sh: 353/353 testów uruchomionych i zaliczonych.` (`check-bundle: OK`)
 
 **Wynik: 0 blokujących, 4 do poprawy, 8 do BACKLOG.** P1, P2 i P4 są zrobione w `reports/F15-poprawki-P1-P2-P4.md`
 (355/355), a P3 w dokumentach przy scaleniu. W `BACKLOG.md` otwartych pozycji jest dziś 34 (`- [ ]`); 8 nowych
@@ -48,7 +48,7 @@ z tego raportu jeszcze tam nie trafiło (P3).
     i `retentionPlanMatchesWhatRetentionDeletes`;
   - usunięty zapis znacznika `audio-deleted.json` → pada `retentionDeletesOnlyCafAndOnlyAfterTheTerm`.
 - **Hashe w raportach:** 27 plików (CLAUDE.md, BACKLOG, ROADMAP, 23 raporty, 1 spike), 85 unikalnych hashy. Wszystkie
-  istnieją, są przodkami `faza15`, a opisy zgadzają się z tematami commitów. `faza-1.5a` → `b4f5804` jest poprawny
+  istnieją, są przodkami `faza15`, a opisy zgadzają się z tematami commitów. `faza-1.5a` → `826e450` jest poprawny
   (commit zamykający T13-B). Sprawdzał Haiku. Mimo polecenia „tylko odczyt” agent zostawił w katalogu worktree
   25 pustych plików `docs_superpowers_*.md`, nieśledzonych. Usunąłem je; główny checkout jest czysty.
 - **Zgodność z §11.5 i decyzjami:** Keep audio 7/14/30/90/Forever z domyślnymi 30, R1 (potwierdzenie skrócenia z liczbą
@@ -92,7 +92,7 @@ aplikacji nie wygrywa. Mutacja: stary filtr.
 
 **P3. Rozjazdy dokumentów ze stanem (mechaniczne, Haiku).**
 - `ROADMAP.md`, sekcja 1.6, ostatnie zdanie: „„Coming up" i integracje Google/Outlook/Slack zostają”. Coming up jest
-  zrobione (`F16-coming-up.md`, `02ca8ae`).
+  zrobione (`F16-coming-up.md`, `d071c85`).
 - `ROADMAP.md`: „Faza 1.5b (w toku)” i wiersz „Przegląd całości przez Opusa, potem scalenie” wymagają aktualizacji
   po decyzji o scaleniu. Raport: ten plik.
 - `CLAUDE.md`, „Kod:”: brak modułów `MeetNotesNotes` (notatki, szablony, retencja i przenoszenie) i `MeetNotesMeetings`
@@ -101,7 +101,7 @@ aplikacji nie wygrywa. Mutacja: stary filtr.
 - `BACKLOG.md`: dopisać B1–B8 z tego raportu, P2 przenieść z sekcji T5 z dopiskiem o retencji.
 
 **P4. Testy „cisza przez godzinę” w `OfferDetectorTests` nie mogą paść (F16-przeglad #2, nadal otwarte).**
-`BACKLOG.md:99`; od `49c4980` plik testów się nie zmienił. Tiki co 5–60 s przy `maxTickGap = 3` zerują `micSince`
+`BACKLOG.md:99`; od `26c5fcd` plik testów się nie zmienił. Tiki co 5–60 s przy `maxTickGap = 3` zerują `micSince`
 w każdym kroku, więc oferta rozmowy nie powstaje w ogóle i asercje przechodzą nawet po usunięciu każdego wyciszenia.
 Liczą się do 353/353, a nie sprawdzają bramki (wyciszenie po Stop i po „Not a meeting”). Mutację (e) z planu T3 łapią
 dziś inne testy, ale luka „Stop w chwili krótkiego zwolnienia mikrofonu” zostaje bez strażnika. Tę bramkę trzeba
@@ -145,7 +145,7 @@ traktować jako „bez testu”, nie jako drobiazg.
    `claude/vigilant-austin-cd58d0` (`faza15` + raport). Wariant: scalić tę gałąź do `master` tutaj (`master` nie jest
    nigdzie wyciągnięty), potem przesunąć `faza15` fast-forwardem w głównym checkoucie. P1, P2 i P4 przed scaleniem albo po:
    Twoja decyzja. Push też jest Twoją decyzją.
-2. **Tagi:** propozycja `faza-1.6` → `49c4980` (koniec 1.6 na `faza15` z przeglądem F16) i `faza-1.5` na commicie
+2. **Tagi:** propozycja `faza-1.6` → `26c5fcd` (koniec 1.6 na `faza15` z przeglądem F16) i `faza-1.5` na commicie
    scalenia w `master`. Istnieją już `faza-1.5a` i `faza-1.5b-wyciszanie`.
 3. **Nadal otwarte i nieblokujące:** pomiar T11 (Auto, para PL+EN); poczekalnia Teams (F16-przeglad #1, spec 1.6 §6
    pkt 2) bez pomiaru i decyzji przy włączonym auto-starcie; lekarz, urodziny i OOO pokryte tylko testami.

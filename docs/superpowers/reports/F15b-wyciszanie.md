@@ -2,9 +2,9 @@
 
 Zadanie: `docs/design/macos.md` §11.5, akapit „Wyciszanie torów w pigułce” (decyzja użytkownika 2026-10-16),
 oraz decyzja (b) z raportu F15-T13 część B (zdarzenie przy pierwszych niezerowych próbkach po `allZeros60s`).
-Gałąź `claude/adoring-pasteur-77900b` z `faza15` @ `49c4980`. Plan i decyzje 1–4 zaakceptowane przez użytkownika 2026-10-19.
+Gałąź `claude/adoring-pasteur-77900b` z `faza15` @ `26c5fcd`. Plan i decyzje 1–4 zaakceptowane przez użytkownika 2026-10-19.
 
-Commity: `aef4629` (T1 rdzeń), `efd1971` (T2 notatki), `1f75c3e` (T3 aplikacja), raport w commicie domykającym.
+Commity: `31e2c8c` (T1 rdzeń), `c355189` (T2 notatki), `93e6d47` (T3 aplikacja), raport w commicie domykającym.
 Testy: `scripts/test.sh` → **345/345** po poprawkach z odbioru (344/344 przed nimi) (było 334; +10: 5 rejestrator, 3 podsumowanie, 2 TrackProblem/MuteNote).
 
 Merge Danger: NIEODWRACALNE — zmienia format dziennika sesji na dysku: trzy nowe rodzaje zdarzeń (`track.muted`,
@@ -96,7 +96,7 @@ Sesja `2026-10-19T10-03-38Z-113d` (`.devdata` w worktree):
 - Działa: 3 okresy wyciszenia mikrofonu w dzienniku. Dźwięk systemowy nie ma żadnego, bo próba wyciszenia obu torów
   została odrzucona. Tory są równe (system 111,06 s; mikrofon 139,26 s − 28,2 s przesunięcia). Wypowiedzi „Me” nie ma
   w wyciszonym zakresie 0:13–1:43.
-- Użytkownik: ikona-przełącznik działa, ale jest mało czytelna, i poprosił o przycisk po prawej. Poprawka `18971f1`:
+- Użytkownik: ikona-przełącznik działa, ale jest mało czytelna, i poprosił o przycisk po prawej. Poprawka `5939695`:
   „Mute” / „Unmute” w każdym wierszu toru, „Unmute” wypełnione kolorem `warn`, rozwinięta pigułka 360 pt.
 - Błąd: dźwięk systemowy dał pierwszą próbkę 28 s po mikrofonie, więc dwa wyciszenia wypadły przed zerem osi
   („Microphone muted 0:00–0:00”, czas „0:00:-13”). Poprawka zgodnie z decyzją użytkownika: okres zakończony przed zerem
@@ -115,11 +115,11 @@ cd /Users/michalprzytulski/meetnotes/.claude/worktrees/adoring-pasteur-77900b &&
 
 | # | Punkt | Wynik | Uwaga |
 |---|---|---|---|
-| 1 | Nagranie startuje bez wyciszenia; rozwinięta pigułka: „Mute” przy mikrofonie → `mic.slash`, „Unmute”, szary pasek reaguje na głos, „Muted” | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
-| 2 | Zwinięta pigułka przy wyciszonym mikrofonie: `mic.slash` obok licznika, rozmiar okna bez zmian | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
-| 3 | Próba wyciszenia drugiego toru → „Nothing is being recorded” na ~4 s, nic się nie wycisza | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
-| 4 | Wyciszenie dźwięku systemowego (`speaker.slash`) i odciszenie | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
-| 5 | Po Stop i transkrypcji: w Transcript linia „Microphone muted M:SS–M:SS” we właściwym miejscu; Copy ją zawiera | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
-| 6 | Wypowiedzi z czasu wyciszenia nie ma w transkrypcie; czasy wypowiedzi po odciszeniu zgadzają się z odsłuchem | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
-| 7 | Następne nagranie znów startuje bez wyciszenia | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `18971f1` i `76656ed`) |
+| 1 | Nagranie startuje bez wyciszenia; rozwinięta pigułka: „Mute” przy mikrofonie → `mic.slash`, „Unmute”, szary pasek reaguje na głos, „Muted” | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `5939695` i `d984103`) |
+| 2 | Zwinięta pigułka przy wyciszonym mikrofonie: `mic.slash` obok licznika, rozmiar okna bez zmian | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `5939695` i `d984103`) |
+| 3 | Próba wyciszenia drugiego toru → „Nothing is being recorded” na ~4 s, nic się nie wycisza | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `5939695` i `d984103`) |
+| 4 | Wyciszenie dźwięku systemowego (`speaker.slash`) i odciszenie | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `5939695` i `d984103`) |
+| 5 | Po Stop i transkrypcji: w Transcript linia „Microphone muted M:SS–M:SS” we właściwym miejscu; Copy ją zawiera | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `5939695` i `d984103`) |
+| 6 | Wypowiedzi z czasu wyciszenia nie ma w transkrypcie; czasy wypowiedzi po odciszeniu zgadzają się z odsłuchem | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `5939695` i `d984103`) |
+| 7 | Następne nagranie znów startuje bez wyciszenia | ✅ | użytkownik: „test zrobiony, działa” (2026-10-19, po `5939695` i `d984103`) |
 | 8 | (opcjonalnie) Film/dźwięk systemowy dopiero po ≥ 60 s ciszy → w widoku od razu neutralne „silent for the first minute”, bez ⚠ na liście, jeszcze przed transkryptem | — | nie sprawdzane (opcjonalne); pokryte testem `soundAfterAllZerosIsJournaledAsAudible` |

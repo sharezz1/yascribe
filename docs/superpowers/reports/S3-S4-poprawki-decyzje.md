@@ -1,6 +1,6 @@
 # Konsultacja — pytania z `S3-S4-poprawki.md`
 
-**Konsultant:** Claude (K), Opus 5.5, 2026-09-25. **Stan:** `faza1` @ `93b68cc`, `scripts/test.sh` 52/52 (wg raportu).
+**Konsultant:** Claude (K), Opus 5.5, 2026-09-25. **Stan:** `faza1` @ `13612d9`, `scripts/test.sh` 52/52 (wg raportu).
 Tylko opinia, nic nie wdrożone.
 
 ## Kolejność wykonania
@@ -14,7 +14,7 @@ przesunięcie w pkt 1 nie będzie już +5 — liczby zmieniać na końcu, od fak
 w każdej sesji F, także przy krokach mutacji („Przywróć; `58/58`”), a następna runda poprawek dołoży kolejne „+N”.
 (a) to jednorazowa, mechaniczna zmiana, którą sprawdza jeden `grep`.
 
-Zmienić (numery linii z `93b68cc`):
+Zmienić (numery linii z `13612d9`):
 
 | Plik | Miejsca | Zmiana |
 |---|---|---|

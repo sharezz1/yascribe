@@ -1,6 +1,6 @@
 # Przegląd S11 — runda 2 (po poprawkach E6)
 
-**Zakres:** `git diff e111fe9..HEAD` (E6 = `d66c088`), raport `S11.md` sekcja „E6 — poprawki po przeglądzie i checku S11", plan 05 §E6 (kroki 1–5), plan 00 §4.
+**Zakres:** `git diff 428297f..HEAD` (E6 = `f1666c7`), raport `S11.md` sekcja „E6 — poprawki po przeglądzie i checku S11", plan 05 §E6 (kroki 1–5), plan 00 §4.
 **Domknięcie:** `S11-przeglad.md` uwagi 1–5 (uwaga 6 świadomie odłożona do D — poza zakresem rundy), `checks/S11-check.md` #3.
 
 **Testy:** `scripts/test.sh` → ostatnia linia: `test.sh: 109/109 testów uruchomionych i zaliczonych.` (kod 0). Liczba deklaracji `@Test` = 109 — zgadza się z raportem.
@@ -67,4 +67,4 @@ Obie mutacje E6 dają czerwień tam, gdzie mówi raport. Przerobiony test nadal 
 | Mutacja 2 → ✘ RunnerTests:143 (`!me.isEmpty`) | potwierdzona niezależnie |
 | „Bez nowych `@Test` (109)" | potwierdzone (109 deklaracji, 109/109) |
 | „Sprzątanie: 42 przed i 42 po (nie rośnie)" | potwierdzone (42 → 42 po pełnym przebiegu i po `--filter`; `trap` działa) |
-| Odchylenie 1 (odtworzenie zmian po `git checkout`) | brak skutku w drzewie końcowym: diff `e111fe9..HEAD` kompletny, drzewo po moich mutacjach czyste |
+| Odchylenie 1 (odtworzenie zmian po `git checkout`) | brak skutku w drzewie końcowym: diff `428297f..HEAD` kompletny, drzewo po moich mutacjach czyste |

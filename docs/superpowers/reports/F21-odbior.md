@@ -1,7 +1,7 @@
 # F21 T9 — odbiór agenta fazy 2.1a „Słownik”
 
-> 2026-10-23. Wykonał agent (Sonnet 5.5) na gałęzi `faza21-slownik` (nie scalonej do `master`), po `04ea8d3`. Kod CLI i fixture: `76c921f`;
-> sceny migawek: `4bfb2fa`. Spec: [faza21-slownik-design](../specs/2026-10-23-faza21-slownik-design.md) (§8), plan: [faza21-slownik](../plans/2026-10-23-faza21-slownik.md).
+> 2026-10-23. Wykonał agent (Sonnet 5.5) na gałęzi `faza21-slownik` (nie scalonej do `master`), po `0de12d2`. Kod CLI i fixture: `1996d8d`;
+> sceny migawek: `49b5cee`. Spec: [faza21-slownik-design](../specs/2026-10-23-faza21-slownik-design.md) (§8), plan: [faza21-slownik](../plans/2026-10-23-faza21-slownik.md).
 > **Prywatność:** sesja `62de` jest prawdziwym nagraniem użytkownika (`.devdata/`, poza repo); w raporcie są tylko zliczenia słów ze słownika, nie treść.
 > **Czego nie robiłem:** nie wpisywałem prawdziwych Termów ani Aliasów, nie klikałem w prawdziwej aplikacji (`.app`), nie nagrywałem, nie wołałem API,
 > nie ruszałem pęku kluczy, TCC ani Ustawień systemowych. Zrzuty migawek są w `.design/review/` (poza git), obejrzane przez agenta.
@@ -66,7 +66,7 @@ punkt odczytu, a nie fixture z gotowymi poprawnymi zapisami.
 
 ## 3. §8.2, §8.3 i pełny przebieg
 
-- `scripts/test.sh` (pełny): przy odbiorze agenta (HEAD `4bfb2fa`) 704/704; po poprawce końcowej `test.sh: 719/719 testów uruchomionych i zaliczonych.`, `check-bundle: OK`; po fali A (F1–F3, F5–F7) 726/726; po fali B (F4, F8, F9) `test.sh: 730/730 testów uruchomionych i zaliczonych.`
+- `scripts/test.sh` (pełny): przy odbiorze agenta (HEAD `49b5cee`) 704/704; po poprawce końcowej `test.sh: 719/719 testów uruchomionych i zaliczonych.`, `check-bundle: OK`; po fali A (F1–F3, F5–F7) 726/726; po fali B (F4, F8, F9) `test.sh: 730/730 testów uruchomionych i zaliczonych.`
 - §8.3: przycinanie polecenia korektora do budżetu dowodzi `capturedCorrectorRequestListsExactlyThePrunedTerms` (`Tests/MeetNotesNotesTests/CorrectorTests.swift`);
   licznik „N terms don’t fit” w zakładce — scena `dictionary-list` (Task 8, w poprawce końcowej przestawiona ze 2048 na **4096** zgodnie ze specem §8.3): 128 Termów
   (8 prawdziwych + 120 wypełniaczy `Acme-NNN`), lokalny dostawca `gemma-3-4b` z Context window 4096, budżet `DictionaryPrompt.maxChars` = 983 znaki;
@@ -116,7 +116,7 @@ Pełny przebieg: **719/719** po R27, **730/730** po falach A i B (§7).
 
 ## 7. Fale poprawek po przeglądzie całości (R28)
 
-Przegląd całości gałęzi (Codex gpt-6-astra) dał F1–F11. **Fala A** (inny agent, `6b77bb0` i poprzednie): F1 retencja audio z kryterium ukończenia jak `RunSelection`, F2/F3 bilety korekt i autotytułów
+Przegląd całości gałęzi (Codex gpt-6-astra) dał F1–F11. **Fala A** (inny agent, `ac06722` i poprzednie): F1 retencja audio z kryterium ukończenia jak `RunSelection`, F2/F3 bilety korekt i autotytułów
 (zajętość osobno od komunikatu, tylko najnowsza korekta przebiegu publikuje wynik), F5 wypowiedź ponad limit partii ze słownikiem zostaje oryginalna, F6 „Transcribe again…" w stanie „No transcript yet",
 F7 identyfikatory przebiegów ściśle rosnące. **Fala B** (ten agent, 730/730): **F4** adresy e-mail nigdy nie trafiają do polecenia ani do `vocabulary.txt` (wzorzec `lokalna@domena.tld`, też w `<…>`,
 potem każdy token z `@`; imiona z kropkami, myślnikami i apostrofami bez zmian; zostaje fragment domeny, gdy adres przerwie znak formatujący); **F8** zbiór zakazanych znaków w Terminie i Aliasie =

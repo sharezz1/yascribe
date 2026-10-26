@@ -1,7 +1,7 @@
 # Poprawki S3-S4, runda 2 — przegląd (niezależny)
 
-**Zakres:** `git diff 93b68cc..HEAD` (commity: `58cbfdb` CLI — positional+walidacja, `9a933f9` rdzeń —
-U1, U2, U4, U7 + test, `b6b95bb` raporty, `7b5e131` Plany +6). Raport wykonawcy:
+**Zakres:** `git diff 13612d9..HEAD` (commity: `bde2bd0` CLI — positional+walidacja, `96fcff4` rdzeń —
+U1, U2, U4, U7 + test, `972ea0d` raporty, `1040312` Plany +6). Raport wykonawcy:
 `docs/superpowers/reports/S3-S4-poprawki.md` („Runda CLI", „Runda 2"), uwagi źródłowe:
 `S3-S4-poprawki-przeglad.md` (U1–U7), plan `2026-09-24-faza1-00-przeglad.md` §4.
 **Gałąź:** `faza1`, bez przełączania. **Tryb:** przegląd — niczego nie naprawiono; kontrole
@@ -171,7 +171,7 @@ bezwzględny dla pozostałych trzech mutacji bloku recovery.
   `64/64` (B2), `71/71` (B3), `76/76` (B4, po E2); C: `86/86` (C1), `90/90` (C2), `98/98` (C3),
   `105/105` (C4, po E3); E2 `76/76`, E3 `105/105`, plan 04 `105/105`. Runbook: S6 = 71,
   S7 = 76, S8 = 76, S10 = 98, S11–S18 = 105 — zgadza się co do sztuki. Notka C3
-  „90 z poprzednich zadań" też przesunięta (84 → 90) ✓. Commit `7b5e131` zmienia wyłącznie liczby
+  „90 z poprzednich zadań" też przesunięta (84 → 90) ✓. Commit `1040312` zmienia wyłącznie liczby
   (i notę) — nic poza nimi ✓.
 - **Wartości historyczne nietknięte zgodnie z wytyczną:** `[x]` w planie 01/05 (`47/47`, `44/44`
   itd.), statusy „przebieg kontrolny … 99/99" (plan 05 l. 15/39/258/423/716, plan 00, runbook §6),
@@ -188,5 +188,5 @@ bezwzględny dla pozostałych trzech mutacji bloku recovery.
   zamierzone (miało sprawdzać `positional`); wynik nie jest użyty w ocenie, katalog usunięty.
   Nagrywania jako przedmiotu przeglądu to nie zmienia — P5/P8/U7 i tak czekają na A10.
 - Raport poprawek („Runda CLI", „Runda 2") nie zawiera odwołań do nieistniejących kroków;
-  cytowane liczbę testów i mutacje sprawdzone przebiegiem. Hash `7b5e131` = „Plany +6" zgodny
+  cytowane liczbę testów i mutacje sprawdzone przebiegiem. Hash `1040312` = „Plany +6" zgodny
   z opisem w zadaniu.

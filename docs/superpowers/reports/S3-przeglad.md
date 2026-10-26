@@ -1,6 +1,6 @@
 # S3 — przegląd (niezależny)
 
-**Zakres:** `docs/superpowers/plans/2026-09-24-faza1-00-przeglad.md` §4, raport `docs/superpowers/reports/S3.md`, diff `b6f7729..8b2bdf4` (faktycznie jeden commit: `8b2bdf4`).
+**Zakres:** `docs/superpowers/plans/2026-09-24-faza1-00-przeglad.md` §4, raport `docs/superpowers/reports/S3.md`, diff `901bb4a..3024eb3` (faktycznie jeden commit: `3024eb3`).
 **Tryb:** przegląd. Nic nie naprawiano, nie zmieniano gałęzi ani innych plików niż ten raport.
 
 ## Wynik testów (wymagany)
@@ -16,8 +16,8 @@ Kod wyjścia: `0`. Zgodne z deklaracją w `S3.md`.
 ## Ustalenia osi 1 i 2 (fakty, bez oceny)
 
 - `Sources/meetnotes-cli/CLI.swift` jest **identyczny bajt w bajt** z blokiem kodu A9 z planu (`2026-09-24-faza1-01-fundament-i-nagrywanie.md`, płotki 2677/2792). Deklaracje z `S3.md` („bez różnic", „bajt w bajt") są prawdziwe.
-- Diff pliku planu w `b6f7729..8b2bdf4` to **wyłącznie** `- [ ]` → `- [x]` dla A9 Krok 1–5 (linie ~2675, 2794, 2796, 2798, 2800); liczba linii bez zmian, więc numery linii w `S3.md` pozostają aktualne.
-- Hash `88c0bd4` cytowany w `S3.md` jako przed-amend istnieje; `git diff --stat 88c0bd4 8b2bdf4` = tylko `docs/superpowers/reports/S3.md | 97 +++`. Wyjaśnienie amend potwierdzone.
+- Diff pliku planu w `901bb4a..3024eb3` to **wyłącznie** `- [ ]` → `- [x]` dla A9 Krok 1–5 (linie ~2675, 2794, 2796, 2798, 2800); liczba linii bez zmian, więc numery linii w `S3.md` pozostają aktualne.
+- Hash `88c0bd4` cytowany w `S3.md` jako przed-amend istnieje; `git diff --stat 88c0bd4 3024eb3` = tylko `docs/superpowers/reports/S3.md | 97 +++`. Wyjaśnienie amend potwierdzone.
 - **Mutacja z planu: N/A dla S3.** Jedyne wystąpienie „mutacj" w planie to linia 41 (status sekcji A1 o samym skrypcie testowym). Sekcja A9 nie zawiera kroku mutacji — zadanie A9 nie dokłada żadnego testu (44 → 44).
 - Drzewo robocze czyste (`git status --porcelain` pusty) — brak zapisów poza repo/katalogiem sesji.
 

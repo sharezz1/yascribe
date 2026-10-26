@@ -1,16 +1,16 @@
 # F15-T13 — część A odbioru: poprawki funkcjonalne (2026-10-15)
 
-Wejście: `reports/F15-T13-uwagi-uzytkownika.md` (`bcd3091`). Zakres na polecenie użytkownika: **tylko część A**; część B (wygląd, `docs/design/`) robi osobna sesja designu — widoków nie stylowałem. 1 commit na uwagę. `scripts/test.sh`: **199/199** (183 + 16 nowych `@Test`). Mutacje wykonywał Haiku (każda pada na asercji, nie na budowaniu; po cofnięciu pełny przebieg zielony).
+Wejście: `reports/F15-T13-uwagi-uzytkownika.md` (`1ab686e`). Zakres na polecenie użytkownika: **tylko część A**; część B (wygląd, `docs/design/`) robi osobna sesja designu — widoków nie stylowałem. 1 commit na uwagę. `scripts/test.sh`: **199/199** (183 + 16 nowych `@Test`). Mutacje wykonywał Haiku (każda pada na asercji, nie na budowaniu; po cofnięciu pełny przebieg zielony).
 
 | # | Uwaga | Commit | Testy | Mutacje |
 |---|---|---|---|---|
-| D | `ruvector.db`: plik usunięty, `.gitignore` | `e0a7f5a` | — | — |
-| 3 | Korekta „wisi" | `925e475` | +4 (187) | 5/5 |
-| 2 | Echo z głośników (Me powtarza Them) | `10c7a5a` | +7 (194) | 5/5 |
-| 5 | Krótki tytuł bez przedrostka | `7146b52` | +2 (196) | 4/4 |
-| 4 | Cała notatka zaznaczalna | `1c94378` | +1 (197) | 3/3 |
-| 6a | ModelPicker: układ | `e45bdcb` | — (UI) | n/d |
-| 7 | Kafelki dostawców + Verified | `36db9a6` | +2 (199) | 4/4 |
+| D | `ruvector.db`: plik usunięty, `.gitignore` | `24a84e9` | — | — |
+| 3 | Korekta „wisi" | `db97258` | +4 (187) | 5/5 |
+| 2 | Echo z głośników (Me powtarza Them) | `3081902` | +7 (194) | 5/5 |
+| 5 | Krótki tytuł bez przedrostka | `395aa47` | +2 (196) | 4/4 |
+| 4 | Cała notatka zaznaczalna | `eabaa2d` | +1 (197) | 3/3 |
+| 6a | ModelPicker: układ | `a2341f7` | — (UI) | n/d |
+| 7 | Kafelki dostawców + Verified | `641f0f3` | +2 (199) | 4/4 |
 
 ## #3 Korekta „wisi" — przyczyna i poprawka
 **Przyczyna ustalona z danych sesji `f184`:** `corrected.json` **istnieje**, ale ma godzinę 15:25, ~16 min po transkrypcji (15:09), przy transkrypcie z 7 wypowiedzi (1931 znaków, jedna partia). Korekta nie padła, tylko jedno wywołanie modelu trwało kilkanaście minut: `URLRequest.timeoutInterval` mierzy bezczynność łącza, nie czas całości, więc dostawca trzymający połączenie nigdy go nie przekraczał. Stan nie miał końca ani powodu. **Poprawka:** `withDeadline` (całkowity limit czasu) — 120 s na partię korekty, 60 s autotytuł, 180 s generowanie notatki; po limicie partia zostaje oryginalna i liczy się jako nieudana; gdy nie przeszła żadna partia (`failedCompletely`) → stan **„Correction failed: <powód>"** w wierszu listy (`SessionStatus.correctionFailed`) i w banerze zakładki Transcript z **Retry**; „Improve transcript" także wtedy, gdy korekty nie ma (np. aplikacja zamknięta w trakcie). Stan korekty zawsze się kończy (`runCorrection`).

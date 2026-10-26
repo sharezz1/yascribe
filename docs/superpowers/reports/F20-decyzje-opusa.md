@@ -2,7 +2,7 @@
 
 > Użytkownik przekazał Opusowi prawo decyzji w fazie 2.0 na czas swojej nieobecności (noc 2026-10-20). Wejścia: spec
 > `docs/superpowers/specs/2026-10-19-faza20-lokalne-modele-design.md`, plan `docs/superpowers/plans/2026-10-20-faza20-lokalne-modele.md`,
-> raport S0 `docs/superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md` (commity `697e056`, `76fab16`), recenzja planu `F20-recenzja-planu.md`.
+> raport S0 `docs/superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md` (commity `7c79896`, `4918e17`), recenzja planu `F20-recenzja-planu.md`.
 > Kluczowe twierdzenia S0 sprawdzone samodzielnie, tylko do odczytu, w źródłach przypiętego checkoutu FluidAudio (tag v0.17.7, commit 503b4bd1…):
 > `AsrModels.loadLocal` istnieje i rzuca `modelNotFound` bez sieci; `AsrModels.load(from:)` idzie przez `ModelHub.loadModels`; `ModelNames` ma
 > `jointV3File = "JointDecisionv3.mlmodelc"`; rewizja HF domyślnie `"main"`; `swift build --help` zna `--enable-keychain/--disable-keychain`.
@@ -41,7 +41,7 @@
 
 # F20 — decyzje Opusa po S2 (2026-10-20, noc, delegowane przez użytkownika)
 
-> Wejście: raport S2 `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (commit `38ac47f`), spec §5, §11, §13, plan T9–T14, kod
+> Wejście: raport S2 `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (commit `32f7a75`), spec §5, §11, §13, plan T9–T14, kod
 > `OpenAICompatibleClient` (`chat`, `chatContent`, `request`), `Corrector`, `NoteGenerator`, `NotePrompt`, `AutoTitle`, `ContextError`, `NotesModel`.
 > **Sprawdzone samodzielnie w surowych wynikach S2 (scratchpad sesji, tylko odczyt):** (1) `ollama4k-bonsai-think.log` — tytuł: HTTP 200,
 > `finish: length`, `total_tokens` 4096, `content_chars` 0, `reasoning_chars` 5907 (wyjście ucięte bez błędu); (2) treść 400 przy przepełnieniu

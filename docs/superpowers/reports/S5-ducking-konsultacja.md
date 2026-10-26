@@ -1,6 +1,6 @@
 # S5 — konsultacja: ducking innych aplikacji przy żywym AEC
 
-Gałąź `faza1`, HEAD `ab67df6`. To konsultacja: kod bez zmian, bez nagrywania, bez commitu.
+Gałąź `faza1`, HEAD `9f6a6e3`. To konsultacja: kod bez zmian, bez nagrywania, bez commitu.
 Dane wejściowe: sonda użytkownika (advanced = true, poziom `Min`). Ściszenie trwa od startu do końca
 nagrania, niezależnie od tego, czy ktoś mówi. Po nagraniu głośność wraca.
 

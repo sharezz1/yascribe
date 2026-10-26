@@ -1,8 +1,8 @@
 # Faza 1.5 — poprawki P1, P2, P4 z przeglądu całości
 
 2026-10-19, Sonnet. Źródło: `reports/F15-przeglad-calosci.md`, sekcja „Do poprawy” (P3 — dokumenty — osobno, Haiku).
-Gałąź `claude/gracious-torvalds-37592c`, wycięta z `faza15` (`02ca8ae`) i przesunięta fast-forwardem o dwa commity
-raportu przeglądu (`157d94b`). Nie scalone do `faza15`/`master`, bez pusha i tagów.
+Gałąź `claude/gracious-torvalds-37592c`, wycięta z `faza15` (`d071c85`) i przesunięta fast-forwardem o dwa commity
+raportu przeglądu (`8e3374a`). Nie scalone do `faza15`/`master`, bez pusha i tagów.
 
 `scripts/test.sh` na końcu: `test.sh: 355/355 testów uruchomionych i zaliczonych.` (było 353; +2 nowe testy), `check-bundle: OK`.
 
@@ -10,10 +10,10 @@ raportu przeglądu (`157d94b`). Nie scalone do `faza15`/`master`, bez pusha i ta
 
 | Poprawka | Commit | Test | Mutacja | Padający test |
 |---|---|---|---|---|
-| P1 `RecordingsMove.run`, `commit` rzuca | `ff2a229` | nowy `moveDeletesNothingWhenCommitThrows` (`RecordingsTests.swift`) | przed `do { try await commit() }` dopisana pętla kasująca stare wpisy | `moveDeletesNothingWhenCommitThrows` (`files(old) == before`); poza tym `moveCopiesVerifiesThenDeletes`, `moveDeletesNothingWhenVerificationFails` |
-| P2 `RunDirectory.latestRunID` | `e42c6a8` (+ BACKLOG `2f9f07a`) | nowy `retentionIgnoresCliRunsWhenAppRunHasGaps`; rozszerzony `latestRunIgnoresTheNotesDirectory` (`debug`, `notes.txt`) | stary filtr `isValid(runID:)` | `retentionIgnoresCliRunsWhenAppRunHasGaps` (4 asercje: `latestRunID == run1`, `!transcriptionFinished`, `purged.isEmpty`, audio zostaje), `latestRunIgnoresTheNotesDirectory` |
-| P4 tiki co 1 s w `OfferDetectorTests` | `ed629eb` (+ BACKLOG `165e00c`) | 6 poprawionych: `manualStopSilencesAutoStartForTheSameCall`, `manualStopDuringAMicBlipStaysQuiet`, `dismissedOfferStaysQuietForTheWholeMicSession`, `dismissedOfferStaysQuietAcrossHelperProcessesOfTheSameApp`, `ignoredAppsNeverOffer`, `unknownAppsNeverOffer` | (A) bez `mutedFamilies.formUnion(lastInput.keys)` | `manualStopDuringAMicBlipStaysQuiet`, `manualStopSilencesAutoStartForTheSameCall` (+ `afterManualStopANewCallOffersAgain`) |
-| P4 (dodatek, po decyzji użytkownika) | `a6341a8` | `dismissedOfferStaysQuietForTheWholeMicSession` i `…AcrossHelperProcessesOfTheSameApp` z blipem mikrofonu 10 s < `releaseSeconds` | (B) bez `mutedFamilies.insert(f)` w `dismiss()` | oba poprawione `dismissed…` (`!r.run(t0 + 3611, …).contains(where: isOffering)`), a także `dismissedOfferReturnsForANewMicSession` i `micSessionEndsAtExactlyReleaseSeconds` |
+| P1 `RecordingsMove.run`, `commit` rzuca | `b55dca6` | nowy `moveDeletesNothingWhenCommitThrows` (`RecordingsTests.swift`) | przed `do { try await commit() }` dopisana pętla kasująca stare wpisy | `moveDeletesNothingWhenCommitThrows` (`files(old) == before`); poza tym `moveCopiesVerifiesThenDeletes`, `moveDeletesNothingWhenVerificationFails` |
+| P2 `RunDirectory.latestRunID` | `9935a66` (+ BACKLOG `ec8f152`) | nowy `retentionIgnoresCliRunsWhenAppRunHasGaps`; rozszerzony `latestRunIgnoresTheNotesDirectory` (`debug`, `notes.txt`) | stary filtr `isValid(runID:)` | `retentionIgnoresCliRunsWhenAppRunHasGaps` (4 asercje: `latestRunID == run1`, `!transcriptionFinished`, `purged.isEmpty`, audio zostaje), `latestRunIgnoresTheNotesDirectory` |
+| P4 tiki co 1 s w `OfferDetectorTests` | `40ee0f1` (+ BACKLOG `6e0aceb`) | 6 poprawionych: `manualStopSilencesAutoStartForTheSameCall`, `manualStopDuringAMicBlipStaysQuiet`, `dismissedOfferStaysQuietForTheWholeMicSession`, `dismissedOfferStaysQuietAcrossHelperProcessesOfTheSameApp`, `ignoredAppsNeverOffer`, `unknownAppsNeverOffer` | (A) bez `mutedFamilies.formUnion(lastInput.keys)` | `manualStopDuringAMicBlipStaysQuiet`, `manualStopSilencesAutoStartForTheSameCall` (+ `afterManualStopANewCallOffersAgain`) |
+| P4 (dodatek, po decyzji użytkownika) | `b6e2c7e` | `dismissedOfferStaysQuietForTheWholeMicSession` i `…AcrossHelperProcessesOfTheSameApp` z blipem mikrofonu 10 s < `releaseSeconds` | (B) bez `mutedFamilies.insert(f)` w `dismiss()` | oba poprawione `dismissed…` (`!r.run(t0 + 3611, …).contains(where: isOffering)`), a także `dismissedOfferReturnsForANewMicSession` i `micSessionEndsAtExactlyReleaseSeconds` |
 
 Wszystkie mutacje cofnięte `git checkout <plik>`; po każdej `git status` czysty. Wszystkie padnięcia są na asercjach
 (`Expectation failed`), nie na budowaniu.
@@ -25,7 +25,7 @@ Wszystkie mutacje cofnięte `git checkout <plik>`; po każdej `git status` czyst
 `…AcrossHelperProcessesOfTheSameApp`: po `dismiss()` `step` liczy tę samą ofertę co `current`, więc nie zwraca akcji
 (`.show` tylko przy zmianie oferty). Wyciszenie rodziny jest obserwowalne dopiero, gdy oferta zniknie i wróci w tej samej
 sesji mikrofonu. Za decyzją użytkownika dopisałem do obu testów blip mikrofonu (10 s < `releaseSeconds`) w godzinie ciszy
-(`a6341a8`); teraz mutacja B pada także na nich (wiersz w tabeli).
+(`b6e2c7e`); teraz mutacja B pada także na nich (wiersz w tabeli).
 
 **Uwaga 2 — P1: przegląd twierdził, że żaden test nie woła `commit`, który rzuca.** `moveCopiesVerifiesThenDeletes`
 już to robi (`{ throw NoSave() }`) i pada przy mutacji „kasuj przed `commit`”. Nowy test dokłada to, czego tamten nie
@@ -51,4 +51,4 @@ zrobiłem z jawnymi ścieżkami, a mutację powtórzyłem na zacommitowanym stan
 - `Tests/MeetNotesNotesTests/SearchAndLayoutTests.swift`: nazwy przebiegów wg wzorca, + `debug` i `notes.txt`.
 - `Sources/MeetNotesTranscription/TranscriptionRunner.swift`: `latestRunID` filtruje regexem `^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z-[0-9a-f]{4}$`.
 - `Tests/MeetNotesMeetingsTests/OfferDetectorTests.swift`: 6 testów z tikami co 1 s.
-- `docs/superpowers/BACKLOG.md`: odhaczone `latestRunID` (sekcja T5, `e42c6a8`) i „cisza przez godzinę” (`ed629eb`).
+- `docs/superpowers/BACKLOG.md`: odhaczone `latestRunID` (sekcja T5, `9935a66`) i „cisza przez godzinę” (`40ee0f1`).

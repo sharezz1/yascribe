@@ -23,7 +23,7 @@ Przeczytaj przed startem — to nie błędy, tylko jawne granice (decyzje użytk
 
 **Stos:** Swift 6.4 (tryb 6), tylko Command Line Tools, `swift-testing`, SwiftUI + AppKit, EventKit (`requestFullAccessToEvents`), Core Audio (lista obiektów procesów), `SMAppService`. Zero nowych zależności zewnętrznych.
 
-**Spec:** `docs/superpowers/specs/2026-10-16-faza16-kalendarz-design.md` (commit `510750f`). Plan argumentuje ze speca; wykonawca czyta oba.
+**Spec:** `docs/superpowers/specs/2026-10-16-faza16-kalendarz-design.md` (commit `cad8756`). Plan argumentuje ze speca; wykonawca czyta oba.
 
 **Gałąź:** przed T0 `git switch -c faza16` (od `faza15`). ⚠️ Zadania T8–T10 dotykają pigułki (`RecordingController`) i plików, które równolegle zmienia sesja 1.5b (wyciszanie torów, macos.md §11.5): `RecordingController.swift`, `AppModel.swift`, `Snapshots.swift`, `SettingsView.swift` (T7 też). T8 ma bramkę: zaczyna się dopiero po potwierdzeniu przez użytkownika, że 1.5b jest zamknięta albo po rebase; T0–T6 tych plików nie dotykają (poza `Snapshots`/`SettingsView` w T7).
 

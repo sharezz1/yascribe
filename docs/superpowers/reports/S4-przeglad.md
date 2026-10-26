@@ -1,6 +1,6 @@
 # Przegląd S4 — E1 (rdzeń: dziennik, nadzór torów, sprzątanie Core Audio)
 
-**Zakres:** `git diff 8b2bdf4..4b8025a`, plan `docs/superpowers/plans/2026-09-24-faza1-05-poprawki-po-recenzjach.md`
+**Zakres:** `git diff 3024eb3..236d42b`, plan `docs/superpowers/plans/2026-09-24-faza1-05-poprawki-po-recenzjach.md`
 zadanie E1 (kroki 1–10), wymagania `docs/superpowers/plans/2026-09-24-faza1-00-przeglad.md` §4,
 raport wykonawcy `docs/superpowers/reports/S4.md`. Gałąź `faza1`.
 Recenzja szuka błędów, nie ocenia. Niczego nie naprawiono — poniżej tylko opis.
@@ -22,17 +22,17 @@ Zgodne z oczekiwaniem planu (krok 8) i z raportem S4.
 Bloki planu (kroki 3–7) weszły dosłownie — `SessionJournal.read`, `tick()`, `FormatConverter.failures`
 (3 miejsca), `HALCapture.init/start`, `SystemTapSource.build/startCapture`, `MicrophoneSources`
 (w tym `watcher` w `VoiceProcessedMicrophoneSource`) pokrywają się 1:1 z treścią planu. Zmiany
-zgłoszone jako „minimalne" nie wystąpiły; zachowanie względem `8b2bdf4` zmienia się tylko tam,
+zgłoszone jako „minimalne" nie wystąpiły; zachowanie względem `3024eb3` zmienia się tylko tam,
 gdzie plan to przewiduje. Rozjazdy komentarz/zachowanie: **P1**, **P5**.
 
 ### 2. Testy vs wymagania; mutacja z planu
 
 - `tickBeforeStartDoesNothing` — wymaganie „`tick()` przed `start()` nic nie robi" (Hermes 2.1).
-  Na `8b2bdf4` czerwony (stary `tick()` wywoływał `evaluateLocked` → `SilenceCondition(1)` przy
+  Na `3024eb3` czerwony (stary `tick()` wywoływał `evaluateLocked` → `SilenceCondition(1)` przy
   t = 10 s → `endReason == .silence`). Test sprawdza dokładnie to wymaganie. OK.
-- `completeButCorruptLastLineIsAnError` — ChatGPT #12. Na `8b2bdf4` czerwony (stary warunek
+- `completeButCorruptLastLineIsAnError` — ChatGPT #12. Na `3024eb3` czerwony (stary warunek
   `isLast` tolerował zakończoną niepoprawną ostatnią linię). OK.
-- `deadTrackIsFlaggedWhileOtherContinues` — ChatGPT #9. Na `8b2bdf4` czerwony na
+- `deadTrackIsFlaggedWhileOtherContinues` — ChatGPT #9. Na `3024eb3` czerwony na
   `sys.failure == "stalled30s"` (kompiluje się — nie używa nowych parametrów). Sprawdza
   „sesja trwa" (`endReason == nil`) i `track.failed` z powodem `stalled30s`. Nie sprawdza
   granicy 30 s ani tego, że mikrofon nie został oznaczony — patrz **P4**.
@@ -192,11 +192,11 @@ gdzie plan to przewiduje. Rozjazdy komentarz/zachowanie: **P1**, **P5**.
 - **Plik:** `docs/superpowers/reports/S4.md`
 - **Miejsce:** tabela „Commity" (linia z `006e69b`) i zdanie „Raport dodany do tego samego commita
   (`--amend`)"
-- **Problem:** po dodaniu raportu przez `--amend` hash zmienił się na `4b8025a` — to on jest na
+- **Problem:** po dodaniu raportu przez `--amend` hash zmienił się na `236d42b` — to on jest na
   gałęzi `faza1`. `006e69b` istnieje jeszcze jako obiekt, ale to wersja **bez** `S4.md`
   (9 plików zamiast 10). Czytelnik robiący `git show 006e69b` nie zobaczy raportu, którego dotyczy.
   Dodatkowo „9 plików" opisuje zakres sprzed amendu.
-- **Propozycja:** podmienić hash na `4b8025a` (albo dopisać „hash po amende") i policzyć 10 plików
+- **Propozycja:** podmienić hash na `236d42b` (albo dopisać „hash po amende") i policzyć 10 plików
   (6 źródeł, 2 testy, plan, raport).
 
 ### P11 — zapis do dziennika (fsync) pod blokadą rejestratora na ścieżce audio

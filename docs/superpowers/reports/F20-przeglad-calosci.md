@@ -1,9 +1,9 @@
 # F20 — przegląd całości gałęzi `faza20` (T14, część B)
 
-> 2026-10-20, Opus z delegacji użytkownika. Zakres: `git diff faza15..faza20` (83 pliki, +6764/−112; gałąź na `11fb41d` = kod `9720d3b`, raport S1
-> `6f2da98`, raport T8 `aca4260` i poprawka U1 `11fb41d`). Przegląd tylko do odczytu; w repo powstały wyłącznie dwa raporty T14. Odbiór sprzętowy 2.0b:
+> 2026-10-20, Opus z delegacji użytkownika. Zakres: `git diff faza15..faza20` (83 pliki, +6764/−112; gałąź na `c215a23` = kod `9719107`, raport S1
+> `6fc76d7`, raport T8 `59a0d5f` i poprawka U1 `c215a23`). Przegląd tylko do odczytu; w repo powstały wyłącznie dwa raporty T14. Odbiór sprzętowy 2.0b:
 > `F20-2.0b-odbior.md` (ten sam commit).
-> `scripts/test.sh` uruchomiony raz, na końcu, na `11fb41d`: **kod 0, 548/548** (12:14–12:16, load 1,7 → 6,2).
+> `scripts/test.sh` uruchomiony raz, na końcu, na `c215a23`: **kod 0, 548/548** (12:14–12:16, load 1,7 → 6,2).
 > Scalenie `faza20` → `master` **nie** jest decyzją Opusa.
 
 ## 0. Werdykt
@@ -42,7 +42,7 @@ jako sukces. To łamie anty-cel „ciche obcięcie” (spec §2) i założenie �
 |---|---|---|
 | R1 bramka klucza | zamknięte | `Provider.swift` `isLocal`/`requiresKey`; `AppModel.swift:313` |
 | R2 dwa limity czasu | zamknięte | `OpenAICompatibleClient.swift:136-153`; `ChatLimits.swift:25-39` |
-| R3 materiał S1 | zamknięte (dokumenty; S1 wykonany — `6f2da98`) | spec §13 pkt 1 |
+| R3 materiał S1 | zamknięte (dokumenty; S1 wykonany — `6fc76d7`) | spec §13 pkt 1 |
 | R4 cztery miejsca `ProviderKind` | zamknięte | `AppModel.swift:436`; `ProviderSetup.swift:72`; `Probe.swift:78` |
 | R5 `.filtered` | zamknięte | `Probe.swift:78` |
 | R6 budżet korekty / `/api/show` | zamknięte w kodzie (`/api/show` odpada, wykrycie tylko obniża); **założenie „Ollama nie obcina wejścia” obalone** dla `bonsai-2` | `ContextBudget.swift:39-43`; `ContextProbe.swift:15-25`; `Corrector.swift:123-127` |
@@ -60,7 +60,7 @@ jako sukces. To łamie anty-cel „ciche obcięcie” (spec §2) i założenie �
 | P4 override magazynu w aplikacji | zamknięte (DEBUG) | `ModelStore.swift:45-50` |
 | P5 `ContextProbe` z modelem, droga do `NotesModel`, znaki/token | zamknięte (wykrycie w chwili użycia; 2,4 zn./tok. — na sprzęcie 2,8–3,3) | `NotesModel.swift:89,138` |
 | P6 `timedOut` ≠ „serwer nie działa” | zamknięte | `ProviderSetup.swift:191-197` |
-| P7 `Package.resolved` | zamknięte (`a6d6568`) | `Package.resolved` |
+| P7 `Package.resolved` | zamknięte (`ba0b74d`) | `Package.resolved` |
 | P8 „Preparing model…” | zamknięte | `LocalASRClient.swift:88`; `ModelCardState.swift:9` |
 | P9 baseline jakości S2 | **otwarte** — baseline API wymaga klucza użytkownika | odbiór pkt 11 |
 | P10 `AutoTitle` | zamknięte (`ChatLimits .title`) | `NotesModel.swift:201-205` |
@@ -70,10 +70,10 @@ jako sukces. To łamie anty-cel „ciche obcięcie” (spec §2) i założenie �
 
 ## 3a. Commity po rozpoczęciu przeglądu: T8 i U1
 
-- **Raport T8** (`F20-2.0a-odbior.md`, `cec0263`/`aca4260`): odbiór 2.0a bez kroków użytkownika — wszystkie kroki agenta przeszły, Wi-Fi off,
+- **Raport T8** (`F20-2.0a-odbior.md`, `fe9f7bd`/`59a0d5f`): odbiór 2.0a bez kroków użytkownika — wszystkie kroki agenta przeszły, Wi-Fi off,
   „Download”, „Preparing…” w `.app` i 3.1 czekają na użytkownika; wykrył **U1** (słowa rozciągnięte przez wyciętą ciszę na sklejeniach okien).
   Raport nie przeczy kodowi; liczby czasów i pamięci przyjmuję z raportu (nie powtarzałem).
-- **U1** (`11fb41d`): `Chunk.sourceSpan` mapuje oba końce słowa w obrębie fragmentu, w którym słowo się zaczyna; `Merger` używa go zamiast dwóch osobnych
+- **U1** (`c215a23`): `Chunk.sourceSpan` mapuje oba końce słowa w obrębie fragmentu, w którym słowo się zaczyna; `Merger` używa go zamiast dwóch osobnych
   `sourceSeconds`. Przeczytane: przycięcie jest monotoniczne (`max(s, e)` zostaje), słowa w całości w jednym fragmencie bez zmian, słowo w całości w przerwie →
   zerowa długość na początku następnego fragmentu; warunek `segments` niepuste — ten sam co w istniejącym `sourceSeconds` (paker nie tworzy pustych okien).
   4 nowe testy w `RunnerTests` (sklejenie, środek fragmentu, start w przerwie, początek wypowiedzi). Dotyczy też ścieżki API (wspólny `Merger`) — zmiana
@@ -81,15 +81,15 @@ jako sukces. To łamie anty-cel „ciche obcięcie” (spec §2) i założenie �
 
 ## 4. Zgodność dokumentów z kodem
 
-1. **`CLAUDE.md` i `docs/wymagania.md` są nieaktualne po `6f2da98` i `aca4260`:** piszą „pliku S1 nie ma” / „S1 nie została zmierzona” i „brak raportu”
-   T8, a oba raporty są na gałęzi. `CLAUDE.md` podaje też stan „na `e36b8bd`” (bez U1). Poprawka dokumentów — przy scaleniu (nie w tym commicie: T14 commituje tylko raporty).
-2. **Definicja „lokalny”:** spec §11.5 i `wymagania.md` wymieniają `localhost`, `127.0.0.1`, `::1`, `*.localhost`; kod (po przeglądzie T10, `a95096e`) uznaje też
+1. **`CLAUDE.md` i `docs/wymagania.md` są nieaktualne po `6fc76d7` i `59a0d5f`:** piszą „pliku S1 nie ma” / „S1 nie została zmierzona” i „brak raportu”
+   T8, a oba raporty są na gałęzi. `CLAUDE.md` podaje też stan „na `fb59eb5`” (bez U1). Poprawka dokumentów — przy scaleniu (nie w tym commicie: T14 commituje tylko raporty).
+2. **Definicja „lokalny”:** spec §11.5 i `wymagania.md` wymieniają `localhost`, `127.0.0.1`, `::1`, `*.localhost`; kod (po przeglądzie T10, `f580340`) uznaje też
    całe `127.0.0.0/8` i `0.0.0.0` (z testami). Rozszerzenie jest rozsądne (loopback), ale dokumenty go nie mówią — od tego zależą `requiresKey` i wysyłka
    `reasoning_effort`.
 3. **Ponowienie bez `reasoning_effort`:** spec §14 pkt 2 — treść błędu zawiera `reasoning`; kod — `reasoning` **albo** `think`
    (`OpenAICompatibleClient.swift:147`). Szersze, nieszkodliwe; do dopisania w specu.
 4. **Spec §14 / `wymagania.md`: „Ollama nie obcina wejścia (HTTP 400)”** — prawda dla `genesys-ministral3`, **fałsz dla `bonsai-2`** (odbiór pkt 2b). Do poprawy po decyzji.
-5. `max_tokens` części mapy: spec §14 pkt 5 mówi `0,5 × wejścia`, kod (po `4ff727b`) daje miejsce po prompcie, najwyżej `1,0 × wejścia`. Świadoma zmiana
+5. `max_tokens` części mapy: spec §14 pkt 5 mówi `0,5 × wejścia`, kod (po `2dda430`) daje miejsce po prompcie, najwyżej `1,0 × wejścia`. Świadoma zmiana
    z przeglądu T13; spec niezaktualizowany.
 6. Plan: pola `- [ ]` przy T11, T12, T14 nieodhaczone (już w BACKLOG).
 

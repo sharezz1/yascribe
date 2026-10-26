@@ -1,16 +1,16 @@
 # Strona główna z „Coming up” (macos.md §11.5, wariant B)
 
-Gałąź `claude/infallible-wu-2aef0e` (od `faza15` @ 5f3f696). Zadanie: decyzja użytkownika 2026-10-19, makiety
+Gałąź `claude/infallible-wu-2aef0e` (od `faza15` @ 1769304). Zadanie: decyzja użytkownika 2026-10-19, makiety
 `b-cuB2.png`, `b-cuB2none.png`. Scalenie do `faza15` należy do użytkownika.
 
 ## Commity
 
-- 0fa71d5 — `ComingUp` (MeetNotesMeetings): wybór karty i „Later today”, nazwa aplikacji z linku, etykieta czasu; 8 testów.
-- 60b0c4f — widok: nagłówek (tytuł, wyszukiwarka 170 pt, popup presetu 96 pt, „● Record” ad hoc), karta najbliższego
+- f1672a6 — `ComingUp` (MeetNotesMeetings): wybór karty i „Later today”, nazwa aplikacji z linku, etykieta czasu; 8 testów.
+- f7192c8 — widok: nagłówek (tytuł, wyszukiwarka 170 pt, popup presetu 96 pt, „● Record” ad hoc), karta najbliższego
   spotkania, linia pod kartą albo linia bez karty; karta „Record a meeting” usunięta; `startRecording(event:background:)`;
   `todaysEvents(now:)`; migawki.
-- 97a7598 — raport (pierwsza wersja), ROADMAP, BACKLOG.
-- b87bce0 — merge `faza15` @ d66ed4a (faza 1.5b wyciszanie torów, zapis D1 w macos.md §11.5). Konflikt tylko
+- 1f08286 — raport (pierwsza wersja), ROADMAP, BACKLOG.
+- b657d54 — merge `faza15` @ 211e98e (faza 1.5b wyciszanie torów, zapis D1 w macos.md §11.5). Konflikt tylko
   w `BACKLOG.md` (dwie nowe sekcje obok siebie, obie zostały). Kod scalił się sam.
 - HEAD — ta aktualizacja raportu.
 
@@ -46,7 +46,7 @@ Gałąź `claude/infallible-wu-2aef0e` (od `faza15` @ 5f3f696). Zadanie: decyzja
 | M6 | najbliższy start → najwcześniejszy start | `nearestStartWinsBetweenOngoingAndUpcoming` |
 
 Uwaga do śladowości: pierwsza seria M2–M5 była nieważna (plik nie był jeszcze w gicie, `git checkout` go nie
-przywrócił i mutacje się nałożyły). Przywróciłem plik ręcznie, zrobiłem commit 0fa71d5 i powtórzyłem M2–M6 pojedynczo.
+przywrócił i mutacje się nałożyły). Przywróciłem plik ręcznie, zrobiłem commit f1672a6 i powtórzyłem M2–M6 pojedynczo.
 Tabela pokazuje tę drugą serię. M1 był pierwszą zmianą, więc jest ważny.
 
 ## Migawki (`scripts/snapshot.sh`, `.design/review/`, oba motywy)
@@ -59,7 +59,7 @@ Tabela pokazuje tę drugą serię. M1 był pierwszą zmianą, więc jest ważny.
 
 ## Decyzje (D1 potwierdzone; D2–D9 to domyślne, do potwierdzenia przy odbiorze)
 
-- **D1 — POTWIERDZONE przez użytkownika 2026-10-19** („Later today: … · Open Calendar”, gdy nic w 60 min, a coś później; „No more meetings today” tylko, gdy nic do końca dnia; zapis w macos.md §11.5, d66ed4a). **Nic w 60 min, ale coś później dziś.** Spec mówi wtedy „No more meetings today”, co byłoby nieprawdą. Zamiast tego
+- **D1 — POTWIERDZONE przez użytkownika 2026-10-19** („Later today: … · Open Calendar”, gdy nic w 60 min, a coś później; „No more meetings today” tylko, gdy nic do końca dnia; zapis w macos.md §11.5, 211e98e). **Nic w 60 min, ale coś później dziś.** Spec mówi wtedy „No more meetings today”, co byłoby nieprawdą. Zamiast tego
   ta sama linia ma tekst „Later today: 14:00 Dentist (in person) · 16:00 1:1 Adrian” + „Open Calendar”, a Record
   w nagłówku jest primary (migawka `meetings-later`).
 - **D2. Trwające i nadchodzące naraz.** Karta bierze wydarzenie z najbliższym startem (w przód albo w tył), remis po id,

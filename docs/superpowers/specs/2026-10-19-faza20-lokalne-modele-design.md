@@ -6,7 +6,7 @@
 > **Kodu aplikacji nie piszemy do akceptacji speca i planu.** Spiki S0–S2 (§7) to pomiary, nie kod produktu.
 > **2026-10-20: S0 wykonany — GO dla 2.0a** (`docs/superpowers/spikes/2026-10-20-f20-s0-fluidaudio.md`); §13 rozstrzygnięty przez Opusa z delegacji
 > użytkownika (`docs/superpowers/reports/F20-decyzje-opusa.md`), a §3.5, §4.2, §4.3, §7, §11.6, §11.7, §11.10 poprawione według faktów z S0.
-> **2026-10-20: S2 wykonany** (`docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md`, commit `38ac47f`); wartości i kształt 2.0b rozstrzygnął Opus
+> **2026-10-20: S2 wykonany** (`docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md`, commit `32f7a75`); wartości i kształt 2.0b rozstrzygnął Opus
 > z delegacji użytkownika — **§14** (zastępuje „jeden `inputChars`” z §11.9 i wykrywanie przez `/api/show` z §5.2/§11.1).
 >
 > Wejścia: `docs/wymagania.md` §0, §2, §4; `docs/superpowers/ROADMAP.md` (sekcje „Faza 2", „Nieprzypisane");
@@ -316,7 +316,7 @@ Techniczny `baseURL` dostawcy lokalnego; okna ≤59 s; cykl życia modelu ASR (�
 
 ## 14. Decyzje Opusa po S2 (delegowane przez użytkownika)
 
-> 2026-10-20, noc. Wejście: raport S2 `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (commit `38ac47f`). Fakty, na których opieram
+> 2026-10-20, noc. Wejście: raport S2 `docs/superpowers/spikes/2026-10-20-f20-s2-serwery-tekstowe.md` (commit `32f7a75`). Fakty, na których opieram
 > decyzje, sprawdzone w surowych wynikach S2 (scratchpad sesji, tylko odczyt): `ollama4k-bonsai-think.log` — tytuł, HTTP 200, `finish: length`,
 > `total_tokens` 4096, `content_chars` 0; korekta B1 partia 1 na Ollamie — numery wyjścia 1…49 ciągłe, a wejście miało dziury (18, 22, 32 — llama.cpp
 > zachował je i partia przeszła); przebiegi „bez myślenia” wołane z `reasoning_effort: "none"`, a przebiegi ministrala **bez** tego pola (zachowanie pola na
@@ -390,11 +390,11 @@ Twierdzenie z pkt 1 i z §5.2/§11.1 („Ollama **nie** obcina wejścia, HTTP 40
 
 Skutek dla założeń: „ciche obcięcie wejścia” **jest możliwe** na Ollamie, zależnie od modelu/silnika. Aplikacja dochodzi do tego stanu tylko przy polu „Context window” wyższym niż kontekst serwera
 **i** niezaładowanym modelu w chwili użycia (wykrycie `/api/ps` zna tylko model załadowany) albo na serwerze bez wykrywania. Przy pustym polu (4096) i domyślnej Ollamie nie grozi.
-Anty-cel „ciche obcięcie transkryptu” (§2) dla wejścia domyka obrona z T14b (`606ee39`, stałe `truncationRatio = 5,0`, `truncationMinChars = 4000`).
+Anty-cel „ciche obcięcie transkryptu” (§2) dla wejścia domyka obrona z T14b (`348f728`, stałe `truncationRatio = 5,0`, `truncationMinChars = 4000`).
 
 **Obrona (propozycja (a) z przeglądu całości §5, rekomendowana przez Opusa): drugi poziom kontroli w `chat` dla dostawców lokalnych** — porównanie `usage.prompt_tokens` z długością
 promptu (`(system + user).count / prompt_tokens`; zmierzone normalnie 2,8–3,3 znaku na token, przy obcięciu 6,6–14,8; próg rzędu 5 z przeglądu — dokładną stałą ustala kod) i błąd „the server cut the input”
-zamiast zapisu notatki. Jedna gałąź, test na atrapie, działa też na oMLX (gdzie wykrycia kontekstu nie ma). **Stan: wdrożona (T14b, `606ee39`, 561/561)** — `ProviderError.inputTruncated`, tylko dostawcy lokalni, prompt ≥ 4000 znaków, > 5,0 znaku na token.
+zamiast zapisu notatki. Jedna gałąź, test na atrapie, działa też na oMLX (gdzie wykrycia kontekstu nie ma). **Stan: wdrożona (T14b, `348f728`, 561/561)** — `ProviderError.inputTruncated`, tylko dostawcy lokalni, prompt ≥ 4000 znaków, > 5,0 znaku na token.
 
 Pozostałe rozjazdy kod ↔ spec stwierdzone w przeglądzie (§4 pkt 2, 3, 5), niepoprawiane tutaj: `isLocal` uznaje też całe `127.0.0.0/8` i `0.0.0.0` (§11.5 wymienia `localhost`, `127.0.0.1`, `::1`, `*.localhost`);
-ponowienie bez `reasoning_effort` także dla `think` w treści błędu (pkt 2 mówi o `reasoning`); `max_tokens` części mapy to miejsce po prompcie, najwyżej 1,0 × wejścia (pkt 5: 0,5 ×; zmiana po przeglądzie T13, `4ff727b`).
+ponowienie bez `reasoning_effort` także dla `think` w treści błędu (pkt 2 mówi o `reasoning`); `max_tokens` części mapy to miejsce po prompcie, najwyżej 1,0 × wejścia (pkt 5: 0,5 ×; zmiana po przeglądzie T13, `2dda430`).

@@ -1,6 +1,6 @@
 # S5 — poprawka po sondzie S2: AEC wykłada `mic_raw` i głodzi tap
 
-Gałąź `faza1`, baza `b744bbe`. Testy: `scripts/test.sh` → 53/53. **Nowych @Test brak.**
+Gałąź `faza1`, baza `abf5603`. Testy: `scripts/test.sh` → 53/53. **Nowych @Test brak.**
 
 ## Objaw (z dzienników)
 
@@ -154,7 +154,7 @@ Zapisz wynik jako trzy odpowiedzi tak/nie (1–3) plus pkt 4. Decyzja:
 
 ## Runda 3 — mic_raw pod VP
 
-Baza `70193e6`. Testy: `scripts/test.sh` → **54/54. Dodany 1 nowy @Test**
+Baza `135e561`. Testy: `scripts/test.sh` → **54/54. Dodany 1 nowy @Test**
 (`mixesMicArrayChannelsWithGain` w `FormatConverterTests.swift`). Plany są wyrównane do 53, więc
 przesunięcie liczb w planach to osobna decyzja użytkownika.
 

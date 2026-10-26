@@ -1,6 +1,6 @@
 # F15-T13 część B — wdrożenie języka wizualnego B (2026-10-15)
 
-Gałąź `faza15-design-b` (z `faza15` @ `9952595`; `faza15` bez nowych commitów w chwili raportu, gałąź NIE scalona — scalenie to decyzja użytkownika, w uzgodnieniu z sesją poprawek T13). Orkiestrator: Opus. Widoki: 5 agentów Sonnet, każdy we
+Gałąź `faza15-design-b` (z `faza15` @ `d005f14`; `faza15` bez nowych commitów w chwili raportu, gałąź NIE scalona — scalenie to decyzja użytkownika, w uzgodnieniu z sesją poprawek T13). Orkiestrator: Opus. Widoki: 5 agentów Sonnet, każdy we
 własnym worktree, scalone tutaj. Pomiar kontrastu: Haiku. Źródło prawdy: `docs/design/macos.md` §11 i
 makiety `docs/design/makiety/b-*.png`.
 
@@ -10,18 +10,18 @@ makiety `docs/design/makiety/b-*.png`.
 
 | Commit | Co |
 |---|---|
-| `1f131d6` | Docs: spec §5.4, uwaga 7, plan T4 — dodawanie dostawcy w miejscu zamiast arkusza i kafelków |
-| `bf2ac49` | `DesignSystem.swift`: tokeny §11.1 (`NSColor(name:dynamicProvider:)`, wariant Increase Contrast dla `text2`/`line`), `PageTitle`, `.documentTitle()`, `SectionHeader`, `Card`, `RowDivider`, `FormRow`, `PillButtonStyle` (primary/secondary/small; hover, wciśnięty, nieaktywny, fokus), `StateLabel`, `MetaLine`; `ModelPicker` wygląda jak `ModelField`; `.tint(.mnAccent)`; galeria komponentów w migawkach |
-| `26d78f3` | Strona główna (Sonnet) |
-| `63ad9a3` | Pigułka nagrywania, Liquid Glass za `#available(macOS 26)` z materiałem jako fallback (Sonnet) |
-| `3453cf3` | Widok spotkania (Sonnet) |
-| `41ee8eb` | Settings: dodawanie w miejscu, `ProviderPreset.isAdded(in:)` + test, `AppModel.replaceKey` (Sonnet) |
-| `01be8ba` | Presets i Templates (Sonnet) |
-| `0d0f555` | Po scaleniu: `WarnLabel` jako komponent wspólny (był zdublowany w dwóch gałęziach), embedding w Settings bez podwójnej karty |
+| `a8c192a` | Docs: spec §5.4, uwaga 7, plan T4 — dodawanie dostawcy w miejscu zamiast arkusza i kafelków |
+| `d9ca9a6` | `DesignSystem.swift`: tokeny §11.1 (`NSColor(name:dynamicProvider:)`, wariant Increase Contrast dla `text2`/`line`), `PageTitle`, `.documentTitle()`, `SectionHeader`, `Card`, `RowDivider`, `FormRow`, `PillButtonStyle` (primary/secondary/small; hover, wciśnięty, nieaktywny, fokus), `StateLabel`, `MetaLine`; `ModelPicker` wygląda jak `ModelField`; `.tint(.mnAccent)`; galeria komponentów w migawkach |
+| `89a9f4a` | Strona główna (Sonnet) |
+| `0799d75` | Pigułka nagrywania, Liquid Glass za `#available(macOS 26)` z materiałem jako fallback (Sonnet) |
+| `4112636` | Widok spotkania (Sonnet) |
+| `ce79b6b` | Settings: dodawanie w miejscu, `ProviderPreset.isAdded(in:)` + test, `AppModel.replaceKey` (Sonnet) |
+| `10f14b6` | Presets i Templates (Sonnet) |
+| `4b4ccd7` | Po scaleniu: `WarnLabel` jako komponent wspólny (był zdublowany w dwóch gałęziach), embedding w Settings bez podwójnej karty |
 
 ## Weryfikacja
 
-- **Migawki T0 (macos.md §9):** „przed” w `.design/przed/` (34 PNG, stan `9952595`), „po” w `.design/review/`
+- **Migawki T0 (macos.md §9):** „przed” w `.design/przed/` (34 PNG, stan `d005f14`), „po” w `.design/review/`
   (42 PNG, w tym `components-*`, `settings-add-*`). Obejrzane przez orkiestratora: `meetings-full`, `meeting-summary`,
   `presets-editing`, `settings-add-failed`, `components` (oba motywy dla galerii). Agenci obejrzeli resztę swoich ekranów.
   Zgodne z makietami co do palety, typografii, kart, pigułek i stanów. **Dowód: migawka offscreen, nie zrzut na żywo.**
@@ -91,19 +91,19 @@ makiety `docs/design/makiety/b-*.png`.
 
 ## Wykonanie decyzji D1–D8 (2026-10-15, wieczór)
 
-Decyzje użytkownika zapisane w `docs/design/macos.md` §11 (commit `6dbca58` na `faza15`, scalony tutaj).
+Decyzje użytkownika zapisane w `docs/design/macos.md` §11 (commit `dab6864` na `faza15`, scalony tutaj).
 Opus: D1/D4/D7/D8 i scalanie; D5 i D2+D3 — Sonnet; D6 — Opus; każdy agent we własnym worktree.
 
 | D | Wykonanie | Commit |
 |---|---|---|
-| D1 | `text2` jasny `#666259` (kontrast z §11.1: na zaznaczeniu 4,88, tło 5,62, karta 6,08, sunk 5,28) | `6efcbb3` |
-| D2 | Pigułka rozwinięta: czerwona kropka + „Recording” w `text` Semibold; lista spotkań dalej `StateLabel(.live)` na czerwono | `bb997b4` |
-| D3 | Bez przycisku zamknięcia; menu Window → „Hide Recording Window” (aktywne tylko przed startem, przy widocznej pigułce); okno pigułki dopasowane do treści (`fittingSize`, górna krawędź stoi), bez stałego 336×60 i marginesu | `bb997b4` |
-| D4 | `.pillSmallPrimary` (24 pt) dla „Save & verify” i Done; Cancel jako `.pillSmall` | `6efcbb3` |
-| D5 | Kapsuła wstecz (‹ Meetings) i „⋯” (Copy notes, Show in Finder, Delete meeting…); menu aplikacji „Meeting”: Back to Meetings ⌘[, Copy Notes ⌘⇧C, Show in Finder, Delete Meeting…. Usuwanie z potwierdzeniem („Move to Trash”), do Kosza (`trashItem`), nieaktywne dla sesji nagrywanej lub transkrybowanej. Delete bez skrótu ⌘⌫ — kolidowałby z edycją w My notes | `148e6eb`, `263a387` |
-| D6 | Notatka = jeden `NSTextView` tylko do odczytu; `MarkdownBlocks.attributed(_:style:)` w `MeetNotesNotes` (interlinia 22, akapit 16, punkt 18 / zagnieżdżony 36, odstęp punktów 3, nagłówek 15 semibold 20/6, „— uzasadnienie” w `text2`); `flatten` usunięte (jedyny użytkownik). Pomiar migawki: interlinia 22, punkt→punkt 25, wcięcie 18/36, odstępy wokół nagłówków ±1 pt od makiety | `f682735` |
-| D7 | Sidebar: Meetings na górze, Presets / Templates / Settings na dole bez nagłówka (druga lista w `safeAreaInset` z tym samym wyborem); nowa migawka `sidebar-*` | `6efcbb3` |
-| D8 | `FieldMenu` (DesignSystem): pole `field`, obwódka, promień 7, ⌄; pod spodem standardowe `Menu`, wybór przez `Picker(.inline)`. Użyte dla presetu (karta Record i pigułka), Language, Notes language, Provider, szablonu | `6efcbb3` |
+| D1 | `text2` jasny `#666259` (kontrast z §11.1: na zaznaczeniu 4,88, tło 5,62, karta 6,08, sunk 5,28) | `255b835` |
+| D2 | Pigułka rozwinięta: czerwona kropka + „Recording” w `text` Semibold; lista spotkań dalej `StateLabel(.live)` na czerwono | `e3c3862` |
+| D3 | Bez przycisku zamknięcia; menu Window → „Hide Recording Window” (aktywne tylko przed startem, przy widocznej pigułce); okno pigułki dopasowane do treści (`fittingSize`, górna krawędź stoi), bez stałego 336×60 i marginesu | `e3c3862` |
+| D4 | `.pillSmallPrimary` (24 pt) dla „Save & verify” i Done; Cancel jako `.pillSmall` | `255b835` |
+| D5 | Kapsuła wstecz (‹ Meetings) i „⋯” (Copy notes, Show in Finder, Delete meeting…); menu aplikacji „Meeting”: Back to Meetings ⌘[, Copy Notes ⌘⇧C, Show in Finder, Delete Meeting…. Usuwanie z potwierdzeniem („Move to Trash”), do Kosza (`trashItem`), nieaktywne dla sesji nagrywanej lub transkrybowanej. Delete bez skrótu ⌘⌫ — kolidowałby z edycją w My notes | `a1628de`, `ff7876f` |
+| D6 | Notatka = jeden `NSTextView` tylko do odczytu; `MarkdownBlocks.attributed(_:style:)` w `MeetNotesNotes` (interlinia 22, akapit 16, punkt 18 / zagnieżdżony 36, odstęp punktów 3, nagłówek 15 semibold 20/6, „— uzasadnienie” w `text2`); `flatten` usunięte (jedyny użytkownik). Pomiar migawki: interlinia 22, punkt→punkt 25, wcięcie 18/36, odstępy wokół nagłówków ±1 pt od makiety | `881f79a` |
+| D7 | Sidebar: Meetings na górze, Presets / Templates / Settings na dole bez nagłówka (druga lista w `safeAreaInset` z tym samym wyborem); nowa migawka `sidebar-*` | `255b835` |
+| D8 | `FieldMenu` (DesignSystem): pole `field`, obwódka, promień 7, ⌄; pod spodem standardowe `Menu`, wybór przez `Picker(.inline)`. Użyte dla presetu (karta Record i pigułka), Language, Notes language, Provider, szablonu | `255b835` |
 
 **Testy:** `scripts/test.sh` → `200/200` (test `flatten` zastąpiony testem `noteIsOneAttributedTextWithParagraphStyles`).
 Mutacja D6: wcięcie punktu `headIndent = 0` → test pada (`MarkdownTests.swift:55–56`), przywrócone `git checkout`.
@@ -120,14 +120,14 @@ mutacje; agenci: Templates, Settings, pigułka (Sonnet), widok spotkania, Eleven
 
 | # | Wykonanie | Commit |
 |---|---|---|
-| 1 | Pasek narzędzi bez tła i tytułu (`toolbar(removing: .title)`, `toolbarBackground(.hidden)`); `navigationTitle` zostaje dla menu Window/VoiceOver | `59b0f5a` |
-| 2 | Szablon = lista sekcji (`sections?`, `about?` opcjonalne; stary prompt → jedna sekcja), prompt z sekcji po kolei; wbudowane edytowalne (override, „Built-in · edited”, Reset to default), własne: Duplicate / Delete… z potwierdzeniem; pola rosną z treścią (`TextField(axis: .vertical)`) | `a0714de` |
-| 3 | Pigułka: przezroczyste okno, cień po `invalidateShadow`, stały rozmiar (licznik o stałej szerokości, resize tylko przy zwinięta↔rozwinięta, kotwica lewy dolny róg), przesuwanie za tło (`WindowDragGesture` + `makeKey` w `mouseDown`), pozycja w UserDefaults, domyślnie środek dołu ekranu | `205a2ee` |
-| 4 | Pigułka tylko podczas nagrywania; stan „przed startem” i „Hide Recording Window” usunięte; „Show Recording Window” (⌘⌥R) aktywne tylko w trakcie — ratunek, gdy pigułka zniknie z ekranu | `205a2ee` |
-| 5 | Settings: lista OpenRouter / ElevenLabs / Ollama / Custom endpoint z oficjalnymi logo (SVG w kodzie, bez resource bundle), stan po prawej, „⋯” (Edit key…, Test again, Refresh Models, Remove…), konfiguracja w arkuszu z „Test connection” kluczem z pola (bez zapisu do pęku) i „Get an API key”. **ElevenLabs bezpośrednio:** `xi-api-key`, multipart, `scribe_v2`, `language_code` przy języku jawnym, granica `TranscriptionClient`, wybór klienta po `Provider.kind` (opcjonalne, E6) | `4c7b44b`, `714783a`, `6c639c1`, `e5803bf`, `ab43f8d` |
-| 6 | Archive search: „Provider” (tylko skonfigurowani OpenAI-compatible; ukryty przy jednym) + „Embedding model”; zmiana dostawcy czyści model | `4c7b44b` |
-| 7 | Widok spotkania = jedna przewijana strona (bez wewnętrznych ScrollView/List/TextEditor; `GrowingTextView` dla My notes i kontekstu, `LazyVStack` transkryptu); Summary bez karty, ten sam pasek przed/po; notatka na szerokość kolumny (kontener tekstu wraca do szerokości ramki po pomiarze); Transcript w jednej linii; „▶II” = odtwarzanie nagrania → przeniesione do menu Meeting („Play/Pause Recording”, bez skrótu Spacja). „Generate notes” na ⌘↩ zamiast Return (Return w polu kontekstu nie uruchamia płatnego generowania) | `402c899`, `7ca7d78` |
-| 8 | Recordings: lokalizacja (kopia → weryfikacja listy i rozmiarów → przełączenie → usunięcie starych; błąd = nic nie kasujemy) i „Keep audio” 7/14/30/90/Forever (domyślnie 30; kasuje tylko `*.caf`, tylko po ukończonej transkrypcji; znacznik `audio-deleted.json`); widok spotkania: „Audio deleted after N days”, bez odtwarzania i ponownej transkrypcji | `fe273a1`, `c94ffc2`, `997e6b4` |
+| 1 | Pasek narzędzi bez tła i tytułu (`toolbar(removing: .title)`, `toolbarBackground(.hidden)`); `navigationTitle` zostaje dla menu Window/VoiceOver | `49f55dc` |
+| 2 | Szablon = lista sekcji (`sections?`, `about?` opcjonalne; stary prompt → jedna sekcja), prompt z sekcji po kolei; wbudowane edytowalne (override, „Built-in · edited”, Reset to default), własne: Duplicate / Delete… z potwierdzeniem; pola rosną z treścią (`TextField(axis: .vertical)`) | `9e8945f` |
+| 3 | Pigułka: przezroczyste okno, cień po `invalidateShadow`, stały rozmiar (licznik o stałej szerokości, resize tylko przy zwinięta↔rozwinięta, kotwica lewy dolny róg), przesuwanie za tło (`WindowDragGesture` + `makeKey` w `mouseDown`), pozycja w UserDefaults, domyślnie środek dołu ekranu | `68d7221` |
+| 4 | Pigułka tylko podczas nagrywania; stan „przed startem” i „Hide Recording Window” usunięte; „Show Recording Window” (⌘⌥R) aktywne tylko w trakcie — ratunek, gdy pigułka zniknie z ekranu | `68d7221` |
+| 5 | Settings: lista OpenRouter / ElevenLabs / Ollama / Custom endpoint z oficjalnymi logo (SVG w kodzie, bez resource bundle), stan po prawej, „⋯” (Edit key…, Test again, Refresh Models, Remove…), konfiguracja w arkuszu z „Test connection” kluczem z pola (bez zapisu do pęku) i „Get an API key”. **ElevenLabs bezpośrednio:** `xi-api-key`, multipart, `scribe_v2`, `language_code` przy języku jawnym, granica `TranscriptionClient`, wybór klienta po `Provider.kind` (opcjonalne, E6) | `31f6579`, `f5effdf`, `0bcbd6d`, `513b452`, `5052aa0` |
+| 6 | Archive search: „Provider” (tylko skonfigurowani OpenAI-compatible; ukryty przy jednym) + „Embedding model”; zmiana dostawcy czyści model | `31f6579` |
+| 7 | Widok spotkania = jedna przewijana strona (bez wewnętrznych ScrollView/List/TextEditor; `GrowingTextView` dla My notes i kontekstu, `LazyVStack` transkryptu); Summary bez karty, ten sam pasek przed/po; notatka na szerokość kolumny (kontener tekstu wraca do szerokości ramki po pomiarze); Transcript w jednej linii; „▶II” = odtwarzanie nagrania → przeniesione do menu Meeting („Play/Pause Recording”, bez skrótu Spacja). „Generate notes” na ⌘↩ zamiast Return (Return w polu kontekstu nie uruchamia płatnego generowania) | `5061328`, `483a052` |
+| 8 | Recordings: lokalizacja (kopia → weryfikacja listy i rozmiarów → przełączenie → usunięcie starych; błąd = nic nie kasujemy) i „Keep audio” 7/14/30/90/Forever (domyślnie 30; kasuje tylko `*.caf`, tylko po ukończonej transkrypcji; znacznik `audio-deleted.json`); widok spotkania: „Audio deleted after N days”, bez odtwarzania i ponownej transkrypcji | `4ed0f8c`, `81819cb`, `37e2eb0` |
 
 **Testy:** `scripts/test.sh` → `224/224`. Mutacje (każda wprowadzona po `git add`, test padł, `git checkout`):
 Templates 5/5 (override w `all()`, reset, blokada usuwania wbudowanego, migracja, kolejność sekcji), Settings 4/4
@@ -136,7 +136,7 @@ Recordings: agent a–d, orkiestrator powtórzył niezależnie 3/3 (retencja bez
 `*.caf`, wyłączona weryfikacja przenoszenia).
 
 **Przegląd migawek (Sonnet, read-only, 50 PNG):** nic zepsutego. Poprawione: pusty edytor Presets/Templates jako
-tekst na tokenach zamiast `ContentUnavailableView`, nazwa presetu/szablonu zwykłym 15 pt (`f93f742`). Zostaje:
+tekst na tokenach zamiast `ContentUnavailableView`, nazwa presetu/szablonu zwykłym 15 pt (`ae5373d`). Zostaje:
 brak „N GB on disk” w migawce (rozmiar liczony asynchronicznie), brak migawki z „Improve transcript”, model nie
 mieści się w linii presetu w rozwiniętej pigułce.
 
@@ -171,14 +171,14 @@ Użytkownik przyjął zalecenia R1–R8 („Accept the recommendations for R1–
 
 | R | Wykonanie | Commit |
 |---|---|---|
-| R1 | Skrócenie „Keep audio”: `AudioRetention.plan` (ta sama reguła co kasowanie, bez kasowania) → dialog „Delete X of audio from N meetings older than D days?” / Delete Audio / Cancel (Cancel nie zmienia ustawienia); gdy nic by nie zniknęło lub Forever — bez pytania; `apply` idzie po `plan` (reguła w jednym miejscu) | `22677e0` |
-| R2 | Po nieudanym przenoszeniu sprzątana jest tylko własna kopia (wpisy zapisane jako „nasze” przed kopiowaniem i tylko gdy ich nie było); folder docelowy usuwany tylko, jeśli go utworzyliśmy i jest pusty; ponowna próba do tego samego folderu działa | `22677e0` |
-| R3 | Na czas przenoszenia widok spotkania tylko do odczytu („Moving recordings…” pod MetaLine); blokady w modelu (`canDelete`, `generate`, `retryCorrection`, `setManualTitle`, `saveMyNotes`); oczekujący autozapis My notes zapisywany przed startem przenoszenia | `22677e0` |
+| R1 | Skrócenie „Keep audio”: `AudioRetention.plan` (ta sama reguła co kasowanie, bez kasowania) → dialog „Delete X of audio from N meetings older than D days?” / Delete Audio / Cancel (Cancel nie zmienia ustawienia); gdy nic by nie zniknęło lub Forever — bez pytania; `apply` idzie po `plan` (reguła w jednym miejscu) | `fb3f658` |
+| R2 | Po nieudanym przenoszeniu sprzątana jest tylko własna kopia (wpisy zapisane jako „nasze” przed kopiowaniem i tylko gdy ich nie było); folder docelowy usuwany tylko, jeśli go utworzyliśmy i jest pusty; ponowna próba do tego samego folderu działa | `fb3f658` |
+| R3 | Na czas przenoszenia widok spotkania tylko do odczytu („Moving recordings…” pod MetaLine); blokady w modelu (`canDelete`, `generate`, `retryCorrection`, `setManualTitle`, `saveMyNotes`); oczekujący autozapis My notes zapisywany przed startem przenoszenia | `fb3f658` |
 | R4 | Podpis pod „Keep audio” bez zmian | — |
-| R5 | Pigułka: kotwica w środku dolnej krawędzi; `PillPlacement.frame` (czysta funkcja w `MeetNotesRecording`, clamp do `visibleFrame`); pozycja `recordingPillBottomCenter`, stara pozycja przeliczana | `5f6ffab` |
+| R5 | Pigułka: kotwica w środku dolnej krawędzi; `PillPlacement.frame` (czysta funkcja w `MeetNotesRecording`, clamp do `visibleFrame`); pozycja `recordingPillBottomCenter`, stara pozycja przeliczana | `1ef3bbc` |
 | R6 | „Show Recording Window” (⌘⌥R) zostaje jako ratunek | — |
 | R7 | Bez zmian | — |
-| R8 | ElevenLabs 403 z `/v1/models` → `ProviderCheck.limited("Key works for transcription only")`: trójkąt + słowa w `warn`, bez ✗ i Retry, w wierszu i w arkuszu; OpenAI-compatible 403 dalej błąd; migawki `settings-limited-*`, `settings-sheet-limited-*` | `5f6ffab`, `09e30bd` |
+| R8 | ElevenLabs 403 z `/v1/models` → `ProviderCheck.limited("Key works for transcription only")`: trójkąt + słowa w `warn`, bez ✗ i Retry, w wierszu i w arkuszu; OpenAI-compatible 403 dalej błąd; migawki `settings-limited-*`, `settings-sheet-limited-*` | `1ef3bbc`, `c55fd09` |
 
 **Testy:** `scripts/test.sh` → `229/229`. Mutacje: agent R1 4/4, R2 3/3, R5+R8 3/3; orkiestrator powtórzył
 niezależnie 3/3 (brak sprzątania, obce wpisy uznane za nasze, 403 ElevenLabs jako błąd). R3 bez testu — blokady
@@ -198,16 +198,16 @@ reaguje na `.disabled`); Retry korekty na liście spotkań zostaje aktywny w UI,
 
 ## Drugi odbiór 2026-10-16: poprawki 1–6
 
-Zapis w `docs/design/macos.md` §11.5 (`9cbe688`, `2bd91aa`, `dcefcdd` na `faza15`, scalone). Agenci Opus: pigułka (1–3), widok spotkania (4–6).
+Zapis w `docs/design/macos.md` §11.5 (`f9a1636`, `ff502d5`, `77b5654` na `faza15`, scalone). Agenci Opus: pigułka (1–3), widok spotkania (4–6).
 
 | # | Przyczyna → poprawka | Commit |
 |---|---|---|
-| 1 | „Sto / p”: idealna szerokość pigułki zaokrąglona w dół (okno 245 przy treści 253) → `lineLimit(1)` + `fixedSize` na Stop, liczniku, „Recording”, „Open note” i wierszu; migawka `pill-collapsed` w rozmiarze okna z najszerszym licznikiem 09:59:59 | `a401139` |
-| 2 | **Przyczyna rogów (zmierzona):** warstwa Liquid Glass maluje poświatę 2–5 % alfa na całym prostokącie warstwy, także w rogach poza kształtem; okno = rozmiar treści, więc maska alfa okna była prostokątem i system liczył cień z prostokąta. Cień okna klucza ma ostrą krawędź (35–40 % alfa), stąd widoczne tylko na pierwszym planie. Właściwości okna (`.borderless` + `.nonactivatingPanel`, przezroczyste) były już poprawne; sam `invalidateShadow` nic nie zmieniał. → `.clipShape(shape)` po `glassEffect`: rogi 0 alfa, cień z zaokrąglonego kształtu w obu stanach (sonda `CGWindowListCreateImage` własnego okna) | `a401139` |
-| 3 | „Open note” wołało tylko `openSession` (już ustawione) → `NSApp.activate()`, przywrócenie/wysunięcie okna głównego, `openWindow(id: "main")` gdy zamknięte; cel z `OpenNoteDestination.forRecording` (Meetings → sesja → My notes), test + mutacja | `a401139` |
-| 4 | **Przyczyna:** widok spotkania otwiera się przy starcie nagrania; `onAppear` raz kopiował tytuł do `titleDraft` (wtedy pusty), a `@StateObject` z `.id(item.id)` przeżywa przeładowania — autotytuł nigdy nie trafiał do pola. → `titleEdit: String?` (`nil` = pole pokazuje `NoteTitle.fieldText`: ręczny > auto > z notatki, w kolorze `text`); zapis ręcznego tylko gdy `NoteTitle.isEdit` (realna zmiana); testy + mutacje | `1f36b90`, `3a2c432` |
-| 5 | Stałe paski przewijania zwężały treść → `ScrollPage(width)` w DesignSystem: mierzy szerokość zewnętrzną i treści (`onGeometryChange`), przesuwa kolumnę o szerokość paska — kolumna wyśrodkowana względem okna; użyte w widoku spotkania, Presets, Settings, Templates. Dowód: migawki z `-AppleShowScrollBars Always` (argument procesu), krawędź 130/130 vs 130/123 po mutacji | `1f36b90` |
-| 6 | `allZeros60s`: dziennik nie odróżnia ciszy na początku od braku uprawnień (liczba klatek rośnie w obu), więc sygnałem jest transkrypt — wypowiedź mówcy tego toru (system → Them, mikrofon → Me) = dźwięk przyszedł później = informacja („System audio was silent for the first minute; recording continued.”), bez ⚠ na liście; brak takich wypowiedzi albo transkryptu = ostrzeżenie. W widoku: chip „ⓘ/⚠ System audio” w linii metadanych z popoverem i linia nad transkryptem. Stare dzienniki nieprzepisywane. Sesja `af52`: 1 wypowiedź Them → informacja | `1f36b90` |
+| 1 | „Sto / p”: idealna szerokość pigułki zaokrąglona w dół (okno 245 przy treści 253) → `lineLimit(1)` + `fixedSize` na Stop, liczniku, „Recording”, „Open note” i wierszu; migawka `pill-collapsed` w rozmiarze okna z najszerszym licznikiem 09:59:59 | `ea5dcb4` |
+| 2 | **Przyczyna rogów (zmierzona):** warstwa Liquid Glass maluje poświatę 2–5 % alfa na całym prostokącie warstwy, także w rogach poza kształtem; okno = rozmiar treści, więc maska alfa okna była prostokątem i system liczył cień z prostokąta. Cień okna klucza ma ostrą krawędź (35–40 % alfa), stąd widoczne tylko na pierwszym planie. Właściwości okna (`.borderless` + `.nonactivatingPanel`, przezroczyste) były już poprawne; sam `invalidateShadow` nic nie zmieniał. → `.clipShape(shape)` po `glassEffect`: rogi 0 alfa, cień z zaokrąglonego kształtu w obu stanach (sonda `CGWindowListCreateImage` własnego okna) | `ea5dcb4` |
+| 3 | „Open note” wołało tylko `openSession` (już ustawione) → `NSApp.activate()`, przywrócenie/wysunięcie okna głównego, `openWindow(id: "main")` gdy zamknięte; cel z `OpenNoteDestination.forRecording` (Meetings → sesja → My notes), test + mutacja | `ea5dcb4` |
+| 4 | **Przyczyna:** widok spotkania otwiera się przy starcie nagrania; `onAppear` raz kopiował tytuł do `titleDraft` (wtedy pusty), a `@StateObject` z `.id(item.id)` przeżywa przeładowania — autotytuł nigdy nie trafiał do pola. → `titleEdit: String?` (`nil` = pole pokazuje `NoteTitle.fieldText`: ręczny > auto > z notatki, w kolorze `text`); zapis ręcznego tylko gdy `NoteTitle.isEdit` (realna zmiana); testy + mutacje | `1711b50`, `0473cb5` |
+| 5 | Stałe paski przewijania zwężały treść → `ScrollPage(width)` w DesignSystem: mierzy szerokość zewnętrzną i treści (`onGeometryChange`), przesuwa kolumnę o szerokość paska — kolumna wyśrodkowana względem okna; użyte w widoku spotkania, Presets, Settings, Templates. Dowód: migawki z `-AppleShowScrollBars Always` (argument procesu), krawędź 130/130 vs 130/123 po mutacji | `1711b50` |
+| 6 | `allZeros60s`: dziennik nie odróżnia ciszy na początku od braku uprawnień (liczba klatek rośnie w obu), więc sygnałem jest transkrypt — wypowiedź mówcy tego toru (system → Them, mikrofon → Me) = dźwięk przyszedł później = informacja („System audio was silent for the first minute; recording continued.”), bez ⚠ na liście; brak takich wypowiedzi albo transkryptu = ostrzeżenie. W widoku: chip „ⓘ/⚠ System audio” w linii metadanych z popoverem i linia nad transkryptem. Stare dzienniki nieprzepisywane. Sesja `af52`: 1 wypowiedź Them → informacja | `1711b50` |
 
 **Testy:** `scripts/test.sh` → `236/236`. Mutacje: agenci (tytuł 3, klasyfikacja 2, setter 1, Open note 2, ScrollPage i pigułka na migawkach/sondzie); orkiestrator powtórzył niezależnie 4/4 (autotytuł pominięty, cisza zawsze ostrzeżeniem, zły mówca, Open note bez sesji).
 
@@ -225,7 +225,7 @@ Zapis w `docs/design/macos.md` §11.5 (`9cbe688`, `2bd91aa`, `dcefcdd` na `faza1
 ### Decyzje (a)–(d) (2026-10-16)
 
 (a) placeholder bez zmian; (b) trwałe zdarzenie w dzienniku → osobne zadanie wyciszania torów; (d) jednorazowy reset
-rozmiaru okna przyjęty. **(c) zrobione** (`eb42d7b`): `PillPanel.becomeKey()` → `makeFirstResponder(nil)` — przyczyna:
+rozmiaru okna przyjęty. **(c) zrobione** (`67dee61`): `PillPanel.becomeKey()` → `makeFirstResponder(nil)` — przyczyna:
 SwiftUI ustawiał first responder z fokusem na Stop jeszcze przed staniem się kluczem, więc po kliknięciu w tło Space
 zatrzymywał nagranie (sonda: `stopCount=1`). Po poprawce: brak pierścienia i brak reakcji na Space/Return po kliknięciu;
 Tab daje pierścień na Stop (Full Keyboard Access działa); ⌘. dalej zatrzymuje. Dowód: sonda z syntetycznymi `NSEvent`

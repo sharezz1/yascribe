@@ -1,7 +1,7 @@
 # S18 — przegląd całej gałęzi `faza1`
 
 **Zakres:** cała gałąź fazy 1 (`git diff master..HEAD`, 88 commitów), ocena stanu kodu na HEAD
-(`7cc2288`) i dokumentacji. Pliki: `Sources/**`, `Tests/**`, `scripts/**`, `Package.swift`,
+(`bfcf36c`) i dokumentacji. Pliki: `Sources/**`, `Tests/**`, `scripts/**`, `Package.swift`,
 `Resources/Info.plist`, `docs/superpowers/{plans,specs,reports}`.
 
 **Testy:** `scripts/test.sh` → ostatnia linia: `test.sh: 109/109 testów uruchomionych i zaliczonych.`
@@ -14,7 +14,7 @@ literały kluczopodobne sprawdzone na surowych bajtach (`od -c`): to fixture tes
 `scripts/check-hashes.sh` (kod 0) oraz ręcznie. `scripts/run.sh` ani aplikacja nie uruchamiane.
 
 **Czego nie zgłaszam (rozstrzygnięte wcześniej):** check S15 #1–#5 zamknięty przez S15fix
-(`9ab575f`: blokady startu nagrania i transkrypcji, `preset.json` czytany przez `presetFor`,
+(`77e4978`: blokady startu nagrania i transkrypcji, `preset.json` czytany przez `presetFor`,
 odtwarzanie bez `try?`, klucz z Keychain bez cichej awarii — potwierdzone na HEAD); check S15
 #6–#10 → BACKLOG (pozycje strukturalne i D3); S11 #1–#5 + runda 2 #1–#4 zamknięte przez E6/S16
 (`RunInput.crosstalk`, `-mmin +60`, `trap`, komentarze, zakres testu przesłuchu); uwaga o wersji
@@ -106,7 +106,7 @@ formatu `input.json` — świadome odłożenie zapisane w planie 05 (linia 779);
    sprzęcie):** pomiar — 400 000 zapytań UID w pętli (także z `autoreleasepool`) bez awarii
    w obu wariantach („BuiltInMicrophoneDevice" to obiekt stały CF); zostawić albo zmienić na
    `takeUnretainedValue` przy okazji innej pracy.
-2. `docs/superpowers/reports/S0.md:23` cytuje martwy hash `08892c4` (po amendzie: `a29443a`) —
+2. `docs/superpowers/reports/S0.md:23` cytuje martwy hash `08892c4` (po amendzie: `86f4c27`) —
    raport wyjaśnia amend zdaniem obok, hash strzeże `scripts/check-hashes.sh` + wpis w
    `scripts/check-hashes.allow`. **Nigdy** — kosmetyka; jedyna nieścisłość to etykieta wpisu
    w allow („bez opisu") i brak finalnego hasha w tekście raportu.
@@ -142,7 +142,7 @@ formatu `input.json` — świadome odłożenie zapisane w planie 05 (linia 779);
    `reloadSessions()` (`AppModel.swift:205-218`). Pytanie: czy na zrzucie z 12:27 był też wiersz
    „Recording" u góry tej samej listy (ta sama instancja aplikacji)? Jeśli nie — wiersz mógł pochodzić
    z drugiej instancji (`open -n` uruchamia nową; `run.sh` ma co prawda blokadę `pgrep`
-   od `268fb3a`, ale obejście np. `swift run` zostawiłoby dwie instancje na jednym `.devdata`).
+   od `0e2fa49`, ale obejście np. `swift run` zostawiłoby dwie instancje na jednym `.devdata`).
    Bez odpowiedzi nie rozstrzygam między tymi dwiema hipotezami.
 2. **Klasyfikacja pozycji 2.1 (utrata danych konfiguracyjnych przez `load()`/`save()`).**
    Literal decyzji 2026-10-13 mówi „utrata lub zepsucie danych **sesji**" — pliki

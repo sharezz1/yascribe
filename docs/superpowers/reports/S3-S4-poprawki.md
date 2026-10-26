@@ -7,8 +7,8 @@
 
 | Hash | Tytuł | Zakres |
 |---|---|---|
-| `6241e9c` | Raporty: przeglady S3 i S4 | oba przeglądy, bez zmian |
-| `7885c8a` | CLI: walidacja opcji, fit bez cichego obcinania, test fit na plikach | S3-1…S3-9 |
+| `e2b4bf9` | Raporty: przeglady S3 i S4 | oba przeglądy, bez zmian |
+| `2b90cf8` | CLI: walidacja opcji, fit bez cichego obcinania, test fit na plikach | S3-1…S3-9 |
 | `823dc51` → po amendzie: `git log -1` | Rdzen: pierwsza przyczyna awarii toru zostaje, tor moze ozyc, sprzatanie po stop | P1–P9, P12 + spec rdzenia; w amendzie P10 (`S4.md`) i ten raport |
 
 `823dc51` to hash **przed** `--amend`, którym dodano ten raport i poprawkę `S4.md` — obiekt bez raportu. Aktualny hash: `git log -1` na `faza1`.
@@ -55,7 +55,7 @@ uruchamiałem (sprzęt/uprawnienia).
 | P7 30 s od startu sesji | ✅ | `lastChunkByTrack[trackID]` = czas `track.opened`. |
 | P8 wyścig `stop()`/przebudowa | ✅ | Flaga `stopped` w `RawMicrophoneSource` i `SystemTapSource`; `open()`/`startCapture()` po `stop()` nie podpinają capture (zatrzymują go), `rebuild()` po `stop()` sprząta tap i urządzenie zbiorcze. Bez testu — wymaga Core Audio. |
 | P9 CAF otwarty po błędzie dziennika | ✅ | `TrackWriter.close`: przy błędzie `append` zamyka CAF i rzuca dalej. |
-| P10 hash w S4.md | ✅ | `006e69b` → `4b8025a`, „9 plików" → 10 (z opisem amendu). |
+| P10 hash w S4.md | ✅ | `006e69b` → `236d42b`, „9 plików" → 10 (z opisem amendu). |
 | P11 fsync pod blokadą w `tick()` | ⏭ świadomie nie | Patrz „Decyzje". Komentarz `ponytail:` w `tick()`. |
 | P12 niesanityzowany `trackID` | ✅ | `SessionRecorder.isSafeTrackID` (`[A-Za-z0-9_-]+`); zły tor → `track.failed("invalidTrackID")`, bez pliku. Test `unsafeTrackIDNeverLeavesSessionDirectory`. |
 

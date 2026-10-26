@@ -1,4 +1,4 @@
-# Faza 1.6 — odbiór na żywo (b15e841)
+# Faza 1.6 — odbiór na żywo (1ddd08e)
 
 Odbiór robi użytkownik na sprzęcie: ✅/❌ + uwaga. Rozbieżności ze specem: STOP, bez ślepych napraw.
 
@@ -22,9 +22,9 @@ Odbiór robi użytkownik na sprzęcie: ✅/❌ + uwaga. Rozbieżności ze specem
 | 10 | Quit w trakcie nagrywania: pytanie, Stop and Quit, brak „Recovered" | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
 | 11 | Preset bez języka + auto-start → oferta zostaje jako ręczna | ✅ | użytkownik: „wszystko działa", bez szczegółów per punkt (2026-10-19) |
 
-## Menu Preset w ofercie (e3fb58a, 631a812)
+## Menu Preset w ofercie (5e07211, 99df124)
 
 | Punkt | Wynik | Uwaga |
 |---|---|---|
 | Menu Preset w pigułce-ofercie otwiera się i zmienia preset | ✅ | 2026-10-19 |
-| Przeciąganie pigułki po użyciu menu | ❌ → ✅ | Po użyciu menu pigułka nie dawała się przesunąć (okno kluczowe, pozycja bez zmian). Poprawka 631a812: po `NSMenu.didEndTrackingNotification` w trybie oferty zmiana `.id` treści. Użytkownik: „działa". Przyczyna to hipoteza z objawów. |
+| Przeciąganie pigułki po użyciu menu | ❌ → ✅ | Po użyciu menu pigułka nie dawała się przesunąć (okno kluczowe, pozycja bez zmian). Poprawka 99df124: po `NSMenu.didEndTrackingNotification` w trybie oferty zmiana `.id` treści. Użytkownik: „działa". Przyczyna to hipoteza z objawów. |
