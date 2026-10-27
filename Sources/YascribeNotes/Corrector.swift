@@ -138,7 +138,8 @@ public struct Corrector: Sendable {
                    budget.pairedInputChars(fixedChars: system(language: language).count, replyFactor: ContextBudget.correctionReplyFactor))
     }
 
-    public func correct(_ original: Transcript, language: LanguageCode?) async -> CorrectedTranscript {
+    public func correct(_ original: Transcript, language: LanguageCode?,
+                        isCancelled: @Sendable () -> Bool = { Task.isCancelled }) async -> CorrectedTranscript {
         var out = original
         // Numer linii = indeks wypowiedzi + 1; tylko niepuste i niezaflagowane.
         let all: [(n: Int, text: String)] = original.utterances.enumerated().compactMap { i, u in
@@ -158,8 +159,12 @@ public struct Corrector: Sendable {
         var failed = 0
         var rejected = all.count - lines.count
         var firstError: String?
-        for batch in batches {
-            if Task.isCancelled { break }
+        for (index, batch) in batches.enumerated() {
+            if isCancelled() {
+                failed = batches.count
+                if firstError == nil { firstError = "Correction was cancelled." }
+                break
+            }
             do {
                 let model = assignment.model
                 // Numeracja 1…N w każdej partii (spec §14 pkt 3): dziury po pominiętych liniach model wypełniał i cała partia
