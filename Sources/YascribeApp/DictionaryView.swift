@@ -53,9 +53,9 @@ struct DictionaryView: View {
                         + Text(" are the wrong spellings the transcript produces; they are replaced automatically, in every meeting."))
                         .font(.callout).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
-                        Text("Zoey, Zoim").foregroundStyle(.mnText2)
+                        Text("Roky, Rokm").foregroundStyle(.mnText2)
                         Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.mnText3).accessibilityHidden(true)
-                        Text("Zowie").fontWeight(.semibold).foregroundStyle(.mnText)
+                        Text("Nimbu").fontWeight(.semibold).foregroundStyle(.mnText)
                         Spacer(minLength: 0)
                     }
                     .font(.callout)
@@ -303,7 +303,7 @@ struct DictionaryTermSheet: View {
                     Text(state.draftIsNew ? "New term" : "Edit term").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
                         .padding(.bottom, 8)
                     FormRow(label: "Term", caption: state.termError, isError: true, labelWidth: 70) {
-                        TextField("Correct spelling, e.g. Zowie", text: term).textFieldStyle(.plain).fieldBox()
+                        TextField("Correct spelling, e.g. Nimbu", text: term).textFieldStyle(.plain).fieldBox()
                     }
                     .padding(.horizontal, -16)
                     FormRow(label: "Priority", labelWidth: 70) {
@@ -341,7 +341,7 @@ struct DictionaryTermSheet: View {
                         .padding(10)
                     }
                     if let e = state.aliasError { StateLabel(.bad, e).wrapping().padding(.top, 8).padding(.leading, 2) }
-                    Text("Risky means the alias is also an ordinary word (Zoe is a name). It is added switched off; turn it on only if you accept that it may replace correct text.")
+                    Text("Risky means the alias is also an ordinary word (Rok is a name). It is added switched off; turn it on only if you accept that it may replace correct text.")
                         .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10).padding(.leading, 2)
                 }

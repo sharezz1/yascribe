@@ -47,8 +47,8 @@ import YascribeProviders
         #expect(DictionaryPrompt.make(UserDictionary(), link: link(many), maxChars: 100_000).attendees.count == 30)
         let long = String(repeating: "x", count: 200)
         #expect(DictionaryPrompt.make(UserDictionary(), link: link([.init(name: long)]), maxChars: 3000).attendees == [String(repeating: "x", count: 60)])
-        // Uczestnik zajmuje budżet pierwszy: "Ada" (3) zostaje, na Term "Genesys" zostają 2 znaki.
-        let v = DictionaryPrompt.make(dict([("Genesys", .high)]), link: link([.init(name: "Ada")]), maxChars: 5)
+        // Uczestnik zajmuje budżet pierwszy: "Ada" (3) zostaje, na Term "Orbit" zostają 2 znaki.
+        let v = DictionaryPrompt.make(dict([("Orbit", .high)]), link: link([.init(name: "Ada")]), maxChars: 5)
         #expect(v.attendees == ["Ada"])
         #expect(v.terms.isEmpty)
         #expect(v.omittedTerms == 1)
@@ -116,7 +116,7 @@ import YascribeProviders
     }
 
     @Test func nonPositiveAndTinyBudgetsOmitCandidates() {
-        let d = dict([("Zowie", .high), ("Genesys", .normal), ("PUDO", .low)])
+        let d = dict([("Nimbu", .high), ("Orbit", .normal), ("KOPT", .low)])
         let l = link([.init(name: "Ada Lovelace")])
         for budget in [0, -1, -100, 2] { // 2 znaki: najkrótszy kandydat (4) się nie mieści
             let v = DictionaryPrompt.make(d, link: l, maxChars: budget)

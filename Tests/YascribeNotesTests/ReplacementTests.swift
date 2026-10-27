@@ -10,30 +10,30 @@ import Testing
     private func scalars(_ s: String) -> [Unicode.Scalar] { Array(s.unicodeScalars) }
 
     @Test func replacesAliasWithTermExactSpelling() {
-        #expect(rules(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")])).apply(to: "Zoim mówi") == "Zowie mówi")
-        #expect(rules(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")])).apply(to: " Zoim\n") == " Zowie\n")
-        #expect(rules(DictionaryTerm("PUDO", aliases: [DictionaryAlias("Pudo")])).apply(to: "w Pudo obok") == "w PUDO obok")
+        #expect(rules(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")])).apply(to: "Rokm mówi") == "Nimbu mówi")
+        #expect(rules(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")])).apply(to: " Rokm\n") == " Nimbu\n")
+        #expect(rules(DictionaryTerm("KOPT", aliases: [DictionaryAlias("Kopt")])).apply(to: "w Kopt obok") == "w KOPT obok")
     }
 
     @Test func matchingIgnoresCase() {
-        #expect(rules(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")])).apply(to: "zOiM") == "Zowie")
+        #expect(rules(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")])).apply(to: "rOkM") == "Nimbu")
     }
 
     @Test func matchesOnlyOnWordBoundaries() {
-        let r = rules(DictionaryTerm("PUDO", aliases: [DictionaryAlias("pu do"), DictionaryAlias("Pudo")]),
-                      DictionaryTerm("Jarl", aliases: [DictionaryAlias("Jarla")]))
-        #expect(r.apply(to: "pu dowolny") == "pu dowolny")
-        #expect(r.apply(to: "pu do.") == "PUDO.")
-        #expect(r.apply(to: "Pudowski") == "Pudowski")
-        #expect(r.apply(to: "Jarlań") == "Jarlań")
-        #expect(r.apply(to: "żJarla") == "żJarla")
-        #expect(r.apply(to: "(Jarla)") == "(Jarl)")
+        let r = rules(DictionaryTerm("KOPT", aliases: [DictionaryAlias("ko pt"), DictionaryAlias("Kopt")]),
+                      DictionaryTerm("Dorn", aliases: [DictionaryAlias("Dorna")]))
+        #expect(r.apply(to: "ko ptwolny") == "ko ptwolny")
+        #expect(r.apply(to: "ko pt.") == "KOPT.")
+        #expect(r.apply(to: "Koptwski") == "Koptwski")
+        #expect(r.apply(to: "Dornań") == "Dornań")
+        #expect(r.apply(to: "żDorna") == "żDorna")
+        #expect(r.apply(to: "(Dorna)") == "(Dorn)")
     }
 
     @Test func longestAliasWins() {
-        let r = rules(DictionaryTerm("InPost", aliases: [DictionaryAlias("in"), DictionaryAlias("in post")]))
-        #expect(r.apply(to: "in post") == "InPost")
-        #expect(r.apply(to: "paczka in post i in") == "paczka InPost i InPost")
+        let r = rules(DictionaryTerm("Ontrack", aliases: [DictionaryAlias("on"), DictionaryAlias("on track")]))
+        #expect(r.apply(to: "on track") == "Ontrack")
+        #expect(r.apply(to: "paczka on track i on") == "paczka Ontrack i Ontrack")
     }
 
     @Test func aliasDoesNotRechainIntoItsResult() throws {
@@ -45,19 +45,19 @@ import Testing
     }
 
     @Test func termTextContainingOwnAliasIsNotReplacedAgain() {
-        let r = rules(DictionaryTerm("Pudo Max", aliases: [DictionaryAlias("pudo")]))
-        #expect(r.apply(to: "pudo") == "Pudo Max")
-        #expect(r.apply(to: r.apply(to: "pudo")) == r.apply(to: "pudo"))
+        let r = rules(DictionaryTerm("Kopt Max", aliases: [DictionaryAlias("kopt")]))
+        #expect(r.apply(to: "kopt") == "Kopt Max")
+        #expect(r.apply(to: r.apply(to: "kopt")) == r.apply(to: "kopt"))
     }
 
     @Test func termTextContainingOtherTermsAliasIsNotReplacedAgain() throws {
         var d = UserDictionary()
-        try d.upsert(DictionaryTerm("PUDO", aliases: [DictionaryAlias("Pudo")]))
-        try d.upsert(DictionaryTerm("Jarl Pudo", aliases: [DictionaryAlias("jarlpudo")]))
+        try d.upsert(DictionaryTerm("KOPT", aliases: [DictionaryAlias("Kopt")]))
+        try d.upsert(DictionaryTerm("Dorn Kopt", aliases: [DictionaryAlias("dornkopt")]))
         let r = ReplacementRules(d)
-        #expect(r.apply(to: "jarlpudo") == "Jarl Pudo")
-        #expect(r.apply(to: r.apply(to: "jarlpudo")) == "Jarl Pudo")
-        #expect(r.apply(to: "Jarl Pudo i Pudo") == "Jarl Pudo i PUDO")
+        #expect(r.apply(to: "dornkopt") == "Dorn Kopt")
+        #expect(r.apply(to: r.apply(to: "dornkopt")) == "Dorn Kopt")
+        #expect(r.apply(to: "Dorn Kopt i Kopt") == "Dorn Kopt i KOPT")
     }
 
     private func upserted(_ terms: DictionaryTerm...) throws -> ReplacementRules {
@@ -126,23 +126,23 @@ import Testing
         let nfd = { (s: String) in s.decomposedStringWithCanonicalMapping }
         let dictionaries: [[DictionaryTerm]] = [
             [],
-            [t("Hash", "#tag"), t("Zowie", "Zoim")],                      // Alias od symbolu: filtr wyłączony
+            [t("Hash", "#tag"), t("Nimbu", "Rokm")],                      // Alias od symbolu: filtr wyłączony
             [t("Strasse", "straße"), t("Fuß", "fuss")],                     // ß ≡ SS
             [t("Logos", "λόγοσ")],                                          // ς ≡ σ
-            [t("Genesys", "Dżenesis"), t("Żuraw", nfd("żuraw"))],           // NFD/NFC
+            [t("Orbit", "Żorbit"), t("Żuraw", nfd("żuraw"))],           // NFD/NFC
             [t("Y", "x")],                                                  // znak łączący po słowie
-            [t("PUDO", "pu do", "Pudo"), t("Jarl", "Jarla")],               // wielowyrazowy
-            [t("e-mail", "e-mejl"), t("InPost", "in", "in post")],          // z łącznikiem, najdłuższy
-            [t("Pudo Max", "pudo")],                                        // ochrona tekstu Terma
-            [t("PUDO", "Pudo"), t("Jarl Pudo", "jarlpudo")],
+            [t("KOPT", "ko pt", "Kopt"), t("Dorn", "Dorna")],               // wielowyrazowy
+            [t("e-mail", "e-mejl"), t("Ontrack", "on", "on track")],          // z łącznikiem, najdłuższy
+            [t("Kopt Max", "kopt")],                                        // ochrona tekstu Terma
+            [t("KOPT", "Kopt"), t("Dorn Kopt", "dornkopt")],
             [t("A", "x"), t("B", "A y")], [t("A B", "x"), t("B C", "y"), t("Z", "C")],
-            [t("Zowie", "Zoim"), t("queue")],                               // wielkość liter
+            [t("Nimbu", "Rokm"), t("queue")],                               // wielkość liter
             [t(".NET", "dotnet"), t("Core", "kor")],                         // Term od symbolu: filtr wyłączony
         ]
         let texts = ["", "   ", "...!?", "a #tag b", "#TAG", "tag", "STRASSE i Straße", "strasse x", "FUSS", "Fuß", "λόγος", "ΛΌΓΟΣ", "λόγοι",
-                     nfd("o Dżenesis"), "o Dżenesis", "dżenesisy", "ŻURAW", nfd("Żuraw"), "x\u{0301}yz", "x\u{0301}", "x y", "pu do.", "pu dowolny",
-                     "PU DO", "Pudowski", "Jarlań", "wyślij e-mejl", "e-mejla", "e mejl", "in post i in", "pudo", "Pudo Max", "jarlpudo",
-                     "Jarl Pudo i Pudo", "x y", "A y", "A B B", "zOiM i ZOIM", "Queue i Zoim", "nic tu nie ma", "dotnet i kor", ".NET kor"]
+                     nfd("o Żorbit"), "o Żorbit", "żorbity", "ŻURAW", nfd("Żuraw"), "x\u{0301}yz", "x\u{0301}", "x y", "ko pt.", "ko ptwolny",
+                     "KO PT", "Koptwski", "Dornań", "wyślij e-mejl", "e-mejla", "e mejl", "on track i on", "kopt", "Kopt Max", "dornkopt",
+                     "Dorn Kopt i Kopt", "x y", "A y", "A B B", "rOkM i ROKM", "Queue i Rokm", "nic tu nie ma", "dotnet i kor", ".NET kor"]
         for terms in dictionaries {
             let r = ReplacementRules(UserDictionary(terms: terms))
             for x in texts {
@@ -166,10 +166,10 @@ import Testing
             ("r2.d2", "R2.D2", "Target"),
             ("3d", "x_3D\u{203F}3d", "x_Target\u{203F}Target"),           // łączniki Pc nie są słowem
             ("a", "a\u{2163} a\u{00B2}", "a\u{2163} a\u{00B2}"),          // Nl i No przedłużają słowo
-            ("pu do", "pu\u{0301} do", "pu\u{0301} do"),
+            ("ko pt", "pu\u{0301} do", "pu\u{0301} do"),
             ("x\u{0301} y", "X\u{0301} Y", "Target"),                     // Alias ze znakiem łączącym w środku
-            ("Zoim", "\u{1F600} Zoim \u{1F600}\u{1F600}zoim", "\u{1F600} Target \u{1F600}\u{1F600}Target"),  // UTF-16 poza BMP
-            ("Zoim", prefix + "Zoim", prefix + "Target"),
+            ("Rokm", "\u{1F600} Rokm \u{1F600}\u{1F600}rokm", "\u{1F600} Target \u{1F600}\u{1F600}Target"),  // UTF-16 poza BMP
+            ("Rokm", prefix + "Rokm", prefix + "Target"),
         ]
         for c in cases {
             let r = rules(DictionaryTerm("Target", aliases: [DictionaryAlias(c.alias)]))
@@ -183,47 +183,47 @@ import Testing
     }
 
     @Test func preFilterSkipsRegexWhenNoCandidateToken() {
-        let r = rules(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")]))
+        let r = rules(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")]))
         let runs = ReplacementRules.RegexRuns()
         ReplacementRules.$regexRuns.withValue(runs) { #expect(r.apply(to: "nic tu nie ma") == "nic tu nie ma") }
         #expect(runs.count == 0)
-        ReplacementRules.$regexRuns.withValue(runs) { #expect(r.apply(to: "ZOIM mówi") == "Zowie mówi") }
+        ReplacementRules.$regexRuns.withValue(runs) { #expect(r.apply(to: "ROKM mówi") == "Nimbu mówi") }
         #expect(runs.count == 2)
     }
 
     @Test func termIdentityIsCaseSensitive() {
-        let r = rules(DictionaryTerm("queue"), DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")]))
+        let r = rules(DictionaryTerm("queue"), DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")]))
         #expect(!r.isEmpty)
-        #expect(r.apply(to: "Queue i Zoim") == "Queue i Zowie")
+        #expect(r.apply(to: "Queue i Rokm") == "Queue i Nimbu")
         #expect(r.apply(to: "Queue stoi") == "Queue stoi")
     }
 
     @Test func disabledAliasIsIgnored() {
-        let r = rules(DictionaryTerm("PUDO", aliases: [DictionaryAlias("pu do", risky: true, enabled: false)]))
+        let r = rules(DictionaryTerm("KOPT", aliases: [DictionaryAlias("ko pt", risky: true, enabled: false)]))
         #expect(r.isEmpty)
-        #expect(r.apply(to: "pu do") == "pu do")
-        let mixed = rules(DictionaryTerm("PUDO", aliases: [DictionaryAlias("pu do", risky: true, enabled: false), DictionaryAlias("Pudo")]))
+        #expect(r.apply(to: "ko pt") == "ko pt")
+        let mixed = rules(DictionaryTerm("KOPT", aliases: [DictionaryAlias("ko pt", risky: true, enabled: false), DictionaryAlias("Kopt")]))
         #expect(!mixed.isEmpty)
-        #expect(mixed.apply(to: "pu do i Pudo") == "pu do i PUDO")
+        #expect(mixed.apply(to: "ko pt i Kopt") == "ko pt i KOPT")
     }
 
     @Test func isIdempotent() throws {
         var d = UserDictionary()
-        try d.upsert(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")]))
-        try d.upsert(DictionaryTerm("PUDO", aliases: [DictionaryAlias("Pudo"), DictionaryAlias("pu do")]))
-        try d.upsert(DictionaryTerm("InPost", aliases: [DictionaryAlias("in"), DictionaryAlias("in post")]))
+        try d.upsert(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")]))
+        try d.upsert(DictionaryTerm("KOPT", aliases: [DictionaryAlias("Kopt"), DictionaryAlias("ko pt")]))
+        try d.upsert(DictionaryTerm("Ontrack", aliases: [DictionaryAlias("on"), DictionaryAlias("on track")]))
         try d.upsert(DictionaryTerm("A", aliases: [DictionaryAlias("b")]))
         try d.upsert(DictionaryTerm("CPP", aliases: [DictionaryAlias("c++ (x)")]))
-        try d.upsert(DictionaryTerm("Jarl", aliases: [DictionaryAlias("Jarla")]))
-        try d.upsert(DictionaryTerm("Genesys", aliases: [DictionaryAlias("Dżenesis")]))
+        try d.upsert(DictionaryTerm("Dorn", aliases: [DictionaryAlias("Dorna")]))
+        try d.upsert(DictionaryTerm("Orbit", aliases: [DictionaryAlias("Żorbit")]))
         let r = ReplacementRules(d)
-        let texts = ["Zoim mówi", "zOiM", "w Pudo obok", "pu dowolny", "pu do.", "Jarlań", "in post i in", "b", "c++ (x) i cccc",
-                     "Mówię o Dżenesis".decomposedStringWithCanonicalMapping, "x\u{0301}yz", ""]
+        let texts = ["Rokm mówi", "rOkM", "w Kopt obok", "ko ptwolny", "ko pt.", "Dornań", "on track i on", "b", "c++ (x) i cccc",
+                     "Mówię o Żorbit".decomposedStringWithCanonicalMapping, "x\u{0301}yz", ""]
         for x in texts {
             let once = r.apply(to: x)
             #expect(scalars(r.apply(to: once)) == scalars(once), "\(x)")
         }
-        #expect(r.apply(to: "Zoim i Pudo w in post, b") == "Zowie i PUDO w InPost, A")
+        #expect(r.apply(to: "Rokm i Kopt w on track, b") == "Nimbu i KOPT w Ontrack, A")
     }
 
     @Test func specialCharactersInAliasAreLiteral() {
@@ -236,13 +236,13 @@ import Testing
     }
 
     @Test func nfdTextMatchesNfcAlias() {
-        let r = rules(DictionaryTerm("Genesys", aliases: [DictionaryAlias("Dżenesis")]))
-        let nfd = "Mówię o Dżenesis".decomposedStringWithCanonicalMapping
-        #expect(scalars(nfd) != scalars("Mówię o Dżenesis".precomposedStringWithCanonicalMapping))
-        #expect(scalars(r.apply(to: nfd)) == scalars("Mówię o Genesys".precomposedStringWithCanonicalMapping))
+        let r = rules(DictionaryTerm("Orbit", aliases: [DictionaryAlias("Żorbit")]))
+        let nfd = "Mówię o Żorbit".decomposedStringWithCanonicalMapping
+        #expect(scalars(nfd) != scalars("Mówię o Żorbit".precomposedStringWithCanonicalMapping))
+        #expect(scalars(r.apply(to: nfd)) == scalars("Mówię o Orbit".precomposedStringWithCanonicalMapping))
         // Alias w NFD (np. ręcznie wpisany do dictionary.json z pominięciem upsert) też trafia w tekst NFC.
-        let nfdAlias = rules(DictionaryTerm("Genesys", aliases: [DictionaryAlias("Dżenesis".decomposedStringWithCanonicalMapping)]))
-        #expect(nfdAlias.apply(to: "o Dżenesis".precomposedStringWithCanonicalMapping) == "o Genesys")
+        let nfdAlias = rules(DictionaryTerm("Orbit", aliases: [DictionaryAlias("Żorbit".decomposedStringWithCanonicalMapping)]))
+        #expect(nfdAlias.apply(to: "o Żorbit".precomposedStringWithCanonicalMapping) == "o Orbit")
     }
 
     @Test func combiningMarkContinuesTheWord() {
@@ -252,26 +252,26 @@ import Testing
     }
 
     @Test func emptyRulesReturnSameTranscript() {
-        let nfd = "Mówię o Dżenesis".decomposedStringWithCanonicalMapping
-        let t = transcript([utt(nfd, .me, at: 3, flagged: true), utt("Zoim", .them, at: 7, echo: true)])
+        let nfd = "Mówię o Żorbit".decomposedStringWithCanonicalMapping
+        let t = transcript([utt(nfd, .me, at: 3, flagged: true), utt("Rokm", .them, at: 7, echo: true)])
         for r in [ReplacementRules(UserDictionary()),
-                  rules(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim", risky: true, enabled: false)]))] {
+                  rules(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm", risky: true, enabled: false)]))] {
             #expect(r.isEmpty)
             let out = Replacement.apply(t, rules: r)
             #expect(out == t)
             #expect(scalars(out.utterances[0].text) == scalars(nfd))
-            #expect(out.utterances[1].text == "Zoim")
+            #expect(out.utterances[1].text == "Rokm")
         }
     }
 
     @Test func transcriptReplacementKeepsWordsAndTimes() {
-        var u = utt("Zoim mówi", .them, at: 5, flagged: true, echo: true)
-        u.words = [Word(text: "Zoim", start: 5, end: 5.4), Word(text: "mówi", start: 5.5, end: 6)]
+        var u = utt("Rokm mówi", .them, at: 5, flagged: true, echo: true)
+        u.words = [Word(text: "Rokm", start: 5, end: 5.4), Word(text: "mówi", start: 5.5, end: 6)]
         u.approximateTiming = true
         let t = Transcript(utterances: [u, utt("bez zmian", .me, at: 9)],
                            failedChunks: [ChunkFailure(track: "system", index: 2, start: 60, end: 90, error: "x")])
-        let out = Replacement.apply(t, rules: rules(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoim")])))
-        #expect(out.utterances.map(\.text) == ["Zowie mówi", "bez zmian"])
+        let out = Replacement.apply(t, rules: rules(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")])))
+        #expect(out.utterances.map(\.text) == ["Nimbu mówi", "bez zmian"])
         #expect(out.failedChunks == t.failedChunks)
         for (a, b) in zip(out.utterances, t.utterances) {
             #expect(a.words == b.words)

@@ -7,7 +7,7 @@ public enum TermPriority: String, Codable, CaseIterable, Sendable { case high, n
 
 public struct DictionaryAlias: Codable, Equatable, Sendable {
     public var text: String
-    /// Alias, który może być zwykłym słowem („pu do"); z importu przychodzi wyłączony.
+    /// Alias, który może być zwykłym słowem („ko pt"); z importu przychodzi wyłączony.
     public var risky: Bool
     public var enabled: Bool
 
@@ -114,7 +114,7 @@ public struct UserDictionary: Codable, Equatable, Sendable {
 }
 
 public extension UserDictionary {
-    /// Alias, który różni się od swojego Terma tylko wielkością liter (np. „Pudo" → „PUDO"): podmiana normalizuje zapis i jest poprawna,
+    /// Alias, który różni się od swojego Terma tylko wielkością liter (np. „Kopt" → „KOPT"): podmiana normalizuje zapis i jest poprawna,
     /// choć liczenie bez rozróżniania wielkości liter nadal widzi Alias w wyniku. Odbiór `dictionary-check` nie wymaga tu zera (F9).
     static func aliasOnlyNormalizesCase(alias: String, term: String) -> Bool {
         key(alias) == key(term)

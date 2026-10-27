@@ -35,7 +35,7 @@ public enum LanguageGuard {
         }
     }
 
-    /// Auto: wypowiedź, w której większość liter nie jest łacińska, to bełkot (Granola „Multi" na polskim → cyrylica).
+    /// Auto: wypowiedź, w której większość liter nie jest łacińska, to bełkot (tryb wielojęzyczny na polskim → cyrylica).
     /// Zwraca język dominującego obcego alfabetu (`ru`, `el`, `ja`…, a dla nieznanego `zz`); za mało liter albo większość
     /// łacińska → `nil` (jeden cudzy wyraz w polskim zdaniu nie jest bełkotem).
     public static func nonLatinScript(_ text: String) -> LanguageCode? {

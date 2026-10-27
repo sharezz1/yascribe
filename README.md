@@ -116,8 +116,6 @@ Wymagania: macOS 27.
 
 **Pomysły bez terminu:** czat nad spotkaniem i archiwum · rozpoznawanie rozmówców i zakładka z zadaniami · punkty notatki z odnośnikiem do transkryptu · MCP dla Claude i eksport do markdown · dyktowanie na żywo · wbudowany model tekstowy · Google Calendar, Outlook, Slack · notaryzacja.
 
-Szczegółowa mapa faz i statusów: [docs/superpowers/ROADMAP.md](docs/superpowers/ROADMAP.md).
-
 ## Budowanie
 
 Wystarczą Command Line Tools (Swift 6.4), bez Xcode.
@@ -128,8 +126,6 @@ scripts/run.sh          # buduje i uruchamia z danymi w .devdata/
 scripts/test.sh         # jedyny sposób uruchamiania testów
 scripts/bundle.sh       # składa .build/Yascribe.app
 ```
-
-Wymagania: [docs/wymagania.md](docs/wymagania.md); plany i stan faz: [docs/superpowers/ROADMAP.md](docs/superpowers/ROADMAP.md).
 
 ## Nazwa i znak
 

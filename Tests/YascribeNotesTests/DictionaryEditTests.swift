@@ -4,8 +4,8 @@ import Testing
 
 @Suite struct DictionaryEditTests {
     @Test func failedDictionarySavePreservesDraftAndAllowsRetry() {
-        let before = UserDictionary(terms: [DictionaryTerm("Zowie")])
-        let edited = UserDictionary(terms: [DictionaryTerm("Zowie"), DictionaryTerm("Genesys")])
+        let before = UserDictionary(terms: [DictionaryTerm("Nimbu")])
+        let edited = UserDictionary(terms: [DictionaryTerm("Nimbu"), DictionaryTerm("Orbit")])
         var memory = before
         var saves = 0
         var failing = true
@@ -35,16 +35,16 @@ import Testing
         #expect(pb.message == "“zoomem” is already an alias of “Zoom”.")
         // (a) Alias edytowanego Terma = cudzy Term.
         thrown = nil
-        do { try d.upsert(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoom")])) } catch { thrown = error }
+        do { try d.upsert(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Zoom")])) } catch { thrown = error }
         let a = try #require(thrown)
-        let pa = DictionaryEdit.presentation(of: a, draftTerm: "Zowie")
+        let pa = DictionaryEdit.presentation(of: a, draftTerm: "Nimbu")
         #expect(pa.field == .alias)
     }
 
     @Test func otherErrorsLandOnTheirFields() {
         #expect(DictionaryEdit.presentation(of: .emptyTerm, draftTerm: "").field == .term)
         #expect(DictionaryEdit.presentation(of: .duplicateTerm("X"), draftTerm: "X").field == .term)
-        #expect(DictionaryEdit.presentation(of: .aliasTaken(alias: "Zoey", by: "Zowie"), draftTerm: "Other").message == "“Zoey” already belongs to “Zowie”.")
+        #expect(DictionaryEdit.presentation(of: .aliasTaken(alias: "Roky", by: "Nimbu"), draftTerm: "Other").message == "“Roky” already belongs to “Nimbu”.")
         #expect(DictionaryEdit.presentation(of: .invalidCharacters("#x"), draftTerm: " #x ").field == .term)
         #expect(DictionaryEdit.presentation(of: .invalidCharacters("#y"), draftTerm: "X").field == .alias)
     }

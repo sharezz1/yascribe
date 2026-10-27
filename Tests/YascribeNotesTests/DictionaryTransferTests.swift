@@ -13,34 +13,34 @@ import Testing
     }
 
     @Test func vocabularyTiersMapToPriorities() {
-        let vocab = "# header\n# ====== T1 — core ======\n# --- group ---\nGenesys\n\n# ====== T3 — tail ======\nZowie\n"
+        let vocab = "# header\n# ====== T1 — core ======\n# --- group ---\nOrbit\n\n# ====== T3 — tail ======\nNimbu\n"
         let r = import1(vocab)
-        #expect(term(r.dictionary, "Genesys")?.priority == .high)
-        #expect(term(r.dictionary, "Zowie")?.priority == .low)
+        #expect(term(r.dictionary, "Orbit")?.priority == .high)
+        #expect(term(r.dictionary, "Nimbu")?.priority == .low)
         #expect(r.report.termsAdded == 2)
     }
 
     @Test func replacementsAddAliasesToTerms() {
-        let repl = "# ---------- 1. Names ----------\nDżenesis\tGenesys\nGenezis\tGenesys\n"
-        let r = import1("# ====== T1 — core ======\nGenesys\n", repl)
-        #expect(term(r.dictionary, "Genesys")?.aliases == [DictionaryAlias("Dżenesis"), DictionaryAlias("Genezis")])
-        #expect(term(r.dictionary, "Genesys")?.priority == .high)
+        let repl = "# ---------- 1. Names ----------\nŻorbit\tOrbit\nOrbix\tOrbit\n"
+        let r = import1("# ====== T1 — core ======\nOrbit\n", repl)
+        #expect(term(r.dictionary, "Orbit")?.aliases == [DictionaryAlias("Żorbit"), DictionaryAlias("Orbix")])
+        #expect(term(r.dictionary, "Orbit")?.priority == .high)
         #expect(r.report.termsAdded == 1)
         #expect(r.report.aliasesAdded == 2)
         #expect(r.report.summary == "1 terms, 2 aliases, 0 risky left off, 0 conflicts, 0 rejected")
     }
 
     @Test func termsOnlyInReplacementsGetLowPriority() {
-        let r = import1(nil, "Zołwi\tZowie\n")
-        #expect(term(r.dictionary, "Zowie")?.priority == .low)
+        let r = import1(nil, "Rokwi\tNimbu\n")
+        #expect(term(r.dictionary, "Nimbu")?.priority == .low)
         #expect(r.report.termsAdded == 1)
     }
 
     @Test func riskySectionImportsAliasesDisabled() {
-        let repl = "A\tGenesys\n#! ---------- 8. RISKY ----------\n#! comment\npu do\tPudo\n"
+        let repl = "A\tOrbit\n#! ---------- 8. RISKY ----------\n#! comment\nko pt\tKopt\n"
         let r = import1(nil, repl)
-        #expect(term(r.dictionary, "Pudo")?.aliases == [DictionaryAlias("pu do", risky: true, enabled: false)])
-        #expect(term(r.dictionary, "Genesys")?.aliases == [DictionaryAlias("A")])
+        #expect(term(r.dictionary, "Kopt")?.aliases == [DictionaryAlias("ko pt", risky: true, enabled: false)])
+        #expect(term(r.dictionary, "Orbit")?.aliases == [DictionaryAlias("A")])
         #expect(r.report.riskyLeftOff == 1)
     }
 
@@ -56,25 +56,25 @@ import Testing
     }
 
     @Test func aliasEqualToAnotherTermIsReportedNotInserted() {
-        // R1: „genesis" jest Termem, więc nie może być Aliasem „Genesys" (Replacement byłby nieidempotentny).
-        let r = import1("Genesys\nGenesis\n", "genesis\tGenesys\n")
-        #expect(term(r.dictionary, "Genesys")?.aliases.isEmpty == true)
-        #expect(r.report.conflicts == [.init(alias: "genesis", keptBy: "Genesis", skippedFor: "Genesys")])
+        // R1: „orbis" jest Termem, więc nie może być Aliasem „Orbit" (Replacement byłby nieidempotentny).
+        let r = import1("Orbit\nOrbis\n", "orbis\tOrbit\n")
+        #expect(term(r.dictionary, "Orbit")?.aliases.isEmpty == true)
+        #expect(r.report.conflicts == [.init(alias: "orbis", keptBy: "Orbis", skippedFor: "Orbit")])
         #expect(r.report.aliasesAdded == 0)
     }
 
     @Test func termsMergeIgnoringCaseAndKeepExistingPriority() throws {
         var d = UserDictionary()
-        try d.upsert(DictionaryTerm("genesys", priority: .normal))
-        let r = import1("# ====== T1 — core ======\nGenesys\n", nil, into: d)
+        try d.upsert(DictionaryTerm("orbit", priority: .normal))
+        let r = import1("# ====== T1 — core ======\nOrbit\n", nil, into: d)
         #expect(r.dictionary.terms.count == 1)
         #expect(r.dictionary.terms.first?.priority == .normal)
         #expect(r.report == DictionaryImportReport())
     }
 
     @Test func importIsIdempotent() {
-        let vocab = "# ====== T1 — core ======\nGenesys\n# ====== T3 — tail ======\nZowie\n"
-        let repl = "Dżenesis\tGenesys\nx\tAlpha\n#! ---------- risky ----------\npu do\tPudo\n"
+        let vocab = "# ====== T1 — core ======\nOrbit\n# ====== T3 — tail ======\nNimbu\n"
+        let repl = "Żorbit\tOrbit\nx\tAlpha\n#! ---------- risky ----------\nko pt\tKopt\n"
         let first = import1(vocab, repl)
         let second = import1(vocab, repl, into: first.dictionary)
         #expect(second.dictionary == first.dictionary)
@@ -83,8 +83,8 @@ import Testing
     }
 
     @Test func reimportKeepsUserEdits() throws {
-        let vocab = "# ====== T1 — core ======\nPudo\n"
-        let repl = "#! ---------- risky ----------\npu do\tPudo\n"
+        let vocab = "# ====== T1 — core ======\nKopt\n"
+        let repl = "#! ---------- risky ----------\nko pt\tKopt\n"
         var d = import1(vocab, repl).dictionary
         d.terms[0].priority = .low
         d.terms[0].aliases[0].enabled = true
@@ -92,7 +92,7 @@ import Testing
         let again = import1(vocab, repl, into: d)
         #expect(again.dictionary == d)
         #expect(again.dictionary.terms[0].priority == .low)
-        #expect(again.dictionary.terms[0].aliases == [DictionaryAlias("pu do", risky: true, enabled: true)])
+        #expect(again.dictionary.terms[0].aliases == [DictionaryAlias("ko pt", risky: true, enabled: true)])
         #expect(again.report == DictionaryImportReport())
     }
 
@@ -126,33 +126,33 @@ import Testing
     }
 
     @Test func utf8BOMPreservesTierAndRiskySection() {
-        let vocab = "\u{FEFF}# ====== T1 — core ======\nGenesys\n"
-        let repl = "\u{FEFF}#! ---------- risky ----------\npu do\tPudo\n"
+        let vocab = "\u{FEFF}# ====== T1 — core ======\nOrbit\n"
+        let repl = "\u{FEFF}#! ---------- risky ----------\nko pt\tKopt\n"
         let r = import1(vocab, repl)
-        #expect(term(r.dictionary, "Genesys")?.priority == .high)
+        #expect(term(r.dictionary, "Orbit")?.priority == .high)
         #expect(term(r.dictionary, "\u{FEFF}# ====== T1 — core ======") == nil)
-        #expect(term(r.dictionary, "Pudo")?.aliases == [DictionaryAlias("pu do", risky: true, enabled: false)])
+        #expect(term(r.dictionary, "Kopt")?.aliases == [DictionaryAlias("ko pt", risky: true, enabled: false)])
         #expect(r.report.riskyLeftOff == 1)
     }
 
     @Test func multiFileImportResetsSectionsAndHandlesEachBOM() {
         let r = DictionaryTransfer.importFiles(
-            vocabularies: ["# ====== T3 — tail ======\nZowie\n", "\u{FEFF}Genesys\n"],
-            replacements: ["#! ---------- risky ----------\npu do\tPudo\n", "\u{FEFF}Dżenesis\tGenesys\n"],
+            vocabularies: ["# ====== T3 — tail ======\nNimbu\n", "\u{FEFF}Orbit\n"],
+            replacements: ["#! ---------- risky ----------\nko pt\tKopt\n", "\u{FEFF}Żorbit\tOrbit\n"],
             into: UserDictionary())
         // Tier i sekcja risky z pierwszego pliku nie przechodzą do drugiego; BOM drugiego pliku nie psuje pierwszej linii.
-        #expect(term(r.dictionary, "Zowie")?.priority == .low)
-        #expect(term(r.dictionary, "Genesys")?.priority == .normal)
-        #expect(term(r.dictionary, "Pudo")?.aliases == [DictionaryAlias("pu do", risky: true, enabled: false)])
-        #expect(term(r.dictionary, "Genesys")?.aliases == [DictionaryAlias("Dżenesis")])
+        #expect(term(r.dictionary, "Nimbu")?.priority == .low)
+        #expect(term(r.dictionary, "Orbit")?.priority == .normal)
+        #expect(term(r.dictionary, "Kopt")?.aliases == [DictionaryAlias("ko pt", risky: true, enabled: false)])
+        #expect(term(r.dictionary, "Orbit")?.aliases == [DictionaryAlias("Żorbit")])
         #expect(r.report.riskyLeftOff == 1)
     }
 
     @Test func replacementsRowWithExtraColumnsIsRejected() {
         // R15b: trzecia niepusta kolumna = wiersz poza formatem `fraza<TAB>zapis`: nie jest czytany jako dwie pierwsze kolumny.
-        let r = import1(nil, "Zoim\tZowie\tnote\nJarla\tJarek\t\nZoey\tZowie\n")
-        #expect(term(r.dictionary, "Zowie")?.aliases == [DictionaryAlias("Zoey")])
-        #expect(term(r.dictionary, "Jarek")?.aliases == [DictionaryAlias("Jarla")]) // pusta trzecia kolumna (ogon tabulatora) jest dozwolona
+        let r = import1(nil, "Rokm\tNimbu\tnote\nDorna\tDorek\t\nRoky\tNimbu\n")
+        #expect(term(r.dictionary, "Nimbu")?.aliases == [DictionaryAlias("Roky")])
+        #expect(term(r.dictionary, "Dorek")?.aliases == [DictionaryAlias("Dorna")]) // pusta trzecia kolumna (ogon tabulatora) jest dozwolona
         #expect(r.report.rejected == 1)
         #expect(r.report.aliasesAdded == 2)
         #expect(r.report.summary == "2 terms, 2 aliases, 0 risky left off, 0 conflicts, 1 rejected")
@@ -173,10 +173,10 @@ import Testing
     }
 
     @Test func riskySectionEndsAtNextHeader() {
-        let repl = "#! ---------- risky ----------\n#! note\npu do\tPudo\n# plain comment\n# ---------- 9. Names ----------\nDżenesis\tGenesys\n"
+        let repl = "#! ---------- risky ----------\n#! note\nko pt\tKopt\n# plain comment\n# ---------- 9. Names ----------\nŻorbit\tOrbit\n"
         let r = import1(nil, repl)
-        #expect(term(r.dictionary, "Pudo")?.aliases == [DictionaryAlias("pu do", risky: true, enabled: false)])
-        #expect(term(r.dictionary, "Genesys")?.aliases == [DictionaryAlias("Dżenesis")])
+        #expect(term(r.dictionary, "Kopt")?.aliases == [DictionaryAlias("ko pt", risky: true, enabled: false)])
+        #expect(term(r.dictionary, "Orbit")?.aliases == [DictionaryAlias("Żorbit")])
     }
 
     @Test func exportRoundTripsCommentPrefixes() throws {

@@ -35,7 +35,7 @@ kontrolce, która zachowuje się „nie tak”? Są dwa typowe objawy:
 
 - **Wygląda jak strona internetowa.** Własne przyciski w stylu webowym, własna ramka okna,
   akcje widoczne dopiero po najechaniu kursorem, brak menu. Tak wyglądają aplikacje
-  na Electronie, które zmierzyliśmy (OpenWhispr).
+  na Electronie, które zmierzyliśmy.
 - **Wygląda jak aplikacja z iPhone'a.** Pasek zakładek na dole, wielkie przyciski pod palec,
   wszystko w arkuszach modalnych, brak skrótów klawiszowych, brak menu kontekstowego.
 
@@ -280,11 +280,11 @@ słowach. Od tego zależy wygląd podświetlenia, zaznaczania i menu kontekstowe
 |---|---|---|---|
 | 1 | 🔀 Panele chowają się, gdy aplikacja traci aktywność (✅ panels) | **Pływające okno nagrywania zostaje na ekranie**, gdy aktywny jest Teams czy przeglądarka | Nagrywamy spotkanie, które odbywa się w innej aplikacji. Wskaźnik „Recording / Not recording” i przycisk stop muszą być widoczne właśnie wtedy. Zmierzona awaria bez tego: 70 minut przypadkowego dźwięku (W§1) |
 | 2 | 🔀 Klik w panel zwykle go aktywuje | **Klik w okno nagrywania nie odbiera fokusu** aplikacji ze spotkaniem ⚠️ (AppKit: `NSPanel` z `.nonactivatingPanel`; sam SwiftUI `.windowLevel(.floating)` tego nie daje, do sprawdzenia) | Użytkownik w trakcie rozmowy nie może przez przypadek przełączyć okna Teams |
-| 3 | 🔀 Ustawienia w osobnym oknie, otwieranym z menu aplikacji i skrótem Cmd-, (✅ settings) | **Ustawienia są zakładką w oknie głównym.** Pozycja **Settings…** w menu i **Cmd-,** prowadzą do tej zakładki | Decyzja użytkownika z 2026-09-24 (spec fazy 1, §1.2). Na zrzutach z tego dnia pięciu konkurentów (Narada, Wispr Flow, FluidVoice, MacParakeet, Granola) trzyma Ustawienia w nawigacji bocznej. Zachowujemy to, czego HIG pilnuje ze względu na odkrywalność: pozycję w menu i standardowy skrót |
+| 3 | 🔀 Ustawienia w osobnym oknie, otwieranym z menu aplikacji i skrótem Cmd-, (✅ settings) | **Ustawienia są zakładką w oknie głównym.** Pozycja **Settings…** w menu i **Cmd-,** prowadzą do tej zakładki | Decyzja użytkownika z 2026-09-24 (spec fazy 1, §1.2). Na zrzutach z tego dnia pięć porównywanych aplikacji trzyma Ustawienia w nawigacji bocznej. Zachowujemy to, czego HIG pilnuje ze względu na odkrywalność: pozycję w menu i standardowy skrót |
 
 | 4 | 🔀 Dynamiczne kolory systemowe, bez surowego hex (§6.1, ✅ color) | **Własna ciepła paleta w obszarze treści** (§11.1), jasna i ciemna, zdefiniowana w kodzie jako kolory dynamiczne | Odbiór F15-T13 (2026-10-15): domyślne szare `Form`/`GroupBox` wyglądały „jak Windows 98 z zaokrąglonymi rogami”. Użytkownik wybrał kierunek B. Zostają warianty jasny i ciemny oraz kontrast ≥ 4,5:1, zmierzony dla każdej pary w §11.1. Sidebar i kontrolki systemowe nie są przemalowywane |
 | 5 | 🔀 Akcent aplikacji ustępuje akcentowi użytkownika (✅ color) | **Stały akcent: stonowana zieleń** (`tint` w treści) | Akcent użytkownika (np. niebieski) gryzie się z ciepłym tłem. Kolor nadal niczego nie znaczy sam: każdy stan to ikona i słowo (§11.4) |
-| 6 | 🔀 Jedna rodzina kroju (§5, impeccable) | **New York w dwóch rolach**: tytuł strony i tytuł spotkania (§11.2). Wszystkie etykiety, nagłówki sekcji, przyciski i dane zostają w SF | Wzór: Granola i Wispr Flow. Szeryf w etykietach UI odpadł w teście „product slop” (impeccable, `operate.md`), dlatego jest ograniczony do tytułów. New York jest krojem systemowym (`design: .serif`), więc nie trzeba niczego dołączać |
+| 6 | 🔀 Jedna rodzina kroju (§5, impeccable) | **New York w dwóch rolach**: tytuł strony i tytuł spotkania (§11.2). Wszystkie etykiety, nagłówki sekcji, przyciski i dane zostają w SF | Szeryf w etykietach UI odpadł w teście „product slop” (impeccable, `operate.md`), dlatego jest ograniczony do tytułów. New York jest krojem systemowym (`design: .serif`), więc nie trzeba niczego dołączać |
 | 7 | 🔀 Standardowe style przycisków; bez własnego przycisku o białym tle i czarnym tekście (§4, ✅ buttons) | **Przyciski-pigułki** (`Capsule`, własny `ButtonStyle`). Przycisk drugorzędny w trybie jasnym jest biały z ciemnym tekstem | Część kierunku B. HIG rezerwuje ten wygląd dla stanu „włączony”, dlatego **pigułka nigdy nie jest przełącznikiem**. Przełączniki to systemowy `Toggle(.switch)`, a wybory to `Picker`/`Menu`. Wymiary, fokus z klawiatury i pozycje menu bez zmian |
 
 Każde nowe odstępstwo dopisuj tutaj, z uzasadnieniem opartym na pomiarze albo wymaganiu.
@@ -436,7 +436,7 @@ w dolnym pasku, jak na `b-add.png`.
   zaznaczalny `NSTextView` (D6). **Wstecz i „⋯” są (D5)**; „⋯” zawiera Copy notes, Show in
   Finder i Delete meeting…, a każda z tych akcji jest też w menu aplikacji (§3).
   **Odbiór 2026-10-16 (uwaga 7, decyzja użytkownika; makiety `b-summary0.png`, `b-transcript.png`):**
-  - **cały widok spotkania to jedna przewijana strona** (wzór Granola): tytuł, `MetaLine`, zakładki
+  - **cały widok spotkania to jedna przewijana strona**: tytuł, `MetaLine`, zakładki
     i treść przewijają się razem, pasek przewijania przy krawędzi okna. **Żadnych wewnętrznych
     obszarów przewijania** w kolumnie: edytor My notes, lista transkryptu i notatka rosną z treścią
     (koniec „białego paska” i „panelu po prawej”);
@@ -483,8 +483,7 @@ w dolnym pasku, jak na `b-add.png`.
     startem” (preset ⌄ + Record) i pozycja „Hide Recording Window” odpadają; nagranie zaczyna
     się z karty „Record a meeting” w oknie. Podczas nagrywania nadal bez przycisku zamknięcia (D3).
 - **Settings — stan po odbiorze 2026-10-16 (uwaga 5, zastępuje opis wyżej i obrazek sprzed tej
-  daty):** karta Providers to **lista wszystkich obsługiwanych dostawców jeden pod drugim** (wzór
-  Spokenly), także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, a na końcu „Custom endpoint”.
+  daty):** karta Providers to **lista wszystkich obsługiwanych dostawców jeden pod drugim**, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, a na końcu „Custom endpoint”.
   Wiersz: **logo** w kafelku 32 pt (promień 8, obwódka `line`), nazwa, opis roli
   („Transcription, correction and summary…”, „Scribe v2 transcription · direct API”, „Runs on this
   Mac · correction and summary only, no transcription”), po prawej stan: ✓ „Verified · N models”
@@ -562,7 +561,7 @@ w dolnym pasku, jak na `b-add.png`.
   przechwytywanie naprawdę nie działało). Punkt (2) to decyzja projektanta wynikająca z celu
   wykrywacza (brak uprawnienia → cisza do końca).
 - **Templates** (`b-templates.png`, odbiór 2026-10-16, uwaga 2): układ jak Presets (lista 196 pt +
-  edytor). Szablon to **lista sekcji** (wzór Granola): karta z tytułem (SF 13 Semibold) i
+  edytor). Szablon to **lista sekcji**: karta z tytułem (SF 13 Semibold) i
   instrukcją (`text2`), uchwyt ⋮⋮ do zmiany kolejności, ✕ do usunięcia (to samo w menu
   kontekstowym), pod listą „Add section”. Nad sekcjami opcjonalne pole „About this meeting type”.
   Pola rosną z treścią, bez własnego przewijania (koniec szarego toru paska przewijania). Prompt dla
@@ -628,7 +627,7 @@ Pewność oznaczona: **mocne** (ogłoszenie producenta, recenzja wydanej wersji)
   GitHubie. Tło: krytyka aplikacji na WebView2/Electron za zużycie pamięci.
 - **Natywne aplikacje Maca nadal przeważają — średnie.** W próbce 2440 aplikacji (III 2026)
   70,8% jest natywnych, a 19,3% to Electron. Głośna jest krytyka Electronu za pamięć i baterię.
-- **Ciepły minimalizm w narzędziach do notatek — średnie.** Notion, Granola i Craft mają
+- **Ciepły minimalizm w narzędziach do notatek — średnie.** Popularne narzędzia do notatek mają
   kremowe lub ciepłe tło, szeryfowe tytuły i tekst w sansie, zamiast zimnych szarości. To dokładnie
   kierunek B.
 - **Spokojniejsze interfejsy narzędzi — mocne (Linear).** Refresh Lineara z 2026 przygasza

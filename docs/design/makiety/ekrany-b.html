@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Yascribe — ekrany, kierunek B</title>
-<!-- Makieta wysokiej wierności, kierunek B (ciepły, Granola), po teście „AI slop" (impeccable operate.md, craft-floor.md).
+<!-- Makieta wysokiej wierności, kierunek B (ciepły), po teście „AI slop" (impeccable operate.md, craft-floor.md).
      1 px = 1 pt; render 2×. ?s=home|meeting|presets|settings|add|pill — jasny i ciemny obok siebie.
      Tokeny = docs/design/macos.md §11. -->
 <style>
@@ -286,12 +286,12 @@ const meeting = th => win(th,'m', `<div class="toolbar" style="left:222px">
     <span class="pill" style="height:28px">${I.redo}Regenerate</span>
     <span class="pill" style="height:28px;width:28px;padding:0;justify-content:center">${I.copy}</span></div>
   <div class="note">
-    <p>Przegląd rozbieżności między prognozą a grafikiem na weekend: w sobotę prognoza ~9&nbsp;000 interakcji, w niedzielę ~4&nbsp;000, a grafik daje w niedzielę o ~30% więcej agentów. Osobno: błąd zapisu w Genesys (ID 24) do zgłoszenia.</p>
+    <p>Przegląd rozbieżności między prognozą a grafikiem na weekend: w sobotę prognoza ~9&nbsp;000 interakcji, w niedzielę ~4&nbsp;000, a grafik daje w niedzielę o ~30% więcej agentów. Osobno: błąd zapisu w Orbit (ID 24) do zgłoszenia.</p>
     <h4>Prognoza a grafik</h4>
     <ul><li>Sobota: ~9&nbsp;000 interakcji, 180–240 agentów.</li><li>Niedziela: ~4&nbsp;000 interakcji, 200–300 agentów.</li>
         <li>Oczekiwane: w sobotę około dwa razy więcej agentów niż w niedzielę.</li></ul>
-    <h4>Błąd zapisu w Genesys (osobny wątek)</h4>
-    <ul><li>Zapis zmian kończy się błędem o ID 24; poprawka po stronie Genesys.</li><li>ID agentów zebrane dla zespołu wsparcia.</li></ul>
+    <h4>Błąd zapisu w Orbit (osobny wątek)</h4>
+    <ul><li>Zapis zmian kończy się błędem o ID 24; poprawka po stronie Orbit.</li><li>ID agentów zebrane dla zespołu wsparcia.</li></ul>
     <h4>Następne kroki</h4>
     <ul><li><b>Zbadać logikę przydziału sobota/niedziela</b> (Piotr) <span class="why">— grafik przeczy prognozie, przyczyna nieznana.</span></li>
         <li><b>Zgłosić błąd zapisu ID 24 do wsparcia</b> (Michał) <span class="why">— ID agentów już zebrane.</span></li></ul>
@@ -321,7 +321,7 @@ const presets = th => win(th,'p', `<div class="main"><div class="col" style="wid
       <div class="card">
         <div class="form-row"><label>Model</label>${model('OpenRouter','deepseek/deepseek-v4.1-flash')}</div>
         <div class="form-row" style="align-items:start"><label style="padding-top:8px">Instructions</label>
-          <div><div class="prompt">Keep product names unchanged: Genesys, WFM, InPost.</div>
+          <div><div class="prompt">Keep product names unchanged: Orbit, WFM, Ontrack.</div>
           <div class="t-cap" style="margin-top:6px">Added to the correction prompt.</div></div></div>
       </div>
       <div class="sec-h"><span class="t-head">Summary</span></div>
@@ -484,7 +484,7 @@ const pastRows = `<div class="day">Today</div>
   <div class="day" style="margin-top:18px">Yesterday</div>
   ${row('Scheduling forecast discrepancy with Piotr','16:10 · 42 min · Polish',`<span class="state ok">${I.check}Notes ready</span>`)}`;
 
-/* A: karta dnia nad kartą Record (Granola) */
+/* A: karta dnia nad kartą Record */
 const cuA = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${homeHead}
   <div class="sec-h" style="margin-top:0"><span class="t-head">Coming up</span><span class="link" style="font-size:12px">Open Calendar</span></div>
   <div class="card cu-day" style="margin-bottom:22px"><div class="cu-date"><b>19</b><span>October<br>Monday</span></div>
@@ -564,11 +564,11 @@ const dhead = full => `<div style="display:flex;align-items:center;gap:8px;margi
 const drow = (term, pri, aliases, sel) => `<div class="lrow drow ${sel?'sel':''}"><div class="t"><b>${term}</b><span>${aliases}</span></div><span class="pri ${pri=='High'?'hi':''}">${pri}</span></div>`;
 const off = a => `${a} <i>(risky, off)</i>`;
 const dlist = (selTerm) => `<div class="card" style="overflow:hidden">
-  ${drow('Zowie','High','Zoe <i>(risky, off)</i>, Zoey, Zoim', selTerm)}
-  ${drow('PUDO','High',`pu do, ${off('Pudo')}`)}
-  ${drow('Genesys','High','Genesis, Dżenesis')}
-  ${drow('InPost','High',`in post, ${off('impost')}`)}
-  ${drow('Jarek','Normal','Jarla')}
+  ${drow('Nimbu','High','Rok <i>(risky, off)</i>, Roky, Rokm', selTerm)}
+  ${drow('KOPT','High',`ko pt, ${off('Kopt')}`)}
+  ${drow('Orbit','High','Orbis, Żorbit')}
+  ${drow('Ontrack','High',`on track, ${off('ontrak')}`)}
+  ${drow('Dorek','Normal','Dorna')}
   ${drow('Zoom','Normal','Doomem, Zoomem')}
   ${drow('WFM','Normal','<i>No aliases · hint for the model only</i>')}
   ${drow('Terraform','Low','teraform')}
@@ -591,7 +591,7 @@ const dictEmpty = th => win(th,'d', `<div class="main"><div class="col" style="w
     <div class="dim" style="line-height:20px;max-width:520px">Add the names and words your meetings keep getting wrong. A <b style="font-weight:500;color:var(--text)">term</b> is the correct spelling.
       Its <b style="font-weight:500;color:var(--text)">aliases</b> are the wrong spellings the transcript produces; they are replaced automatically, in every meeting.</div>
     <div style="margin:16px 0 20px;padding:12px 14px;border-radius:10px;background:var(--sunk);display:flex;align-items:center;gap:10px">
-      <span class="dim">Zoey, Zoim</span><span class="faint">→</span><span style="font-weight:600">Zowie</span></div>
+      <span class="dim">Roky, Rokm</span><span class="faint">→</span><span style="font-weight:600">Nimbu</span></div>
     <div style="display:flex;align-items:center;gap:10px"><span class="pill primary lg">${I.plus}New term</span><span class="pill lg">Import…</span>
       <span class="t-cap">Reads vocab_core.txt and replacements.tsv</span></div>
   </div></div></div>`);
@@ -600,17 +600,17 @@ const arow = (a, risky, on) => `<div class="arow"><div class="field"><span class
   <span class="rk">${cbox(risky)}Risky</span><span class="switch ${on?'':'off'}"></span></div>`;
 const dictEdit = th => win(th,'d', dbody(true) + `<div class="scrim"></div><div class="sheet wide">
   <div style="margin-bottom:16px"><div class="t-head" style="font-size:15px;line-height:20px">Edit term</div></div>
-  <div class="form-row"><label class="dim">Term</label><div class="field"><span class="grow">Zowie</span></div></div>
+  <div class="form-row"><label class="dim">Term</label><div class="field"><span class="grow">Nimbu</span></div></div>
   <div class="form-row"><label class="dim">Priority</label><div style="display:flex;align-items:center;gap:10px">${popup('High',120)}<span class="t-cap">Low priority is left out of the prompt first.</span></div></div>
   <div class="sec-h" style="margin:14px 0 6px"><span class="t-head">Aliases</span><span class="t-cap">replaced in every transcript</span></div>
   <div class="card" style="overflow:hidden">
     <div class="arow head"><span>Alias</span><span>Risky</span><span style="text-align:right">On</span></div>
-    ${arow('Zoey',false,true)}${arow('Zoim',false,true)}${arow('Zoe',true,false)}
+    ${arow('Roky',false,true)}${arow('Rokm',false,true)}${arow('Rok',true,false)}
     <div class="addrow" style="padding:8px 14px;gap:10px"><div class="field ${th=='light'?'focus':''}" style="flex:1;height:28px"><span class="grow ${th=='light'?'faint':''}">${th=='light'?'Add alias':'Zoomem'}${th=='light'?'':'<span class="caret"></span>'}</span></div>
       <span class="pill sm off">Add</span></div>
   </div>
   ${th=='light'
-    ? `<div class="t-cap" style="margin:8px 2px 0;line-height:15px"><b>Risky</b> means the alias is also an ordinary word (Zoe is a name). It is added switched off; turn it on only if you accept that it may replace correct text.</div>`
+    ? `<div class="t-cap" style="margin:8px 2px 0;line-height:15px"><b>Risky</b> means the alias is also an ordinary word (Rok is a name). It is added switched off; turn it on only if you accept that it may replace correct text.</div>`
     : `<div class="state bad" style="margin:8px 2px 0;white-space:normal;align-items:flex-start">${I.x}<span>“Zoomem” is already an alias of Zoom. An alias belongs to one term.</span></div>`}
   <div style="display:flex;align-items:center;gap:8px;margin-top:20px"><span class="pill sm" style="color:var(--rec)">Delete term</span><span style="flex:1"></span>
     <span class="pill">Cancel</span><span class="pill primary">Save</span></div>
@@ -625,7 +625,7 @@ const dictImport = th => win(th,'d', dbody(true) + `<div class="scrim"></div><di
     <div class="t-cap" style="margin-top:2px">vocab_core.txt · replacements.tsv</div></div></div>
   <div class="card" style="display:flex;padding:14px 16px">${stat(166,'terms added')}${stat(223,'aliases added')}${stat(12,'risky, left off')}${stat(2,'conflicts')}</div>
   <div class="sec-h" style="margin:16px 0 6px"><span class="t-head">Conflicts</span><span class="t-cap">an alias belongs to one term</span></div>
-  <div class="card" style="overflow:hidden">${cflt('Jarla','Jarek','Jarosław')}${cflt('in post','InPost','Post Office')}</div>
+  <div class="card" style="overflow:hidden">${cflt('Dorna','Dorek','Jarosław')}${cflt('on track','Ontrack','Post Office')}</div>
   <div class="t-cap" style="margin:10px 2px 0;line-height:15px">Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are.</div>
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><span class="pill primary">Done</span></div>
 </div>`);

@@ -2,7 +2,7 @@ import AVFoundation
 import CoreAudio
 import Foundation
 
-/// Układ urządzenia zbiorczego tapa (faza 2.0.2). `.tapOnly` bez wyjścia jako podurządzenia robią OpenWhispr i Chromium;
+/// Układ urządzenia zbiorczego tapa (faza 2.0.2). `.tapOnly` bez wyjścia jako podurządzenia robi Chromium;
 /// jest domyślny od D4 (pomiary M2b). `.withOutputSubdevice` to układ sprzed fazy 2.0.2, zostaje do porównań (`tap-rate`).
 public enum AggregateLayout: Sendable, Equatable {
     case withOutputSubdevice, tapOnly
@@ -45,7 +45,7 @@ public final class SystemTapSource: AudioSource, @unchecked Sendable {
     private let layout: AggregateLayout
 
     /// D4 (2026-10-23): bez wyjścia jako podurządzenia zegar tapa nie idzie za częstotliwością słuchawek (M2b: 48 000 Hz
-    /// przy wyjściu 44 100 i 16 000), tak samo buduje tap Chromium (Wispr Flow).
+    /// przy wyjściu 44 100 i 16 000), tak samo buduje tap Chromium.
     public static let defaultLayout: AggregateLayout = .tapOnly
 
     public init(layout: AggregateLayout = SystemTapSource.defaultLayout) { self.layout = layout }
