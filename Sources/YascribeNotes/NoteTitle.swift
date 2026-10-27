@@ -36,7 +36,7 @@ public enum NoteTitle {
         for label in labels where lower.hasPrefix(label) {
             let rest = title.dropFirst(label.count).drop(while: { $0 == " " })
             guard let sep = rest.first, ":–—-".contains(sep) else { continue }
-            let after = rest.dropFirst().trimmingCharacters(in: .whitespaces)
+            let after = rest.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
             if !after.isEmpty { return after.prefix(1).uppercased() + after.dropFirst() }
         }
         return title
@@ -46,14 +46,14 @@ public enum NoteTitle {
     /// bloku kodu są tolerowane). Brak nagłówka → `title == nil`, `body` = cała odpowiedź.
     public static func parse(_ response: String) -> (title: String?, body: String) {
         var lines = response.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
-        if lines.count >= 2, lines.first!.trimmingCharacters(in: .whitespaces).hasPrefix("```"),
-           lines.last!.trimmingCharacters(in: .whitespaces) == "```" {
+        if lines.count >= 2, lines.first!.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```"),
+           lines.last!.trimmingCharacters(in: .whitespacesAndNewlines) == "```" {
             lines.removeFirst()
             lines.removeLast()
         }
         var seen = 0
         for (i, line) in lines.enumerated() {
-            let t = line.trimmingCharacters(in: .whitespaces)
+            let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if t.isEmpty { continue }
             seen += 1
             if t.hasPrefix("# ") {
@@ -67,13 +67,18 @@ public enum NoteTitle {
     }
 
     static func clean(_ s: String) -> String {
-        s.trimmingCharacters(in: CharacterSet(charactersIn: "*\"“”' ").union(.whitespaces))
+        var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pairs = [("**", "**"), ("*", "*"), ("\"", "\""), ("'", "'"), ("„", "”"), ("«", "»"), ("“", "”"), ("‘", "’")]
+        while let pair = pairs.first(where: { t.hasPrefix($0.0) && t.hasSuffix($0.1) && t.count >= $0.0.count + $0.1.count }) {
+            t = String(t.dropFirst(pair.0.count).dropLast(pair.1.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return t
     }
 
     /// Ręczny > kalendarz > auto > tytuł z notatki > „Untitled meeting". Tytuł z notatki nie nadpisuje istniejącego.
     public static func display(meta: NoteMeta, noteTitle: String?) -> String {
         for c in [meta.manualTitle, meta.calendarEvent?.title, meta.autoTitle, noteTitle] {
-            if let c, !c.trimmingCharacters(in: .whitespaces).isEmpty { return c }
+            if let c, !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return c }
         }
         return untitled
     }

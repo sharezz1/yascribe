@@ -38,15 +38,19 @@ public enum AutoTitle {
         return parts.filter { !$0.isEmpty }.joined(separator: "\n[…]\n")
     }
 
-    /// Pierwsza niepusta linia odpowiedzi, bez `#`, cudzysłowów, gwiazdek i kropki; do 80 znaków.
+    /// Pierwsza sensowna linia odpowiedzi, bez `#`, cudzysłowów, gwiazdek i kropki; do 80 znaków.
     public static func clean(_ reply: String) -> String? {
-        guard let first = reply.components(separatedBy: "\n").map({ $0.trimmingCharacters(in: .whitespaces) })
-            .first(where: { !$0.isEmpty }) else { return nil }
+        guard let first = reply.components(separatedBy: "\n").map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { line in
+                let lower = line.lowercased()
+                return !line.isEmpty && !line.hasPrefix("```") && !lower.hasPrefix("<think") && !lower.hasPrefix("</think")
+            }) else { return nil }
         var t = first
         while t.hasPrefix("#") { t.removeFirst() }
-        t = t.trimmingCharacters(in: CharacterSet(charactersIn: "*\"“”'. ").union(.whitespaces))
+        t = NoteTitle.clean(t.trimmingCharacters(in: CharacterSet(charactersIn: ".").union(.whitespacesAndNewlines)))
+        t = t.trimmingCharacters(in: CharacterSet(charactersIn: ".").union(.whitespacesAndNewlines))
         t = NoteTitle.stripLabel(t)
-        if t.isEmpty || t == NoteTitle.untitled { return nil }
+        if t.isEmpty || t.lowercased() == NoteTitle.untitled.lowercased() { return nil }
         return String(t.prefix(maxLength))
     }
 
