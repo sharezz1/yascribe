@@ -18,3 +18,6 @@
 .claude/.proven-config-version
 .design/
 ruvector.db
+
+# Instrukcje robocze dla Claude Code: lokalne, nie do publicznego repo
+CLAUDE.md
