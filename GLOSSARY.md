@@ -9,15 +9,15 @@ Jeden globalny zbiór terminów użytkownika, wspólny dla wszystkich presetów 
 _Unikaj_: słownik per preset, lista słów
 
 **Term**:
-Poprawny zapis nazwy lub wyrazu domenowego (np. `Nimbu`, `Orbit`, `KOPT`). Może istnieć bez aliasów — wtedy jest tylko podpowiedzią dla modelu.
+Poprawny zapis nazwy lub wyrazu domenowego (np. `Kubernetes`, `PostgreSQL`). Może istnieć bez aliasów — wtedy jest tylko podpowiedzią dla modelu.
 _Unikaj_: słowo kluczowe, fraza, wpis
 
 **Alias**:
-Błędne rozpoznanie przypisane do dokładnie jednego terminu (np. `Roky`, `Rokm` → `Nimbu`). Na jego podstawie działa podmiana.
+Błędne rozpoznanie przypisane do dokładnie jednego terminu (np. `Kuberneti`, `Kubernetis` → `Kubernetes`). Na jego podstawie działa podmiana.
 _Unikaj_: wariant, synonim, zamiennik
 
 **Risky alias**:
-Alias, który jest też zwykłym słowem (np. `Kopt`, `ontrak`), więc podmiana mogłaby zepsuć poprawne zdania. Importowany jako wyłączony (sekcje `#!` w `replacements.tsv`), użytkownik włącza go świadomie.
+Alias, który jest też zwykłym słowem (np. `go` → `Go`), więc podmiana mogłaby zepsuć poprawne zdania. Importowany jako wyłączony (sekcje `#!` w `replacements.tsv`), użytkownik włącza go świadomie.
 _Unikaj_: niebezpieczny alias
 
 **Priority** (terminu):
