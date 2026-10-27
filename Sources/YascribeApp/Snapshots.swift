@@ -470,7 +470,7 @@ enum Snapshots {
                 var terms = [term("Nimbu", .high, [DictionaryAlias("Roky"), DictionaryAlias("Rokm"), DictionaryAlias("Rok", risky: true, enabled: false)]),
                              term("KOPT", .high, [DictionaryAlias("ko pt"), DictionaryAlias("Kopt", risky: true, enabled: false)]),
                              term("Orbit", .high, [DictionaryAlias("Orbis"), DictionaryAlias("Żorbit")]),
-                             term("OnTrack", .high, [DictionaryAlias("on track"), DictionaryAlias("ontrak", risky: true, enabled: false)]),
+                             term("Ontrack", .high, [DictionaryAlias("on track"), DictionaryAlias("ontrak", risky: true, enabled: false)]),
                              term("Dorek", .normal, [DictionaryAlias("Dorna")]),
                              term("Zoom", .normal, [DictionaryAlias("Doomem"), DictionaryAlias("Zoomem")]),
                              term("WFM", .normal),
@@ -497,7 +497,7 @@ enum Snapshots {
                 many.saveError = "Couldn’t save the dictionary: The file couldn’t be saved because the disk is full."
                 try render("dictionary-edit-many-aliases", size: CGSize(width: 500, height: 700), dark: dark, model: model) { DictionaryTermSheet(state: many) }
                 let report = DictionaryImportReport(termsAdded: 166, aliasesAdded: 223, riskyLeftOff: 12, conflicts: [
-                    .init(alias: "Dorna", keptBy: "Dorek", skippedFor: "Jarosław"), .init(alias: "on track", keptBy: "OnTrack", skippedFor: "Post Office")])
+                    .init(alias: "Dorna", keptBy: "Dorek", skippedFor: "Jarosław"), .init(alias: "on track", keptBy: "Ontrack", skippedFor: "Post Office")])
                 try render("dictionary-import-report", size: CGSize(width: 500, height: 480), dark: dark, model: model) {
                     DictionaryImportSheet(report: report, files: ["vocab_core.txt", "replacements.tsv"], onDone: {})
                 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Yascribe — ekrany, kierunek B</title>
-<!-- Makieta wysokiej wierności, kierunek B (ciepły, inne narzędzie), po teście „AI slop" (impeccable operate.md, craft-floor.md).
+<!-- Makieta wysokiej wierności, kierunek B (ciepły), po teście „AI slop" (impeccable operate.md, craft-floor.md).
      1 px = 1 pt; render 2×. ?s=home|meeting|presets|settings|add|pill — jasny i ciemny obok siebie.
      Tokeny = docs/design/macos.md §11. -->
 <style>
@@ -321,7 +321,7 @@ const presets = th => win(th,'p', `<div class="main"><div class="col" style="wid
       <div class="card">
         <div class="form-row"><label>Model</label>${model('OpenRouter','deepseek/deepseek-v4.1-flash')}</div>
         <div class="form-row" style="align-items:start"><label style="padding-top:8px">Instructions</label>
-          <div><div class="prompt">Keep product names unchanged: Orbit, WFM, OnTrack.</div>
+          <div><div class="prompt">Keep product names unchanged: Orbit, WFM, Ontrack.</div>
           <div class="t-cap" style="margin-top:6px">Added to the correction prompt.</div></div></div>
       </div>
       <div class="sec-h"><span class="t-head">Summary</span></div>
@@ -484,7 +484,7 @@ const pastRows = `<div class="day">Today</div>
   <div class="day" style="margin-top:18px">Yesterday</div>
   ${row('Scheduling forecast discrepancy with Piotr','16:10 · 42 min · Polish',`<span class="state ok">${I.check}Notes ready</span>`)}`;
 
-/* A: karta dnia nad kartą Record (inne narzędzie) */
+/* A: karta dnia nad kartą Record */
 const cuA = th => win(th,'m', `<div class="main"><div class="col" style="width:600px">${homeHead}
   <div class="sec-h" style="margin-top:0"><span class="t-head">Coming up</span><span class="link" style="font-size:12px">Open Calendar</span></div>
   <div class="card cu-day" style="margin-bottom:22px"><div class="cu-date"><b>19</b><span>October<br>Monday</span></div>
@@ -567,7 +567,7 @@ const dlist = (selTerm) => `<div class="card" style="overflow:hidden">
   ${drow('Nimbu','High','Rok <i>(risky, off)</i>, Roky, Rokm', selTerm)}
   ${drow('KOPT','High',`ko pt, ${off('Kopt')}`)}
   ${drow('Orbit','High','Orbis, Żorbit')}
-  ${drow('OnTrack','High',`on track, ${off('ontrak')}`)}
+  ${drow('Ontrack','High',`on track, ${off('ontrak')}`)}
   ${drow('Dorek','Normal','Dorna')}
   ${drow('Zoom','Normal','Doomem, Zoomem')}
   ${drow('WFM','Normal','<i>No aliases · hint for the model only</i>')}
@@ -625,7 +625,7 @@ const dictImport = th => win(th,'d', dbody(true) + `<div class="scrim"></div><di
     <div class="t-cap" style="margin-top:2px">vocab_core.txt · replacements.tsv</div></div></div>
   <div class="card" style="display:flex;padding:14px 16px">${stat(166,'terms added')}${stat(223,'aliases added')}${stat(12,'risky, left off')}${stat(2,'conflicts')}</div>
   <div class="sec-h" style="margin:16px 0 6px"><span class="t-head">Conflicts</span><span class="t-cap">an alias belongs to one term</span></div>
-  <div class="card" style="overflow:hidden">${cflt('Dorna','Dorek','Jarosław')}${cflt('on track','OnTrack','Post Office')}</div>
+  <div class="card" style="overflow:hidden">${cflt('Dorna','Dorek','Jarosław')}${cflt('on track','Ontrack','Post Office')}</div>
   <div class="t-cap" style="margin:10px 2px 0;line-height:15px">Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are.</div>
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px"><span class="pill primary">Done</span></div>
 </div>`);

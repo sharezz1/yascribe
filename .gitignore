@@ -21,3 +21,7 @@ ruvector.db
 
 # Instrukcje robocze dla Claude Code: lokalne, nie do publicznego repo
 CLAUDE.md
+docs/superpowers/
+docs/plan.md
+docs/wymagania.md
+docs/brainstorm-asr.md
