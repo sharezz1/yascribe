@@ -4,6 +4,34 @@ import YascribeProviders
 @testable import YascribeNotes
 @testable import YascribeTranscription
 
+@Test func autoTitleRemovesOnlyMatchingQuotePairs() {
+    #expect(AutoTitle.clean("„Prognoza na sobotę”") == "Prognoza na sobotę")
+    #expect(AutoTitle.clean("«Plan zmian»") == "Plan zmian")
+    #expect(AutoTitle.clean("‘Plan zmian’") == "Plan zmian")
+    #expect(AutoTitle.clean("Review of \"Plan B\"") == "Review of \"Plan B\"")
+    #expect(AutoTitle.clean("\"Plan") == "\"Plan")
+    #expect(AutoTitle.clean("**„Plan”**") == "Plan")
+}
+
+@Test func autoTitleRejectsUntitledWithoutCaseSensitivity() {
+    #expect(AutoTitle.clean("untitled meeting") == nil)
+    #expect(AutoTitle.clean(" Untitled meeting. ") == nil)
+}
+
+@Test func autoTitleSkipsFencesAndThinkTags() {
+    for input in ["```", "```markdown", "</think>", "<think>myślę nad tytułem</think>"] {
+        #expect(AutoTitle.clean(input) == nil)
+    }
+    #expect(AutoTitle.clean("```\nForecast gap\n```") == "Forecast gap")
+    #expect(AutoTitle.clean("  <THINK>\n </THINK>\n Forecast gap") == "Forecast gap")
+}
+
+@Test func autoTitleSkipsThinkBlock() {
+    #expect(AutoTitle.clean("<think>\nUżytkownik prosi o tytuł.\n</think>\nPrognoza na sobotę") == "Prognoza na sobotę")
+    #expect(AutoTitle.clean("<think>x</think>\nTytuł") == "Tytuł")
+    #expect(AutoTitle.clean("<think>\nniezamknięte") == nil)
+}
+
 @Test func autoTitleIsStoredOnlyWhenNoTitleExists() async throws {
     let session = tempDir()
     defer { try? FileManager.default.removeItem(at: session) }

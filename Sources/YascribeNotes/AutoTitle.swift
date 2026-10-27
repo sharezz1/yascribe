@@ -38,15 +38,29 @@ public enum AutoTitle {
         return parts.filter { !$0.isEmpty }.joined(separator: "\n[…]\n")
     }
 
-    /// Pierwsza niepusta linia odpowiedzi, bez `#`, cudzysłowów, gwiazdek i kropki; do 80 znaków.
+    /// Pierwsza sensowna linia odpowiedzi, bez `#`, cudzysłowów, gwiazdek i kropki; do 80 znaków.
+    /// Pomija cały blok `<think>\u2026</think>` (liniowo), a nie tylko same znaczniki.
     public static func clean(_ reply: String) -> String? {
-        guard let first = reply.components(separatedBy: "\n").map({ $0.trimmingCharacters(in: .whitespaces) })
-            .first(where: { !$0.isEmpty }) else { return nil }
+        let rawLines = reply.components(separatedBy: "\n")
+        var skippingThink = false
+        var candidateLines: [String] = []
+        for raw in rawLines {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lower = line.lowercased()
+            if lower.hasPrefix("<think") { skippingThink = true }
+            if skippingThink || lower.hasPrefix("</think>") {
+                if lower.contains("</think>") { skippingThink = false }
+                continue
+            }
+            if !line.isEmpty && !line.hasPrefix("```") { candidateLines.append(line) }
+        }
+        guard let first = candidateLines.first else { return nil }
         var t = first
         while t.hasPrefix("#") { t.removeFirst() }
-        t = t.trimmingCharacters(in: CharacterSet(charactersIn: "*\"“”'. ").union(.whitespaces))
+        t = NoteTitle.clean(t.trimmingCharacters(in: CharacterSet(charactersIn: ".").union(.whitespacesAndNewlines)))
+        t = t.trimmingCharacters(in: CharacterSet(charactersIn: ".").union(.whitespacesAndNewlines))
         t = NoteTitle.stripLabel(t)
-        if t.isEmpty || t == NoteTitle.untitled { return nil }
+        if t.isEmpty || t.lowercased() == NoteTitle.untitled.lowercased() { return nil }
         return String(t.prefix(maxLength))
     }
 

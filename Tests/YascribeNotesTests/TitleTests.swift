@@ -2,6 +2,48 @@ import Foundation
 import Testing
 @testable import YascribeNotes
 
+@Test func titleHandlesCRLF() {
+    let result = NoteTitle.parse("# Title\r\nBody\r\n")
+    #expect(result.title == "Title" && result.body == "Body")
+    #expect(NoteTitle.parse("# \r\nBody").title == nil)
+    #expect(NoteTitle.stripLabel("Notes: \r\nplan\r") == "Plan")
+    #expect(NoteTitle.clean("\rTitle\r") == "Title")
+}
+
+@Test func titleRemovesOnlyMatchingDecorationPairs() {
+    #expect(NoteTitle.parse("# Review of \"Plan B\"\nbody").title == "Review of \"Plan B\"")
+    #expect(NoteTitle.parse("# **\"Tytuł\"**\nbody").title == "Tytuł")
+    #expect(NoteTitle.parse("# \"Podsumowanie spotkania: Plan zmian\"\nbody").title == "Plan zmian")
+    for (input, expected) in [("„Plan”", "Plan"), ("«Plan»", "Plan"), ("“Plan”", "Plan"),
+                              ("‘Plan’", "Plan"), ("'Plan'", "Plan"), ("*Plan*", "Plan"), ("**Plan**", "Plan"),
+                              ("\"Plan", "\"Plan"), ("Plan”", "Plan”")] {
+        #expect(NoteTitle.clean(input) == expected)
+    }
+}
+
+@Test func titleStripsUnpairedAsterisksAndListMarkers() {
+    #expect(NoteTitle.clean("* Forecast gap") == "Forecast gap")
+    #expect(NoteTitle.clean("- Forecast gap") == "Forecast gap")
+    #expect(NoteTitle.clean("• Forecast gap") == "Forecast gap")
+    #expect(NoteTitle.clean("**Forecast gap") == "Forecast gap")
+    #expect(NoteTitle.clean("*Plan*") == "Plan")
+    #expect(NoteTitle.parse("# *Plan\nbody").title == "Plan")
+    #expect(NoteTitle.parse("# - Plan zmian\nbody").title == "Plan zmian")
+    // Ozdobniki w środku i niedopasowane cudzysłowy zostają nietknięte.
+    #expect(NoteTitle.clean("Review of \"Plan B\"") == "Review of \"Plan B\"")
+    #expect(NoteTitle.clean("Plan”") == "Plan”")
+    #expect(NoteTitle.parse("# Plan „B” zmian\nbody").title == "Plan „B” zmian")
+}
+
+@Test func titleNormalizesCRLFInBody() {
+    #expect(NoteTitle.parse("# T\r\nA\r\nB\r\n").body == "A\nB")
+    #expect(NoteTitle.parse("# T\rA\rB").body == "A\nB")
+}
+
+@Test func displaySkipsNewlineOnlyTitles() {
+    #expect(NoteTitle.display(meta: NoteMeta(manualTitle: "\r"), noteTitle: nil) == NoteTitle.untitled)
+}
+
 @Test func titleIsTheFirstHeading() {
     let r = NoteTitle.parse("# Scheduling forecast\n\n## Topic\n- x")
     #expect(r.title == "Scheduling forecast")
