@@ -10,7 +10,7 @@ private func build(_ t: Transcript, myNotes: String = "", context: String = "", 
 
 @Test func promptTellsTheModelToAdmitAFragmentedTranscript() throws {
     let p = try #require(build(transcript([utt("Okay, so the forecast.")])))
-    #expect(p.system.contains("inconsistent, fragmentary or garbled")) // jak odmowa inne narzędzie: powiedz to, nie zmyślaj
+    #expect(p.system.contains("inconsistent, fragmentary or garbled")) // jak odmowa innego narzędzia: powiedz to, nie zmyślaj
     #expect(p.system.contains("Never invent"))
 }
 
