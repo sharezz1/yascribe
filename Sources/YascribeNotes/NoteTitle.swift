@@ -47,8 +47,11 @@ public enum NoteTitle {
     public static func parse(_ response: String) -> (title: String?, body: String) {
         let normalized = response.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         var lines = normalized.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
+        let firstNonEmpty = lines.first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let opensWithFence = firstNonEmpty?.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```") ?? false
+        let closesWithFence = lines.last?.trimmingCharacters(in: .whitespacesAndNewlines) == "```"
         if lines.count >= 2, lines.first!.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```"),
-           lines.last!.trimmingCharacters(in: .whitespacesAndNewlines) == "```" {
+           closesWithFence {
             lines.removeFirst()
             lines.removeLast()
         }
@@ -59,7 +62,16 @@ public enum NoteTitle {
             seen += 1
             if t.hasPrefix("# ") {
                 let title = stripLabel(clean(String(t.dropFirst(2))))
-                let body = lines[(i + 1)...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                var bodyLines = Array(lines[0..<i] + lines[(i + 1)...])
+                if opensWithFence && !closesWithFence {
+                    if let fenceIdx = bodyLines.firstIndex(where: {
+                        let s = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                        return !s.isEmpty && s.hasPrefix("```")
+                    }) {
+                        bodyLines.remove(at: fenceIdx)
+                    }
+                }
+                let body = bodyLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
                 return (title.isEmpty ? nil : title, body)
             }
             if seen >= 3 { break }

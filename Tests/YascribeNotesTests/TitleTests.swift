@@ -53,10 +53,26 @@ import Testing
 @Test func titleToleratesPreambleAndCodeFence() {
     let a = NoteTitle.parse("Sure, here is your note:\n\n# **Forecast gap**\nBody")
     #expect(a.title == "Forecast gap")
-    #expect(a.body == "Body")
+    #expect(a.body == "Sure, here is your note:\n\nBody")
     let b = NoteTitle.parse("```markdown\n# Fenced\nBody line\n```")
     #expect(b.title == "Fenced")
     #expect(b.body == "Body line")
+}
+
+@Test func titleKeepsPreambleBeforeHeading() {
+    let r = NoteTitle.parse("Uwaga: transkrypt niespójny.\n# Plan\nTreść")
+    #expect(r.title == "Plan")
+    #expect(r.body == "Uwaga: transkrypt niespójny.\nTreść")
+}
+
+@Test func titleDropsUnclosedOpeningFence() {
+    let r = NoteTitle.parse("```\n# Plan\nTreść")
+    #expect(r.title == "Plan")
+    #expect(r.body == "Treść")
+    // Tekst przed niezamkniętym ogrodzeniem zostaje, samo ogrodzenie znika.
+    let withPreamble = NoteTitle.parse("Uwaga.\n```\n# Plan\nTreść")
+    #expect(withPreamble.title == "Plan")
+    #expect(withPreamble.body == "Uwaga.\n```\nTreść")
 }
 
 @Test func noHeadingMeansNoTitle() {
