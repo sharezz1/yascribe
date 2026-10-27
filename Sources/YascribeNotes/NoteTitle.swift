@@ -45,7 +45,8 @@ public enum NoteTitle {
     /// Tytuł = pierwszy nagłówek `# ` w pierwszych trzech niepustych liniach odpowiedzi (wstęp i ogrodzenie
     /// bloku kodu są tolerowane). Brak nagłówka → `title == nil`, `body` = cała odpowiedź.
     public static func parse(_ response: String) -> (title: String?, body: String) {
-        var lines = response.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
+        let normalized = response.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        var lines = normalized.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
         if lines.count >= 2, lines.first!.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```"),
            lines.last!.trimmingCharacters(in: .whitespacesAndNewlines) == "```" {
             lines.removeFirst()
@@ -68,7 +69,17 @@ public enum NoteTitle {
 
     static func clean(_ s: String) -> String {
         var t = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        let pairs = [("**", "**"), ("*", "*"), ("\"", "\""), ("'", "'"), ("„", "”"), ("«", "»"), ("“", "”"), ("‘", "’")]
+        // Znaczniki listy na początku (razem z jedną spacją) zostają zdjęte przed parowaniem ozdobników.
+        let bullets = ["* ", "- ", "\u{2022} "]
+        for b in bullets where t.hasPrefix(b) {
+            t = String(t.dropFirst(b.count))
+            break
+        }
+        // Nieparowane gwiazdki z końców (parytet ze starym zachowaniem z master).
+        while t.hasPrefix("*") { t.removeFirst() }
+        while t.hasSuffix("*") { t.removeLast() }
+        t = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pairs = [("**", "**"), ("\"", "\""), ("'", "'"), ("„", "”"), ("«", "»"), ("“", "”"), ("‘", "’")]
         while let pair = pairs.first(where: { t.hasPrefix($0.0) && t.hasSuffix($0.1) && t.count >= $0.0.count + $0.1.count }) {
             t = String(t.dropFirst(pair.0.count).dropLast(pair.1.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         }

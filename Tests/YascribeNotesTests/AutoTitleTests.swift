@@ -26,6 +26,12 @@ import YascribeProviders
     #expect(AutoTitle.clean("  <THINK>\n </THINK>\n Forecast gap") == "Forecast gap")
 }
 
+@Test func autoTitleSkipsThinkBlock() {
+    #expect(AutoTitle.clean("<think>\nUżytkownik prosi o tytuł.\n</think>\nPrognoza na sobotę") == "Prognoza na sobotę")
+    #expect(AutoTitle.clean("<think>x</think>\nTytuł") == "Tytuł")
+    #expect(AutoTitle.clean("<think>\nniezamknięte") == nil)
+}
+
 @Test func autoTitleIsStoredOnlyWhenNoTitleExists() async throws {
     let session = tempDir()
     defer { try? FileManager.default.removeItem(at: session) }

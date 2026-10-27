@@ -39,12 +39,22 @@ public enum AutoTitle {
     }
 
     /// Pierwsza sensowna linia odpowiedzi, bez `#`, cudzysłowów, gwiazdek i kropki; do 80 znaków.
+    /// Pomija cały blok `<think>\u2026</think>` (liniowo), a nie tylko same znaczniki.
     public static func clean(_ reply: String) -> String? {
-        guard let first = reply.components(separatedBy: "\n").map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
-            .first(where: { line in
-                let lower = line.lowercased()
-                return !line.isEmpty && !line.hasPrefix("```") && !lower.hasPrefix("<think") && !lower.hasPrefix("</think")
-            }) else { return nil }
+        let rawLines = reply.components(separatedBy: "\n")
+        var skippingThink = false
+        var candidateLines: [String] = []
+        for raw in rawLines {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lower = line.lowercased()
+            if lower.hasPrefix("<think") { skippingThink = true }
+            if skippingThink || lower.hasPrefix("</think>") {
+                if lower.contains("</think>") { skippingThink = false }
+                continue
+            }
+            if !line.isEmpty && !line.hasPrefix("```") { candidateLines.append(line) }
+        }
+        guard let first = candidateLines.first else { return nil }
         var t = first
         while t.hasPrefix("#") { t.removeFirst() }
         t = NoteTitle.clean(t.trimmingCharacters(in: CharacterSet(charactersIn: ".").union(.whitespacesAndNewlines)))
