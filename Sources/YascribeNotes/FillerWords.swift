@@ -1,6 +1,6 @@
 import Foundation
 
-/// Przerywniki w poprawionym transkrypcie („yyy", „mhm"): deterministyczny filtr słów z listy (wzór: FluidVoice, `removeFillerWords`),
+/// Przerywniki w poprawionym transkrypcie („yyy", „mhm"): deterministyczny filtr słów z listy,
 /// bez modelu. Działa na tekście po korekcie (F20 P2); surowy transkrypt zostaje nietknięty.
 public enum FillerWords {
     /// Same dźwięki bez znaczenia (nie „no", „tak", „wiesz", „znaczy"): polskie i angielskie. Lista użytkownika w Settings zastępuje tę.

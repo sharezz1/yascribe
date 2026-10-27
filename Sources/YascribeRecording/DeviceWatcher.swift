@@ -2,7 +2,7 @@ import CoreAudio
 import Foundation
 
 /// Obserwator zmiany domyślnego urządzenia (wejścia albo wyjścia). Bez niego
-/// przepięcie słuchawek urywa nagranie (W§1 🆕). Narada instaluje trzy takie.
+/// przepięcie słuchawek urywa nagranie (W§1 🆕).
 final class DeviceWatcher: @unchecked Sendable {
     private var addr: AudioObjectPropertyAddress
     private let object: AudioObjectID

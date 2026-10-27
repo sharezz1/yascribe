@@ -467,11 +467,11 @@ enum Snapshots {
                 model.dictionary = UserDictionary()
                 try render("dictionary-empty", size: CGSize(width: 900, height: 520), dark: dark, model: model) { DictionaryView() }
                 func term(_ t: String, _ p: TermPriority, _ a: [DictionaryAlias] = []) -> DictionaryTerm { DictionaryTerm(t, priority: p, aliases: a) }
-                var terms = [term("Zowie", .high, [DictionaryAlias("Zoey"), DictionaryAlias("Zoim"), DictionaryAlias("Zoe", risky: true, enabled: false)]),
-                             term("PUDO", .high, [DictionaryAlias("pu do"), DictionaryAlias("Pudo", risky: true, enabled: false)]),
-                             term("Genesys", .high, [DictionaryAlias("Genesis"), DictionaryAlias("Dżenesis")]),
-                             term("InPost", .high, [DictionaryAlias("in post"), DictionaryAlias("impost", risky: true, enabled: false)]),
-                             term("Jarek", .normal, [DictionaryAlias("Jarla")]),
+                var terms = [term("Nimbu", .high, [DictionaryAlias("Roky"), DictionaryAlias("Rokm"), DictionaryAlias("Rok", risky: true, enabled: false)]),
+                             term("KOPT", .high, [DictionaryAlias("ko pt"), DictionaryAlias("Kopt", risky: true, enabled: false)]),
+                             term("Orbit", .high, [DictionaryAlias("Orbis"), DictionaryAlias("Żorbit")]),
+                             term("Ontrack", .high, [DictionaryAlias("on track"), DictionaryAlias("ontrak", risky: true, enabled: false)]),
+                             term("Dorek", .normal, [DictionaryAlias("Dorna")]),
                              term("Zoom", .normal, [DictionaryAlias("Doomem"), DictionaryAlias("Zoomem")]),
                              term("WFM", .normal),
                              term("Terraform", .low, [DictionaryAlias("teraform")])]
@@ -489,35 +489,35 @@ enum Snapshots {
                 let termEditing = DictionaryViewState()
                 termEditing.open(terms[0])
                 termEditing.newAlias = "Zoomem"
-                termEditing.show(.aliasTaken(alias: "Zoomem", by: "Zoom"), draftText: "Zowie")
+                termEditing.show(.aliasTaken(alias: "Zoomem", by: "Zoom"), draftText: "Nimbu")
                 try render("dictionary-edit", size: CGSize(width: 500, height: 560), dark: dark, model: model) { DictionaryTermSheet(state: termEditing) }
                 // R22/I4: 40 Aliasów — lista w arkuszu przewija się, Save/Cancel/Delete zostają na widoku; plus komunikat nieudanego zapisu.
                 let many = DictionaryViewState()
-                many.open(DictionaryTerm("Genesys", priority: .high, aliases: (1...40).map { DictionaryAlias("Genesis \($0)", risky: $0 % 7 == 0, enabled: $0 % 7 != 0) }))
+                many.open(DictionaryTerm("Orbit", priority: .high, aliases: (1...40).map { DictionaryAlias("Orbis \($0)", risky: $0 % 7 == 0, enabled: $0 % 7 != 0) }))
                 many.saveError = "Couldn’t save the dictionary: The file couldn’t be saved because the disk is full."
                 try render("dictionary-edit-many-aliases", size: CGSize(width: 500, height: 700), dark: dark, model: model) { DictionaryTermSheet(state: many) }
                 let report = DictionaryImportReport(termsAdded: 166, aliasesAdded: 223, riskyLeftOff: 12, conflicts: [
-                    .init(alias: "Jarla", keptBy: "Jarek", skippedFor: "Jarosław"), .init(alias: "in post", keptBy: "InPost", skippedFor: "Post Office")])
+                    .init(alias: "Dorna", keptBy: "Dorek", skippedFor: "Jarosław"), .init(alias: "on track", keptBy: "Ontrack", skippedFor: "Post Office")])
                 try render("dictionary-import-report", size: CGSize(width: 500, height: 480), dark: dark, model: model) {
                     DictionaryImportSheet(report: report, files: ["vocab_core.txt", "replacements.tsv"], onDone: {})
                 }
-                // Faza 2.1 T9 (odbiór §8.1 w UI): wymyślony transkrypt ze starymi zapisami (Zoim, Jarla, Doomem) pod słownikiem z Aliasami —
+                // Faza 2.1 T9 (odbiór §8.1 w UI): wymyślony transkrypt ze starymi zapisami (Rokm, Dorna, Doomem) pod słownikiem z Aliasami —
                 // widok surowy, poprawiony i preset bez korekty pokazują Termy, a pliki na dysku zostają nietknięte.
                 if var item = model.sessions.first(where: { $0.id.hasSuffix("bb22") }) {
                     let fixture = """
                     {"utterances":[
-                      {"speaker":"them","start":3,"end":8,"text":"Zoim will send the invoice, and Jarla checks it before we close the month","words":[],"approximateTiming":false},
-                      {"speaker":"me","start":10,"end":14,"text":"We can talk on Doomem tomorrow, Zoim has the link","words":[],"approximateTiming":false},
-                      {"speaker":"them","start":16,"end":20,"text":"Great, Jarla will join at ten","words":[],"approximateTiming":false}
+                      {"speaker":"them","start":3,"end":8,"text":"Rokm will send the invoice, and Dorna checks it before we close the month","words":[],"approximateTiming":false},
+                      {"speaker":"me","start":10,"end":14,"text":"We can talk on Doomem tomorrow, Rokm has the link","words":[],"approximateTiming":false},
+                      {"speaker":"them","start":16,"end":20,"text":"Great, Dorna will join at ten","words":[],"approximateTiming":false}
                     ],"failedChunks":[]}
                     """
                     let raw = try JSONDecoder().decode(Transcript.self, from: Data(fixture.utf8))
-                    model.dictionary = UserDictionary(terms: [term("Zowie", .high, [DictionaryAlias("Zoim")]), term("Jarek", .normal, [DictionaryAlias("Jarla")]),
+                    model.dictionary = UserDictionary(terms: [term("Nimbu", .high, [DictionaryAlias("Rokm")]), term("Dorek", .normal, [DictionaryAlias("Dorna")]),
                                                               term("Zoom", .normal, [DictionaryAlias("Doomem")])])
                     item.runID = "snapshot-run"
                     item.transcript = raw
                     var proofread = raw
-                    proofread.utterances[1].text = "We can talk on Doomem tomorrow. Zoim has the link."
+                    proofread.utterances[1].text = "We can talk on Doomem tomorrow. Rokm has the link."
                     let dictTranscript = MeetingViewState(); dictTranscript.tab = .transcript
                     var withCorrection = item
                     withCorrection.corrected = CorrectedTranscript(transcript: proofread, model: "deepseek/deepseek-v4.1-flash", batches: 1, failedBatches: 0, rejectedLines: 0)

@@ -12,8 +12,8 @@ import Testing
     @Test func savedWithLinesWritesTrace() throws {
         let url = try dir().appendingPathComponent("vocabulary.txt")
         try "old".write(to: url, atomically: true, encoding: .utf8)
-        #expect(VocabularyTrace.update(promptLines: "Known names: Zowie.", at: url, correctionSaved: true) == nil)
-        #expect(try String(contentsOf: url, encoding: .utf8) == "Known names: Zowie.")
+        #expect(VocabularyTrace.update(promptLines: "Known names: Nimbu.", at: url, correctionSaved: true) == nil)
+        #expect(try String(contentsOf: url, encoding: .utf8) == "Known names: Nimbu.")
     }
 
     @Test func savedWithoutLinesRemovesTraceAndMissingFileIsFine() throws {

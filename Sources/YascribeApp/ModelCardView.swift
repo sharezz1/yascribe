@@ -3,7 +3,7 @@ import YascribeLocalASR
 import YascribeProviders
 import SwiftUI
 
-/// Karta modelu lokalnego ASR (F20 T7; wzór: karty modeli Meetily, język wizualny B z macos.md §11).
+/// Karta modelu lokalnego ASR (F20 T7; język wizualny B z macos.md §11).
 /// Pobranie startuje wyłącznie z kliknięcia „Download" — nigdy automatycznie.
 
 final class ModelCardUI: ObservableObject {

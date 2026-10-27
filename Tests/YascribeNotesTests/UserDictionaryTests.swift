@@ -9,7 +9,7 @@ import YascribeProviders
         defer { try? FileManager.default.removeItem(at: root) }
         let paths = YascribePaths(root: root)
         let dictionary = UserDictionary(terms: [
-            DictionaryTerm("Zowie", priority: .high, aliases: [DictionaryAlias("Zoey")])
+            DictionaryTerm("Nimbu", priority: .high, aliases: [DictionaryAlias("Roky")])
         ])
 
         try JSONFile.save(dictionary, to: paths.dictionary)
@@ -19,17 +19,17 @@ import YascribeProviders
 
     @Test func upsertRejectsAliasOwnedByAnotherTerm() throws {
         var dictionary = UserDictionary()
-        try dictionary.upsert(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zoey")]))
-        #expect(throws: DictionaryError.aliasTaken(alias: "Zoey", by: "Zowie")) {
-            try dictionary.upsert(DictionaryTerm("Other", aliases: [DictionaryAlias("Zoey")]))
+        try dictionary.upsert(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Roky")]))
+        #expect(throws: DictionaryError.aliasTaken(alias: "Roky", by: "Nimbu")) {
+            try dictionary.upsert(DictionaryTerm("Other", aliases: [DictionaryAlias("Roky")]))
         }
     }
 
     @Test func upsertRejectsDuplicateTermIgnoringCase() throws {
         var dictionary = UserDictionary()
-        try dictionary.upsert(DictionaryTerm("Zowie"))
-        #expect(throws: DictionaryError.duplicateTerm("zOWie")) {
-            try dictionary.upsert(DictionaryTerm("zOWie"))
+        try dictionary.upsert(DictionaryTerm("Nimbu"))
+        #expect(throws: DictionaryError.duplicateTerm("nIMbu")) {
+            try dictionary.upsert(DictionaryTerm("nIMbu"))
         }
     }
 
@@ -37,16 +37,16 @@ import YascribeProviders
         var dictionary = UserDictionary()
         #expect(throws: DictionaryError.emptyTerm) { try dictionary.upsert(DictionaryTerm(" \n ")) }
         #expect(throws: DictionaryError.emptyAlias) {
-            try dictionary.upsert(DictionaryTerm("Zowie", aliases: [DictionaryAlias(" \t ")]))
+            try dictionary.upsert(DictionaryTerm("Nimbu", aliases: [DictionaryAlias(" \t ")]))
         }
     }
 
     @Test func upsertRejectsReservedCharacters() throws {
         var dictionary = UserDictionary()
-        #expect(throws: DictionaryError.invalidCharacters("#Zowie")) { try dictionary.upsert(DictionaryTerm(" #Zowie ")) }
+        #expect(throws: DictionaryError.invalidCharacters("#Nimbu")) { try dictionary.upsert(DictionaryTerm(" #Nimbu ")) }
         for bad in ["a\tb", "a\nb", "a\rb", "a\u{2028}b", "a\u{2029}b", "a\u{85}b", "a\u{0B}b", "a\u{0C}b", "a\u{01}b", "#x"] {
             #expect(throws: DictionaryError.invalidCharacters(bad)) {
-                try dictionary.upsert(DictionaryTerm("Zowie", aliases: [DictionaryAlias(bad)]))
+                try dictionary.upsert(DictionaryTerm("Nimbu", aliases: [DictionaryAlias(bad)]))
             }
         }
         #expect(dictionary.terms.isEmpty)
@@ -69,51 +69,51 @@ import YascribeProviders
     }
 
     @Test func caseOnlyAliasIsRecognizedForTheCliCheck() {
-        // F9: „Pudo" → „PUDO" to poprawna normalizacja; „Pudu" → „PUDO" już nie.
-        #expect(UserDictionary.aliasOnlyNormalizesCase(alias: "Pudo", term: "PUDO"))
+        // F9: „Kopt" → „KOPT" to poprawna normalizacja; „Kopu" → „KOPT" już nie.
+        #expect(UserDictionary.aliasOnlyNormalizesCase(alias: "Kopt", term: "KOPT"))
         #expect(UserDictionary.aliasOnlyNormalizesCase(alias: "STRASSE", term: "Straße"))
-        #expect(!UserDictionary.aliasOnlyNormalizesCase(alias: "Pudu", term: "PUDO"))
-        #expect(!UserDictionary.aliasOnlyNormalizesCase(alias: "pu do", term: "PUDO"))
+        #expect(!UserDictionary.aliasOnlyNormalizesCase(alias: "Kopu", term: "KOPT"))
+        #expect(!UserDictionary.aliasOnlyNormalizesCase(alias: "ko pt", term: "KOPT"))
     }
 
     @Test func upsertNormalizesToNFC() throws {
         var dictionary = UserDictionary()
-        try dictionary.upsert(DictionaryTerm(" Genesys ", aliases: [DictionaryAlias("Dz\u{0307}enesis")]))
+        try dictionary.upsert(DictionaryTerm(" Orbit ", aliases: [DictionaryAlias("Z\u{0307}orbit")]))
         let term = try #require(dictionary.terms.first)
-        #expect(term.text == "Genesys")
-        #expect(term.aliases.map(\.text) == ["Dżenesis"])
+        #expect(term.text == "Orbit")
+        #expect(term.aliases.map(\.text) == ["Żorbit"])
         // `==` w Swift uznaje równoważność kanoniczną, więc NFC sprawdzamy na skalarach: „ż" ma być jednym skalarem.
-        #expect(term.aliases.first?.text.unicodeScalars.count == 8)
+        #expect(term.aliases.first?.text.unicodeScalars.count == 6)
 
         // Term wpisany w NFD też ląduje jako NFC.
         var nfd = UserDictionary()
-        try nfd.upsert(DictionaryTerm("Dz\u{0307}enesis"))
-        #expect(nfd.terms.first?.text.unicodeScalars.count == 8)
+        try nfd.upsert(DictionaryTerm("Z\u{0307}orbit"))
+        #expect(nfd.terms.first?.text.unicodeScalars.count == 6)
     }
 
     @Test func upsertDropsAliasIdenticalToItsTerm() throws {
         var dictionary = UserDictionary()
-        try dictionary.upsert(DictionaryTerm("Zowie", aliases: [DictionaryAlias("Zowie")]))
+        try dictionary.upsert(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Nimbu")]))
         #expect(dictionary.terms.first?.aliases.isEmpty == true)
     }
 
     @Test func upsertKeepsAliasDifferingOnlyInCase() throws {
         var dictionary = UserDictionary()
-        try dictionary.upsert(DictionaryTerm("PUDO", aliases: [DictionaryAlias("Pudo")]))
-        #expect(dictionary.terms.first?.aliases.map(\.text) == ["Pudo"])
+        try dictionary.upsert(DictionaryTerm("KOPT", aliases: [DictionaryAlias("Kopt")]))
+        #expect(dictionary.terms.first?.aliases.map(\.text) == ["Kopt"])
     }
 
     @Test func upsertRejectsAliasThatIsAnotherTermsText() throws {
         var dictionary = UserDictionary()
-        try dictionary.upsert(DictionaryTerm("Zowie"))
-        #expect(throws: DictionaryError.aliasIsTerm(alias: "zowie", term: "Zowie")) {
-            try dictionary.upsert(DictionaryTerm("Zoom", aliases: [DictionaryAlias("zowie")]))
+        try dictionary.upsert(DictionaryTerm("Nimbu"))
+        #expect(throws: DictionaryError.aliasIsTerm(alias: "nimbu", term: "Nimbu")) {
+            try dictionary.upsert(DictionaryTerm("Zoom", aliases: [DictionaryAlias("nimbu")]))
         }
 
         var reverse = UserDictionary()
-        try reverse.upsert(DictionaryTerm("Zoom", aliases: [DictionaryAlias("zowie")]))
-        #expect(throws: DictionaryError.aliasIsTerm(alias: "Zowie", term: "Zoom")) {
-            try reverse.upsert(DictionaryTerm("Zowie"))
+        try reverse.upsert(DictionaryTerm("Zoom", aliases: [DictionaryAlias("nimbu")]))
+        #expect(throws: DictionaryError.aliasIsTerm(alias: "Nimbu", term: "Zoom")) {
+            try reverse.upsert(DictionaryTerm("Nimbu"))
         }
     }
 }

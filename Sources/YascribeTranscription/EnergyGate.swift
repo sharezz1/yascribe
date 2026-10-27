@@ -1,8 +1,7 @@
 import Foundation
 
 /// 🔴 Bramka mowy per kanał przed ASR (W§1) — energetyczna, bez modelu: RMS
-/// w dBFS z histerezą. Tak robi Wispr Flow (`rmsDbfs`, `silenceAccruedMs`,
-/// `silenceQualifiedMs`, `silenceArmed`, rozdz. 15). Cisza nie trafia do modelu:
+/// w dBFS z histerezą. Cisza nie trafia do modelu:
 /// nie halucynuje (82% na milczącym mikrofonie, rozdz. 13) i nie kosztuje.
 public struct EnergyGate: Sendable {
     public struct Config: Codable, Equatable, Sendable {

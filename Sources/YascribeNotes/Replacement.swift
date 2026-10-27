@@ -15,14 +15,14 @@ public struct ReplacementRules: @unchecked Sendable {
     private let starts: (aliases: Set<String>, entries: Set<String>)?
 
     /// Aliasy włączone i niepuste (plik `dictionary.json` mógł ominąć `upsert`: pusty Alias wstawiałby Term na każdej granicy słowa),
-    /// w NFC, od najdłuższego: alternacja bierze pierwszą pasującą gałąź, więc „in post" musi stać przed „in".
+    /// w NFC, od najdłuższego: alternacja bierze pierwszą pasującą gałąź, więc „on track" musi stać przed „on".
     public init(_ d: UserDictionary) {
         let aliases = d.terms.flatMap { term in
             term.aliases.filter { $0.enabled }.map { (text: Self.nfc($0.text), caseless: true, term: Self.nfc(term.text)) }
         }.filter { !$0.text.isEmpty }
         guard !aliases.isEmpty else { terms = []; regex = nil; starts = nil; return }
-        // Tekst każdego Terma jako wpis tożsamościowy (z wielkością liter, R9): „Pudo Max" dopasowany w całości nie jest skanowany
-        // dalej, więc zawarty w nim Alias „pudo" nie zrobi z niego „Pudo Max Max" przy drugim zastosowaniu (idempotencja).
+        // Tekst każdego Terma jako wpis tożsamościowy (z wielkością liter, R9): „Kopt Max" dopasowany w całości nie jest skanowany
+        // dalej, więc zawarty w nim Alias „kopt" nie zrobi z niego „Kopt Max Max" przy drugim zastosowaniu (idempotencja).
         let identities = d.terms.map { (text: Self.nfc($0.text), caseless: false, term: Self.nfc($0.text)) }.filter { !$0.text.isEmpty }
         let entries = (aliases + identities).sorted { $0.text.count > $1.text.count }
         terms = entries.map(\.term)

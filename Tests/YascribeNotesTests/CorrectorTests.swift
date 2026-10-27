@@ -246,7 +246,7 @@ private func longTranscript(_ n: Int = 100) -> Transcript {
 
 /// Zestawy testów w dwóch plikach: korektor tutaj, podsumowanie i mapa w `PromptTests.swift` (`extension VocabularyInPromptTests`).
 @Suite struct VocabularyInPromptTests {
-    static let vocabulary = PromptVocabulary(terms: ["Genesys", "Pudo"], attendees: ["Anna Kowalska"])
+    static let vocabulary = PromptVocabulary(terms: ["Orbit", "Kopt"], attendees: ["Anna Kowalska"])
 
     private func withVocabulary(_ v: PromptVocabulary?, budget: ContextBudget? = nil) -> Corrector {
         Corrector(client: chatClient(ChatStub { capitalizing($0.user) }), assignment: assignment, budget: budget, vocabulary: v)
@@ -254,7 +254,7 @@ private func longTranscript(_ n: Int = 100) -> Transcript {
 
     @Test func correctorSystemIncludesVocabularyLines() {
         let s = withVocabulary(Self.vocabulary).system(language: .polish)
-        #expect(s.contains("Known names and terms") && s.contains("Genesys; Pudo"))
+        #expect(s.contains("Known names and terms") && s.contains("Orbit; Kopt"))
         #expect(s.contains("Meeting attendees") && s.contains("Anna Kowalska"))
         // Po zdaniu o języku, przed „Extra instructions".
         let a = Corrector(client: chatClient(ChatStub { $0.user }), assignment: RoleAssignment(providerID: testProvider.id, model: "m", prompt: "Be brief."),

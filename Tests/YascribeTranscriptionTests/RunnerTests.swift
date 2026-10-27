@@ -381,7 +381,7 @@ private func mergeGlued(_ ws: [(String, Double, Double)]) -> Transcript {
 }
 
 @Test func autoLanguageFlagsGibberishInAnotherScript() async throws {
-    // Granola „Multi" zamieniła polską wypowiedź w rosyjski bełkot. Przy Auto taki tekst jest oznaczony i poza notatkami.
+    // Tryb wielojęzyczny zamienił polską wypowiedź w rosyjski bełkot. Przy Auto taki tekst jest oznaczony i poza notatkami.
     struct CyrillicASR: HTTPClient {
         func send(_ r: URLRequest) async throws -> (Data, HTTPURLResponse) {
             let d = try JSONSerialization.data(withJSONObject: ["text": "Привет это проверка связи с вами сегодня"])
