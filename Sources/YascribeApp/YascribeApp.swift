@@ -70,7 +70,7 @@ struct YascribeApp: App {
             }
         }
         // Aplikacja żyje po zamknięciu okna (SwiftUI nie kończy jej po ostatnim oknie); ikona w Docku zostaje.
-        MenuBarExtra("Yascribe", systemImage: "waveform") {
+        MenuBarExtra("Yascribe", systemImage: "pencil.and.scribble") {
             MenuBarMenu().environment(model)
         }
     }
