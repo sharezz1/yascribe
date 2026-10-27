@@ -47,6 +47,9 @@ final class RecordingController {
     /// „Nothing is being recorded” po próbie wyciszenia ostatniego nagrywającego toru; znika po 4 s (decyzja 1).
     private(set) var muteWarning = false
     @ObservationIgnored private var warningTask: Task<Void, Never>?
+    /// Odliczanie pytania „Meeting ended?”: po `endPromptAutoStopSeconds` bez odpowiedzi nagranie się kończy (decyzja użytkownika 2026-10-27).
+    @ObservationIgnored private var endPromptTask: Task<Void, Never>?
+    static let endPromptAutoStopSeconds = 5.0
     /// Katalog trwającej sesji — lista sesji go pomija (Hermes 4.5: nie „Recovered").
     private(set) var directory: URL?
     private var recorder: SessionRecorder?
@@ -217,11 +220,19 @@ final class RecordingController {
     func showEndPrompt(_ signal: EndSignal, onStop: @escaping () -> Void, onContinue: @escaping () -> Void) {
         pill.onPrimary = onStop
         pill.onSecondary = { [weak self] in onContinue(); self?.hideEndPrompt() }
+        pill.endDeadline = Date().addingTimeInterval(Self.endPromptAutoStopSeconds)
         present(.endPrompt(signal), title: "Meeting ended?")
+        endPromptTask?.cancel()
+        endPromptTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(Self.endPromptAutoStopSeconds))
+            guard !Task.isCancelled, let self, case .endPrompt = self.pill.mode else { return }
+            self.pill.onPrimary()
+        }
     }
 
     /// Wraca do pigułki nagrania (pytanie wisi podczas nagrywania); bez nagrania chowa okno.
     func hideEndPrompt() {
+        endPromptTask?.cancel()
         guard case .endPrompt = pill.mode else { return }
         if isRecording { pill.mode = .recording } else { hidePanel() }
     }
@@ -243,6 +254,8 @@ final class PillState: ObservableObject {
     /// Akcje przycisków oferty (Start / Not a meeting) i pytania (Stop / Continue); ustawia `RecordingController`.
     var onPrimary: () -> Void = {}
     var onSecondary: () -> Void = {}
+    /// Kiedy pytanie „Meeting ended?” samo zatrzyma nagranie; czyta je widok pytania.
+    var endDeadline: Date?
 }
 
 /// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia), a treść ma stały

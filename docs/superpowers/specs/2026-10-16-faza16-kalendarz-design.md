@@ -254,9 +254,10 @@ Sygnały końca:
 
 **Zachowanie (decyzja użytkownika 2026-10-16): sygnał 1 lub 2 → zawsze stan *End prompt*** —
 pigułka pyta „Meeting ended?". „Stop" kończy (powód `button`, jak każde ręczne zatrzymanie),
-„Continue" wycisza pytanie na T_snooze (szkic: 10 min; **moja decyzja**). **Nie ma trybu
-„kończ sam"**, nie ma ustawienia i nie ma nowego `EndReason` — auto-tryb z §4.5 dotyczy
-wyłącznie startu. Zwolnienie mikrofonu przy wyciszeniu w Teams (jeśli spike to potwierdzi) jest
+„Continue" wycisza pytanie na T_snooze (szkic: 10 min; **moja decyzja**). **Nie ma ustawienia i nie ma
+nowego `EndReason`.** *(Zmiana 2026-10-27, decyzja użytkownika: pytanie bez odpowiedzi przez 5 s
+kończy nagranie samo, tak jak „Stop" (powód `button`); pigułka pokazuje odliczanie „Stopping in N s",
+„Continue" je przerywa. Wcześniej: „nie ma trybu kończ sam".)** Auto-tryb z §4.5 dotyczy startu. Zwolnienie mikrofonu przy wyciszeniu w Teams (jeśli spike to potwierdzi) jest
 więc tylko jednym zbędnym pytaniem, a nie ucięciem nagrania.
 
 **Co z istniejącym `SilenceCondition` (600 s)?** Zostaje bez zmian jako **twardy bezpiecznik**:
