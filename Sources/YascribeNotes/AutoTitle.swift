@@ -73,7 +73,8 @@ public enum AutoTitle {
                                 onProblem: @Sendable (String) -> Void = { _ in }) async -> String? {
         guard shouldRun(meta: store.readMeta()), let p = prompt(transcript: transcript, notesLanguage: notesLanguage),
               let reply = try? await withDeadline(timeout, {
-                  try await client.chat(model: model, system: p.system, user: p.user, timeout: chatTimeout, maxTokens: maxTokens)
+                  try await client.chat(model: model, system: p.system, user: p.user, timeout: chatTimeout, maxTokens: maxTokens,
+                                        thinking: false)
               }),
               let title = clean(reply), stillCurrent() else { return nil }
         var stored = false

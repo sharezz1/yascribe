@@ -146,7 +146,7 @@ import YascribeProviders
     let stub = ChatStub { _ in "Forecast gap" }
     _ = await AutoTitle.generate(client: chatClient(stub), model: "m", transcript: transcript([utt("Prognoza na sobotę.")]),
                                  notesLanguage: .polish, store: NotesStore(session: session), timeout: 120, chatTimeout: 150, maxTokens: 64)
-    #expect(stub.calls[0].timeout == 150 && stub.calls[0].maxTokens == 64)
+    #expect(stub.calls[0].timeout == 150 && stub.calls[0].maxTokens == 64 && stub.calls[0].reasoningEnabled == false)
 }
 
 @Test func truncatedInputGivesNoAutoTitle() async {
