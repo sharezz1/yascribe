@@ -44,8 +44,25 @@ public enum BackupName {
 /// Brak pliku to nie to samo co plik, którego nie da się odczytać (Review Luna #2): nieczytelny plik jest przed
 /// PIERWSZYM zapisem odkładany jako `<nazwa>.corrupt-<yyyyMMdd-HHmmss>` (jak `AppModel.load()`), a metody zapisu
 /// zwracają komunikat z nazwą. `problems()` mówi, które pliki są nieczytelne, zanim cokolwiek zapiszemy.
+/// Procesowy rejestr blokad dla zapisów JSON, kluczowany ścieżką pliku: różne notatki nie blokują się,
+/// a wszystkie instancje `NotesStore` na ten sam plik szeregują odczyt-zmiana-zapis atomowo.
+private final class FileLockRegistry: @unchecked Sendable {
+    private var locks: [String: NSLock] = [:]
+    private let lock = NSLock()
+
+    func lock(for path: String) -> NSLock {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = locks[path] { return existing }
+        let fresh = NSLock()
+        locks[path] = fresh
+        return fresh
+    }
+}
+
 public struct NotesStore: Sendable {
     public let directory: URL
+    private static let lockRegistry = FileLockRegistry()
 
     public init(session: URL) { directory = session.appendingPathComponent("notes") }
 
@@ -81,8 +98,12 @@ public struct NotesStore: Sendable {
     }
 
     /// Czyta, zmienia, zapisuje. Nieczytelny `meta.json` jest najpierw odkładany (nie kasujemy cudzych danych).
+    /// Całość jest szeregowana procesowo dla danego pliku, więc równoległe `updateMeta` na tę samą ścieżkę nie gubią pól.
     @discardableResult
     public func updateMeta(now: Date = Date(), _ change: (inout NoteMeta) -> Void) throws -> String? {
+        let fileLock = Self.lockRegistry.lock(for: metaURL.path)
+        fileLock.lock()
+        defer { fileLock.unlock() }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let note = try setAsideIfUnreadable(metaURL, now: now) { _ = try JSONFile.load(NoteMeta.self, from: metaURL, default: NoteMeta()) }
         var m = (try? JSONFile.load(NoteMeta.self, from: metaURL, default: NoteMeta())) ?? NoteMeta()

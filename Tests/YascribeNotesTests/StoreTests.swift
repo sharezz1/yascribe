@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import YascribeMeetings
 @testable import YascribeNotes
 
 private func summary(_ text: String) -> NoteSummary {
@@ -96,6 +97,57 @@ private func writeUnreadable(_ store: NotesStore) throws {
     #expect(store.readMyNotes() == "fresh" && store.readMeta().manualTitle == "New")
     #expect(try store.readSummary()?.markdown == "s")
     #expect(!names.contains { $0.hasPrefix("summary-") }) // nieczytelny summary nie jest „wersją do kopii"
+}
+
+@Test func concurrentUpdatesOnSameFileDoNotLoseFields() throws {
+    // Dwie instancje NotesStore na tym samym katalogu; równolegle zapisują różne pola.
+    // Zamiast wielu iteracji naraz — pojedyncza para zapisów powtarzana wielokrotnie,
+    // żeby wyścig odczyt-zmiana-zapis na pustym pliku był łatwy do zaobserwowania.
+    // Bez szeregowania jedno z pól ginie w części powtórzeń; z blokadą zawsze oba są ustawione.
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let repeats = 100
+    let metaURL = NotesStore(session: session).directory.appendingPathComponent("meta.json")
+    for r in 0..<repeats {
+        let storeA = NotesStore(session: session)
+        let storeB = NotesStore(session: session)
+        try? FileManager.default.removeItem(at: metaURL)
+        let group = DispatchGroup()
+        group.enter()
+        DispatchQueue.global().async {
+            _ = try? storeA.updateMeta { $0.autoTitle = "auto-\(r)" }
+            group.leave()
+        }
+        group.enter()
+        DispatchQueue.global().async {
+            let link = CalendarLink(title: "Event-\(r)",
+                                    start: Date(timeIntervalSince1970: 1_000),
+                                    end: Date(timeIntervalSince1970: 2_000))
+            _ = try? storeB.updateMeta { $0.calendarEvent = link }
+            group.leave()
+        }
+        group.wait()
+        let meta = storeA.readMeta()
+        #expect(meta.autoTitle != nil, "autoTitle missing after repeat \(r)")
+        #expect(meta.calendarEvent != nil, "calendarEvent missing after repeat \(r)")
+    }
+}
+
+@Test func corruptMetaIsSetAsideAndNewWriteIsValid() throws {
+    // Nieczytelny meta.json: updateMeta odkłada go jako .corrupt-... i zapisuje nowy, poprawny plik.
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let store = NotesStore(session: session)
+    try FileManager.default.createDirectory(at: store.directory, withIntermediateDirectories: true)
+    try "{".write(to: store.directory.appendingPathComponent("meta.json"), atomically: true, encoding: .utf8)
+
+    let note = try #require(try store.updateMeta { $0.manualTitle = "Fixed" })
+    #expect(note.contains("meta.json") && note.contains(".corrupt-"))
+    #expect(store.readMeta().manualTitle == "Fixed")
+
+    let names = try FileManager.default.contentsOfDirectory(atPath: store.directory.path)
+    let corrupt = try #require(names.first { $0.hasPrefix("meta.json.corrupt-") })
+    #expect(try String(contentsOf: store.directory.appendingPathComponent(corrupt), encoding: .utf8) == "{")
 }
 
 extension JSONDecoder {
