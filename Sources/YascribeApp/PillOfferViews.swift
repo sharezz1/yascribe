@@ -50,7 +50,16 @@ struct PillEndPromptView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: "questionmark.circle").font(.system(size: 14)).foregroundStyle(.mnText2).frame(width: 18).accessibilityHidden(true)
-                Text("Meeting ended?").font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Meeting ended?").font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(1)
+                    if let deadline = pill.endDeadline {
+                        TimelineView(.periodic(from: .now, by: 0.5)) { ctx in
+                            Text("Stopping in \(max(0, Int(deadline.timeIntervalSince(ctx.date).rounded(.up)))) s")
+                                .font(.callout).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1)
+                        }
+                    }
+                }
+                .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {

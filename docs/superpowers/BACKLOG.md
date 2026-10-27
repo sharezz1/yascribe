@@ -256,3 +256,6 @@ nie są tu kopiowane.
 - [ ] **B7.** Pierwsze uruchomienie po aktualizacji z fazy 1 stosuje domyślne 30 dni bez pytania R1; faza 1 nie kasowała nic, więc pierwsze audio zniknie ok. 2026-11-12 (patrz „Dla użytkownika” w raporcie).
 - [ ] **B8.** `EndDetector`: gdy pytanie wisi z sygnału `silence`, a potem przychodzi `callReleased`, treść pytania się nie zmienia (`shown != nil` → `nil`); kosmetyka.
 - [ ] Domyślny `runID` CLI (`2026-10-14T10-00-00Z`, bez `-xxxx`) nie pasuje do wzorca `latestRunID` (P2, `9935a66`): sesja transkrybowana tylko z CLI nie pokaże transkryptu w aplikacji; kierunek bezpieczny dla retencji. Rozważyć dopisanie sufiksu w CLI.
+
+## Z rozmowy 2026-10-27
+- [ ] **Mute z Teams → mute toru `mic` w aplikacji.** Wyciszenie w Teams nie zwalnia wejścia (pomiar T0), więc sygnałów audio nie użyjemy. Kandydaci: lokalne API Teams (`localhost:8124`, parowanie tokenem, tylko nowy Teams) albo Accessibility (nowe uprawnienie TCC, kruche). Wymaga spike'a na sprzęcie przed planem.
