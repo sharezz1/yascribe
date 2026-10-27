@@ -50,6 +50,8 @@ final class RecordingController {
     /// Odliczanie pytania „Meeting ended?”: po `endPromptAutoStopSeconds` bez odpowiedzi nagranie się kończy (decyzja użytkownika 2026-10-27).
     @ObservationIgnored private var endPromptTask: Task<Void, Never>?
     static let endPromptAutoStopSeconds = 5.0
+    /// Odczyt mute z Teams co sekundę podczas nagrania (Accessibility); przenosi go na tor mikrofonu.
+    @ObservationIgnored private var teamsMuteTask: Task<Void, Never>?
     /// Katalog trwającej sesji — lista sesji go pomija (Hermes 4.5: nie „Recovered").
     private(set) var directory: URL?
     private var recorder: SessionRecorder?
@@ -107,6 +109,23 @@ final class RecordingController {
         levelTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { _ in
             Task { @MainActor in self.levels = self.recorder?.currentLevels() ?? [:] }
         }
+        TeamsMuteReader.requestAccessIfNeeded()
+        teamsMuteTask = Task { [weak self] in
+            var sync = CallMuteSync()
+            while !Task.isCancelled {
+                let state = await Task.detached { TeamsMuteReader.read() }.value
+                guard let self, !Task.isCancelled else { return }
+                sync.step(read: state) { self.setMicMuted($0) }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    /// Wyciszenie toru mikrofonu z Teams; odmowę rdzenia (jedyny żywy tor) sygnalizuje wynikiem, bez ostrzeżenia w pigułce.
+    private func setMicMuted(_ mute: Bool) -> Bool {
+        guard let recorder, recorder.setMuted("mic_raw", mute) else { return false }
+        muted = recorder.mutedTracks()
+        return true
     }
 
     private func refreshDeviceIdentity() {
@@ -172,6 +191,8 @@ final class RecordingController {
         timer = nil
         levelTimer?.invalidate()
         levelTimer = nil
+        teamsMuteTask?.cancel()
+        teamsMuteTask = nil
         levels = [:]
         muted = []
         muteWarning = false
