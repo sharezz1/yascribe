@@ -129,7 +129,7 @@ scripts/test.sh         # jedyny sposób uruchamiania testów
 scripts/bundle.sh       # składa .build/Yascribe.app
 ```
 
-Opis modułów, zasady pracy i stan faz: [CLAUDE.md](CLAUDE.md); wymagania: [docs/wymagania.md](docs/wymagania.md).
+Wymagania: [docs/wymagania.md](docs/wymagania.md); plany i stan faz: [docs/superpowers/ROADMAP.md](docs/superpowers/ROADMAP.md).
 
 ## Nazwa i znak
 
