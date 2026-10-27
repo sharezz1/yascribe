@@ -12,7 +12,6 @@ Nazwa: Yascribe (do 2026-10-26 MeetNotes). Repo `sharezz1/yascribe`; stare `shar
 |---|---|
 | `docs/wymagania.md` | wymagania (W§) — m.in. język jawny domyślnie, „Auto" tylko awaryjnie |
 | `docs/design/macos.md` | referencja platformy, świadome odstępstwa od HIG |
-| `docs/design/inspiracje/` | Granola, Wispr Flow, Meetily — zrzuty i co przenosimy |
 | `docs/superpowers/specs/` | specyfikacje: rdzeń nagrywania, warstwa dostawców, faza 1.5, 1.6, 2.0 |
 | `docs/superpowers/plans/` | plany faz (zadania z gotowym kodem) i runbook fazy 1 |
 | `docs/superpowers/reports/` | raporty sesji, przeglądy, recenzje planów |
