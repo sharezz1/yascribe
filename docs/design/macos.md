@@ -18,7 +18,7 @@
 > - **Słownik (Dictionary) jest osobną zakładką**, a nie sekcją ustawień.
 >
 > ✏️ **Uzgodnienie z 2026-10-15 (język wizualny):** obszar treści dostaje własny system
-> wizualny, opisany w §11 (kierunek B, „ciepły”, wzorowany na inne narzędzie). Łamie on trzy reguły
+> wizualny, opisany w §11 (kierunek B, „ciepły”, wzorowany na popularnych narzędziach do notatek). Łamie on trzy reguły
 > z §5 i §6.1, a odstępstwa 4–7 w §10 je uzasadniają. Ramka okna, sidebar, menu i kontrolki
 > systemowe zostają bez zmian.
 
