@@ -21,7 +21,7 @@ private func noise(_ n: Int, seed: UInt64) -> [Float] {
 }
 
 @Test func findsDelayedAndAttenuatedCopy() {
-    // Profil inne narzędziea z rozdz. 18: system w nagraniu ze wzmocnieniem 0,06 i opóźnieniem.
+    // Profil nagrania z mikrofonu przechwytującego głośniki: system w nagraniu ze wzmocnieniem 0,06 i opóźnieniem.
     let a = noise(8_000, seed: 2)
     let delayed = [Float](repeating: 0, count: 240) + a.map { $0 * 0.06 }
     let r = AudioFit.fit(reference: a, recorded: delayed, maxLagFrames: 400)

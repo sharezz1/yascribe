@@ -1,7 +1,7 @@
 import Foundation
 
 /// 🔴 Drugi tryb awarii bramki (W§1, rozdz. 17): przesłuch z głośników. Mikrofon słyszy
-/// rozmówców, a bramka energii uznaje to za mowę — inne narzędzie wstawiał tak urywki cudzych
+/// rozmówców, a bramka energii uznaje to za mowę — inne narzędzia wstawiały tak urywki cudzych
 /// zdań w środek zdań rozmówcy (52 z 53 wtrąceń ≤ 3 słowa). Fragment mikrofonu, którego
 /// obwiednia energii idzie w parze z kanałem systemowym (z opóźnieniem drogi akustycznej
 /// do 0,3 s), odpada przed ASR. Obwiednia z ramek 20 ms, nie próbki: tanio i odpornie na

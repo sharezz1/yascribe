@@ -22,18 +22,18 @@ import Testing
     @Test func matchesOnlyOnWordBoundaries() {
         let r = rules(DictionaryTerm("KOPT", aliases: [DictionaryAlias("ko pt"), DictionaryAlias("Kopt")]),
                       DictionaryTerm("Dorn", aliases: [DictionaryAlias("Dorna")]))
-        #expect(r.apply(to: "pu dowolny") == "pu dowolny")
+        #expect(r.apply(to: "ko ptwolny") == "ko ptwolny")
         #expect(r.apply(to: "ko pt.") == "KOPT.")
         #expect(r.apply(to: "Koptwski") == "Koptwski")
         #expect(r.apply(to: "Dornań") == "Dornań")
-        #expect(r.apply(to: "żJarla") == "żJarla")
+        #expect(r.apply(to: "żDorna") == "żDorna")
         #expect(r.apply(to: "(Dorna)") == "(Dorn)")
     }
 
     @Test func longestAliasWins() {
-        let r = rules(DictionaryTerm("OnTrack", aliases: [DictionaryAlias("in"), DictionaryAlias("on track")]))
-        #expect(r.apply(to: "on track") == "OnTrack")
-        #expect(r.apply(to: "paczka on track i in") == "paczka OnTrack i OnTrack")
+        let r = rules(DictionaryTerm("Ontrack", aliases: [DictionaryAlias("on"), DictionaryAlias("on track")]))
+        #expect(r.apply(to: "on track") == "Ontrack")
+        #expect(r.apply(to: "paczka on track i on") == "paczka Ontrack i Ontrack")
     }
 
     @Test func aliasDoesNotRechainIntoItsResult() throws {
@@ -132,7 +132,7 @@ import Testing
             [t("Orbit", "Żorbit"), t("Żuraw", nfd("żuraw"))],           // NFD/NFC
             [t("Y", "x")],                                                  // znak łączący po słowie
             [t("KOPT", "ko pt", "Kopt"), t("Dorn", "Dorna")],               // wielowyrazowy
-            [t("e-mail", "e-mejl"), t("OnTrack", "in", "on track")],          // z łącznikiem, najdłuższy
+            [t("e-mail", "e-mejl"), t("Ontrack", "on", "on track")],          // z łącznikiem, najdłuższy
             [t("Kopt Max", "kopt")],                                        // ochrona tekstu Terma
             [t("KOPT", "Kopt"), t("Dorn Kopt", "dornkopt")],
             [t("A", "x"), t("B", "A y")], [t("A B", "x"), t("B C", "y"), t("Z", "C")],
@@ -140,8 +140,8 @@ import Testing
             [t(".NET", "dotnet"), t("Core", "kor")],                         // Term od symbolu: filtr wyłączony
         ]
         let texts = ["", "   ", "...!?", "a #tag b", "#TAG", "tag", "STRASSE i Straße", "strasse x", "FUSS", "Fuß", "λόγος", "ΛΌΓΟΣ", "λόγοι",
-                     nfd("o Żorbit"), "o Żorbit", "dżenesisy", "ŻURAW", nfd("Żuraw"), "x\u{0301}yz", "x\u{0301}", "x y", "ko pt.", "pu dowolny",
-                     "KO PT", "Koptwski", "Dornań", "wyślij e-mejl", "e-mejla", "e mejl", "on track i in", "kopt", "Kopt Max", "dornkopt",
+                     nfd("o Żorbit"), "o Żorbit", "żorbity", "ŻURAW", nfd("Żuraw"), "x\u{0301}yz", "x\u{0301}", "x y", "ko pt.", "ko ptwolny",
+                     "KO PT", "Koptwski", "Dornań", "wyślij e-mejl", "e-mejla", "e mejl", "on track i on", "kopt", "Kopt Max", "dornkopt",
                      "Dorn Kopt i Kopt", "x y", "A y", "A B B", "rOkM i ROKM", "Queue i Rokm", "nic tu nie ma", "dotnet i kor", ".NET kor"]
         for terms in dictionaries {
             let r = ReplacementRules(UserDictionary(terms: terms))
@@ -168,7 +168,7 @@ import Testing
             ("a", "a\u{2163} a\u{00B2}", "a\u{2163} a\u{00B2}"),          // Nl i No przedłużają słowo
             ("ko pt", "pu\u{0301} do", "pu\u{0301} do"),
             ("x\u{0301} y", "X\u{0301} Y", "Target"),                     // Alias ze znakiem łączącym w środku
-            ("Rokm", "\u{1F600} Rokm \u{1F600}\u{1F600}zoim", "\u{1F600} Target \u{1F600}\u{1F600}Target"),  // UTF-16 poza BMP
+            ("Rokm", "\u{1F600} Rokm \u{1F600}\u{1F600}rokm", "\u{1F600} Target \u{1F600}\u{1F600}Target"),  // UTF-16 poza BMP
             ("Rokm", prefix + "Rokm", prefix + "Target"),
         ]
         for c in cases {
@@ -211,19 +211,19 @@ import Testing
         var d = UserDictionary()
         try d.upsert(DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")]))
         try d.upsert(DictionaryTerm("KOPT", aliases: [DictionaryAlias("Kopt"), DictionaryAlias("ko pt")]))
-        try d.upsert(DictionaryTerm("OnTrack", aliases: [DictionaryAlias("in"), DictionaryAlias("on track")]))
+        try d.upsert(DictionaryTerm("Ontrack", aliases: [DictionaryAlias("on"), DictionaryAlias("on track")]))
         try d.upsert(DictionaryTerm("A", aliases: [DictionaryAlias("b")]))
         try d.upsert(DictionaryTerm("CPP", aliases: [DictionaryAlias("c++ (x)")]))
         try d.upsert(DictionaryTerm("Dorn", aliases: [DictionaryAlias("Dorna")]))
         try d.upsert(DictionaryTerm("Orbit", aliases: [DictionaryAlias("Żorbit")]))
         let r = ReplacementRules(d)
-        let texts = ["Rokm mówi", "rOkM", "w Kopt obok", "pu dowolny", "ko pt.", "Dornań", "on track i in", "b", "c++ (x) i cccc",
+        let texts = ["Rokm mówi", "rOkM", "w Kopt obok", "ko ptwolny", "ko pt.", "Dornań", "on track i on", "b", "c++ (x) i cccc",
                      "Mówię o Żorbit".decomposedStringWithCanonicalMapping, "x\u{0301}yz", ""]
         for x in texts {
             let once = r.apply(to: x)
             #expect(scalars(r.apply(to: once)) == scalars(once), "\(x)")
         }
-        #expect(r.apply(to: "Rokm i Kopt w on track, b") == "Nimbu i KOPT w OnTrack, A")
+        #expect(r.apply(to: "Rokm i Kopt w on track, b") == "Nimbu i KOPT w Ontrack, A")
     }
 
     @Test func specialCharactersInAliasAreLiteral() {

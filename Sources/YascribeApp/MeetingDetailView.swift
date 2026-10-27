@@ -26,7 +26,7 @@ struct MeetingDetailView: View {
 
     private var isRecording: Bool { SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory) }
 
-    /// Uwaga 7 z odbioru: cały widok to jedna przewijana strona (wzór inne narzędzie) — tytuł, zakładki i treść w jednym
+    /// Uwaga 7 z odbioru: cały widok to jedna przewijana strona — tytuł, zakładki i treść w jednym
     /// `ScrollView` na całą szerokość detalu (pasek przy krawędzi okna), kolumna 640 w środku, bez wewnętrznych przewijań.
     /// `ScrollPage`: kolumna nie przeskakuje, gdy stały pasek przewijania pojawia się na dłuższej zakładce (błąd 5).
     var body: some View {
