@@ -45,6 +45,7 @@ struct MenuBarMenu: View {
         Text(status)
         Divider()
         Button("Open Yascribe") { MainWindow.show(openWindow) }
+        CheckForUpdatesButton(updater: model.updater)
         Button("Quit Yascribe") { quit() }
         Text("Quitting turns off detection")
     }
