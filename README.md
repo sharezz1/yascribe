@@ -36,7 +36,7 @@ Język wybierasz sam · lokalnie albo przez API · dwa tory dźwięku · wolne o
 
 ## Dlaczego polski nie jest tu dodatkiem
 
-Po angielsku gotowe narzędzia działają dobrze. Polski wymaga zwykle drugiego trybu, w którym model sam zgaduje język i potrafi się pomylić. W teście z 13 października 2026 inne narzędzie w trybie wielojęzycznym zapisała polską rozmowę rosyjską cyrylicą, a ten sam fragment w inne narzędzie wyszedł poprawną polszczyzną. Dlatego w Yascribe **język podajesz modelowi wprost**, a automatyczne wykrywanie jest tylko awaryjne.
+Po angielsku gotowe narzędzia działają dobrze. Polski wymaga zwykle trybu wielojęzycznego, w którym model sam zgaduje język i potrafi się pomylić, na przykład zapisać polską rozmowę cyrylicą. Dlatego w Yascribe **język podajesz modelowi wprost**, a automatyczne wykrywanie jest tylko awaryjne.
 
 - **Język ustawiasz sam.** Preset łączy język z modelami transkrypcji, korekty i notatki, więc nie mogą się rozjechać. Przy starcie nagrania widzisz, że działa „Polish · PL".
 - **Polskie przerywniki znikają.** Yyy, mhm i podobne wypadają z transkryptu po korekcie. Surowy zapis zostaje nietknięty.
