@@ -7,6 +7,7 @@ cd "$(dirname "$0")/.."
 APP="$(YASCRIBE_APP=.build/check/Yascribe.app YASCRIBE_SIGN_IDENTITY=- scripts/bundle.sh 2>/dev/null | tail -1)"
 [ "$APP" = ".build/check/Yascribe.app" ] || { echo "check-bundle: bundle.sh zwrócił nieoczekiwaną ścieżkę: $APP" >&2; exit 1; }
 [ -d "$APP" ] || { echo "check-bundle: brak paczki $APP" >&2; exit 1; }
+cmp Resources/ThirdPartyNotices/SpeexDSP.txt "$APP/Contents/Resources/ThirdPartyNotices/SpeexDSP.txt" || { echo "check-bundle: brak licencji SpeexDSP" >&2; exit 1; }
 PLIST="$APP/Contents/Info.plist"
 plutil -lint "$PLIST" >/dev/null
 for key in CFBundleIdentifier LSMinimumSystemVersion NSMicrophoneUsageDescription NSAudioCaptureUsageDescription NSCalendarsFullAccessUsageDescription; do

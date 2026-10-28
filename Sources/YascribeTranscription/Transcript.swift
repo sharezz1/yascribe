@@ -102,4 +102,5 @@ public struct RunMetadata: Codable, Equatable, Sendable {
     public var audioSecondsSent: Double
     public var failedChunkCount: Int
     public var languageFlagCount: Int
+    public var offlineAEC: OfflineAEC.Report? = nil
 }
