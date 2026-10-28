@@ -91,3 +91,39 @@ import YascribeProviders
     let local = Provider(name: "Ollama", baseURL: URL(string: "http://localhost:11434/v1")!)
     #expect(ContextError.describe(model: "vendor/m", error, provider: local) == want)
 }
+
+@Test func maxTokensOutputLimitIsNotContextOverflow() {
+    // Fałszywy pozytyw z przeglądu T6/D6: limit WYJŚCIA nie jest przepełnieniem kontekstu.
+    let e = ProviderError.http(400, "{\"error\":{\"message\":\"max_tokens (4096) exceeds maximum (2000)\",\"type\":\"invalid_request_error\"}}")
+    #expect(!ContextError.isContextOverflow(e))
+}
+
+@Test func requestEntityTooLargeIsAlwaysContextOverflow() {
+    // Spec §4.1: 413 to limit rozmiaru żądania, więc zawsze przepełnienie wejścia — nawet z domyślnym HTML nginx.
+    let e = ProviderError.http(413, "<html>\n<head><title>413 Request Entity Too Large</title></head>\n<body>\n<center><h1>413 Request Entity Too Large</h1></center>\n</body>\n</html>")
+    #expect(ContextError.isContextOverflow(e))
+}
+
+@Test func tooManyTokensIsContextOverflow() {
+    let e = ProviderError.http(422, "{\"error\":\"too many tokens\"}")
+    #expect(ContextError.isContextOverflow(e))
+}
+
+@Test func contextLengthExceededIsContextOverflow() {
+    let e = ProviderError.http(400, "{\"error\":\"context length exceeded\"}")
+    #expect(ContextError.isContextOverflow(e))
+}
+
+@Test func htmlErrorPageIsNotContextOverflow() {
+    // Strona błędu serwera przy 400/422 nie jest komunikatem modelu, nawet gdyby zawierała słowo "context".
+    let e = ProviderError.http(400, "<!DOCTYPE html><html><body><h1>Bad Request: context limit</h1></body></html>")
+    #expect(!ContextError.isContextOverflow(e))
+}
+
+@Test func describeIncludesBodySnippetForOverflow() {
+    let body = "{\"error\":{\"message\":\"This model's maximum context length is 128000 tokens. However, your messages resulted in 128001 tokens.\",\"type\":\"invalid_request_error\"}}"
+    let e = ProviderError.http(400, body)
+    let msg = ContextError.describe(model: "vendor/m", e)
+    #expect(msg.contains("vendor/m") && msg.contains("longer context"))
+    #expect(msg.contains("maximum context length is 128000 tokens. However, your messages resulted in 128001 tokens."))
+}

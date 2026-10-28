@@ -6,8 +6,28 @@ import YascribeProviders
 public enum ContextError {
     public static func isContextOverflow(_ error: Error) -> Bool {
         guard case ProviderError.http(let status, let body)? = error as? ProviderError, [400, 413, 422].contains(status) else { return false }
+        if status == 413 { return true }
         let b = body.lowercased()
-        return ["context", "too long", "maximum", "too many tokens", "token limit"].contains { b.contains($0) }
+        if b.contains("<html") || b.contains("<!doctype") { return false }
+        let phrases = ["context", "too long", "too many tokens", "token limit", "maximum context"]
+        return phrases.contains { b.contains($0) }
+    }
+
+    /// Zwięzły fragment ciała odpowiedzi dla komunikatu (spec §4.1): jedna linia, do ~160 znaków, bez znaczników HTML.
+    private static func bodySnippet(_ body: String) -> String? {
+        let oneLine = body
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+        let withoutTags = oneLine.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
+        let collapsed = withoutTags.replacingOccurrences(of: "[ \t]+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        // Niektóre serwery zwracają HTML z powtórzonym tekstem (np. "413 Request Entity Too Large 413 Request Entity Too Large").
+        let words = collapsed.components(separatedBy: " ")
+        let deduped = words.enumerated().compactMap { $0.offset == 0 || words[$0.offset - 1] != $0.element ? $0.element : nil }
+            .joined(separator: " ")
+        let snippet = String(deduped.prefix(160))
+        return snippet.isEmpty ? nil : snippet
     }
 
     /// Serwer uciął wyjście (`finish_reason: "length"`): brak miejsca na odpowiedź w kontekście albo w limicie tokenów.
@@ -53,10 +73,15 @@ public enum ContextError {
         if isEmptyReply(error) { return "\(model) returned an empty reply." }
         if isContextOverflow(error) {
             // Lokalnie długie transkrypty są dzielone (map-reduce), więc przepełnienie znaczy: kontekst serwera < „Context window" w Settings.
+            let body: String? = {
+                guard case ProviderError.http(_, let text)? = error as? ProviderError else { return nil }
+                return bodySnippet(text)
+            }()
+            let suffix = body.map { " (\($0))" } ?? ""
             return local
-                ? "\(model) can't take this much text: the server's context length is smaller than the Context window set in Settings. "
+                ? "\(model) can't take this much text\(suffix): the server's context length is smaller than the Context window set in Settings. "
                     + "Lower the Context window to the server's value, raise the server's context length, or use a model with a longer context."
-                : "\(model) can't take a transcript this long. Try a model with a longer context. (Splitting long transcripts arrives later.)"
+                : "\(model) can't take a transcript this long\(suffix). Try a model with a longer context. (Splitting long transcripts arrives later.)"
         }
         return "\(model) failed: \(error)"
     }

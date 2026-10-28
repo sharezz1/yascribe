@@ -46,25 +46,41 @@ public enum NoteTitle {
     /// bloku kodu są tolerowane). Brak nagłówka → `title == nil`, `body` = cała odpowiedź.
     public static func parse(_ response: String) -> (title: String?, body: String) {
         let normalized = response.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-        var lines = normalized.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
-        if lines.count >= 2, lines.first!.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```"),
-           lines.last!.trimmingCharacters(in: .whitespacesAndNewlines) == "```" {
-            lines.removeFirst()
-            lines.removeLast()
-        }
+        let lines = normalized.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
+
+        // Pierwszy nagłówek `# ` w pierwszych trzech niepustych liniach.
+        var headingIndex: Int?
         var seen = 0
         for (i, line) in lines.enumerated() {
             let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if t.isEmpty { continue }
             seen += 1
-            if t.hasPrefix("# ") {
-                let title = stripLabel(clean(String(t.dropFirst(2))))
-                let body = lines[(i + 1)...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-                return (title.isEmpty ? nil : title, body)
-            }
+            if t.hasPrefix("# ") { headingIndex = i; break }
             if seen >= 3 { break }
         }
-        return (nil, lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
+
+        // Ogrodzenie kodu może być wokół nagłówka, także gdy przed nim jest preambuła
+        // lub po zamykającym ``` występuje jeszcze tekst. Zamykające zdejmujemy TYLKO razem
+        // z otwierającym — inaczej zjadamy ogrodzenie bloku kodu, który należy do treści.
+        var indicesToRemove = Set<Int>()
+        if let h = headingIndex,
+           let open = lines[..<h].firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```") }) {
+            indicesToRemove.insert(open)
+            if let close = lines[(h + 1)...].firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "```" }) {
+                indicesToRemove.insert(close)
+            }
+        }
+        let stripped = lines.enumerated().filter { !indicesToRemove.contains($0.offset) }.map { $0.element }
+
+        guard let h = headingIndex else {
+            return (nil, stripped.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        let newHeadingIndex = h - indicesToRemove.filter { $0 < h }.count
+        let titleLine = stripped[newHeadingIndex].trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = stripLabel(clean(String(titleLine.dropFirst(2))))
+        let bodyLines = Array(stripped[0..<newHeadingIndex] + stripped[(newHeadingIndex + 1)...])
+        let body = bodyLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return (title.isEmpty ? nil : title, body)
     }
 
     static func clean(_ s: String) -> String {
