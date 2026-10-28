@@ -69,6 +69,15 @@ struct SessionItem: Identifiable, Equatable {
 /// Klucz listy modeli: dostawca + modalność wyjścia (`filter == ""` = lista domyślna).
 struct ModelListKey: Hashable { var provider: UUID; var filter: String }
 
+/// Filtr listy spotkań (TASK-26): wszystkie, bez folderu, albo jeden folder.
+enum MeetingFilter: Equatable {
+    case all
+    case unfiled
+    case folder(String)
+
+    var folderID: String? { if case .folder(let id) = self { return id }; return nil }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -104,6 +113,10 @@ final class AppModel {
     var showSetup = false
     /// Spotkanie czekające na potwierdzenie usunięcia (przycisk „⋯” i menu Meeting) — dialog jest w `MeetingDetailView`.
     var pendingDelete: String?
+    /// Foldery spotkań (TASK-26): `folders.json`; brak pliku = brak folderów, stare sesje są „No folder".
+    var folders = FoldersFile()
+    /// Filtr listy spotkań; sesje w nieistniejącym folderze liczą się jako „No folder".
+    var meetingFilter: MeetingFilter = .all
     /// Sesje z trwającym przebiegiem — drugi przebieg tej samej sesji płaciłby za te same okna (check S15 #2).
     private(set) var transcribing: Set<String> = []
 
@@ -187,6 +200,7 @@ final class AppModel {
         modelNames = read(paths.modelNames, ModelNameCache())
         notes.templates = read(paths.templates, TemplatesFile())
         dictionary = read(paths.dictionary, UserDictionary())
+        folders = read(paths.folders, FoldersFile())
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
     }
@@ -205,7 +219,8 @@ final class AppModel {
     /// Sesje, których katalogi są w użyciu (nagrywanie, transkrypcja, korekta, tytuł, notatka).
     private var busySessions: Set<String> {
         var s = transcribing.union(notes.corrections.sessions).union(notes.titles.sessions)
-        s.formUnion(notes.generation.filter { $0.value == .generating }.keys)
+        // Bilety generowania, także anulowanego: zadanie może jeszcze zapisać notatkę (TASK-25).
+        s.formUnion(notes.generatingSessions)
         if let d = recording.directory { s.insert(d.lastPathComponent) }
         return s
     }
@@ -701,10 +716,14 @@ final class AppModel {
     /// Otwarte spotkanie (widok szczegółów) — dla menu Meeting; poza Meetings nic nie jest „otwarte”.
     var openItem: SessionItem? { section == .meetings ? sessions.first { $0.id == selectedSessionID } : nil }
 
-    /// Sesji nagrywanej ani transkrybowanej nie usuwamy (katalog jest w użyciu); w trakcie przenoszenia żadnej (R3).
-    func canDelete(_ item: SessionItem) -> Bool {
-        recordingsMove == nil && !SessionStatus.isRecording(item.url, recordingDirectory: recording.directory) && !isTranscribing(item)
+    /// Powód, dla którego teraz nie wolno usunąć spotkania; `nil` = wolno. Oceniany także po potwierdzeniu.
+    func deleteBlocker(_ item: SessionItem) -> String? {
+        DeleteMeeting.blocker(recording: SessionStatus.isRecording(item.url, recordingDirectory: recording.directory),
+                             busy: busySessions.contains(item.id), moving: recordingsMove != nil)
     }
+
+    /// Sesji nagrywanej, transkrybowanej albo przetwarzanej nie usuwamy (katalog jest w użyciu).
+    func canDelete(_ item: SessionItem) -> Bool { deleteBlocker(item) == nil }
 
     func copyNotes(_ item: SessionItem) {
         guard let md = item.notes.summary?.markdown else { return }
@@ -714,17 +733,155 @@ final class AppModel {
 
     func showInFinder(_ item: SessionItem) { NSWorkspace.shared.activateFileViewerSelecting([item.url]) }
 
-    /// Do Kosza, nie trwale. Wraca do listy i przeładowuje ją; błąd trafia do `lastError`.
+    /// Potwierdzenie przed usunięciem z listy (menu kontekstowe wiersza); szczegóły mają własny dialog.
+    func requestDelete(_ item: SessionItem) {
+        if let reason = deleteBlocker(item) {
+            lastError = "Couldn't delete the meeting: \(reason)"
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Move “\(item.title)” to the Trash?"
+        alert.informativeText = "The meeting folder, with its recordings and notes, goes to the Trash. You can put it back from there."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Move to Trash")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        deleteSession(item.id)
+    }
+
+    /// Do Kosza, nie trwale. Cały katalog sesji. Bramka sprawdzana ponownie po potwierdzeniu, a najnowsze
+    /// My notes zapisujemy przed przeniesieniem — gdy zapis padnie, nie usuwamy niczego (TASK-25).
     func deleteSession(_ id: String) {
         pendingDelete = nil
-        guard let item = sessions.first(where: { $0.id == id }), canDelete(item) else { return }
+        guard let item = sessions.first(where: { $0.id == id }) else { return }
+        if let reason = deleteBlocker(item) { lastError = "Couldn't delete the meeting: \(reason)"; return }
+        if let problem = notes.flushPendingSaves(for: id) { lastError = "Couldn't delete the meeting: \(problem)"; return }
+        // Stan mógł się zmienić w trakcie zapisu — druga ocena tuż przed przeniesieniem.
+        if let reason = deleteBlocker(item) { lastError = "Couldn't delete the meeting: \(reason)"; return }
         do {
-            try FileManager.default.trashItem(at: item.url, resultingItemURL: nil)
+            switch try trashDestination() {
+            case .systemTrash:
+                try FileManager.default.trashItem(at: item.url, resultingItemURL: nil)
+            case .directory(let trash):
+                try FileManager.default.moveItem(at: item.url, to: trash.appendingPathComponent(item.url.lastPathComponent))
+            }
             if selectedSessionID == id { selectedSessionID = nil }
         } catch {
             lastError = "Couldn't move the meeting to the Trash: \(error.localizedDescription)"
         }
         reloadSessions()
+    }
+
+    /// Dokąd idzie usunięte spotkanie. Produkcja: systemowy Kosz. Kopia do odbioru GUI (tylko DEBUG) może wskazać
+    /// testowy katalog przez `YASCRIBE_TEST_TRASH_DIR`; zła ścieżka to błąd, nie cichy powrót do Kosza użytkownika.
+    private func trashDestination() throws -> MeetingTrash.Destination {
+        #if DEBUG
+        let requested = ProcessInfo.processInfo.environment[MeetingTrash.testDirectoryVariable]
+        #else
+        let requested: String? = nil // produkcja: zmienna nie istnieje dla tej kompilacji
+        #endif
+        return try MeetingTrash.destination(requested: requested, dataRoot: paths.root)
+    }
+
+    // MARK: Foldery (TASK-26)
+
+    /// Sesja widoczna przy bieżącym filtrze. `folderID` wskazujący usunięty folder = „No folder" (stare metadane czytelne).
+    func matchesFilter(_ item: SessionItem) -> Bool {
+        switch meetingFilter {
+        case .all: return true
+        case .unfiled: return folders.folder(item.notes.meta.folderID) == nil
+        case .folder(let id): return item.notes.meta.folderID == id
+        }
+    }
+
+    var filterLabel: String {
+        switch meetingFilter {
+        case .all: "All folders"
+        case .unfiled: "No folder"
+        case .folder(let id): folders.folder(id)?.name ?? "No folder"
+        }
+    }
+
+    /// Etykieta folderu sesji; `nil` = bez folderu (albo folder usunięty).
+    func folderName(of item: SessionItem) -> String? { folders.folder(item.notes.meta.folderID)?.name }
+
+    private func saveFolders() -> String? {
+        do { try JSONFile.save(folders, to: paths.folders); return nil }
+        catch { return "Couldn't save the folders: \(error.localizedDescription)" }
+    }
+
+    /// `nil` = utworzono; tekst = powód odmowy (pusta, za długa, powtórzona nazwa).
+    @discardableResult
+    func createFolder(_ name: String) -> String? {
+        let previous = folders
+        do { try folders.create(name) } catch { return error.localizedDescription }
+        if let problem = saveFolders() { folders = previous; return problem }
+        return nil
+    }
+
+    @discardableResult
+    func renameFolder(_ id: String, to name: String) -> String? {
+        let previous = folders
+        do { try folders.rename(id, to: name) } catch { return error.localizedDescription }
+        if let problem = saveFolders() { folders = previous; return problem }
+        return nil
+    }
+
+    /// Usuwa folder, spotkania zostają (tracą tylko przypisanie). `nil` = usunięto. Pamięć wraca do stanu z dysku,
+    /// gdy zapis padnie (żadnego folderu „tylko w pamięci").
+    @discardableResult
+    func deleteFolder(_ id: String) -> String? {
+        let previous = folders
+        let previousFilter = meetingFilter
+        guard folders.delete(id) else { return FolderError.notFound.localizedDescription }
+        if let problem = saveFolders() { folders = previous; meetingFilter = previousFilter; return problem }
+        if meetingFilter == .folder(id) { meetingFilter = .all }
+        return nil
+    }
+
+    func promptNewFolder(assignTo item: SessionItem? = nil) {
+        guard let name = Self.promptForName(title: "New Folder", message: "Meetings stay where they are on disk; the folder only groups them.",
+                                           confirm: "Create") else { return }
+        if let error = createFolder(name) {
+            lastError = error
+        } else if let item, let folder = folders.folders.last {
+            notes.setFolder(folder.id, for: item)
+        }
+    }
+
+    func promptRenameFolder(_ id: String) {
+        guard let current = folders.folder(id) else { return }
+        guard let name = Self.promptForName(title: "Rename Folder", message: nil, confirm: "Rename", initial: current.name) else { return }
+        if let error = renameFolder(id, to: name) { lastError = error }
+    }
+
+    /// Potwierdzenie: spotkania w folderze zostają, tylko przestają być przypisane.
+    func confirmDeleteFolder(_ id: String) {
+        guard let folder = folders.folder(id) else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete the folder “\(folder.name)”?"
+        alert.informativeText = "Its meetings are kept; they just move to “No folder”."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Delete Folder")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        if let error = deleteFolder(id) { lastError = error }
+    }
+
+    /// Jedno pole tekstowe w `NSAlert`; `nil` = anulowano.
+    private static func promptForName(title: String, message: String?, confirm: String, initial: String = "") -> String? {
+        let alert = NSAlert()
+        alert.messageText = title
+        if let message { alert.informativeText = message }
+        alert.addButton(withTitle: confirm)
+        alert.addButton(withTitle: "Cancel")
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        field.stringValue = initial
+        field.placeholderString = "Folder name"
+        alert.accessoryView = field
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        return field.stringValue
     }
 
     /// Zapis własnych szablonów; `nil` = zapisano, tekst = powód.

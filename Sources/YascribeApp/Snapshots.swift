@@ -104,6 +104,15 @@ enum Snapshots {
                 }
                 try render("presets", size: CGSize(width: 900, height: 600), dark: dark, model: model) { PresetsView() }
                 try render("meetings", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
+                // Akcje w wierszu: folder przypisany i brak folderu, także przy węższym oknie.
+                let foldersBefore = model.folders
+                let sessionsBefore = model.sessions
+                let folder = try model.folders.create("Project planning and research")
+                model.sessions[0].notes.meta.folderID = folder.id
+                try render("meetings-folders", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }
+                try render("meetings-folders-narrow", size: CGSize(width: 620, height: 600), dark: dark, model: model) { MeetingsView() }
+                model.folders = foldersBefore
+                model.sessions = sessionsBefore
                 // Pola tekstowe: edycja presetu jest w `.sheet`, którego `NSHostingView` nie przechwytuje; T4 renderuje `PresetSheet` bezpośrednio.
                 let form = PresetEditorState()
                 form.draft = model.presets.presets.first

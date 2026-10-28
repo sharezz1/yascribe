@@ -111,6 +111,7 @@ struct MeetingDetailView: View {
                     item.audioDeletedAfterDays.map { "Audio deleted after \($0) days" } ?? "",
                 ])
                 EventPickerChip(item: item)
+                FolderChip(item: item)
                 if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
                 ForEach(item.trackProblems, id: \.trackID) { problemButton($0) }
             }

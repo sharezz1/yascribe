@@ -37,16 +37,21 @@ public struct NoteGenerator: Sendable {
     public var mapLimits: ChatLimits?
     /// Czy model API może „myśleć" przed odpowiedzią (ustawienie Settings; `GlobalSettings.summaryThinkingEnabled`). Lokalnych nie dotyczy.
     public var thinking = true
+    /// Tryb ścisły zapisu (TASK-25): notatka nie odtworzy katalogu spotkania, którego już nie ma (np. po Koszu).
+    /// Domyślnie wyłączony — inne klienty generatora zachowują się bez zmian.
+    public let requiresExistingSession: Bool
 
     /// Poziomy kondensacji (pierwsza mapa + hierarchia), po których zbyt długie wejście reduce jest jawnym błędem.
     static let maxMapLevels = 3
 
-    public init(client: OpenAICompatibleClient, model: String, timeout: Double = 180, chatTimeout: Double = 120, maxTokens: Int? = nil) {
+    public init(client: OpenAICompatibleClient, model: String, timeout: Double = 180, chatTimeout: Double = 120, maxTokens: Int? = nil,
+                requiresExistingSession: Bool = false) {
         self.client = client
         self.model = model
         self.timeout = timeout
         self.chatTimeout = chatTimeout
         self.maxTokens = maxTokens
+        self.requiresExistingSession = requiresExistingSession
     }
 
     /// `budget == nil` (API) — zawsze jeden przebieg. Z budżetem: jeden przebieg, gdy CAŁY prompt (z My notes i kontekstem) mieści
@@ -56,7 +61,7 @@ public struct NoteGenerator: Sendable {
                          now: Date = Date(),
                          onProblem: @Sendable (String) -> Void = { _ in },
                          progress: (@Sendable (NoteProgress) -> Void)? = nil) async throws -> NoteSummary {
-        let store = NotesStore(session: session)
+        let store = NotesStore(session: session, requiresExistingSession: requiresExistingSession)
         let myNotes = store.readMyNotes()
         guard var prompt = NotePromptBuilder.build(template: template, transcript: transcript, myNotes: myNotes,
                                                    context: context, notesLanguage: notesLanguage,

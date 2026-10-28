@@ -25,6 +25,8 @@ public struct YascribePaths: Sendable {
     public var modelNames: URL { root.appendingPathComponent("model-names.json") }
     public var templates: URL { root.appendingPathComponent("templates.json") }
     public var dictionary: URL { root.appendingPathComponent("dictionary.json") }
+    /// Foldery spotkań (TASK-26); brak pliku = brak folderów.
+    public var folders: URL { root.appendingPathComponent("folders.json") }
     public var sessions: URL { root.appendingPathComponent("sessions") }
 }
 
@@ -48,8 +50,12 @@ public enum JSONFile {
         return try decoder.decode(T.self, from: Data(contentsOf: url))
     }
 
-    public static func save<T: Encodable>(_ value: T, to url: URL) throws {
-        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    /// `createParents: false` — zapis bez tworzenia katalogów nadrzędnych (TASK-25): brak rodzica kończy się błędem
+    /// zapisu, więc późny zapis nie odtworzy usuniętego spotkania. Domyślnie `true` — inni klienci bez zmian.
+    public static func save<T: Encodable>(_ value: T, to url: URL, createParents: Bool = true) throws {
+        if createParents {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        }
         try encoder.encode(value).write(to: url, options: .atomic)
     }
 }
