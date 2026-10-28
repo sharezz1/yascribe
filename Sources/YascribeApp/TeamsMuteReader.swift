@@ -10,6 +10,7 @@ enum TeamsMuteReader {
     /// Drzewo okna spotkania ma setki elementów; sufit chroni przed pełnym przejściem po całym czacie.
     private static let nodeLimit = 4000
     nonisolated(unsafe) private static var prompted = false
+    nonisolated(unsafe) private static var enabledPID: pid_t?
 
     static var isRunning: Bool { !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty }
 
@@ -26,6 +27,13 @@ enum TeamsMuteReader {
               let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else { return nil }
         let root = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetMessagingTimeout(root, 0.5)
+        // Chromium (WebView Teams) po restarcie nie wystawia drzewa treści, dopóki jakiś klient AX o nie poprosi (pomiar 2026-10-28:
+        // 20 węzłów zamiast ~1350). Zwracane kody błędu są mylące (-25205/-25208), a flaga i tak działa. Wywołanie raz na proces Teams.
+        if enabledPID != app.processIdentifier {
+            enabledPID = app.processIdentifier
+            _ = AXUIElementSetAttributeValue(root, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+            _ = AXUIElementSetAttributeValue(root, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        }
         var queue: [AXUIElement] = elements(root, kAXWindowsAttribute)
         var i = 0
         while i < queue.count, i < nodeLimit {
