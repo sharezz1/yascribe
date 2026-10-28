@@ -22,7 +22,11 @@ public enum ContextError {
         let withoutTags = oneLine.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
         let collapsed = withoutTags.replacingOccurrences(of: "[ \t]+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
-        let snippet = String(collapsed.prefix(160))
+        // Niektóre serwery zwracają HTML z powtórzonym tekstem (np. "413 Request Entity Too Large 413 Request Entity Too Large").
+        let words = collapsed.components(separatedBy: " ")
+        let deduped = words.enumerated().compactMap { $0.offset == 0 || words[$0.offset - 1] != $0.element ? $0.element : nil }
+            .joined(separator: " ")
+        let snippet = String(deduped.prefix(160))
         return snippet.isEmpty ? nil : snippet
     }
 

@@ -85,19 +85,19 @@ Para with **bold**.
     #expect(text.contains("A") && text.contains("B") && text.contains("1") && text.contains("2"))
 }
 
-@Test func tableRendersWithSeparatorsAndBoldHeader() {
+@Test func tableRendersWithSeparatorsAndBoldHeader() throws {
     let note = MarkdownBlocks.attributed(MarkdownBlocks.group("| A | B |\n|---|---|\n| 1 | 2 |"))
     #expect(note.string.contains("A | B"))
     #expect(note.string.contains("1 | 2"))
     let headerRange = (note.string as NSString).range(of: "A | B")
-    let headerFont = note.attribute(.font, at: headerRange.location, effectiveRange: nil) as! NSFont
+    let headerFont = try #require(note.attribute(.font, at: headerRange.location, effectiveRange: nil) as? NSFont)
     #expect(NSFontManager.shared.traits(of: headerFont).contains(.boldFontMask))
 }
 
-@Test func codeBlockUsesMonospacedFontAndBackground() {
+@Test func codeBlockUsesMonospacedFontAndBackground() throws {
     let note = MarkdownBlocks.attributed(MarkdownBlocks.group("```swift\nlet x = 1\n```"))
     let codeRange = (note.string as NSString).range(of: "let x = 1")
-    let codeFont = note.attribute(.font, at: codeRange.location, effectiveRange: nil) as! NSFont
+    let codeFont = try #require(note.attribute(.font, at: codeRange.location, effectiveRange: nil) as? NSFont)
     #expect(codeFont.isFixedPitch)
     #expect(note.attribute(.backgroundColor, at: codeRange.location, effectiveRange: nil) != nil)
 }

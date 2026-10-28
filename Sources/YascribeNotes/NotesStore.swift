@@ -38,12 +38,6 @@ public enum BackupName {
     }
 }
 
-/// `<sesja>/notes/`: `my-notes.md`, `summary.json`, `meta.json`, `summary-<ts>.json` (kopie przy regeneracji).
-/// Katalog `notes/` leży obok `runs/` — `summarize()` i wyszukiwanie przebiegów go nie czytają.
-///
-/// Brak pliku to nie to samo co plik, którego nie da się odczytać (Review Luna #2): nieczytelny plik jest przed
-/// PIERWSZYM zapisem odkładany jako `<nazwa>.corrupt-<yyyyMMdd-HHmmss>` (jak `AppModel.load()`), a metody zapisu
-/// zwracają komunikat z nazwą. `problems()` mówi, które pliki są nieczytelne, zanim cokolwiek zapiszemy.
 /// Procesowy rejestr blokad dla zapisów JSON, kluczowany ścieżką pliku: różne notatki nie blokują się,
 /// a wszystkie instancje `NotesStore` na ten sam plik szeregują odczyt-zmiana-zapis atomowo.
 private final class FileLockRegistry: @unchecked Sendable {
@@ -60,6 +54,12 @@ private final class FileLockRegistry: @unchecked Sendable {
     }
 }
 
+/// `<sesja>/notes/`: `my-notes.md`, `summary.json`, `meta.json`, `summary-<ts>.json` (kopie przy regeneracji).
+/// Katalog `notes/` leży obok `runs/` — `summarize()` i wyszukiwanie przebiegów go nie czytają.
+///
+/// Brak pliku to nie to samo co plik, którego nie da się odczytać (Review Luna #2): nieczytelny plik jest przed
+/// PIERWSZYM zapisem odkładany jako `<nazwa>.corrupt-<yyyyMMdd-HHmmss>` (jak `AppModel.load()`), a metody zapisu
+/// zwracają komunikat z nazwą. `problems()` mówi, które pliki są nieczytelne, zanim cokolwiek zapiszemy.
 public struct NotesStore: Sendable {
     public let directory: URL
     private static let lockRegistry = FileLockRegistry()

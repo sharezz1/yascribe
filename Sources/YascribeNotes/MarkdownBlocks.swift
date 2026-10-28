@@ -29,9 +29,11 @@ public enum MarkdownBlocks {
             blocks.append(MarkdownBlock(kind: kind(comps), depth: depth(comps), text: piece))
         }
         // Fenced code blocks carry a trailing newline before the closing fence.
-        if let last = blocks.last, case .codeBlock = last.kind {
-            let trimmed = String(last.text.characters).trimmingCharacters(in: .newlines)
-            blocks[blocks.count - 1].text = AttributedString(trimmed)
+        for i in blocks.indices {
+            if case .codeBlock = blocks[i].kind {
+                let trimmed = String(blocks[i].text.characters).trimmingCharacters(in: .newlines)
+                blocks[i].text = AttributedString(trimmed)
+            }
         }
         return blocks
     }
