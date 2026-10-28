@@ -139,20 +139,20 @@ private func capitalizing(_ user: String) -> String {
     #expect(stub.calls.count == 1 && stub.calls[0].reasoningEnabled == false)
 }
 
-@Test func cancellationCountsAllUnprocessedBatchesAsFailed() async {
-    // Po anulowaniu każda nieprzetworzona partia liczy się jako nieudana; transkrypt jest nietknięty poza tymi partiami.
+@Test func cancellationCountsOnlyUnprocessedBatchesAsFailed() async {
+    // Po anulowaniu tylko nieprzetworzone partie liczą się jako nieudane; przetworzone partie zostają poprawione.
     final class Calls: @unchecked Sendable { var count = 0 }
     let calls = Calls()
     let t = transcript((0..<12).map { utt("wypowiedź numer \($0) o prognozie", at: Double($0) * 5) })
     let stub = ChatStub { capitalizing($0.user) }
-    var c = corrector(stub, maxBatchChars: 95)
+    let c = corrector(stub, maxBatchChars: 95)
     let r = await c.correct(t, language: .polish, isCancelled: {
         calls.count += 1
         return calls.count > 1 // anulowanie po pierwszej partii
     })
     #expect(r.batches > 1)
-    #expect(r.failedBatches == r.batches)
-    #expect(r.failedCompletely)
+    #expect(r.failedBatches == r.batches - 1)
+    #expect(!r.failedCompletely)
     #expect(r.firstError?.contains("cancelled") == true)
     let changed = r.transcript.utterances.filter { $0.text.hasSuffix(".") }.count
     let original = r.transcript.utterances.filter { !$0.text.hasSuffix(".") }.count

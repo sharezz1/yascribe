@@ -161,7 +161,7 @@ public struct Corrector: Sendable {
         var firstError: String?
         for (index, batch) in batches.enumerated() {
             if isCancelled() {
-                failed = batches.count
+                failed += batches.count - index
                 if firstError == nil { firstError = "Correction was cancelled." }
                 break
             }
