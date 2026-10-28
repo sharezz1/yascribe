@@ -72,7 +72,19 @@ import Testing
     // Tekst przed niezamkniętym ogrodzeniem zostaje, samo ogrodzenie znika.
     let withPreamble = NoteTitle.parse("Uwaga.\n```\n# Plan\nTreść")
     #expect(withPreamble.title == "Plan")
-    #expect(withPreamble.body == "Uwaga.\n```\nTreść")
+    #expect(withPreamble.body == "Uwaga.\nTreść")
+}
+
+@Test func titleToleratesPreambleBeforeCodeFence() {
+    let r = NoteTitle.parse("Oto notatka:\n```markdown\n# Plan\nTreść\n```")
+    #expect(r.title == "Plan")
+    #expect(r.body == "Oto notatka:\nTreść")
+}
+
+@Test func titleToleratesTextAfterClosingFence() {
+    let r = NoteTitle.parse("```markdown\n# Plan\nTreść\n```\nUwaga końcowa")
+    #expect(r.title == "Plan")
+    #expect(r.body == "Treść\nUwaga końcowa")
 }
 
 @Test func noHeadingMeansNoTitle() {
