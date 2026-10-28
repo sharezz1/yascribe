@@ -839,10 +839,14 @@ final class AppModel {
         return nil
     }
 
-    func promptNewFolder() {
+    func promptNewFolder(assignTo item: SessionItem? = nil) {
         guard let name = Self.promptForName(title: "New Folder", message: "Meetings stay where they are on disk; the folder only groups them.",
                                            confirm: "Create") else { return }
-        if let error = createFolder(name) { lastError = error }
+        if let error = createFolder(name) {
+            lastError = error
+        } else if let item, let folder = folders.folders.last {
+            notes.setFolder(folder.id, for: item)
+        }
     }
 
     func promptRenameFolder(_ id: String) {
