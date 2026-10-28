@@ -150,6 +150,30 @@ private func writeUnreadable(_ store: NotesStore) throws {
     #expect(try String(contentsOf: store.directory.appendingPathComponent(corrupt), encoding: .utf8) == "{")
 }
 
+@Test func corruptMetaMoveFailureLeavesOriginalUntouched() throws {
+    // Jeśli przeniesienie nieczytelnego meta.json się nie uda, updateMeta rzuca i meta.json pozostaje nietknięty.
+    let session = tempDir()
+    let fm = FileManager.default
+    defer {
+        _ = try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: session.path)
+        try? fm.removeItem(at: session)
+    }
+    let store = NotesStore(session: session)
+    try fm.createDirectory(at: store.directory, withIntermediateDirectories: true)
+    try "{".write(to: store.directory.appendingPathComponent("meta.json"), atomically: true, encoding: .utf8)
+    // notes/ bez prawa zapisu — moveItem do podkatalogu .corrupt-... się nie uda.
+    try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: store.directory.path)
+
+    #expect(throws: (any Error).self) {
+        try store.updateMeta { $0.manualTitle = "Fixed" }
+    }
+
+    // Przywróć prawo zapisu, żeby móc sprawdzić zawartość.
+    try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: store.directory.path)
+    #expect(try String(contentsOf: store.directory.appendingPathComponent("meta.json"), encoding: .utf8) == "{")
+    #expect(try fm.contentsOfDirectory(atPath: store.directory.path).allSatisfy { !$0.contains(".corrupt-") })
+}
+
 extension JSONDecoder {
     static var iso: JSONDecoder {
         let d = JSONDecoder()
