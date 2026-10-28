@@ -60,12 +60,12 @@ public enum NoteTitle {
         }
 
         // Ogrodzenie kodu może być wokół nagłówka, także gdy przed nim jest preambuła
-        // lub po zamykającym ``` występuje jeszcze tekst.
+        // lub po zamykającym ``` występuje jeszcze tekst. Zamykające zdejmujemy TYLKO razem
+        // z otwierającym — inaczej zjadamy ogrodzenie bloku kodu, który należy do treści.
         var indicesToRemove = Set<Int>()
-        if let h = headingIndex {
-            if let open = lines[..<h].firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```") }) {
-                indicesToRemove.insert(open)
-            }
+        if let h = headingIndex,
+           let open = lines[..<h].firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```") }) {
+            indicesToRemove.insert(open)
             if let close = lines[(h + 1)...].firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "```" }) {
                 indicesToRemove.insert(close)
             }
