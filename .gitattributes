@@ -1,0 +1,2 @@
+# SpeexDSP vendor files stay byte-for-byte identical to the official source.
+Sources/CSpeexDSP/vendor/** whitespace=-space-before-tab,-blank-at-eof

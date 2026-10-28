@@ -15,6 +15,9 @@ public struct RunInput: Codable, Equatable, Sendable {
     public var maxChunkSeconds: Double
     public var crosstalk: CrosstalkFilter
     public var trackFrames: [String: Int]
+    /// Absent in legacy runs: retain their original waveform/cache behavior.
+    public var offlineAEC: OfflineAEC.Configuration? = nil
+    public var offlineAECFingerprint: String? = nil
 }
 
 public struct TranscriptionProgress: Equatable, Sendable {
@@ -81,9 +84,11 @@ public struct TranscriptionRunner: Sendable {
     public let maxChunkSeconds: Double
     public let gate: EnergyGate
     public let crosstalk: CrosstalkFilter
+    public let offlineAEC: OfflineAEC.Configuration?
 
     public init(session: URL, runID: String, snapshot: RunSnapshot, client: any TranscriptionClient,
-                maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter()) {
+                maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter(),
+                offlineAEC: OfflineAEC.Configuration? = .init()) {
         self.session = SessionDirectory(url: session)
         self.runID = runID
         self.snapshot = snapshot
@@ -91,6 +96,7 @@ public struct TranscriptionRunner: Sendable {
         self.maxChunkSeconds = maxChunkSeconds
         self.gate = gate
         self.crosstalk = crosstalk
+        self.offlineAEC = offlineAEC
     }
 
     /// „Oni" = ścieżka systemowa; „ja" = mikrofon po AEC, a gdy go brak albo gdy jego ścieżka
@@ -110,9 +116,19 @@ public struct TranscriptionRunner: Sendable {
         let summary = try session.summarize()
         let dir = RunDirectory(session: session.url, runID: runID)
         try FileManager.default.createDirectory(at: dir.url.appendingPathComponent("chunks"), withIntermediateDirectories: true)
-        let input = RunInput(snapshot: snapshot, gate: gate.config, maxChunkSeconds: maxChunkSeconds, crosstalk: crosstalk,
+        let saved = try JSONFile.load(RunInput?.self, from: dir.input, default: nil)
+        // An old run has no AEC config: upgrading must not change paid windows.
+        let aec: OfflineAEC.Configuration?
+        if let saved { aec = saved.offlineAEC == nil ? nil : offlineAEC }
+        else { aec = offlineAEC }
+        let tracks = Self.tracks(in: summary)
+        var input = RunInput(snapshot: snapshot, gate: gate.config, maxChunkSeconds: maxChunkSeconds, crosstalk: crosstalk,
                              trackFrames: Dictionary(summary.tracks.map { ($0.id, $0.frames ?? -1) }, uniquingKeysWith: { a, _ in a }))
-        if let saved = try JSONFile.load(RunInput?.self, from: dir.input, default: nil) {
+        input.offlineAEC = aec
+        if aec != nil {
+            input.offlineAECFingerprint = try OfflineAEC.fingerprint(session: session, trackIDs: tracks.map(\.id))
+        }
+        if let saved {
             guard saved == input else { throw RunError.inputMismatch }
         } else {
             try JSONFile.save(input, to: dir.input)
@@ -123,7 +139,8 @@ public struct TranscriptionRunner: Sendable {
         var plan: [(track: String, chunk: Chunk, samples: [Float])] = []
         var speakers: [String: Speaker] = [:]
         var systemX: [Float]?
-        for (id, speaker) in Self.tracks(in: summary) { // `tracks(in:)` zwraca `system` pierwszy
+        var aecReport: OfflineAEC.Report? = aec.map { _ in .init(.notApplicable) }
+        for (id, speaker) in tracks { // `tracks(in:)` zwraca `system` pierwszy
             speakers[id] = speaker
             let caf = try CAFReader(url: session.trackURL(id))
             let x = try Resampler.toASR(caf.samples, sampleRate: caf.sampleRate, channels: caf.channels)
@@ -133,8 +150,15 @@ public struct TranscriptionRunner: Sendable {
                 regions = crosstalk.keep(regions, mic: x, system: sys, micOffsetSeconds: offset)
             }
             if id == "system" { systemX = x }
+            // Both gating and quiet-point chunk splitting use the original.
+            var asrSamples = x
+            if id == "mic_raw", let aec, let sys = systemX {
+                let processed = try OfflineAEC.process(microphone: x, system: sys, summary: summary, configuration: aec)
+                asrSamples = processed.samples
+                aecReport = processed.report
+            }
             let chunks = ChunkPacker(maxSeconds: maxChunkSeconds).pack(regions, samples: x)
-            for c in chunks { plan.append((id, c, x)) }
+            for c in chunks { plan.append((id, c, asrSamples)) }
         }
 
         var results: [ChunkResult] = []
@@ -174,7 +198,8 @@ public struct TranscriptionRunner: Sendable {
         try JSONFile.save(transcript, to: dir.transcript)
         try JSONFile.save(RunMetadata(runID: runID, snapshot: snapshot, startedAt: started, finishedAt: Date(),
                                       chunkCount: plan.count, requestCount: requests, audioSecondsSent: secondsSent,
-                                      failedChunkCount: failures.count, languageFlagCount: transcript.languageFlagCount),
+                                      failedChunkCount: failures.count, languageFlagCount: transcript.languageFlagCount,
+                                      offlineAEC: aecReport),
                           to: dir.metadata)
         return transcript
     }

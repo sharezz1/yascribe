@@ -18,6 +18,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/YascribeApp"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp -R Resources/ThirdPartyNotices "$APP/Contents/Resources/ThirdPartyNotices"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
 # Wersja z VERSION, numer builda = liczba commitów (rośnie z każdym commitem; Sparkle porównuje `CFBundleVersion`).
