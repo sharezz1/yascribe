@@ -50,10 +50,31 @@ final class NotesModel {
 
     /// Trwające generowanie (klucz: id sesji); token odróżnia przebieg anulowany od nowego na tej samej sesji.
     private var generationRuns: [String: (token: UUID, task: Task<Void, Never>)] = [:]
+    /// Bilety realnie działających zadań (id sesji → tokeny). Wpis zostaje do faktycznego końca zadania, także po
+    /// „Cancel" — dopóki zadanie może jeszcze zapisać notatkę, sesja jest zajęta (TASK-25: usunięcie w tym oknie
+    /// przeniosłoby katalog, a późny zapis by go odtworzył). Zbiór na sesję, bo po Cancel może wystartować nowe zadanie.
+    private var inflight: [String: Set<UUID>] = [:]
     private var saveTasks: [String: Task<Void, Never>] = [:]
     private var staleReported: Set<String> = []
     /// Treść My notes czekająca na autozapis (klucz: id sesji).
     private var pendingSaves: [String: (session: URL, text: String)] = [:]
+
+    /// Sesje z zadaniem generowania, które jeszcze się nie zakończyło (także anulowane w trakcie).
+    var generatingSessions: Set<String> { Set(inflight.keys) }
+
+    private func startTicket(_ id: String, _ token: UUID) { inflight[id, default: []].insert(token) }
+
+    /// Zdejmuje tylko własny bilet: starsze zakończenie nie zwalnia nowszego zadania tej samej sesji.
+    private func endTicket(_ id: String, _ token: UUID) {
+        inflight[id]?.remove(token)
+        if inflight[id]?.isEmpty == true { inflight[id] = nil }
+    }
+
+    /// Zapis notatek spotkania w trybie ścisłym: brak katalogu sesji = odmowa, nie odtworzenie (TASK-25).
+    private func store(_ session: URL) -> NotesStore { NotesStore(session: session, requiresExistingSession: true) }
+
+    /// Jest treść czekająca na autozapis (klucz: id sesji).
+    func hasPendingNotes(_ id: String) -> Bool { pendingSaves[id] != nil }
 
     func state(_ id: String) -> GenState { generation[id] ?? .idle }
 
@@ -95,7 +116,7 @@ final class NotesModel {
     func setOverride(_ role: Role, _ value: RoleOverride?, item: SessionItem) {
         guard !isMoving() else { report(Self.movingMessage); return }
         do {
-            if let note = try NotesStore(session: item.url).updateMeta({ $0.setOverride(role, value) }) { report(note) }
+            if let note = try store(item.url).updateMeta({ $0.setOverride(role, value) }) { report(note) }
         } catch {
             report("Couldn't save the model choice: \(error)")
         }
@@ -146,7 +167,7 @@ final class NotesModel {
         // Słownik, reguły i uczestnicy z jednej chwili, przed pierwszym `await`: edycja słownika w trakcie sondy kontekstu
         // nie miesza wersji wejścia i polecenia. Uczestnicy z `meta.json` teraz, więc późne powiązanie wydarzenia też się liczy.
         let dict = dictionary(), rules = replacementRules()
-        let link = NotesStore(session: sessionURL).readMeta().calendarEvent
+        let link = store(sessionURL).readMeta().calendarEvent
         let input = Replacement.apply(transcript, rules: rules)
         correctionFailure[id] = nil
         onChange()
@@ -169,7 +190,10 @@ final class NotesModel {
         }
         if result.batches > 0, outcome.mayPublish {
             let run = RunDirectory(session: sessionURL, runID: runID)
-            let saved = (try? JSONFile.save(result, to: run.corrected)) != nil
+            // Katalogu spotkania, którego już nie ma, nie odtwarzamy późnym zapisem (TASK-25): także sam zapis
+            // nie tworzy rodziców, więc usunięcie w trakcie korekty kończy się porażką zapisu, nie nową sesją.
+            guard FileManager.default.fileExists(atPath: sessionURL.path) else { return transcript }
+            let saved = (try? JSONFile.save(result, to: run.corrected, createParents: false)) != nil
             // Ślad do odbioru §8.4 tylko po zapisanej korekcie (R18): stary ślad obok nowego `corrected.json` kłamałby.
             if let error = VocabularyTrace.update(promptLines: used?.promptLines, at: run.url.appendingPathComponent("vocabulary.txt"),
                                                   correctionSaved: saved) {
@@ -204,7 +228,8 @@ final class NotesModel {
         generation[id] = .generating
         let limits = ChatLimits.for(client.provider, call: .note)
         var generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
-                                      chatTimeout: limits.transport, maxTokens: limits.maxTokens)
+                                      chatTimeout: limits.transport, maxTokens: limits.maxTokens,
+                                      requiresExistingSession: true)
         generator.thinking = choice.thinking ?? summaryThinking()
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
@@ -213,6 +238,7 @@ final class NotesModel {
         let dict = dictionary(), link = item.notes.meta.calendarEvent
         let transcript = Replacement.apply(source, rules: replacementRules())
         let token = UUID()
+        startTicket(id, token) // bilet przed pierwszym `await`: Cancel nie zwalnia sesji przed końcem zadania
         let task = Task {
             do {
                 // Lokalny serwer: kontekst sprawdzamy w chwili użycia (`/api/ps` zna tylko model załadowany); budżet włącza map-reduce.
@@ -260,7 +286,9 @@ final class NotesModel {
     }
 
     /// Kończy przebieg, o ile nie został anulowany (wtedy stan już ustawił `cancelGeneration`, a nowy przebieg może trwać).
+    /// Bilet trzyma sesję zajętą aż do tej chwili — także gdy przebieg był anulowany.
     private func finishGeneration(_ id: String, _ token: UUID, _ result: GenState) {
+        if inflight[id]?.contains(token) == true { endTicket(id, token) }
         if generationRuns[id]?.token == token {
             generationRuns[id] = nil
             progress[id] = nil
@@ -275,7 +303,7 @@ final class NotesModel {
         let id = sessionURL.lastPathComponent
         var working = transcript
         // Wznowienie też bierze własny model sesji (jeśli jest), nie tylko preset.
-        let saved = NotesStore(session: sessionURL).readMeta().modelOverrides
+        let saved = store(sessionURL).readMeta().modelOverrides
         let known = knownProviderIDs()
         if let corr = CorrectionModel.resolve(frozen: snapshot.preset, override: saved?.usable(.correction, knownProviders: known)) {
             working = await runCorrection(sessionURL: sessionURL, runID: runID, assignment: corr,
@@ -295,7 +323,7 @@ final class NotesModel {
             _ = await AutoTitle.generate(client: client, model: choice.assignment.model,
                                          transcript: Replacement.apply(working, rules: replacementRules()),
                                          notesLanguage: snapshot.preset.effectiveNotesLanguage,
-                                         store: NotesStore(session: sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
+                                         store: store(sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
                                          maxTokens: limits.maxTokens,
                                          stillCurrent: { RunSelection.shouldPostProcess(session: sessionURL, runID: runID) },
                                          onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
@@ -315,23 +343,35 @@ final class NotesModel {
         saveTasks[id] = Task {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
-            self.writePending(id)
+            // Porażka zapisu trafia do użytkownika; tekst zostaje w buforze na następną próbę (TASK-25).
+            if let error = self.writePending(id) { self.report(error) }
         }
     }
 
     /// Zapisuje od razu wszystko, co czeka na autozapis — przed przenoszeniem folderu nagrań.
     func flushPendingSaves() {
-        for (id, task) in saveTasks { task.cancel(); writePending(id) }
+        for (id, task) in saveTasks { task.cancel(); if let error = writePending(id) { report(error) } }
         saveTasks = [:]
     }
 
-    private func writePending(_ id: String) {
-        guard let p = pendingSaves.removeValue(forKey: id) else { return }
-        guard !isMoving() else { report("Couldn't save your notes: \(Self.movingMessage)"); return }
+    /// Zapisuje najnowsze My notes tej sesji i zwraca powód, gdy się nie udało (`nil` = zapisane albo nic nie czekało).
+    /// Usuwanie spotkania woła to przed przeniesieniem katalogu do Kosza i odmawia, gdy zapis padnie.
+    func flushPendingSaves(for id: String) -> String? {
+        saveTasks.removeValue(forKey: id)?.cancel()
+        return writePending(id)
+    }
+
+    /// Bufor znika dopiero po udanym zapisie: porażka nie gubi tekstu i zostaje na następną próbę (TASK-25).
+    /// Tryb ścisły: katalog spotkania, którego już nie ma, nie powstaje od nowa.
+    private func writePending(_ id: String) -> String? {
+        guard let p = pendingSaves[id] else { return nil }
+        guard !isMoving() else { return "Your notes weren't saved: \(Self.movingMessage)" }
         do {
-            if let note = try NotesStore(session: p.session).writeMyNotes(p.text) { report(note) }
+            if let note = try store(p.session).writeMyNotes(p.text) { report(note) }
+            pendingSaves[id] = nil
+            return nil
         } catch {
-            report("Couldn't save your notes: \(error)")
+            return "Couldn't save your notes: \(error.localizedDescription)"
         }
     }
 
@@ -339,9 +379,20 @@ final class NotesModel {
         guard !isMoving() else { report(Self.movingMessage); return }
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            if let note = try NotesStore(session: item.url).updateMeta({ $0.manualTitle = t.isEmpty ? nil : t }) { report(note) }
+            if let note = try store(item.url).updateMeta({ $0.manualTitle = t.isEmpty ? nil : t }) { report(note) }
         } catch {
             report("Couldn't save the title: \(error)")
+        }
+        onChange()
+    }
+
+    /// Przypisanie spotkania do folderu (TASK-26); `nil` = „No folder". Pliki nagrania zostają na miejscu.
+    func setFolder(_ folderID: String?, for item: SessionItem) {
+        guard !isMoving() else { report(Self.movingMessage); return }
+        do {
+            if let note = try store(item.url).updateMeta({ $0.folderID = folderID }) { report(note) }
+        } catch {
+            report("Couldn't save the folder: \(error)")
         }
         onChange()
     }

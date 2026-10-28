@@ -21,8 +21,9 @@ struct MeetingsView: View {
     private var days: [(Date, [SessionItem])] {
         let cal = Calendar.current
         let filtered = model.sessions.filter { s in
-            SessionSearch.matches(state.query, title: s.title, myNotes: s.notes.myNotes, summary: s.notes.summary?.markdown,
-                                  transcript: model.transcript(of: s, corrected: true))
+            model.matchesFilter(s)
+                && SessionSearch.matches(state.query, title: s.title, myNotes: s.notes.myNotes, summary: s.notes.summary?.markdown,
+                                         transcript: model.transcript(of: s, corrected: true))
         }
         let groups = Dictionary(grouping: filtered) { cal.startOfDay(for: $0.startedAt) }
         return groups.keys.sorted(by: >).map { ($0, groups[$0]!) }
@@ -44,6 +45,8 @@ struct MeetingsView: View {
                     TimelineView(.everyMinute) { ctx in
                         ComingUpHeader(state: state, now: state.preview?.now ?? ctx.date)
                     }
+                    FolderMenu()
+                        .padding(.bottom, 14)
                     if model.sessions.isEmpty {
                         ContentUnavailableView {
                             Label("No meetings yet", systemImage: "waveform")
@@ -245,6 +248,66 @@ struct NextMeetingCard: View {
     }
 }
 
+/// Przypisanie spotkania do folderu w nagłówku szczegółów (TASK-26). Pliki nagrania zostają na miejscu.
+struct FolderChip: View {
+    @Environment(AppModel.self) private var model
+    let item: SessionItem
+
+    var body: some View {
+        FieldMenu(label: "Folder", value: model.folderName(of: item) ?? "No folder", prefix: "Folder", width: nil) {
+            Button("No folder") { model.notes.setFolder(nil, for: item) }
+            if !model.folders.folders.isEmpty { Divider() }
+            ForEach(model.folders.folders) { f in
+                Button(f.name) { model.notes.setFolder(f.id, for: item) }
+            }
+            Divider()
+            Button("New Folder…") { model.promptNewFolder() }
+        }
+    }
+}
+
+/// Filtr folderów (TASK-26): All / No folder / folder, plus tworzenie, zmiana nazwy i usuwanie folderu.
+/// Usunięcie folderu nie usuwa spotkań — zostają w „No folder".
+struct FolderMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Menu {
+            Button("All folders") { model.meetingFilter = .all }
+            Button("No folder") { model.meetingFilter = .unfiled }
+            if !model.folders.folders.isEmpty {
+                Divider()
+                ForEach(model.folders.folders) { f in
+                    Button(f.name) { model.meetingFilter = .folder(f.id) }
+                }
+            }
+            Divider()
+            Button("New Folder…") { model.promptNewFolder() }
+            if !model.folders.folders.isEmpty {
+                Menu("Edit Folders") {
+                    ForEach(model.folders.folders) { f in
+                        Menu(f.name) {
+                            Button("Rename…") { model.promptRenameFolder(f.id) }
+                            Button("Delete Folder…", role: .destructive) { model.confirmDeleteFolder(f.id) }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(model.filterLabel, systemImage: "folder")
+                .font(.system(size: 12))
+                .foregroundStyle(.mnText)
+                .padding(.horizontal, 8).frame(height: 28)
+                .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+        }
+        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel("Folder filter")
+        .accessibilityValue(model.filterLabel)
+        .help("Group meetings in folders. Recordings stay on disk.")
+    }
+}
+
 /// Preset z nazwą widoczną w etykiecie (nie samą ikoną). Język i model są obok, w opisie karty.
 struct PresetMenu: View {
     @Environment(AppModel.self) private var model
@@ -286,6 +349,7 @@ struct SessionRow: View {
         } else if let l = lang.language {
             parts.append(Locale(identifier: "en").localizedString(forLanguageCode: l.rawValue) ?? l.rawValue.uppercased())
         }
+        if let folder = model.folderName(of: item) { parts.append(folder) }
         return parts.joined(separator: " · ")
     }
 
@@ -322,6 +386,13 @@ struct SessionRow: View {
         .padding(.vertical, 9).padding(.horizontal, 4)
         .background(hover.hovering ? Color.mnSelection : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .onHover { hover.hovering = $0 }
+        .contextMenu {
+            Button("Show in Finder") { model.showInFinder(item) }
+            Divider()
+            Button("Delete meeting…", role: .destructive) { model.requestDelete(item) }
+                .disabled(!model.canDelete(item))
+        }
+        .help(model.deleteBlocker(item) ?? "")
     }
 
     @ViewBuilder private var statusView: some View {

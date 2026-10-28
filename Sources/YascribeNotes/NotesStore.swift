@@ -54,6 +54,15 @@ private final class FileLockRegistry: @unchecked Sendable {
     }
 }
 
+public enum NotesStoreError: Error, Equatable, LocalizedError {
+    /// Sesji nie ma już na dysku (np. spotkanie poszło do Kosza) — zapis w trybie ścisłym nie odtwarza katalogu.
+    case sessionMissing
+
+    public var errorDescription: String? {
+        switch self { case .sessionMissing: "The meeting's folder no longer exists." }
+    }
+}
+
 /// `<sesja>/notes/`: `my-notes.md`, `summary.json`, `meta.json`, `summary-<ts>.json` (kopie przy regeneracji).
 /// Katalog `notes/` leży obok `runs/` — `summarize()` i wyszukiwanie przebiegów go nie czytają.
 ///
@@ -62,13 +71,44 @@ private final class FileLockRegistry: @unchecked Sendable {
 /// zwracają komunikat z nazwą. `problems()` mówi, które pliki są nieczytelne, zanim cokolwiek zapiszemy.
 public struct NotesStore: Sendable {
     public let directory: URL
+    /// Tryb ścisły (TASK-25): zapis wymaga istniejącego katalogu sesji. Późny zapis po przeniesieniu spotkania
+    /// do Kosza nie odtworzy katalogu; wolno utworzyć tylko liść `notes/`. Domyślnie wyłączony (inne klienty bez zmian).
+    public let requiresExistingSession: Bool
     private static let lockRegistry = FileLockRegistry()
 
-    public init(session: URL) { directory = session.appendingPathComponent("notes") }
+    public init(session: URL, requiresExistingSession: Bool = false) {
+        directory = session.appendingPathComponent("notes")
+        self.requiresExistingSession = requiresExistingSession
+    }
+
+    /// Ścieżka sesji, w której leży `notes/`.
+    var sessionURL: URL { directory.deletingLastPathComponent() }
+
+    /// Katalog `notes/` gotowy do zapisu. W trybie ścisłym brak sesji = odmowa (zamiast odtworzenia katalogu).
+    private func prepareDirectory() throws {
+        let fm = FileManager.default
+        if requiresExistingSession {
+            var isDirectory: ObjCBool = false
+            guard fm.fileExists(atPath: sessionURL.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+                throw NotesStoreError.sessionMissing
+            }
+            if !fm.fileExists(atPath: directory.path) {
+                try fm.createDirectory(at: directory, withIntermediateDirectories: false)
+            }
+        } else {
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+    }
 
     var myNotesURL: URL { directory.appendingPathComponent("my-notes.md") }
     var summaryURL: URL { directory.appendingPathComponent("summary.json") }
     var metaURL: URL { directory.appendingPathComponent("meta.json") }
+
+    /// Zapis JSON bez odtwarzania katalogów w trybie ścisłym: `prepareDirectory()` sprawdza sesję, a zapis
+    /// Późniejszy zapis mógłby ją odtworzyć, gdyby tworzył rodziców po usunięciu katalogu sesji.
+    private func saveJSON<T: Encodable>(_ value: T, to url: URL) throws {
+        try JSONFile.save(value, to: url, createParents: !requiresExistingSession)
+    }
 
     /// Do wyświetlania: brak albo nieczytelny plik → pusty tekst (nieczytelny zgłasza `problems()`).
     public func readMyNotes() -> String { (try? String(contentsOf: myNotesURL, encoding: .utf8)) ?? "" }
@@ -91,7 +131,7 @@ public struct NotesStore: Sendable {
     /// Zwraca komunikat, gdy odłożono nieczytelny plik; `nil` — nic nie było do odłożenia.
     @discardableResult
     public func writeMyNotes(_ text: String, now: Date = Date()) throws -> String? {
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try prepareDirectory()
         let note = try setAsideIfUnreadable(myNotesURL, now: now) { _ = try String(contentsOf: myNotesURL, encoding: .utf8) }
         try text.write(to: myNotesURL, atomically: true, encoding: .utf8)
         return note
@@ -104,11 +144,11 @@ public struct NotesStore: Sendable {
         let fileLock = Self.lockRegistry.lock(for: metaURL.path)
         fileLock.lock()
         defer { fileLock.unlock() }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try prepareDirectory()
         let note = try setAsideIfUnreadable(metaURL, now: now) { _ = try JSONFile.load(NoteMeta.self, from: metaURL, default: NoteMeta()) }
         var m = (try? JSONFile.load(NoteMeta.self, from: metaURL, default: NoteMeta())) ?? NoteMeta()
         change(&m)
-        try JSONFile.save(m, to: metaURL)
+        try saveJSON(m, to: metaURL)
         return note
     }
 
@@ -117,13 +157,13 @@ public struct NotesStore: Sendable {
     @discardableResult
     public func writeSummary(_ s: NoteSummary, now: Date = Date()) throws -> String? {
         let fm = FileManager.default
-        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+        try prepareDirectory()
         let note = try setAsideIfUnreadable(summaryURL, now: now) { _ = try JSONFile.load(NoteSummary?.self, from: summaryURL, default: nil) }
         if fm.fileExists(atPath: summaryURL.path) {
             let name = BackupName.name(for: now) { fm.fileExists(atPath: directory.appendingPathComponent($0).path) }
             try fm.copyItem(at: summaryURL, to: directory.appendingPathComponent(name))
         }
-        try JSONFile.save(s, to: summaryURL)
+        try saveJSON(s, to: summaryURL)
         return note
     }
 

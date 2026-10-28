@@ -9,6 +9,8 @@ public struct NoteMeta: Codable, Equatable, Sendable {
     public var calendarEvent: CalendarLink?
     /// Model wybrany dla tego nagrania zamiast presetowego (faza 2.0.1). Opcjonalne: stary `meta.json` czyta się bez zmian.
     public var modelOverrides: ModelOverrides?
+    /// Folder spotkania (TASK-26) — samo przypisanie, pliki zostają na miejscu. Opcjonalne: stary `meta.json` czyta się bez zmian.
+    public var folderID: String?
     public init(manualTitle: String? = nil, autoTitle: String? = nil) {
         self.manualTitle = manualTitle
         self.autoTitle = autoTitle
