@@ -68,6 +68,7 @@ struct MeetingsView: View {
                     }
                 }
             }
+               .scrollIndicators(.hidden)
                .frame(maxWidth: .infinity)
                    ScrollView {
                        OverviewPanel(item: model.sessions.first { $0.id == state.overviewID })
