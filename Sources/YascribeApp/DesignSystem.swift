@@ -93,16 +93,19 @@ struct ScrollPage<Content: View>: View {
     }
 
     let width: CGFloat
+    let showsIndicators: Bool
     let content: Content
     @StateObject private var widths = Widths()
 
-    init(_ width: CGFloat, @ViewBuilder content: () -> Content) {
+    init(_ width: CGFloat, showsIndicators: Bool = true, @ViewBuilder content: () -> Content) {
         self.width = width
+        self.showsIndicators = showsIndicators
         self.content = content()
     }
 
     var body: some View {
-        ScrollView {
+        // Inicjalizator ukrywa też pasek legacy na macOS; scrollIndicators(.hidden) tego nie robi.
+        ScrollView(showsIndicators: showsIndicators) {
             content
                 .contentColumn(width)
                 .padding(.leading, max(0, widths.outer - widths.inner))
