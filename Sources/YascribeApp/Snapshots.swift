@@ -96,11 +96,53 @@ enum Snapshots {
         do {
             try seed(model)
             for dark in [false, true] {
+                if var example = model.sessions.first {
+                    example.transcript = try JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8))
+                    example.notes.meta.manualTitle = "Quarterly forecast review"
+                    example.runID = "fixture-run"
+                    example.notes.meta.overviewRunID = "fixture-run"
+                    example.notes.meta.overviewTranscriptFingerprint = Overview.fingerprint(example.transcript)
+                    example.notes.meta.overview = "The team reviewed a synthetic forecast."
+                    try render("overview-filled", size: CGSize(width: 290, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).contentBackground() }
+                    example.notes.meta.overview = nil
+                    try render("overview-empty", size: CGSize(width: 290, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).contentBackground() }
+                    try render("overview-narrow", size: CGSize(width: 200, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).contentBackground() }
+                }
+                if !model.sessions.isEmpty {
+                    let index = 0
+                    let before = model.sessions
+                    for offset in model.sessions.indices {
+                        model.sessions[offset].startedAt = Calendar.current.date(byAdding: .day, value: -offset, to: Date()) ?? Date()
+                    }
+                    model.sessions[index].transcript = try JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8))
+                    model.sessions[index].notes.meta.manualTitle = "Quarterly forecast review"
+                    model.sessions[index].runID = "fixture-run"
+                    model.sessions[index].notes.meta.overviewRunID = "fixture-run"
+                    model.sessions[index].notes.meta.overviewTranscriptFingerprint = Overview.fingerprint(model.sessions[index].transcript)
+                    model.sessions[index].notes.meta.overview = "The team reviewed a synthetic forecast."
+                    let selected = MeetingsViewState()
+                    selected.overviewID = model.sessions[index].id
+                    try render("meetings-overview", size: CGSize(width: 1000, height: 700), dark: dark, model: model) { MeetingsView(state: selected) }
+                    try render("meetings-overview-narrow", size: CGSize(width: 760, height: 700), dark: dark, model: model) { MeetingsView(state: selected) }
+                    let section = model.section
+                    model.section = .meetings
+                    try render("window-meetings", size: CGSize(width: 1280, height: 760), dark: dark, model: model) { ContentView() }
+                    try render("window-meetings-minimum", size: CGSize(width: 960, height: 760), dark: dark, model: model) { ContentView() }
+                    model.section = .presets
+                    try render("window-presets", size: CGSize(width: 960, height: 760), dark: dark, model: model) { ContentView() }
+                    model.section = .templates
+                    try render("window-templates", size: CGSize(width: 960, height: 760), dark: dark, model: model) { ContentView() }
+                    model.section = section
+                    model.sessions = before
+                }
                 // Galeria komponentów §11.4 (DesignSystem.swift) — jeden rzut oka na tokeny i stany przed widokami.
                 try render("components", size: CGSize(width: 640, height: 520), dark: dark, model: model) { ComponentGallery() }
-                // D7: sidebar osobno (całe okno z NavigationSplitView renderuje się offscreen jako pusta plansza, T3).
+                // Sidebar osobno: kontrola marki i minimalnej szerokości obok pełnych migawek okna.
                 try render("sidebar", size: CGSize(width: 210, height: 500), dark: dark, model: model) {
                     SidebarList(selection: .constant(.settings)).listStyle(.sidebar)
+                }
+                try render("sidebar-narrow", size: CGSize(width: 160, height: 500), dark: dark, model: model) {
+                    SidebarList(selection: .constant(.meetings)).listStyle(.sidebar)
                 }
                 try render("presets", size: CGSize(width: 900, height: 600), dark: dark, model: model) { PresetsView() }
                 try render("meetings", size: CGSize(width: 900, height: 600), dark: dark, model: model) { MeetingsView() }

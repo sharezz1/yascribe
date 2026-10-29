@@ -30,8 +30,9 @@ struct YascribeApp: App {
         WindowGroup("Yascribe", id: "main") {
             ContentView()
                 .environment(model)
-                .frame(minWidth: 820, minHeight: 520)
+                .frame(minWidth: 960, minHeight: 520)
         }
+        .windowResizability(.contentMinSize)
         .commands {
             // Po „About Yascribe”: Sparkle pyta o nową wersję, a instalacja nigdy nie przerywa nagrania (RestartGate).
             CommandGroup(after: .appInfo) { CheckForUpdatesButton(updater: model.updater) }
@@ -114,12 +115,21 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var model = model
-        NavigationSplitView {
+        HStack(spacing: 0) {
             SidebarList(selection: $model.section)
-                .navigationSplitViewColumnWidth(min: 160, ideal: 180)
-        } detail: {
+                .listStyle(.sidebar)
+                .frame(width: 200)
+                .padding(.top, 12)
             switch model.section {
-            case .meetings: MeetingsView()
+            case .meetings:
+                MeetingsView()
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(.mnLine2, lineWidth: 1)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.trailing, 12)
             case .presets: PresetsView()
             case .templates: TemplatesView()
             case .settings: SettingsView()
@@ -128,6 +138,7 @@ struct ContentView: View {
             case .dictionary: DictionaryView()
             }
         }
+        .background(Color.mnBackground.ignoresSafeArea())
         .tint(.mnAccent) // 🔀 odstępstwo 5 (macos.md §10): stały akcent w treści
         // Uwaga 1 z odbioru 2026-10-16 (§11.5): pasek bez własnego tła i tytułu; ciepłe tło do górnej krawędzi.
         // `navigationTitle` zostaje w widokach — nazwa okna w menu Window i dla VoiceOver.
@@ -150,13 +161,26 @@ struct SidebarList: View {
     var body: some View {
         List(selection: $selection) {
             Label(Section.meetings.rawValue, systemImage: Section.meetings.symbol).tag(Section.meetings)
+                .foregroundStyle(.mnText)
+        }
+        .scrollContentBackground(.hidden)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack(spacing: 8) {
+                YascribeMark()
+                Text("Yascribe").font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             List(selection: $selection) {
                 ForEach([Section.presets, .templates, .dictionary, .settings]) { s in
                     Label(s.rawValue, systemImage: s.symbol).tag(s)
+                        .foregroundStyle(.mnText)
                 }
             }
+            .scrollContentBackground(.hidden)
             .scrollDisabled(true)
             .frame(height: 4 * 28 + 16)
         }

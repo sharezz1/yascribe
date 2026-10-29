@@ -7,7 +7,7 @@ import SwiftUI
 /// Strona główna, wariant B z „Coming up” (macos.md §11.5, decyzja 2026-10-19; makiety b-cuB2.png, b-cuB2none.png):
 /// nagłówek z Record ad hoc, karta najbliższego spotkania z Apple Calendar, linia reszty dnia i oś spotkań po dniach.
 final class MeetingsViewState: ObservableObject {
-    @Published var query = ""
+    @Published var overviewID: String?
     /// Migawki: kalendarz i chwila na sztywno zamiast EventKit i zegara.
     var preview: (connected: Bool, events: [CalendarEventInfo], now: Date)?
 }
@@ -20,11 +20,7 @@ struct MeetingsView: View {
 
     private var days: [(Date, [SessionItem])] {
         let cal = Calendar.current
-        let filtered = model.sessions.filter { s in
-            model.matchesFilter(s)
-                && SessionSearch.matches(state.query, title: s.title, myNotes: s.notes.myNotes, summary: s.notes.summary?.markdown,
-                                         transcript: model.transcript(of: s, corrected: true))
-        }
+        let filtered = model.sessions.filter { model.matchesFilter($0) }
         let groups = Dictionary(grouping: filtered) { cal.startOfDay(for: $0.startedAt) }
         return groups.keys.sorted(by: >).map { ($0, groups[$0]!) }
     }
@@ -39,7 +35,8 @@ struct MeetingsView: View {
     var body: some View {
         @Bindable var model = model
         NavigationStack {
-            ScrollPage(600) {
+            HStack(alignment: .top, spacing: 0) {
+               ScrollPage(600) {
                 VStack(alignment: .leading, spacing: 0) {
                     // Co minutę: „in 8 min” i wejście spotkania w okno 60 min. Kalendarz czyta tylko `ComingUpHeader`.
                     TimelineView(.everyMinute) { ctx in
@@ -56,19 +53,34 @@ struct MeetingsView: View {
                     }
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(days.enumerated()), id: \.element.0) { n, group in
-                            Text(Self.dayTitle(group.0))
-                                .font(.system(size: 12, weight: .medium)).foregroundStyle(.mnText2)
-                                .padding(.leading, 4).padding(.bottom, 2).padding(.top, n == 0 ? 0 : 20)
-                                .accessibilityAddTraits(.isHeader)
+                            HStack(spacing: 12) {
+                                Text(Self.dayTitle(group.0))
+                                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
+                                    .accessibilityAddTraits(.isHeader)
+                                Rectangle().fill(.mnLine).frame(height: 1).accessibilityHidden(true)
+                            }
+                            .padding(.horizontal, 4).padding(.bottom, 10).padding(.top, n == 0 ? 8 : 28)
                             ForEach(Array(group.1.enumerated()), id: \.element.id) { i, item in
                                 if i > 0 { RowDivider(inset: 4) }
-                                SessionRow(item: item)
+                                SessionRow(item: item, onPreview: { state.overviewID = item.id })
                             }
                         }
                     }
                 }
             }
-            .contentBackground()
+               .frame(maxWidth: .infinity)
+                   ScrollView {
+                       OverviewPanel(item: model.sessions.first { $0.id == state.overviewID })
+                           .padding(24)
+                   }
+                   .frame(width: 280)
+                   .frame(maxHeight: .infinity, alignment: .top)
+                   .overlay(alignment: .leading) {
+                       Rectangle().fill(.mnLine2).frame(width: 0.5)
+                   }
+            }
+            .frame(minWidth: 720)
+            .background(Color.mnCard)
             .navigationDestination(item: $model.selectedSessionID) { id in
                 // `.id`: bez niego SwiftUI zostawia ten sam widok przy zmianie wyboru (Record, „Open Note") i tekst z jednej
                 // sesji trafiłby do drugiej (Review Focus #9).
@@ -79,34 +91,66 @@ struct MeetingsView: View {
     }
 }
 
-/// Wyszukiwarka-kapsuła obok tytułu. Zamiast `.searchable`: ten ląduje w pasku okna, a makieta ma go w linii z tytułem.
-struct SearchCapsule: View {
-    @Binding var text: String
+struct OverviewPanel: View {
+    @Environment(AppModel.self) private var model
+    let item: SessionItem?
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.mnText2).accessibilityHidden(true)
-            TextField("Search meetings", text: $text).textFieldStyle(.plain)
-                .accessibilityLabel("Search titles, notes and transcripts")
-            if !text.isEmpty {
-                Button { text = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.mnText2) }
-                    .buttonStyle(.plain).help("Clear search").accessibilityLabel("Clear search")
+        VStack(alignment: .leading, spacing: 18) {
+            if let item {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(item.title).font(.system(size: 16, weight: .medium))
+                    Text(item.startedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 12)).foregroundStyle(.mnText2)
+                }
+                RowDivider(inset: 0)
             }
-        }
-        .padding(.horizontal, 10)
-        .frame(width: 170, height: 28)
-        .background(.mnField, in: Capsule())
-        .overlay(Capsule().strokeBorder(.mnLine, lineWidth: 0.5))
-        .help("Search titles, notes and transcripts")
+            Text("Overview").textCase(.uppercase)
+                .font(.system(size: 11, weight: .medium)).tracking(0.8)
+                .foregroundStyle(.mnText2).accessibilityAddTraits(.isHeader)
+            if let item {
+                if let text = Overview.cached(item.notes.meta, runID: item.runID, transcript: item.transcript, correctedTranscript: item.corrected?.transcript) {
+                    Text(text).font(.system(size: 13)).lineSpacing(5).foregroundStyle(.mnText)
+                } else {
+                    Text("No overview yet.").font(.system(size: 13)).foregroundStyle(.mnText2)
+                    if model.notes.isTitling(item.id) {
+                        Text("Generating…").font(.system(size: 12))
+                    } else {
+                        if model.notes.overviewFailure.contains(item.id) { Text("Couldn't generate overview. Try again.").font(.system(size: 12)) }
+                        Button("Generate overview") { model.notes.generateOverview(item) }
+                            .disabled(item.runID == nil || item.transcript == nil || model.notes.summaryChoice(for: item) == nil)
+                    }
+                }
+            } else {
+                Text("Point to or focus a meeting to see its overview.").font(.system(size: 13)).foregroundStyle(.mnText2)
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// Góra strony: tytuł, wyszukiwarka, preset i „● Record” ad hoc; pod nimi karta najbliższego spotkania albo jedna linia.
+/// Góra strony: tytuł, preset i „● Record” ad hoc; pod nimi karta najbliższego spotkania albo jedna linia.
 /// Jeden primary na ekranie (§11.4): Record na karcie, a bez karty (albo w trakcie nagrania: Stop) ten w nagłówku.
 struct ComingUpHeader: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: MeetingsViewState
     let now: Date
+
+    private func recordButton(recording: Bool, primary: Bool) -> some View {
+        Button {
+            recording ? model.recording.stop() : model.startRecording()
+        } label: {
+            HStack(spacing: 6) {
+                if recording {
+                    Image(systemName: "stop.fill").font(.system(size: 9)).foregroundStyle(.mnRecDot)
+                } else {
+                    Circle().fill(.mnRecDot).frame(width: 7, height: 7)
+                }
+                Text(recording ? "Stop" : "Record")
+            }
+        }
+        .buttonStyle(PillButtonStyle(kind: primary ? .primary : .secondary))
+        .help(recording ? "Stop recording" : "Record now, without a calendar event")
+    }
 
     var body: some View {
         @Bindable var model = model
@@ -116,24 +160,10 @@ struct ComingUpHeader: View {
         let recording = model.recording.isRecording
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                PageTitle("Meetings")
+                PageTitle("Meetings").fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 12)
-                SearchCapsule(text: $state.query)
-                PresetMenu(width: nil)
-                Button {
-                    recording ? model.recording.stop() : model.startRecording()
-                } label: {
-                    HStack(spacing: 6) {
-                        if recording {
-                            Image(systemName: "stop.fill").font(.system(size: 9)).foregroundStyle(.mnRecDot)
-                        } else {
-                            Circle().fill(.mnRecDot).frame(width: 7, height: 7)
-                        }
-                        Text(recording ? "Stop" : "Record")
-                    }
-                }
-                .buttonStyle(PillButtonStyle(kind: recording || up.next == nil ? .primary : .secondary))
-                .help(recording ? "Stop recording" : "Record now, without a calendar event")
+                PresetMenu()
+                recordButton(recording: recording, primary: recording || up.next == nil)
             }
             .padding(.bottom, model.activePreset?.isAutoLanguage == true ? 6 : 18)
             // Auto = ryzyko zmyślonej angielszczyzny (W§2): ostrzeżenie widoczne przed startem, ikona + słowo.
@@ -387,7 +417,9 @@ struct PresetMenu: View {
 struct SessionRow: View {
     @Environment(AppModel.self) private var model
     @StateObject private var hover = HoverState()
+    @FocusState private var focused: Bool
     let item: SessionItem
+    var onPreview: (() -> Void)? = nil
 
     private var status: SessionStatus {
         SessionStatus.of(isRecording: SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory),
@@ -433,6 +465,8 @@ struct SessionRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focused($focused)
+            .onChange(of: focused) { _, value in if value { onPreview?() } }
             if status == .correctionFailed {
                 Button("Retry") { model.notes.retryCorrection(item) }
                     .buttonStyle(.pillSmall).disabled(!model.notes.canRetryCorrection(item))
@@ -454,7 +488,7 @@ struct SessionRow: View {
         }
         .padding(.vertical, 9).padding(.horizontal, 4)
         .background(hover.hovering ? Color.mnSelection : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .onHover { hover.hovering = $0 }
+        .onHover { hover.hovering = $0; if $0 { onPreview?() } }
         .contextMenu {
             SessionActions(item: item)
         }

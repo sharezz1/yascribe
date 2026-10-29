@@ -38,5 +38,6 @@ let package = Package(
         .testTarget(name: "YascribeLocalASRTests", dependencies: ["YascribeLocalASR", "YascribeProviders", "YascribeTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
         .testTarget(name: "YascribeMeetingsTests", dependencies: ["YascribeMeetings"]),
         .testTarget(name: "YascribeUpdatesTests", dependencies: ["YascribeUpdates"]),
+        .testTarget(name: "YascribeAppTests", dependencies: ["YascribeApp", "YascribeNotes", "YascribeProviders", "YascribeTranscription"]),
     ]
 )
