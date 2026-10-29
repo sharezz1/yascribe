@@ -36,7 +36,7 @@ struct MeetingsView: View {
         @Bindable var model = model
         NavigationStack {
             HStack(alignment: .top, spacing: 0) {
-               ScrollPage(600) {
+               ScrollPage(600, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     // Co minutę: „in 8 min” i wejście spotkania w okno 60 min. Kalendarz czyta tylko `ComingUpHeader`.
                     TimelineView(.everyMinute) { ctx in
@@ -68,7 +68,6 @@ struct MeetingsView: View {
                     }
                 }
             }
-               .scrollIndicators(.hidden)
                .frame(maxWidth: .infinity)
                    ScrollView {
                        OverviewPanel(item: model.sessions.first { $0.id == state.overviewID })
