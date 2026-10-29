@@ -23,6 +23,13 @@ public struct CorrectedTranscript: Codable, Equatable, Sendable {
         self.failedBatches = failedBatches
         self.rejectedLines = rejectedLines
     }
+
+    public static func load(session: URL, runID: String?) -> CorrectedTranscript? {
+        guard let runID, RunDirectory.isValid(runID: runID) else { return nil }
+        guard var c = (try? JSONFile.load(CorrectedTranscript?.self, from: RunDirectory(session: session, runID: runID).corrected, default: nil)) ?? nil else { return nil }
+        c.transcript = c.transcript.echoMarked()
+        return c
+    }
 }
 
 public extension RunDirectory {

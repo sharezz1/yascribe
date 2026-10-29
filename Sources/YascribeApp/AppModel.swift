@@ -336,7 +336,7 @@ final class AppModel {
             item.runSnapshot = run.snapshot
             item.latestAttemptID = run.latestAttemptID
             item.attemptNotPromoted = run.notPromoted
-            item.corrected = Self.loadCorrected(url, run.currentID)
+            item.corrected = CorrectedTranscript.load(session: url, runID: run.currentID)
             item.audioDeletedAfterDays = AudioDeletion.read(url)?.afterDays
             item.notes = SessionNotes(myNotes: store.readMyNotes(), meta: store.readMeta(),
                                       summary: (try? store.readSummary()) ?? nil, problems: store.problems())
@@ -368,13 +368,6 @@ final class AppModel {
 
     /// Język bieżącego przebiegu (I2): z jego migawki, preset sesji tylko dla przebiegów bez migawki.
     func runLanguage(_ item: SessionItem) -> RunLanguage { RunLanguage.of(item.runSnapshot, fallback: presetFor(sessionURL: item.url)) }
-
-    static func loadCorrected(_ session: URL, _ runID: String?) -> CorrectedTranscript? {
-        guard let runID, RunDirectory.isValid(runID: runID) else { return nil }
-        guard var c = (try? JSONFile.load(CorrectedTranscript?.self, from: RunDirectory(session: session, runID: runID).corrected, default: nil)) ?? nil else { return nil }
-        c.transcript = c.transcript.echoMarked() // korekta sprzed filtra echa nie niesie znacznika
-        return c
-    }
 
     // MARK: Dostawcy
 

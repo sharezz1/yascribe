@@ -39,6 +39,16 @@ private func image(_ svg: String, template: Bool) -> NSImage? {
     return i
 }
 
+struct YascribeMark: View {
+    var body: some View {
+        if let mark = image(LogoSVG.yascribe, template: true) {
+            Image(nsImage: mark).renderingMode(.template).resizable().scaledToFit()
+                .foregroundStyle(.mnText).frame(width: 28, height: 28)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 /// Logo w kafelku 32 pt (promień 8, obwódka `line`); Custom endpoint to SF Symbol. `size` = bok kafelka.
 struct ProviderLogo: View {
     @Environment(\.colorScheme) private var scheme

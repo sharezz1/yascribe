@@ -25,6 +25,7 @@ final class NotesModel {
     private(set) var titles = RunOperations()
     /// Powód ostatniego nieudanego przebiegu korekty (klucz: id sesji). Znika po udanym ponowieniu.
     private(set) var correctionFailure: [String: String] = [:]
+    private(set) var overviewFailure: Set<String> = []
     var templates = TemplatesFile()
 
     /// Podłączane przez `AppModel` (bez cyklu własności).
@@ -316,6 +317,7 @@ final class NotesModel {
         if let choice = SummaryModel.resolve(frozen: snapshot.preset, override: saved?.usable(.summary, knownProviders: known),
                                              defaultPresetID: info.defaultID, presets: info.presets),
            let client = clientFor(choice.assignment.providerID) {
+            let corrected = CorrectedTranscript.load(session: sessionURL, runID: runID)?.transcript
             let ticket = titles.start(session: id, runID: runID)
             onChange()
             let limits = ChatLimits.for(client.provider, call: .title)
@@ -327,7 +329,42 @@ final class NotesModel {
                                          maxTokens: limits.maxTokens,
                                          stillCurrent: { RunSelection.shouldPostProcess(session: sessionURL, runID: runID) },
                                          onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
+            if RunSelection.shouldPostProcess(session: sessionURL, runID: runID) {
+                let ok = await Overview.generate(client: client, model: choice.assignment.model,
+                    transcript: Replacement.apply(corrected ?? transcript, rules: replacementRules()),
+                    notesLanguage: snapshot.preset.effectiveNotesLanguage, store: store(sessionURL), runID: runID, sourceTranscript: transcript,
+                    correctedTranscript: corrected,
+                    timeout: limits.soft, chatTimeout: limits.transport, maxTokens: limits.maxTokens,
+                    stillCurrent: { Overview.sourceIsCurrent(session: sessionURL, runID: runID, transcript: transcript, correctedTranscript: corrected) })
+                if !ok { overviewFailure.insert(id) } else { overviewFailure.remove(id) }
+            }
             _ = titles.finish(ticket)
+            onChange()
+        }
+    }
+
+    func generateOverview(_ item: SessionItem) {
+        guard !isMoving(), !titles.isActive(item.id), !corrections.isActive(item.id), let runID = item.runID,
+              let source = item.transcript, let transcript = item.transcript(corrected: true) else { return }
+        guard let choice = summaryChoice(for: item), let client = clientFor(choice.assignment.providerID) else {
+            overviewFailure.insert(item.id)
+            return
+        }
+        let ticket = titles.start(session: item.id, runID: runID)
+        let limits = ChatLimits.for(client.provider, call: .title)
+        let language = (item.runSnapshot?.preset ?? presetFor(item.url))?.effectiveNotesLanguage
+        let text = Replacement.apply(transcript, rules: replacementRules())
+        let corrected = item.corrected?.transcript
+        onChange()
+        Task {
+            let ok = await Overview.generate(client: client, model: choice.assignment.model, transcript: text,
+                notesLanguage: language, store: store(item.url), runID: runID, sourceTranscript: source, correctedTranscript: corrected, timeout: limits.soft,
+                chatTimeout: limits.transport, maxTokens: limits.maxTokens,
+                stillCurrent: { Overview.sourceIsCurrent(session: item.url, runID: runID, transcript: source, correctedTranscript: corrected) })
+            let outcome = titles.finish(ticket)
+            if outcome.ownsMessage {
+                if ok { overviewFailure.remove(item.id) } else { overviewFailure.insert(item.id) }
+            }
             onChange()
         }
     }
