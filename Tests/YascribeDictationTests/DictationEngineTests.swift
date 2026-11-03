@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 import YascribeNotes
 import YascribeProviders
@@ -86,6 +87,7 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
     var clock = Date(timeIntervalSince1970: 1_000)
     var modelAvailable = true
     var meta = DictationRecordMeta(app: "MetaApp", asrModel: "asr-1", correctionModel: nil)
+    var chat: ChatFunction?
     var engine: DictationEngine!
 
     init(capture: FakeCapture = FakeCapture(), inserter: FakeInserter = FakeInserter(),
@@ -97,7 +99,7 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
                                  buildInput: { [unowned self] pcm in
                                      guard modelAvailable else { return nil }
                                      let input = DictationPipelineInput(pcm: pcm, language: nil, asrModel: meta.asrModel ?? "",
-                                                                        transcriber: self.asr, shape: .audioTranscriptions, chat: nil,
+                                                                        transcriber: self.asr, shape: .audioTranscriptions, chat: chat,
                                                                         vocabulary: PromptVocabulary(), removeFillers: nil,
                                                                         replacement: ReplacementRules(UserDictionary()))
                                      return (input, meta)
@@ -327,4 +329,57 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
         #expect(h.engine.phase == .idle)
         #expect(h.asr.calls == 1)
     }
+
+    @Test func refuseIgnoredWhileProcessing() async {
+        let h = Harness()
+        h.engine.apply(.start)
+        h.clock += 1.5
+        h.engine.apply(.stop)
+        h.engine.refuse("Recording a meeting")
+        #expect(h.engine.phase == .processing)
+        await h.engine.work?.value
+        #expect(h.engine.phase == .finished(.inserted))
+        #expect(h.records.count == 1)
+    }
+
+    @Test func phaseChangesAreObservable() async {
+        let h = Harness()
+        let fired = Flag()
+        h.engine.apply(.start)
+        withObservationTracking { _ = h.engine.phase } onChange: { fired.set() }
+        h.capture.fail("Microphone disconnected")   // przejście wewnętrzne, bez wywołania API silnika
+        await h.settle()
+        #expect(h.engine.phase == .failed("Microphone disconnected"))
+        #expect(fired.value)
+    }
+
+    @Test func correctionFailureIsRecordedWithRawText() async {
+        let h = Harness()
+        h.meta.correctionModel = "fix-1"
+        h.chat = { _, _ in throw Boom() }
+        await h.dictate()
+        #expect(h.engine.phase == .finished(.inserted))
+        #expect(h.inserter.inserted == ["hello"])
+        #expect(h.records.first?.correctionFailed == true)
+        #expect(h.records.first?.text == h.records.first?.raw)
+        #expect(h.records.first?.correctionModel == "fix-1")
+    }
+
+    @Test func newStartDropsRetainedAudio() async {
+        let h = Harness(asr: [.failure(Boom())])
+        await h.dictate()
+        #expect(h.engine.retained != nil)
+        h.engine.apply(.start)
+        #expect(h.engine.phase == .listening)
+        #expect(h.engine.retained == nil)
+        #expect(!h.engine.canRetry)
+    }
+}
+
+/// Znacznik dla `onChange` obserwacji (wołanego poza głównym aktorem). Stan pod `lock`.
+private final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fired = false
+    func set() { lock.withLock { fired = true } }
+    var value: Bool { lock.withLock { fired } }
 }

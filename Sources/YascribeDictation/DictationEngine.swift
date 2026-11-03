@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Metadane wpisu historii ustalane w chwili `.stop` (zmiana ustawień w trakcie nie zmienia wpisu).
 public struct DictationRecordMeta: Equatable, Sendable {
@@ -34,7 +35,8 @@ public enum DictationPhase: Equatable, Sendable {
 }
 
 /// Sesja dyktowania: mikrofon → potok → wstawienie → historia. Audio tylko w pamięci, nigdy na dysku.
-@MainActor public final class DictationEngine {
+/// Obserwowana jest tylko `phase` (UI widzi też przejścia wewnętrzne: auto-stop, powrót do `.idle`, awarię mikrofonu).
+@MainActor @Observable public final class DictationEngine {
     public static let missingModelMessage = "Choose a dictation model in Settings."
 
     struct Retained {
@@ -56,14 +58,14 @@ public enum DictationPhase: Equatable, Sendable {
 
     public private(set) var phase: DictationPhase = .idle
     /// Każde przejście unieważnia spóźnione wznowienia (timery, `onFailure`, potok) z poprzedniej sesji.
-    private var session = 0
-    private var startedAt = Date()
-    private var startApp: String?
+    @ObservationIgnored private var session = 0
+    @ObservationIgnored private var startedAt = Date()
+    @ObservationIgnored private var startApp: String?
     /// Próbki po błędzie ASR do jednego `retry()`.
-    var retained: Retained?
-    var maxTimer: Task<Void, Never>?
-    var resetTimer: Task<Void, Never>?
-    var work: Task<Void, Never>?
+    @ObservationIgnored private(set) var retained: Retained?
+    @ObservationIgnored private(set) var maxTimer: Task<Void, Never>?
+    @ObservationIgnored private(set) var resetTimer: Task<Void, Never>?
+    @ObservationIgnored private(set) var work: Task<Void, Never>?
 
     public init(capture: any AudioCapturing, inserter: any TextInserting, now: @escaping () -> Date = Date.init,
                 sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
