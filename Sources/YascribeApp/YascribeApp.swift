@@ -156,7 +156,7 @@ struct ContentView: View {
             case .templates: TemplatesView()
             case .settings: SettingsView()
             case .tasks: LaterPhaseView(title: "Tasks", text: "Tasks with owners across meetings arrive with notes and speaker identity.")
-            case .dictation: LaterPhaseView(title: "Dictation", text: "Dictation arrives in a later phase.")
+            case .dictation: DictationView()
             case .dictionary: DictionaryView()
             }
         }
@@ -175,7 +175,7 @@ struct ContentView: View {
     }
 }
 
-/// Sidebar (D7, macos.md §11.5): Meetings na górze; Presets / Templates / Dictionary / Settings na dole, bez nagłówka sekcji.
+/// Sidebar (D7, macos.md §11.5): Meetings i Dictation na górze; Presets / Templates / Dictionary / Settings na dole, bez nagłówka sekcji.
 /// Dolna grupa to druga lista z tym samym wyborem, przypięta `safeAreaInset` (lista nie umie dosunąć wierszy do dołu).
 struct SidebarList: View {
     @Binding var selection: Section
@@ -183,6 +183,8 @@ struct SidebarList: View {
     var body: some View {
         List(selection: $selection) {
             Label(Section.meetings.rawValue, systemImage: Section.meetings.symbol).tag(Section.meetings)
+                .foregroundStyle(.mnText)
+            Label(Section.dictation.rawValue, systemImage: Section.dictation.symbol).tag(Section.dictation)
                 .foregroundStyle(.mnText)
         }
         .scrollContentBackground(.hidden)
