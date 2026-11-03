@@ -4,6 +4,12 @@ import YascribeProviders
 import YascribeTranscription
 import Observation
 
+/// Wybór modelu z okna „Models…": `.preset` = model z presetu i wyczyszczone nadpisanie roli (w summary także `thinking`).
+enum ModelDraft: Equatable {
+    case preset
+    case custom(RoleOverride)
+}
+
 /// Generowanie notatek, korekta, autotytuł i autozapis My notes (spec 1.5 §4.1). Logika w `YascribeNotes`;
 /// ten model tylko spina ją z interfejsem i trzyma stan „w toku".
 @MainActor
@@ -47,6 +53,8 @@ final class NotesModel {
     /// Trwa przenoszenie folderu nagrań — widok spotkania jest tylko do odczytu, zapisy blokujemy też tutaj (R3),
     /// żeby skrót z menu nie obszedł interfejsu. Zapis po usunięciu starego miejsca odtworzyłby osierocony katalog.
     var isMoving: () -> Bool = { false }
+    /// Trwa transkrypcja tej sesji (klucz: id); podłączane przez `AppModel`.
+    var isTranscribing: (String) -> Bool = { _ in false }
     private static let movingMessage = "Meetings are being moved to a new folder. Try again when that finishes."
 
     /// Trwające generowanie (klucz: id sesji); token odróżnia przebieg anulowany od nowego na tej samej sesji.
@@ -114,14 +122,26 @@ final class NotesModel {
     }
 
     /// Zapisuje wybór modelu przy sesji (`nil` = wróć do presetu). Niczego nie uruchamia; trwające przebiegi zostają przy modelu z chwili startu.
-    func setOverride(_ role: Role, _ value: RoleOverride?, item: SessionItem) {
-        guard !isMoving() else { report(Self.movingMessage); return }
+    /// `true` tylko po udanym zapisie.
+    @discardableResult
+    func setOverride(_ role: Role, _ value: RoleOverride?, item: SessionItem) -> Bool {
+        guard !isMoving() else { report(Self.movingMessage); return false }
+        defer { onChange() }
         do {
             if let note = try store(item.url).updateMeta({ $0.setOverride(role, value) }) { report(note) }
+            return true
         } catch {
             report("Couldn't save the model choice: \(error)")
+            return false
         }
-        onChange()
+    }
+
+    /// Zapis szkicu przed uruchomieniem; odmowa bez zapisu, gdy model pusty albo dostawca zniknął w trakcie otwartego okna.
+    private func saveDraft(_ role: Role, _ draft: ModelDraft, item: SessionItem) -> Bool {
+        guard case .custom(let o) = draft else { return setOverride(role, nil, item: item) }
+        guard !o.model.trimmingCharacters(in: .whitespaces).isEmpty else { report("Choose a model first."); return false }
+        guard knownProviderIDs().contains(o.providerID) else { report("That provider is no longer available."); return false }
+        return setOverride(role, o, item: item)
     }
 
     func isCorrecting(_ id: String) -> Bool { corrections.isActive(id) }
@@ -132,7 +152,7 @@ final class NotesModel {
     /// albo padła (całkiem lub z częścią partii: „N parts kept as heard”), albo jej nie ma (np. aplikacja zamknięta w trakcie).
     func canRetryCorrection(_ item: SessionItem) -> Bool {
         // Bez wypowiedzi (np. wszystkie okna padły offline) nie ma czego poprawiać: przycisk nic by nie zrobił; wtedy jest „Retry Failed Parts”.
-        guard !isCorrecting(item.id), state(item.id) != .generating, item.runID != nil,
+        guard !isCorrecting(item.id), state(item.id) != .generating, !isTranscribing(item.id), item.runID != nil,
               let transcript = item.transcript, !transcript.utterances.isEmpty else { return false }
         guard correctionAssignment(for: item) != nil else { return false }
         // Własny model korekty pozwala puścić ją jeszcze raz także po udanej, żeby porównać modele (nadpisuje corrected.json).
@@ -145,19 +165,45 @@ final class NotesModel {
         guard canRetryCorrection(item), let c = correctionAssignment(for: item),
               let runID = item.runID, let t = item.transcript else { return }
         reportStaleOverride(.correction, for: item)
+        startCorrection(item, runID: runID, transcript: t, assignment: c)
+    }
+
+    /// „Models…" → Correct: wolno także po udanej korekcie i bez nadpisania (porównanie modeli).
+    func canCorrectNow(_ item: SessionItem) -> Bool {
+        !isMoving() && !isCorrecting(item.id) && state(item.id) != .generating && !isTranscribing(item.id)
+            && item.runID != nil && !(item.transcript?.utterances.isEmpty ?? true)
+    }
+
+    /// Korekta dokładnie modelem ze szkicu (nie z `item`, który bywa nieaktualną migawką); `true` = wystartowała.
+    @discardableResult
+    func improveTranscript(_ item: SessionItem, draft: ModelDraft) -> Bool {
+        guard canCorrectNow(item), let runID = item.runID, let t = item.transcript else {
+            if isMoving() { report(Self.movingMessage) }
+            return false
+        }
+        let override: RoleOverride? = if case .custom(let o) = draft { o } else { nil }
+        guard let c = CorrectionModel.resolve(frozen: presetFor(item.url), override: override),
+              saveDraft(.correction, draft, item: item) else { return false }
+        startCorrection(item, runID: runID, transcript: t, assignment: c)
+        return true
+    }
+
+    /// Bilet rezerwowany synchronicznie, przed `Task`: drugi klik bez oddania sterowania widzi już `isCorrecting`.
+    private func startCorrection(_ item: SessionItem, runID: String, transcript: Transcript, assignment: RoleAssignment) {
         let url = item.url
         // Język przebiegu, który się poprawia (I2): po „Transcribe again…" inny niż w `preset.json` sesji.
         let language = RunLanguage.of(item.runSnapshot, fallback: presetFor(url)).language
-        Task { _ = await runCorrection(sessionURL: url, runID: runID, assignment: c, language: language, transcript: t) }
+        let ticket = corrections.start(session: url.lastPathComponent, runID: runID)
+        Task { _ = await runCorrection(sessionURL: url, runID: runID, assignment: assignment, language: language, transcript: transcript, ticket: ticket) }
     }
 
     /// Jedna korekta; stan ZAWSZE się kończy: sukces (corrected.json), albo `correctionFailure` z powodem.
     private func runCorrection(sessionURL: URL, runID: String, assignment: RoleAssignment, language: LanguageCode?,
-                               transcript: Transcript) async -> Transcript {
+                               transcript: Transcript, ticket reserved: RunOperations.Ticket? = nil) async -> Transcript {
         let id = sessionURL.lastPathComponent
         // Bilet od pierwszej linii, przed każdym wczesnym wyjściem: inaczej starsza korekta, kończąc się, nadpisałaby
         // porażkę nowszej, która padła bez klienta (fix round 2).
-        let ticket = corrections.start(session: id, runID: runID)
+        let ticket = reserved ?? corrections.start(session: id, runID: runID)
         guard !assignment.model.isEmpty, let client = clientFor(assignment.providerID) else {
             if corrections.finish(ticket).ownsMessage {
                 correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
@@ -207,25 +253,41 @@ final class NotesModel {
 
     // MARK: Notatka na żądanie
 
-    func generate(item: SessionItem, useCorrected: Bool, template: Template, context: String) {
+    /// `draft == nil` = model zapisany przy sesji (pasek); inaczej dokładnie szkic z okna, zapisany przed startem. `true` = wystartowało.
+    @discardableResult
+    func generate(item: SessionItem, useCorrected: Bool, template: Template, context: String, draft: ModelDraft? = nil) -> Bool {
         let id = item.id
-        guard !isMoving() else { report(Self.movingMessage); return }
-        guard state(id) != .generating else { return }
+        guard !isMoving() else { report(Self.movingMessage); return false }
+        guard state(id) != .generating else { return false }
         // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
-        guard !isCorrecting(id) else { return }
+        guard !isCorrecting(id) else { return false }
+        guard !isTranscribing(id) else {
+            generation[id] = .failed("This meeting is being transcribed.")
+            return false
+        }
         guard let source = item.transcript(corrected: useCorrected) else {
             generation[id] = .failed("This meeting has no transcript yet.")
-            return
+            return false
         }
-        guard let choice = summaryChoice(for: item) else {
+        let info = presetsInfo()
+        let choice: SummaryChoice? = switch draft {
+        case nil: summaryChoice(for: item)
+        case .preset?: presetSummaryChoice(for: item)
+        case .custom(let o)?: SummaryModel.resolve(frozen: presetFor(item.url), override: o, defaultPresetID: info.defaultID, presets: info.presets)
+        }
+        guard let choice else {
             generation[id] = .failed("No preset has a summary model. Choose one in Presets.")
-            return
+            return false
         }
         guard let client = clientFor(choice.assignment.providerID) else {
             generation[id] = .failed("Couldn't reach the summary provider. Check Settings.")
-            return
+            return false
         }
-        reportStaleOverride(.summary, for: item)
+        if let draft {
+            guard saveDraft(.summary, draft, item: item) else { return false }
+        } else {
+            reportStaleOverride(.summary, for: item)
+        }
         generation[id] = .generating
         let limits = ChatLimits.for(client.provider, call: .note)
         var generator = NoteGenerator(client: client, model: choice.assignment.model, timeout: limits.soft,
@@ -267,6 +329,7 @@ final class NotesModel {
             }
         }
         generationRuns[id] = (token, task)
+        return true
     }
 
     /// Tylko migawki (`Snapshots.swift`): stan „w toku" bez uruchamiania pracy. Bez argumentów czyści stan.
