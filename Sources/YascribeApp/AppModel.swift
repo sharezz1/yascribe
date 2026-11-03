@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import YascribeDictation
 import YascribeLocalASR
 import YascribeMeetings
 import YascribeNotes
@@ -131,6 +132,8 @@ final class AppModel {
     let notes = NotesModel()
     /// Lokalny ASR (F20): magazyn modelu i faza pobierania/przygotowania; UI w T7.
     let localASR = LocalASRSupport()
+    /// Dyktowanie: powstaje w `load()` (historia), skrót startuje `YascribeApp.init` obok `monitor`.
+    @ObservationIgnored lazy var dictation = DictationController(model: self)
 
     init() {
         recording.model = self
@@ -201,6 +204,7 @@ final class AppModel {
         notes.templates = read(paths.templates, TemplatesFile())
         dictionary = read(paths.dictionary, UserDictionary())
         folders = read(paths.folders, FoldersFile())
+        dictation.loadHistory(stamp: stamp, errors: &errors)
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
     }
@@ -591,16 +595,27 @@ final class AppModel {
             lastError = "Update in progress."
             return false
         }
+        guard DictationGate.canStartMeeting(dictationBusy: dictation.engine.isBusy) else {
+            lastError = "Finish dictating first."
+            return false
+        }
         return true
     }
 
     /// Zakończenie aplikacji (⌘Q, pasek menu, restart Sparkle): z nagraniem w toku pyta, najpierw zatrzymuje je, potem pozwala wyjść.
     /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
-    enum TerminationDecision { case now, cancel, afterRecording }
+    enum TerminationDecision { case now, cancel, afterRecording, afterDictation }
 
     /// `afterRecording`: zgoda jest, ale rejestrator jeszcze finalizuje pliki (`stop()` mógł wrócić od razu, gdy
     /// finalizacja zaczęła się wcześniej na wątku audio); wyjście dopiero po `recordingFinished()`.
+    /// `afterDictation`: trwa transkrypcja dyktowania; wyjście po jej końcu (tekst trafia do celu i historii).
     func terminationDecision() -> TerminationDecision {
+        // Przed `updateGate`: ta bramka widzi tylko nagranie spotkania. Dyktowanie i nagranie się wykluczają.
+        switch dictation.engine.phase {
+        case .listening: dictation.engine.apply(.cancel)   // bez pytania, mikrofon zwolniony
+        case .processing: return .afterDictation
+        default: break
+        }
         if quitApproved { return recording.isRecording ? .afterRecording : .now }
         if updateGate.shouldTerminate() { return .now }
         let alert = NSAlert()

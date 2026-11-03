@@ -22,6 +22,7 @@ struct YascribeApp: App {
             DispatchQueue.main.async { MainActor.assumeIsolated { Snapshots.runAll(model: model) } }
         } else {
             model.monitor.start()
+            model.dictation.start()
         }
     }
 
@@ -98,7 +99,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.onRecordingEnded = reply
             DispatchQueue.main.asyncAfter(deadline: .now() + 15) { MainActor.assumeIsolated { reply() } }
             return .terminateLater
+        case .afterDictation:
+            // Skrót wyłączony od razu (nowa sesja w trakcie czekania nie ruszy); transkrypcja kończy się i wstawia tekst.
+            model.dictation.stop()
+            var replied = false
+            let reply: @MainActor () -> Void = {
+                guard !replied else { return }
+                replied = true
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+            Task { @MainActor in
+                await model.dictation.engine.waitUntilIdle()
+                reply()
+            }
+            // Tylko na zawieszenie: powyżej limitów żądań (ASR 120 s + korekta 2 × 120 s z ponowieniem + wstawienie).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 400) { MainActor.assumeIsolated { reply() } }
+            return .terminateLater
         }
+    }
+
+    /// Także po zamknięciu bez pytania: tap skrótu off, mikrofon dyktowania zwolniony.
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.model?.dictation.stop()
     }
 }
 

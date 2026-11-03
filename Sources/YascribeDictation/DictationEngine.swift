@@ -108,6 +108,11 @@ public enum DictationPhase: Equatable, Sendable {
         finish(.refused(message))
     }
 
+    /// Zamknięcie aplikacji: czeka na koniec trwającej transkrypcji i wstawienia (`retry()` podmienia `work`, stąd pętla).
+    public func waitUntilIdle() async {
+        while phase == .processing, let w = work { await w.value }
+    }
+
     public func retry() {
         guard canRetry, let r = retained else { return }
         retained = nil

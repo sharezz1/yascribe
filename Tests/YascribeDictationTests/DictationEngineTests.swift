@@ -374,6 +374,17 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
         #expect(h.engine.retained == nil)
         #expect(!h.engine.canRetry)
     }
+
+    @Test func waitUntilIdleWaitsForProcessing() async {
+        let h = Harness()
+        await h.engine.waitUntilIdle()   // bez sesji: wraca od razu
+        h.engine.apply(.start)
+        h.engine.apply(.stop)
+        #expect(h.engine.phase == .processing)
+        await h.engine.waitUntilIdle()
+        #expect(h.engine.phase == .finished(.inserted))
+        #expect(h.records.count == 1)
+    }
 }
 
 /// Znacznik dla `onChange` obserwacji (wołanego poza głównym aktorem). Stan pod `lock`.
