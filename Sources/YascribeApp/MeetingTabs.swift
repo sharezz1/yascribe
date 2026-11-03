@@ -24,8 +24,9 @@ final class MeetingViewState: ObservableObject {
     @Published var showContext = false
     /// Okno „Models…" (zakładka wybiera treść); otwarte na `MeetingDetailView`, poza przewijaną stroną.
     @Published var modelsSheet = false
-    /// Popover modelu podsumowania otwierany z `⋯` w Summary.
-    @Published var summaryModelPopover = false
+    /// Source notatki wybrany w oknie Summary; `nil` = jak „Version" w Transcript. Żyje do zamknięcia widoku spotkania.
+    @Published var summaryUseCorrected: Bool?
+    var summaryCorrected: Bool { summaryUseCorrected ?? useCorrected }
 }
 
 // MARK: Zakładki tekstowe (macos.md §11.5)
@@ -341,14 +342,11 @@ struct SummaryTab: View {
                 .font(.callout).foregroundStyle(.mnWarn)
         }
     }
-    /// Spec 6: notatka powstała innym modelem niż ten z presetu — notka w `⋯`, znika po zgodności. Pełne id w tekście.
-    private var madeWithLine: String? {
-        guard let made = item.notes.summary?.model, let preset = model.notes.presetSummaryChoice(for: item)?.assignment.model,
-              made != preset else { return nil }
-        return "Made with \(model.modelDisplayName(made)) (\(made)); preset: \(model.modelDisplayName(preset)) (\(preset))"
-    }
+    /// Source z okna Summary (albo „Version" z Transcript), znormalizowany: bez korekty zawsze oryginał.
+    private var corrected: Bool { state.summaryCorrected && item.corrected != nil }
+    private var transcribing: Bool { model.isTranscribing(item) }
     private var hasText: Bool {
-        guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return false }
+        guard let t = model.transcript(of: item, corrected: corrected) else { return false }
         return !NotePromptBuilder.transcriptLines(t).isEmpty
     }
     /// Powód, dla którego „Generate notes" jest nieaktywne: brak transkryptu to coś innego niż transkrypt bez treści.
@@ -408,7 +406,7 @@ struct SummaryTab: View {
     }
 
     private var sourceLine: String {
-        let kind = state.useCorrected && item.corrected != nil ? "corrected" : "original"
+        let kind = corrected ? "corrected" : "original"
         let details = [
             item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) },
             model.runLanguage(item).language?.englishName,
@@ -416,7 +414,7 @@ struct SummaryTab: View {
         return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
     }
 
-    /// Jedna linia bez wnęki: szablon · kontekst · przycisk · Copy · `⋯`. „Add context" rozwija pole pod linią.
+    /// Jedna linia bez wnęki: szablon · kontekst · przycisk · Models… · Copy. „Add context" rozwija pole pod linią.
     /// Przed notatką jedyny primary „Generate notes", po — „Regenerate" + Copy (oba `.pill`).
     private func bar(_ s: NoteSummary?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -436,20 +434,21 @@ struct SummaryTab: View {
                     Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
                         .buttonStyle(.pill)
                         .layoutPriority(2)
-                        .disabled(gen == .generating || !hasText || choice == nil || moving || correcting)
+                        .disabled(gen == .generating || !hasText || choice == nil || moving || correcting || transcribing)
+                    modelsButton
                     Button { copy(s.markdown) } label: { Label("Copy", systemImage: "doc.on.doc") }
                         .buttonStyle(.pill)
                         .layoutPriority(2)
                         .help("Copy the notes")
                 } else {
+                    modelsButton
                     Button("Generate notes") { run() }
                         .buttonStyle(.pillPrimary)
                         .layoutPriority(2)
-                        .disabled(gen == .generating || !hasText || choice == nil || moving || correcting)
+                        .disabled(gen == .generating || !hasText || choice == nil || moving || correcting || transcribing)
                         // ⌘↩, nie sam Return: Return w polu kontekstu ma wstawić nową linię, a nie uruchomić płatne generowanie.
                         .keyboardShortcut(.return, modifiers: .command)
                 }
-                moreMenu
             }
             if state.showContext {
                 if moving {
@@ -464,32 +463,12 @@ struct SummaryTab: View {
         }
     }
 
-    /// Notatki o przebiegu: model inny niż w presecie i długie spotkanie. NSMenu ignoruje czcionkę — to wyłączone pozycje.
-    private var menuNotes: [String] {
-        var out: [String] = []
-        if let made = madeWithLine { out.append(made) }
-        if let parts = item.notes.summary?.condensedParts { out.append("Long meeting: condensed in \(parts) parts before summarizing.") }
-        return out
-    }
-
-    /// `⋯` zawsze ma pozycję modelu (jak dawny chip na pasku).
-    private var moreMenu: some View {
-        MoreMenu {
-            Button(MeetingModelChip.menuTitle(.summary, item: item, model: model)) {
-                DispatchQueue.main.async { state.summaryModelPopover = true }
-            }
-            .help(MeetingModelChip.override(.summary, item: item, model: model) != nil
-                  ? "Chosen for this meeting. The preset uses \(model.notes.presetSummaryChoice(for: item)?.assignment.model ?? "no model")."
-                  : "Choose another summary model for this meeting")
-            let notes = menuNotes
-            if !notes.isEmpty {
-                Divider()
-                ForEach(notes, id: \.self) { Text($0) }
-            }
-        }
-        .background {
-            MeetingModelChip(role: .summary, item: item, presented: $state.summaryModelPopover)
-        }
+    /// Wybór modelu, Source i ponowne uruchomienie są w oknie; informacje o przebiegu to jego podpisy.
+    private var modelsButton: some View {
+        Button { state.modelsSheet = true } label: { Label("Models…", systemImage: "slider.horizontal.3") }
+            .buttonStyle(.pill)
+            .layoutPriority(2)
+            .help("Choose the summary model for this meeting")
     }
 
     /// Popup szablonu: pole 130 × 28, promień 7 (makieta: `.field`). Menu zostaje systemowe.
@@ -504,11 +483,11 @@ struct SummaryTab: View {
     }
 
     @ViewBuilder private var errorView: some View {
-        if case .failed(let message) = gen { ErrorLine(message: message) { run() }.disabled(moving || correcting) }
+        if case .failed(let message) = gen { ErrorLine(message: message) { run() }.disabled(moving || correcting || transcribing) }
     }
 
     private func run() {
-        model.notes.generate(item: item, useCorrected: state.useCorrected, template: template, context: state.context)
+        model.notes.generate(item: item, useCorrected: corrected, template: template, context: state.context)
     }
 
     private func copy(_ text: String) {

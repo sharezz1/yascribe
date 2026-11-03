@@ -60,6 +60,30 @@ import YascribeProviders
         #expect(ModelsSheetRules.languageChoice(isAuto: false, language: nil) == .unset)
     }
 
+    @Test func summaryReasonEachReasonAndNil() {
+        func r(g: Bool = false, t: Bool = true, c: Bool = true, m: Bool = false, k: Bool = false, tr: Bool = false) -> String? {
+            ModelsSheetRules.summaryReason(generating: g, hasText: t, hasChoice: c, moving: m, correcting: k, transcribing: tr)
+        }
+        #expect(r() == nil)
+        #expect(r(g: true, t: false, c: false, m: true, k: true, tr: true) == "Notes are being generated.")
+        #expect(r(t: false, c: false, m: true, k: true, tr: true) == "Nothing to summarize.")
+        #expect(r(c: false, m: true, k: true, tr: true) == "Choose a model.")
+        #expect(r(m: true, k: true, tr: true) == "Meetings are being moved.")
+        #expect(r(k: true, tr: true) == "Correction is running.")
+        #expect(r(tr: true) == "Transcription is running.")
+    }
+
+    @Test @MainActor func summaryReasonUsesDraftSourceText() {
+        let empty = Transcript(utterances: [], failedChunks: [])
+        let text = Transcript(utterances: [Utterance(speaker: .them, start: 0, end: 1, text: "Forecast", words: [], approximateTiming: false)], failedChunks: [])
+        let item = SessionItem(url: URL(fileURLWithPath: "/tmp/mn-x"), startedAt: Date(), transcript: text, runID: "run",
+                               corrected: CorrectedTranscript(transcript: empty, model: "c", batches: 1, failedBatches: 0, rejectedLines: 0))
+        let draft = SummaryModelsDraft(item: item, state: MeetingViewState())
+        #expect(!draft.hasText(item))
+        draft.useCorrected = false
+        #expect(draft.hasText(item))
+    }
+
     @Test func correctionOriginCaptions() {
         #expect(ModelsSheetRules.correctionOrigin(hasOverride: true, stale: true, presetName: "P") == "The model you chose is no longer available")
         #expect(ModelsSheetRules.correctionOrigin(hasOverride: true, stale: false, presetName: "P") == "Chosen for this meeting")

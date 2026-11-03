@@ -198,21 +198,30 @@ enum Snapshots {
                    let empty = model.sessions.first(where: { $0.id.hasSuffix("cc33") }) {
                     let summaryTab = MeetingViewState(); summaryTab.tab = .summary
                     try render("meeting-summary", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summaryTab) }
-                    // Faza 2.0.1: model zmieniony (pozycja ⋯) dla tego nagrania (z „changed" i linią pochodzenia), lokalny (bez „Thinking"), popover wprost.
+                    // Faza 2.0.1: model zmieniony dla tego nagrania, lokalny (bez „Thinking"); okno „Summary model" wprost.
                     if let cloud = model.providers.providers.first(where: { !$0.isLocal }) {
                         var changed = withNotes
                         changed.notes.meta.modelOverrides = ModelOverrides(summary: RoleOverride(providerID: cloud.id, model: "anthropic/claude-sonnet-4.5", thinking: false))
                         changed.notes.summary?.model = "anthropic/claude-sonnet-4.5"
                         try render("meeting-summary-model-changed", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: changed, state: summaryTab) }
-                        try render("model-popover-changed", size: CGSize(width: 340, height: 270), dark: dark, model: model) { MeetingModelChip(role: .summary, item: changed, inlinePopover: true) }
+                        // Okno „Summary model": nadpisanie zdalne z Thinking i istniejącą korektą (Source do wyboru).
+                        var changedCorrected = changed
+                        let t = try JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8))
+                        changedCorrected.transcript = t
+                        changedCorrected.corrected = CorrectedTranscript(transcript: t, model: "anthropic/claude-haiku-4.5", batches: 1, failedBatches: 0, rejectedLines: 0)
+                        try render("models-summary-changed", size: CGSize(width: 560, height: 640), dark: dark, model: model) { SummaryModelsSheet(item: changedCorrected, state: summaryTab) {} }
                         let ollama = Provider(name: ProviderPreset.ollama.name, baseURL: URL(string: ProviderPreset.ollama.baseURL)!, contextTokens: 8_192)
                         model.providers.providers.append(ollama)
                         var onMac = withNotes
                         onMac.notes.meta.modelOverrides = ModelOverrides(summary: RoleOverride(providerID: ollama.id, model: "qwen3:8b"))
                         try render("meeting-summary-model-local", size: CGSize(width: 900, height: 200), dark: dark, model: model) { MeetingDetailView(item: onMac, state: summaryTab) }
-                        try render("model-popover-local", size: CGSize(width: 340, height: 230), dark: dark, model: model) { MeetingModelChip(role: .summary, item: onMac, inlinePopover: true) }
+                        try render("models-summary-local", size: CGSize(width: 560, height: 640), dark: dark, model: model) { SummaryModelsSheet(item: onMac, state: summaryTab) {} }
                         model.providers.providers.removeAll { $0.id == ollama.id }
                     }
+                    // Bez korekty: Source = Original, „Corrected" wyłączone; otwarte nad widokiem spotkania.
+                    try render("models-summary-no-correction", size: CGSize(width: 560, height: 640), dark: dark, model: model) { SummaryModelsSheet(item: withNotes, state: summaryTab) {} }
+                    let summarySheet = MeetingViewState(); summarySheet.tab = .summary; summarySheet.modelsSheet = true
+                    try render("models-summary-open", size: CGSize(width: 900, height: 820), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: summarySheet) }
                     // UX po T13: notatka z podziału (linia „Long meeting"), generowanie z postępem i „Cancel", korekta blokuje generowanie.
                     // Fixture nie ładuje transkryptu z dysku; bez niego „Generate notes" jest nieaktywne z innego powodu.
                     var split = withNotes; split.notes.summary?.condensedParts = 4

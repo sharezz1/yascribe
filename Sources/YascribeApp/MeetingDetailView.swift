@@ -51,7 +51,8 @@ struct MeetingDetailView: View {
         .dismissibleSheet(isPresented: $state.modelsSheet, onDismiss: { state.modelsSheet = false }) {
             switch state.tab ?? defaultTab {
             case .transcript: TranscriptModelsSheet(item: item) { state.modelsSheet = false }
-            default: EmptyView()
+            case .summary: SummaryModelsSheet(item: item, state: state) { state.modelsSheet = false }
+            case .myNotes: EmptyView()
             }
         }
         .contentBackground()

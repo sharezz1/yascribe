@@ -43,6 +43,17 @@ enum ModelsSheetRules {
         return "From the preset: \(presetName ?? "none")"
     }
 
+    static func summaryReason(generating: Bool, hasText: Bool, hasChoice: Bool, moving: Bool, correcting: Bool,
+                              transcribing: Bool) -> String? {
+        if generating { return "Notes are being generated." }
+        if !hasText { return "Nothing to summarize." }
+        if !hasChoice { return "Choose a model." }
+        if moving { return "Meetings are being moved." }
+        if correcting { return "Correction is running." }
+        if transcribing { return "Transcription is running." }
+        return nil
+    }
+
     /// Nieznany język nigdy nie staje się Auto: Auto to wyłącznie jawny wybór.
     static func languageChoice(isAuto: Bool, language: LanguageCode?) -> LanguageChoice {
         isAuto ? .auto : (language.map(LanguageChoice.code) ?? .unset)
@@ -75,6 +86,47 @@ final class TranscriptModelsDraft: ObservableObject {
     func resetToPreset(_ preset: RoleAssignment?) {
         correctProviderID = preset?.providerID
         correctModel = preset?.model ?? ""
+        usePreset = true
+    }
+}
+
+/// Szkic okna Summary (tylko w pamięci). Source startuje znormalizowany: bez korekty zawsze Original.
+final class SummaryModelsDraft: ObservableObject {
+    @Published var providerID: UUID? { didSet { usePreset = false } }
+    @Published var model = "" { didSet { usePreset = false } }
+    /// `nil` = ustawienie globalne, dopóki użytkownik nie dotknie przełącznika (albo z zapisanego nadpisania).
+    @Published var thinking: Bool? { didSet { usePreset = false } }
+    @Published var usePreset = false
+    @Published var useCorrected: Bool
+
+    @MainActor init(item: SessionItem, state: MeetingViewState) {
+        useCorrected = state.summaryCorrected && item.corrected != nil
+    }
+
+    var sourceLabel: String { useCorrected ? "Corrected" : "Original" }
+
+    /// Tekst z transkryptu wybranego w oknie, nie z „Version" w Transcript.
+    func hasText(_ item: SessionItem) -> Bool {
+        item.transcript(corrected: useCorrected).map { !NotePromptBuilder.transcriptLines($0).isEmpty } ?? false
+    }
+
+    /// `true` = notatka wystartowała; dopiero wtedy Source zostaje zapamiętany dla spotkania (Regenerate w pasku).
+    @MainActor
+    func submit(item: SessionItem, state: MeetingViewState, notes: NotesModel, template: Template, context: String,
+                preset: RoleAssignment?) -> Bool {
+        guard let draft = ModelsSheetRules.draft(providerID: providerID, model: model, thinking: thinking, preset: preset,
+                                                 hasOverride: notes.overrides(for: item).summary != nil, usePreset: usePreset),
+              notes.generate(item: item, useCorrected: useCorrected && item.corrected != nil, template: template,
+                             context: context, draft: draft)
+        else { return false }
+        state.summaryUseCorrected = useCorrected
+        return true
+    }
+
+    func resetToPreset(_ preset: RoleAssignment?) {
+        providerID = preset?.providerID
+        model = preset?.model ?? ""
+        thinking = nil
         usePreset = true
     }
 }
