@@ -19,6 +19,8 @@ public struct HotkeyMachine: Sendable {
     /// Skrót jest fizycznie wciśnięty (dla `.cancel` po kombinacji potrzebny, by „zjeść” późniejsze puszczenie).
     private var held = false
     public private(set) var isListening = false
+    /// Pole skrótu w Settings przechwytuje klawisze: zdarzenia nie startują dyktowania. Przejście w obie strony zeruje stan.
+    public private(set) var isSuspended = false
 
     public init(hotkey: DictationHotkey, mode: DictationTriggerMode) {
         self.hotkey = hotkey
@@ -33,7 +35,14 @@ public struct HotkeyMachine: Sendable {
     /// Stan sesji z zewnątrz (start z launchera, auto-stop, awaria); `held` zostaje bez zmian.
     public mutating func setListening(_ on: Bool) { isListening = on }
 
+    public mutating func setSuspended(_ on: Bool) {
+        guard on != isSuspended else { return }
+        isSuspended = on
+        reset()
+    }
+
     public mutating func handle(_ event: HotkeyEvent) -> HotkeyAction? {
+        if isSuspended { return nil }
         switch event {
         case let .modifier(keyCode, _, isDown):
             guard hotkey.isModifierOnly, keyCode == hotkey.keyCode else { return nil }

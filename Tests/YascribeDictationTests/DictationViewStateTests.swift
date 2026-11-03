@@ -41,3 +41,15 @@ private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
     #expect(DictationPresentation.emptyHint(hotkey: .fn, mode: .hold).hasPrefix("Hold Fn and speak"))
     #expect(DictationPresentation.emptyHint(hotkey: .fn, mode: .toggle).hasPrefix("Press Fn and speak"))
 }
+
+@Test func emptyModelCountsAsMissing() {
+    let a = RoleAssignment(providerID: UUID(), model: "m")
+    let blank = RoleAssignment(providerID: UUID(), model: "  ")
+    #expect(DictationSettings(asr: a).usableASR == a)
+    #expect(DictationSettings(asr: blank).usableASR == nil)
+    #expect(DictationSettings().usableASR == nil)
+    #expect(DictationSettings(correction: DictationCorrectionSettings(enabled: true, model: a)).usableCorrection == a)
+    #expect(DictationSettings(correction: DictationCorrectionSettings(enabled: true, model: blank)).usableCorrection == nil)
+    #expect(DictationSettings(correction: DictationCorrectionSettings(enabled: false, model: a)).usableCorrection == nil)
+    #expect(DictationSettings(correction: DictationCorrectionSettings(enabled: true, model: nil)).usableCorrection == nil)
+}

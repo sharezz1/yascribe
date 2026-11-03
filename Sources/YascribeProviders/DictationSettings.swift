@@ -54,4 +54,13 @@ public struct DictationSettings: Codable, Equatable, Sendable {
     public var triggerModeOrDefault: DictationTriggerMode { triggerMode ?? .hold }
     public var correctionEnabled: Bool { correction?.enabled ?? false }
     public var showLauncherOrDefault: Bool { showLauncher ?? true }
+
+    /// Model ASR do użycia: pusta nazwa (dostawca wybrany, model jeszcze nie) = brak modelu, żadne żądanie nie idzie z `model: ""`.
+    public var usableASR: RoleAssignment? { asr.flatMap { Self.usable($0) } }
+    /// Model korekty, gdy korekta jest włączona i model wybrany; inaczej `nil` (korekta pominięta).
+    public var usableCorrection: RoleAssignment? { correctionEnabled ? correction?.model.flatMap { Self.usable($0) } : nil }
+
+    private static func usable(_ a: RoleAssignment) -> RoleAssignment? {
+        a.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : a
+    }
 }

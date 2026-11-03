@@ -118,8 +118,8 @@ struct DictationView: View {
     private var list: some View {
         let calendar = Calendar.current
         let now = Date()
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(dictation.history.days(calendar: calendar).enumerated()), id: \.offset) { _, group in
+        return LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(dictation.history.days(calendar: calendar).enumerated()), id: \.element.day) { _, group in
                 SectionHeader(DictationDayLabel.text(for: group.day, now: now, calendar: calendar))
                 Card {
                     ForEach(Array(group.entries.enumerated()), id: \.element.id) { i, entry in

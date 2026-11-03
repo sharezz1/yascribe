@@ -69,6 +69,13 @@ import YascribeTranscription
         }
     }
 
+    /// Pole skrótu w Settings przechwytuje klawisze: tap nie może wtedy uruchamiać dyktowania (ani trwająca sesja trwać).
+    func setCapturingHotkey(_ on: Bool) {
+        if on { engine.apply(.cancel) }
+        monitor.setCapturing(on)
+        monitor.setListening(engine.phase == .listening)
+    }
+
     func refreshPermissions() {
         let now = (inputMonitoring: monitor.permissionGranted, accessibility: AXIsProcessTrusted(),
                    microphone: AVCaptureDevice.authorizationStatus(for: .audio) == .authorized)
@@ -140,10 +147,10 @@ import YascribeTranscription
     /// Wołane z `[]` przy starcie tylko po to, by sprawdzić model: wtedy bez Keychain, sieci i ładowania modeli.
     private func buildInput(_ pcm: [Int16]) -> (input: DictationPipelineInput, meta: DictationRecordMeta)? {
         let s = model.settings.dictationOrDefault
-        guard let asr = s.asr, let provider = model.provider(asr.providerID) else { return nil }
+        guard let asr = s.usableASR, let provider = model.provider(asr.providerID) else { return nil }
         // Brak lokalnego modelu: odmowa przy starcie, a nie po wypowiedzi (sam odczyt magazynu, bez ładowania).
         if provider.api == .fluidAudio, RunGate.check(status: model.localASR.store.status()) != nil { return nil }
-        let correction = s.correctionEnabled ? s.correction?.model : nil
+        let correction = s.usableCorrection
         let meta = DictationRecordMeta(asrModel: asr.model, correctionModel: correction?.model)
         let language = language
         let shape = model.probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: language)?.shape

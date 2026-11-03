@@ -67,3 +67,17 @@ private func key(_ code: UInt16, flags: UInt64 = 0, repeated: Bool = false) -> H
     #expect(HotkeyCapture.label(DictationHotkey(keyCode: 96, flags: shift | command, isModifierOnly: false)) == "⇧⌘ F5")
     #expect(HotkeyCapture.label(DictationHotkey(keyCode: 99 + 200, isModifierOnly: false)) == "Key 299")
 }
+
+@Test func tabLeavesTheFieldLikeEscape() {
+    var c = HotkeyCapture()
+    #expect(c.handle(key(48)) == nil)
+    #expect(c.cancelled)
+}
+
+@Test func arrowsAndPunctuationHaveNames() {
+    #expect(HotkeyCapture.label(DictationHotkey(keyCode: 123, flags: option, isModifierOnly: false)) == "⌥ ←")
+    #expect(HotkeyCapture.label(DictationHotkey(keyCode: 36, isModifierOnly: false)) == "Return")
+    #expect(HotkeyCapture.label(DictationHotkey(keyCode: 117, isModifierOnly: false)) == "Forward Delete")
+    #expect(HotkeyCapture.label(DictationHotkey(keyCode: 50, flags: shift, isModifierOnly: false)) == "⇧ `")
+    #expect(HotkeyCapture.label(DictationHotkey(keyCode: 42, isModifierOnly: false)) == "\\")
+}

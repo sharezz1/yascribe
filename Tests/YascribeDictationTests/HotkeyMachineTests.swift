@@ -98,3 +98,18 @@ private func fnUp() -> HotkeyEvent { .modifier(keyCode: fnKey, flags: 0, isDown:
     #expect(m.handle(fnUp()) == nil)
     #expect(m.handle(fnDown()) == .start)
 }
+
+@Test func suspendedMachineIgnoresEverythingAndResetsOnBothEdges() {
+    for mode in [DictationTriggerMode.hold, .toggle] {
+        var m = HotkeyMachine(hotkey: .fn, mode: mode)
+        #expect(m.handle(fnDown()) == .start)
+        m.setSuspended(true)
+        #expect(!m.isListening)   // przejście zeruje stan
+        #expect(m.handle(fnUp()) == nil)
+        #expect(m.handle(fnDown()) == nil)
+        #expect(m.handle(.keyDown(keyCode: esc, flags: 0, isRepeat: false)) == nil)
+        m.setSuspended(false)
+        #expect(m.handle(fnUp()) == nil)   // puszczenie klawisza trzymanego w trakcie przechwytywania nie kończy niczego
+        #expect(m.handle(fnDown()) == .start)
+    }
+}

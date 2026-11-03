@@ -62,7 +62,8 @@ struct DictationSettingsSection: View {
     private var shortcutRow: some View {
         FormRow(label: "Shortcut", caption: ui.hotkeyMessage ?? (s.hotkeyOrDefault == .fn ? DictationPresentation.fnHint : nil),
                 isError: ui.hotkeyMessage != nil) {
-            HotkeyRecorder(hotkey: s.hotkeyOrDefault, message: $ui.hotkeyMessage) { h in update { $0.hotkey = h } }
+            HotkeyRecorder(hotkey: s.hotkeyOrDefault, message: $ui.hotkeyMessage,
+                           onCapturing: { model.dictation.setCapturingHotkey($0) }) { h in update { $0.hotkey = h } }
                 .frame(width: 180, height: 28)
         }
     }

@@ -32,11 +32,15 @@ import YascribeProviders
     var isRunning: Bool { tap != nil }
 
     func configure(hotkey: DictationHotkey, mode: DictationTriggerMode) {
+        let suspended = machine.isSuspended
         machine = HotkeyMachine(hotkey: hotkey, mode: mode)
+        machine.setSuspended(suspended)   // zmiana skrótu w trakcie przechwytywania nie wznawia nasłuchu
         self.mode = mode
     }
 
     func setListening(_ on: Bool) { machine.setListening(on) }
+
+    func setCapturing(_ on: Bool) { machine.setSuspended(on) }
 
     func reset() { machine.reset() }
 
