@@ -14,6 +14,8 @@ struct ModelPicker: View {
     let providerID: UUID
     let role: Role
     @Binding var selection: String
+    /// „Dostawca ·" przed id; okna z osobnym wierszem Provider go pomijają.
+    var showProvider = true
 
     private var all: [ModelInfo] { model.models(provider: providerID, role: role) }
     private var visible: [ModelInfo] { ModelCatalog.visible(all, role: role, query: state.query) }
@@ -38,7 +40,7 @@ struct ModelPicker: View {
         } label: {
             // `ModelField` (macos.md §11.4): popup „Dostawca · id ⌄”, dostawca w `text2`.
             HStack(spacing: 6) {
-                if let name = model.providers.providers.first(where: { $0.id == providerID })?.roleLabel {
+                if showProvider, let name = model.providers.providers.first(where: { $0.id == providerID })?.roleLabel {
                     Text("\(name)  ·").foregroundStyle(.mnText2).fixedSize()
                 }
                 Text(selection.isEmpty ? "Choose model" : selection).lineLimit(1).truncationMode(.middle)
@@ -79,11 +81,12 @@ struct ModelPicker: View {
                 }
                 .buttonStyle(.plain)
             }
-            .frame(minHeight: 200)
+            .scrollContentBackground(.hidden)
+            .frame(minHeight: 160)
             if let typed { Button("Use “\(typed)”") { pick(typed) } }
         }
         .padding(12)
-        .frame(width: 520, height: 380)
+        .frame(width: 360, height: 320)
     }
 
     private func pick(_ id: String) {
