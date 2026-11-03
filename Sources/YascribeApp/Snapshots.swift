@@ -232,9 +232,15 @@ enum Snapshots {
                         var notCorrected = picked
                         notCorrected.corrected = nil
                         try render("meeting-transcript-not-corrected", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: notCorrected, state: transcriptView) }
-                        // Faza 2.1 D13: „Transcribe again…" — popover wprost (domyślnie model i język nagrania) i przycisk wyłączony po usunięciu audio.
-                        try render("transcribe-again-popover", size: CGSize(width: 340, height: 330), dark: dark, model: model) { TranscribeAgainButton(item: picked, inlinePopover: true) }
+                        // Okno „Models…" (Transcript): wprost, otwarte nad widokiem spotkania, w trakcie korekty i po usunięciu audio.
+                        try render("models-transcript", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: picked) {} }
+                        let sheetOpen = MeetingViewState(); sheetOpen.tab = .transcript; sheetOpen.modelsSheet = true
+                        try render("models-transcript-open", size: CGSize(width: 900, height: 820), dark: dark, model: model) { MeetingDetailView(item: picked, state: sheetOpen) }
+                        model.notes.setPreview(picked.id, correcting: true)
+                        try render("models-transcript-correcting", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: picked) {} }
+                        model.notes.setPreview(picked.id)
                         var noAudio = picked; noAudio.audioDeletedAfterDays = 30
+                        try render("models-transcript-no-audio", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: noAudio) {} }
                         try render("meeting-transcript-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: noAudio, state: transcriptView) }
                         // F6 (D13): pierwsza próba bez transkryptu — w stanie „No transcript yet" także „Transcribe again…".
                         var noTranscript = picked

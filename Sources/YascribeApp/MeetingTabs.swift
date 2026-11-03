@@ -22,9 +22,8 @@ final class MeetingViewState: ObservableObject {
     @Published var context = ""
     @Published var contextPrefilled = false
     @Published var showContext = false
-    /// Popovery otwierane z `⋯` w Transcript (kotwiczą się do `⋯`).
-    @Published var correctionModelPopover = false
-    @Published var transcribeAgainPopover = false
+    /// Okno „Models…" (zakładka wybiera treść); otwarte na `MeetingDetailView`, poza przewijaną stroną.
+    @Published var modelsSheet = false
     /// Popover modelu podsumowania otwierany z `⋯` w Summary.
     @Published var summaryModelPopover = false
 }
@@ -150,7 +149,7 @@ struct TranscriptTab: View {
             // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
             if busy, item.transcript != nil, item.attemptNotPromoted == nil { StateLabel(.progress(nil), "Transcribing again…") }
             attemptBanner
-            // Jedna linia nad listą: wersja po lewej; „Improve transcript" (tylko przed pierwszą korektą), Copy i `⋯` po prawej.
+            // Jedna linia nad listą: wersja po lewej; „Improve transcript" (tylko przed pierwszą korektą), Models… i Copy po prawej.
             if item.transcript != nil {
                 HStack(spacing: 8) {
                     if item.corrected != nil {
@@ -167,11 +166,11 @@ struct TranscriptTab: View {
                         Button("Improve transcript") { model.notes.retryCorrection(item) }
                             .buttonStyle(.pillPrimary)
                             .layoutPriority(2)
-                            .disabled(moving)
+                            .disabled(moving || busy)
                             .help("Run the correction model on this transcript")
                     }
+                    modelsButton
                     copyButton
-                    moreMenu
                 }
                 .padding(.bottom, 4)
             }
@@ -181,46 +180,12 @@ struct TranscriptTab: View {
 
     /// Bez wyświetlonego błędu korekty (ten ma własne Retry) — ten sam warunek co dawny przycisk na pasku.
     private var canImprove: Bool { model.notes.correctionFailureMessage(item.id) == nil && model.notes.canRetryCorrection(item) }
-    /// Chip modelu był tylko przy niepustym transkrypcie przebiegu; ten sam warunek dla pozycji `⋯`.
-    private var showsModelItem: Bool { item.runID != nil && item.transcript?.utterances.isEmpty == false }
-
-    /// „Corrected with …" i „N parts kept as heard" — informacje przeniesione z paska do notki w `⋯`.
-    private var menuNotes: [String] {
-        guard let c = item.corrected else { return [] }
-        var out: [String] = []
-        if c.model != model.notes.correctionAssignment(for: item)?.model { out.append("Corrected with \(model.modelDisplayName(c.model)) (\(c.model))") }
-        if c.failedBatches + c.rejectedLines > 0 { out.append("\(c.failedBatches + c.rejectedLines) parts kept as heard (failed a check)") }
-        return out
-    }
-
-    /// `⋯` zawsze ma „Transcribe again…", więc przy transkrypcie nigdy nie jest puste.
-    /// NSMenu ignoruje własną czcionkę i kolor: notka to wyłączone pozycje systemowe, nie 11 pt `mnText2`.
-    private var moreMenu: some View {
-        MoreMenu {
-            if canImprove, item.corrected != nil {
-                Button("Improve transcript again") { model.notes.retryCorrection(item) }.disabled(moving)
-            }
-            if showsModelItem {
-                Button(MeetingModelChip.menuTitle(.correction, item: item, model: model)) {
-                    DispatchQueue.main.async { state.correctionModelPopover = true }
-                }
-            }
-            if canImprove && item.corrected != nil || showsModelItem { Divider() }
-            let blocker = TranscribeAgainButton.blocker(item: item, model: model)
-            Button(blocker.map { "Transcribe again… (\($0))" } ?? "Transcribe again…") { DispatchQueue.main.async { state.transcribeAgainPopover = true } }
-                .disabled(blocker != nil)
-            let notes = menuNotes
-            if !notes.isEmpty {
-                Divider()
-                ForEach(notes, id: \.self) { Text($0) }
-            }
-        }
-        .background {
-            MeetingModelChip(role: .correction, item: item, presented: $state.correctionModelPopover)
-        }
-        .background {
-            TranscribeAgainButton(item: item, presented: $state.transcribeAgainPopover)
-        }
+    /// Wybór modeli i ponowne uruchomienia są w oknie; informacje o korekcie to jego podpisy.
+    private var modelsButton: some View {
+        Button { state.modelsSheet = true } label: { Label("Models…", systemImage: "slider.horizontal.3") }
+            .buttonStyle(.pill)
+            .layoutPriority(2)
+            .help("Choose models for this meeting")
     }
 
     private var copyButton: some View {
@@ -318,8 +283,8 @@ struct TranscriptTab: View {
                         if item.latestAttemptID != nil {
                             Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }.buttonStyle(.pill).disabled(correcting)
                         }
-                        // D13 (F6): po próbie bez transkryptu inny model i język też do wyboru — ta sama bramka co w nagłówku.
-                        TranscribeAgainButton(item: item)
+                        // D13 (F6): po próbie bez transkryptu inny model i język też do wyboru (okno Models).
+                        modelsButton
                     }
                     .disabled(moving)
                 }

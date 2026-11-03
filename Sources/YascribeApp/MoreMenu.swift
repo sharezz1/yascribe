@@ -2,7 +2,7 @@ import SwiftUI
 
 /// `⋯` 28 × 28 (kółko z obrysem, jak przyciski ikon) z rzadkimi akcjami zakładki: Transcript i Summary.
 /// Pozycje otwierające popover ustawiają flagę w `DispatchQueue.main.async` — po zamknięciu pętli NSMenu;
-/// sam popover kotwiczy się w `.background` tego przycisku (`MeetingModelChip`/`TranscribeAgainButton` z `presented:`).
+/// sam popover kotwiczy się w `.background` tego przycisku (`MeetingModelChip` z `presented:`).
 /// Pusta treść to sprawa wołającego: wtedy nie rysuje `MoreMenu` wcale.
 struct MoreMenu<Content: View>: View {
     @ViewBuilder var content: Content
