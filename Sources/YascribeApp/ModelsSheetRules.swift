@@ -15,10 +15,11 @@ enum ModelsSheetRules {
         return .custom(RoleOverride(providerID: providerID, model: model, thinking: thinking))
     }
 
-    static func transcribeReason(blocker: String?, correcting: Bool, hasPreset: Bool, providerChosen: Bool,
+    static func transcribeReason(blocker: String?, correcting: Bool, generating: Bool, hasPreset: Bool, providerChosen: Bool,
                                  modelEmpty: Bool, languageChosen: Bool) -> String? {
         if let blocker { return blocker }
         if correcting { return "Correction is running." }
+        if generating { return "Notes are being generated." }
         if !hasPreset { return "This meeting has no preset." }
         if !providerChosen || modelEmpty { return "Choose a model." }
         if !languageChosen { return "Choose a language." }

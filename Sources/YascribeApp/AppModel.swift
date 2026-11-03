@@ -945,7 +945,8 @@ final class AppModel {
     private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: any TranscriptionClient) -> Bool {
         let id = sessionURL.lastPathComponent
         if let refusal = TranscriptionStartGate.refusal(sessionURL: sessionURL, transcribing: transcribing.contains(id),
-                                                       correcting: notes.isCorrecting(id), moving: recordingsMove != nil) {
+                                                       correcting: notes.isCorrecting(id), generating: notes.state(id) == .generating,
+                                                       moving: recordingsMove != nil) {
             lastError = refusal
             return false
         }
@@ -994,11 +995,13 @@ extension AppModel: RecordingActivity {
 
 /// Bramki startu transkrypcji, wydzielone z `AppModel.run`, bo `AppModel` nie da się zbudować w teście.
 enum TranscriptionStartGate {
-    static func refusal(sessionURL: URL, transcribing: Bool, correcting: Bool, moving: Bool) -> String? {
+    static func refusal(sessionURL: URL, transcribing: Bool, correcting: Bool, generating: Bool, moving: Bool) -> String? {
         if transcribing { return "This recording is already being transcribed." }
         if moving { return "Meetings are being moved to a new folder. Transcribe when that finishes." }
         // Nowy przebieg w trakcie korekty: korekta starego tekstu nadpisałaby wynik albo poszłaby druga (F2, jak w `resume`).
         if correcting { return "This transcript is being corrected. Try again when that finishes." }
+        // Po przebiegu ruszyłaby autokorekta obok notatki (ten sam lokalny serwer), a notatka ze starego tekstu nadpisałaby nowe.
+        if generating { return "Notes are being generated for this meeting. Try again when that finishes." }
         // Bez audio przebieg utworzyłby pusty `runs/<id>/` jako najnowszą próbę (wznowienie, retencja) bez szans na transkrypt.
         guard AudioRetention.audioFiles(sessionURL).isEmpty else { return nil }
         let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""

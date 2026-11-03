@@ -400,7 +400,7 @@ final class NotesModel {
     }
 
     func generateOverview(_ item: SessionItem) {
-        guard !isMoving(), !titles.isActive(item.id), !corrections.isActive(item.id), let runID = item.runID,
+        guard !isMoving(), !isTranscribing(item.id), !titles.isActive(item.id), !corrections.isActive(item.id), let runID = item.runID,
               let source = item.transcript, let transcript = item.transcript(corrected: true) else { return }
         guard let choice = summaryChoice(for: item), let client = clientFor(choice.assignment.providerID) else {
             overviewFailure.insert(item.id)

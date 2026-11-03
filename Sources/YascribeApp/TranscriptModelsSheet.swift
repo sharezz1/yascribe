@@ -40,7 +40,7 @@ struct TranscriptModelsSheet: View {
     private var transcribeReason: String? {
         ModelsSheetRules.transcribeReason(
             blocker: ModelsSheetRules.transcribeBlocker(item: item, model: model), correcting: model.notes.isCorrecting(item.id),
-            hasPreset: preset != nil, providerChosen: draft.asrProviderID != nil,
+            generating: model.notes.state(item.id) == .generating, hasPreset: preset != nil, providerChosen: draft.asrProviderID != nil,
             modelEmpty: draft.asrModel.trimmingCharacters(in: .whitespaces).isEmpty, languageChosen: chosenLanguage != nil)
     }
 

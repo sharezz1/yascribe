@@ -28,12 +28,14 @@ import YascribeProviders
     }
 
     @Test func transcribeReasonOrder() {
-        func r(_ b: String? = nil, c: Bool = false, p: Bool = true, pc: Bool = true, me: Bool = false, l: Bool = true) -> String? {
-            ModelsSheetRules.transcribeReason(blocker: b, correcting: c, hasPreset: p, providerChosen: pc, modelEmpty: me, languageChosen: l)
+        func r(_ b: String? = nil, c: Bool = false, g: Bool = false, p: Bool = true, pc: Bool = true, me: Bool = false, l: Bool = true) -> String? {
+            ModelsSheetRules.transcribeReason(blocker: b, correcting: c, generating: g, hasPreset: p, providerChosen: pc, modelEmpty: me,
+                                              languageChosen: l)
         }
         #expect(r() == nil)
-        #expect(r("B", c: true, p: false, pc: false, l: false) == "B")
-        #expect(r(c: true, p: false, pc: false, l: false) == "Correction is running.")
+        #expect(r("B", c: true, g: true, p: false, pc: false, l: false) == "B")
+        #expect(r(c: true, g: true, p: false, pc: false, l: false) == "Correction is running.")
+        #expect(r(g: true, p: false, pc: false, l: false) == "Notes are being generated.")
         #expect(r(p: false, pc: false, l: false) == "This meeting has no preset.")
         #expect(r(pc: false, l: false) == "Choose a model.")
         #expect(r(me: true, l: false) == "Choose a model.")

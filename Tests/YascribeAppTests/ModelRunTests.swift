@@ -255,15 +255,41 @@ private final class Reports { var messages: [String] = [] }
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
         try Data().write(to: session.appendingPathComponent("mic.caf"))
-        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: false, moving: false) == nil)
-        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: true, moving: false)
+        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: false, generating: false, moving: false) == nil)
+        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: true, generating: false, moving: false)
                 == "This transcript is being corrected. Try again when that finishes.")
+    }
+
+    /// Odwrotna kolejność niż przy korekcie: najpierw notatka, potem transkrypcja — też odmowa.
+    @Test func transcriptionGateRefusesWhileSummaryGenerates() async throws {
+        try createSession()
+        defer { try? FileManager.default.removeItem(at: session) }
+        try Data().write(to: session.appendingPathComponent("mic.caf"))
+        let model = makeModel()
+        #expect(generate(model, item(), draft("A")))
+        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: model.isCorrecting(item().id),
+                                               generating: model.state(item().id) == .generating, moving: false)
+                == "Notes are being generated for this meeting. Try again when that finishes.")
+        try await waitUntil { model.state(item().id) != .generating }
+    }
+
+    @Test func generateOverviewSkippedWhileTranscribing() async throws {
+        try createSession()
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel()
+        model.isTranscribing = { _ in true }
+        model.generateOverview(item())
+        #expect(!model.titles.isActive(item().id))
+        model.isTranscribing = { _ in false }
+        model.generateOverview(item())
+        #expect(model.titles.isActive(item().id)) // kontrola: bez transkrypcji startuje
+        try await waitUntil { !model.titles.isActive(item().id) }
     }
 
     @Test func transcriptionGateRefusesWhenAudioDeleted() throws {
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
-        let refusal = TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: false, moving: false)
+        let refusal = TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: false, generating: false, moving: false)
         #expect(refusal?.contains("audio was deleted") == true)
     }
 }
