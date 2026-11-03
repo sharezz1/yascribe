@@ -176,6 +176,24 @@ private final class SeenHTTP: HTTPClient, @unchecked Sendable {
         #expect(http.models == ["preset-corr"])
     }
 
+    @Test func clearOverrideWithoutPresetModelRemovesPersistedOverrideAndRunsNothing() throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        try NotesStore(session: session).updateMeta { $0.setOverride(.correction, RoleOverride(providerID: provider.id, model: "mine")) }
+        let model = makeModel()
+        let none = Preset(name: "None", language: .polish, asr: nil)
+        model.presetFor = { _ in none }
+        let draft = TranscriptModelsDraft()
+        draft.correctProviderID = provider.id; draft.correctModel = "mine"
+        #expect(draft.clearOverride(item: item(), notes: model))
+        #expect(NotesStore(session: session).readMeta().modelOverrides?.correction == nil)
+        #expect(!model.isCorrecting(item().id))
+        // Szkic bez modelu: Improve wyłączone („Choose a model."), nie przypnie z powrotem starego wyboru.
+        #expect(ModelsSheetRules.draft(providerID: draft.correctProviderID, model: draft.correctModel, thinking: nil, preset: nil,
+                                       hasOverride: false, usePreset: draft.usePreset) == nil)
+        #expect(http.models.isEmpty)
+    }
+
     @Test func manualEditAfterResetDropsUsePreset() {
         let draft = TranscriptModelsDraft()
         draft.resetToPreset(preset.correction)

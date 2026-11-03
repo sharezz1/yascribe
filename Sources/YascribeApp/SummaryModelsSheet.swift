@@ -96,8 +96,12 @@ struct SummaryModelsSheet: View {
                     .help("Let the model think before it writes the notes")
             }
         }
-        if let p = preset, override != nil || stale {
-            Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pill)
+        if override != nil || stale {
+            if let p = preset {
+                Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pill)
+            } else {
+                Button("Use preset (none)") { clearOverride() }.buttonStyle(.pill)
+            }
         }
     }
 
@@ -124,6 +128,15 @@ struct SummaryModelsSheet: View {
         } else {
             ui.error = model.lastError ?? "Couldn't start the notes."
             model.lastError = nil // odmowa widoczna w oknie, bez drugiego, globalnego alertu
+        }
+    }
+
+    private func clearOverride() {
+        ui.error = nil
+        model.lastError = nil
+        if !draft.clearOverride(item: item, notes: model.notes) {
+            ui.error = model.lastError
+            model.lastError = nil
         }
     }
 

@@ -148,8 +148,12 @@ struct TranscriptModelsSheet: View {
                 ModelPicker(providerID: pid, role: .correction, selection: $draft.correctModel).frame(width: 280)
                 if provider(pid)?.isLocal == true { OnThisMacTag() }
             }
-            if let p = presetCorrection, hasCorrectionOverride || stale {
-                Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pill)
+            if hasCorrectionOverride || stale {
+                if let p = presetCorrection {
+                    Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pill)
+                } else {
+                    Button("Use preset (none)") { clearOverride() }.buttonStyle(.pill)
+                }
             }
             note(ModelsSheetRules.correctionOrigin(hasOverride: hasCorrectionOverride, stale: stale, presetName: preset?.name))
             if let c = item.corrected {
@@ -171,6 +175,15 @@ struct TranscriptModelsSheet: View {
         } else {
             ui.error = model.lastError
             model.lastError = nil // odmowa widoczna w oknie, bez drugiego, globalnego alertu
+        }
+    }
+
+    private func clearOverride() {
+        ui.error = nil
+        model.lastError = nil
+        if !draft.clearOverride(item: item, notes: model.notes) {
+            ui.error = model.lastError
+            model.lastError = nil
         }
     }
 

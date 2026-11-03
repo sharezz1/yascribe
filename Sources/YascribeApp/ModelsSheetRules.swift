@@ -84,6 +84,15 @@ final class TranscriptModelsDraft: ObservableObject {
         return notes.improveTranscript(item, draft: draft)
     }
 
+    /// Preset bez modelu korekty: „Use preset (none)" od razu czyści nadpisanie i niczego nie uruchamia. `false` = zapis padł.
+    @MainActor
+    func clearOverride(item: SessionItem, notes: NotesModel) -> Bool {
+        guard notes.setOverride(.correction, nil, item: item) else { return false }
+        correctProviderID = nil
+        correctModel = ""
+        return true
+    }
+
     func resetToPreset(_ preset: RoleAssignment?) {
         correctProviderID = preset?.providerID
         correctModel = preset?.model ?? ""
@@ -121,6 +130,16 @@ final class SummaryModelsDraft: ObservableObject {
                              context: context, draft: draft)
         else { return false }
         state.summaryUseCorrected = useCorrected
+        return true
+    }
+
+    /// Żaden preset nie ma modelu podsumowania: „Use preset (none)" od razu czyści nadpisanie i niczego nie uruchamia.
+    @MainActor
+    func clearOverride(item: SessionItem, notes: NotesModel) -> Bool {
+        guard notes.setOverride(.summary, nil, item: item) else { return false }
+        providerID = nil
+        model = ""
+        thinking = nil
         return true
     }
 

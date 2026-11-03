@@ -118,6 +118,25 @@ private final class PromptHTTP: HTTPClient, @unchecked Sendable {
         #expect(http.bodies.first?.contains("preset-sum") == true)
     }
 
+    @Test func clearOverrideWithoutPresetModelRemovesPersistedOverrideAndRunsNothing() async throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        try NotesStore(session: session).updateMeta { $0.setOverride(.summary, RoleOverride(providerID: provider.id, model: "mine", thinking: true)) }
+        let model = makeModel(), state = MeetingViewState()
+        let none = Preset(name: "None", language: .polish, asr: nil)
+        model.presetFor = { _ in none }
+        model.presetsInfo = { ([none], none.id) }
+        #expect(model.presetSummaryChoice(for: item(corrected: false)) == nil)
+        let draft = SummaryModelsDraft(item: item(corrected: false), state: state)
+        draft.providerID = provider.id; draft.model = "mine"; draft.thinking = true
+        #expect(draft.clearOverride(item: item(corrected: false), notes: model))
+        #expect(NotesStore(session: session).readMeta().modelOverrides?.summary == nil)
+        #expect(model.state(session.lastPathComponent) == .idle)
+        #expect(draft.providerID == nil && draft.model.isEmpty && draft.thinking == nil)
+        try await Task.sleep(for: .milliseconds(20))
+        #expect(http.bodies.isEmpty)
+    }
+
     @Test func presetResetClearsThinkingAndOverrideInMeta() async throws {
         try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: session) }
