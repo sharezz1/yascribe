@@ -83,3 +83,18 @@ private func fnUp() -> HotkeyEvent { .modifier(keyCode: fnKey, flags: 0, isDown:
     #expect(m.handle(.modifier(keyCode: 58, flags: 0, isDown: false)) == nil)
     #expect(!m.isListening)
 }
+
+@Test func externalListeningLetsEscapeCancel() {
+    var m = HotkeyMachine(hotkey: .fn, mode: .toggle)
+    m.setListening(true)   // start z launchera
+    #expect(m.handle(.keyDown(keyCode: esc, flags: 0, isRepeat: false)) == .cancel)
+    #expect(!m.isListening)
+}
+
+@Test func externalStopEatsLaterRelease() {
+    var m = HotkeyMachine(hotkey: .fn, mode: .hold)
+    #expect(m.handle(fnDown()) == .start)
+    m.setListening(false)  // silnik skończył sam (auto-stop)
+    #expect(m.handle(fnUp()) == nil)
+    #expect(m.handle(fnDown()) == .start)
+}
