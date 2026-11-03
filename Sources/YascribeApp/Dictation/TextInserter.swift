@@ -7,6 +7,7 @@ import YascribeDictation
 /// Bezpieczna jako `@unchecked Sendable`: jedyny stan (PID aplikacji docelowej) jest pod `lock`.
 final class TextInserter: TextInserting, @unchecked Sendable {
     static let passwordMessage = "A password field is focused."
+    static let secureInputMessage = "Secure input is on (another app). Nothing was pasted."
     static let accessibilityMessage = "Allow Accessibility to paste automatically."
     static let appChangedMessage = "The active app changed. Text copied."
     static let noTextFieldMessage = "No text field is focused. Text copied."
@@ -26,9 +27,9 @@ final class TextInserter: TextInserting, @unchecked Sendable {
     /// Czysta bramka: przy jakiejkolwiek niepewności nie wysyłamy Cmd-V.
     static func decide(secureInput: Bool, trusted: Bool, focusedRole: String?, focusedSubrole: String?,
                        focusIsText: Bool, sameApp: Bool) -> Decision {
-        if secureInput || focusedRole == "AXSecureTextField" || focusedSubrole == kAXSecureTextFieldSubrole {
-            return .block(passwordMessage)
-        }
+        if focusedRole == "AXSecureTextField" || focusedSubrole == kAXSecureTextFieldSubrole { return .block(passwordMessage) }
+        // Secure input bywa włączony przez inną aplikację (terminal, menedżer haseł) bez fokusu w polu hasła.
+        if secureInput { return .block(secureInputMessage) }
         guard trusted else { return .copy(accessibilityMessage) }
         guard sameApp else { return .copy(appChangedMessage) }
         guard focusIsText else { return .copy(noTextFieldMessage) }
@@ -57,7 +58,8 @@ final class TextInserter: TextInserting, @unchecked Sendable {
                 Self.sendPaste()
                 return (saved, NSPasteboard.general.changeCount)
             }
-            try? await Task.sleep(for: .milliseconds(400))
+            // Wolna aplikacja docelowa może obsłużyć syntetyczne Cmd-V dopiero po przywróceniu, więc zapas.
+            try? await Task.sleep(for: .milliseconds(800))
             await MainActor.run {
                 // Tylko gdy nikt (ani użytkownik) nie zapisał schowka po nas.
                 guard NSPasteboard.general.changeCount == written, !saved.isEmpty else { return }

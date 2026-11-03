@@ -30,7 +30,7 @@ public struct HotkeyMachine: Sendable {
         isListening = false
     }
 
-    /// Stan sesji z zewnątrz (start z launchera, auto-stop, awaria). Nie rusza `held`: puszczenie trzymanego klawisza zostaje „zjedzone”.
+    /// Stan sesji z zewnątrz (start z launchera, auto-stop, awaria); `held` zostaje bez zmian.
     public mutating func setListening(_ on: Bool) { isListening = on }
 
     public mutating func handle(_ event: HotkeyEvent) -> HotkeyAction? {

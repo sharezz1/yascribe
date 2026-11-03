@@ -27,6 +27,7 @@ public enum InsertResult: Equatable, Sendable {
 
 public protocol TextInserting: AnyObject, Sendable {
     func insert(_ text: String) async -> InsertResult
+    /// Odczyt zapamiętuje cel wklejenia: czytać dokładnie raz na sesję, przy jej starcie.
     var frontmostAppName: String? { get }
 }
 

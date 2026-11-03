@@ -27,6 +27,7 @@ final class MicCapture: AudioCapturing, @unchecked Sendable {
     var level: Float { lock.lock(); defer { lock.unlock() }; return smoothed }
 
     func start(onFailure: @escaping @Sendable (String) -> Void) throws {
+        _ = stop()   // obrona przed startem bez wcześniejszego stopu: nie zostawiamy otwartego źródła
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
         case .authorized: break
         case .notDetermined:
@@ -42,15 +43,24 @@ final class MicCapture: AudioCapturing, @unchecked Sendable {
             try src.start { [weak self] event in
                 switch event {
                 case let .chunk(chunk): self?.append(chunk.samples)
-                case let .failed(why): onFailure(why)
+                case let .failed(why) where Self.isFatal(event): onFailure(why)
                 case .endOfStream: onFailure("Microphone stopped.")
-                case .deviceChanged: break
+                case .failed, .deviceChanged: break
                 }
             }
         } catch {
             _ = stop()
             if case AudioSourceError.permissionDenied = error { throw CaptureError.permission }
             throw CaptureError.device("\(error)")
+        }
+    }
+
+    /// Raporty konwersji i niedopasowania przychodzą przy działającym strumieniu; koniec to tylko nieudane przełączenie i koniec strumienia.
+    static func isFatal(_ event: AudioSourceEvent) -> Bool {
+        switch event {
+        case .endOfStream: true
+        case let .failed(why): why.hasPrefix(RawMicrophoneSource.reopenFailurePrefix)
+        case .chunk, .deviceChanged: false
         }
     }
 

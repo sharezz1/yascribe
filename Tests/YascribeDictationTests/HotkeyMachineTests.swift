@@ -91,7 +91,7 @@ private func fnUp() -> HotkeyEvent { .modifier(keyCode: fnKey, flags: 0, isDown:
     #expect(!m.isListening)
 }
 
-@Test func externalStopEatsLaterRelease() {
+@Test func externalStopIgnoresReleaseAndAllowsRestart() {
     var m = HotkeyMachine(hotkey: .fn, mode: .hold)
     #expect(m.handle(fnDown()) == .start)
     m.setListening(false)  // silnik skończył sam (auto-stop)

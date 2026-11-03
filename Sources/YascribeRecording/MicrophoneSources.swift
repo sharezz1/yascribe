@@ -33,6 +33,9 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
     /// `reconsider` z dwóch obserwatorów i `select` z wątku głównego otwierałyby mikrofon równolegle (dwa capture na jeden tor).
     private let reopenQueue = DispatchQueue(label: "yascribe.mic.reopen")
 
+    /// Jedyne `.failed` tego toru, po którym mikrofon już nie nagrywa (pozostałe to raporty przy działającym strumieniu).
+    public static let reopenFailurePrefix = "reopen:"
+
     public init() {}
 
     /// UID i nazwa wejścia, które nagrywa teraz ten tor (nie zawsze domyślne systemu).
@@ -104,7 +107,7 @@ public final class RawMicrophoneSource: AudioSource, @unchecked Sendable {
         do {
             let uid = try open()
             if !uid.isEmpty { h?(.deviceChanged(uid)) } // "" = spóźniony stop(), bez zdarzenia
-        } catch { h?(.failed("reopen: \(error)")) }
+        } catch { h?(.failed("\(Self.reopenFailurePrefix) \(error)")) }
     }
 }
 
