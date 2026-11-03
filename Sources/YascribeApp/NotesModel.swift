@@ -110,7 +110,7 @@ final class NotesModel {
 
     func overrides(for item: SessionItem) -> ModelOverrides { item.notes.meta.modelOverrides ?? ModelOverrides() }
 
-    private func usableOverride(_ role: Role, for item: SessionItem) -> RoleOverride? {
+    func usableOverride(_ role: Role, for item: SessionItem) -> RoleOverride? {
         overrides(for: item).usable(role, knownProviders: knownProviderIDs())
     }
 

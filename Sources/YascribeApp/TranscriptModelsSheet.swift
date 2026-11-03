@@ -21,7 +21,8 @@ struct TranscriptModelsSheet: View {
     private var preset: Preset? { model.presetFor(sessionURL: item.url) }
     private func provider(_ id: UUID?) -> Provider? { model.providers.providers.first { $0.id == id } }
     private var moving: Bool { model.recordingsMove != nil }
-    private var hasCorrectionOverride: Bool { model.notes.overrides(for: item).correction != nil }
+    // Tylko działające nadpisanie: nieaktualne (dostawca usunięty) przy niezmienionym uruchomieniu nie zostaje przypięte jako własne.
+    private var hasCorrectionOverride: Bool { model.notes.usableOverride(.correction, for: item) != nil }
     private var stale: Bool {
         model.notes.overrides(for: item).isStale(.correction, knownProviders: Set(model.providers.providers.map(\.id)))
     }

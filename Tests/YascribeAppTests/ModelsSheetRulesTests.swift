@@ -160,6 +160,20 @@ private final class SeenHTTP: HTTPClient, @unchecked Sendable {
         #expect(http.models == ["preset-corr"])
     }
 
+    @Test func staleOverrideUnchangedRunUsesPresetAndPinsNothing() async throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        // Dostawca nadpisania usunięty: wypełnienie okna to model presetu; niezmienione uruchomienie czyści nadpisanie.
+        try NotesStore(session: session).updateMeta { $0.setOverride(.correction, RoleOverride(providerID: UUID(), model: "gone")) }
+        let model = makeModel()
+        let draft = TranscriptModelsDraft()
+        draft.correctProviderID = provider.id; draft.correctModel = "preset-corr"
+        #expect(draft.submitCorrection(item: item(), notes: model, preset: preset.correction))
+        try await waitIdle(model)
+        #expect(NotesStore(session: session).readMeta().modelOverrides?.correction == nil)
+        #expect(http.models == ["preset-corr"])
+    }
+
     @Test func manualEditAfterResetDropsUsePreset() {
         let draft = TranscriptModelsDraft()
         draft.resetToPreset(preset.correction)

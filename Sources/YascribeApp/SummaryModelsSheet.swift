@@ -26,7 +26,8 @@ struct SummaryModelsSheet: View {
     private var preset: RoleAssignment? { model.notes.presetSummaryChoice(for: item)?.assignment }
     private func provider(_ id: UUID?) -> Provider? { model.providers.providers.first { $0.id == id } }
     private var moving: Bool { model.recordingsMove != nil }
-    private var override: RoleOverride? { model.notes.overrides(for: item).summary }
+    /// Tylko działające nadpisanie (także dla Thinking): nieaktualne nie może zostać przypięte niezmienionym Regenerate.
+    private var override: RoleOverride? { model.notes.usableOverride(.summary, for: item) }
     private var stale: Bool {
         model.notes.overrides(for: item).isStale(.summary, knownProviders: Set(model.providers.providers.map(\.id)))
     }

@@ -78,7 +78,7 @@ final class TranscriptModelsDraft: ObservableObject {
     @MainActor
     func submitCorrection(item: SessionItem, notes: NotesModel, preset: RoleAssignment?) -> Bool {
         guard let draft = ModelsSheetRules.draft(providerID: correctProviderID, model: correctModel, thinking: nil, preset: preset,
-                                                 hasOverride: notes.overrides(for: item).correction != nil, usePreset: usePreset)
+                                                 hasOverride: notes.usableOverride(.correction, for: item) != nil, usePreset: usePreset)
         else { return false }
         return notes.improveTranscript(item, draft: draft)
     }
@@ -115,7 +115,7 @@ final class SummaryModelsDraft: ObservableObject {
     func submit(item: SessionItem, state: MeetingViewState, notes: NotesModel, template: Template, context: String,
                 preset: RoleAssignment?) -> Bool {
         guard let draft = ModelsSheetRules.draft(providerID: providerID, model: model, thinking: thinking, preset: preset,
-                                                 hasOverride: notes.overrides(for: item).summary != nil, usePreset: usePreset),
+                                                 hasOverride: notes.usableOverride(.summary, for: item) != nil, usePreset: usePreset),
               notes.generate(item: item, useCorrected: useCorrected && item.corrected != nil, template: template,
                              context: context, draft: draft)
         else { return false }

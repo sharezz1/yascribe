@@ -105,6 +105,19 @@ private final class PromptHTTP: HTTPClient, @unchecked Sendable {
         #expect(state.summaryUseCorrected == nil)
     }
 
+    @Test func staleOverrideUnchangedRunUsesPresetAndPinsNothing() async throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        try NotesStore(session: session).updateMeta { $0.setOverride(.summary, RoleOverride(providerID: UUID(), model: "gone", thinking: false)) }
+        let model = makeModel(), state = MeetingViewState()
+        let draft = SummaryModelsDraft(item: item(corrected: false), state: state)
+        draft.providerID = provider.id; draft.model = "preset-sum" // wypełnienie okna: model presetu, Thinking bez nadpisania
+        #expect(submit(draft, item(corrected: false), state, model))
+        try await waitIdle(model)
+        #expect(NotesStore(session: session).readMeta().modelOverrides?.summary == nil)
+        #expect(http.bodies.first?.contains("preset-sum") == true)
+    }
+
     @Test func presetResetClearsThinkingAndOverrideInMeta() async throws {
         try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: session) }
