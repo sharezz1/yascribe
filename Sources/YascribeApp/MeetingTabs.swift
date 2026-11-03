@@ -170,7 +170,7 @@ struct TranscriptTab: View {
                             .disabled(moving || busy)
                             .help("Run the correction model on this transcript")
                     }
-                    modelsButton
+                    modelsButton(label: item.corrected != nil)
                     copyButton
                 }
                 .padding(.bottom, 4)
@@ -182,11 +182,16 @@ struct TranscriptTab: View {
     /// Bez wyświetlonego błędu korekty (ten ma własne Retry) — ten sam warunek co dawny przycisk na pasku.
     private var canImprove: Bool { model.notes.correctionFailureMessage(item.id) == nil && model.notes.canRetryCorrection(item) }
     /// Wybór modeli i ponowne uruchomienia są w oknie; informacje o korekcie to jego podpisy.
-    private var modelsButton: some View {
-        Button { state.modelsSheet = true } label: { Label("Models…", systemImage: "slider.horizontal.3") }
-            .buttonStyle(.pill)
-            .layoutPriority(2)
-            .help("Choose models for this meeting")
+    /// Po pierwszej korekcie „Improve" (okno ze wszystkimi opcjami); przed nią sama ikona obok „Improve transcript".
+    @ViewBuilder private func modelsButton(label: Bool) -> some View {
+        if label {
+            Button { state.modelsSheet = true } label: { Text("Improve") }
+                .buttonStyle(.pill).layoutPriority(2).help("Improve or redo the transcript with another model")
+        } else {
+            Button { state.modelsSheet = true } label: { Image(systemName: "slider.horizontal.3") }
+                .buttonStyle(.pill).layoutPriority(2).help("More options: choose models, transcribe again")
+                .accessibilityLabel("More options")
+        }
     }
 
     private var copyButton: some View {
@@ -234,7 +239,8 @@ struct TranscriptTab: View {
         item.attemptNotPromoted?.snapshot.map { "Resume Transcription with \(runLabel($0))" } ?? "Resume Transcription"
     }
 
-    private var modelName: String? { model.presetFor(sessionURL: item.url)?.correction?.model }
+    // Nadpisanie per spotkanie (chip modelu) wygrywa z presetem, tak jak przy samej korekcie.
+    private var modelName: String? { model.notes.correctionAssignment(for: item)?.model }
     private var shown: Transcript? { model.transcript(of: item, corrected: state.useCorrected) }
     /// Przebieg w Auto: jedyna flaga to „obcy alfabet" (T1), więc etykieta mówi to wprost. Z migawki przebiegu (I2).
     private var isAuto: Bool { model.runLanguage(item).isAuto }
@@ -284,8 +290,8 @@ struct TranscriptTab: View {
                         if item.latestAttemptID != nil {
                             Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }.buttonStyle(.pill).disabled(correcting)
                         }
-                        // D13 (F6): po próbie bez transkryptu inny model i język też do wyboru (okno Models).
-                        modelsButton
+                        // D13 (F6): po próbie bez transkryptu inny model i język też do wyboru (okno Improve).
+                        modelsButton(label: true)
                     }
                     .disabled(moving)
                 }
@@ -414,34 +420,34 @@ struct SummaryTab: View {
         return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
     }
 
-    /// Jedna linia bez wnęki: szablon · kontekst · przycisk · Models… · Copy. „Add context" rozwija pole pod linią.
-    /// Przed notatką jedyny primary „Generate notes", po — „Regenerate" + Copy (oba `.pill`).
+    /// Jedna linia bez wnęki: przed notatką szablon · kontekst · opcje · „Generate notes"; po notatce tylko „Improve" + Copy.
     private func bar(_ s: NoteSummary?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                templateMenu
-                Button { state.showContext.toggle() } label: {
-                    Text(state.context.isEmpty || state.showContext ? "Add context" : "Context: \(state.context.replacingOccurrences(of: "\n", with: " "))")
-                        .font(.system(size: 13)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(moving)
-                .help(state.showContext ? "Hide the context field" : "Add or change the context for the model")
-                .accessibilityValue(state.showContext ? "Expanded" : "Collapsed")
                 if let s {
-                    Button { run() } label: { Label("Regenerate", systemImage: "arrow.clockwise") }
-                        .buttonStyle(.pill)
-                        .layoutPriority(2)
-                        .disabled(gen == .generating || !hasText || choice == nil || moving || correcting || transcribing)
-                    modelsButton
+                    // Po wygenerowaniu notatki wszystkie opcje (szablon, kontekst, model, Regenerate) są w oknie „Improve".
+                    Spacer(minLength: 0)
+                    Button("Improve") { state.modelsSheet = true }
+                        .buttonStyle(.pill).layoutPriority(2).help("Change the template, context or model and regenerate")
                     Button { copy(s.markdown) } label: { Label("Copy", systemImage: "doc.on.doc") }
                         .buttonStyle(.pill)
                         .layoutPriority(2)
                         .help("Copy the notes")
                 } else {
-                    modelsButton
+                    templateMenu
+                    Button { state.showContext.toggle() } label: {
+                        Text(state.context.isEmpty || state.showContext ? "Add context" : "Context: \(state.context.replacingOccurrences(of: "\n", with: " "))")
+                            .font(.system(size: 13)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(moving)
+                    .help(state.showContext ? "Hide the context field" : "Add or change the context for the model")
+                    .accessibilityValue(state.showContext ? "Expanded" : "Collapsed")
+                    Button { state.modelsSheet = true } label: { Image(systemName: "slider.horizontal.3") }
+                        .buttonStyle(.pill).layoutPriority(2).help("More options: choose the summary model")
+                        .accessibilityLabel("More options")
                     Button("Generate notes") { run() }
                         .buttonStyle(.pillPrimary)
                         .layoutPriority(2)
@@ -450,7 +456,7 @@ struct SummaryTab: View {
                         .keyboardShortcut(.return, modifiers: .command)
                 }
             }
-            if state.showContext {
+            if s == nil, state.showContext {
                 if moving {
                     // R3: tylko do odczytu (NSTextView nie reaguje na `.disabled`).
                     Text(state.context).font(.system(size: 13)).foregroundStyle(.mnText2).textSelection(.enabled)
@@ -461,14 +467,6 @@ struct SummaryTab: View {
                 }
             }
         }
-    }
-
-    /// Wybór modelu, Source i ponowne uruchomienie są w oknie; informacje o przebiegu to jego podpisy.
-    private var modelsButton: some View {
-        Button { state.modelsSheet = true } label: { Label("Models…", systemImage: "slider.horizontal.3") }
-            .buttonStyle(.pill)
-            .layoutPriority(2)
-            .help("Choose the summary model for this meeting")
     }
 
     /// Popup szablonu: pole 130 × 28, promień 7 (makieta: `.field`). Menu zostaje systemowe.

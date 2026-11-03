@@ -8,7 +8,7 @@ private final class SummarySheetUIState: ObservableObject {
     var prefilled = false
 }
 
-/// Okno „Summary model": model, Thinking i Source notatki, jedno uruchomienie. Zamyka się tylko, gdy notatka wystartowała.
+/// Okno „Improve summary": model, Thinking i Source notatki, jedno uruchomienie. Zamyka się tylko, gdy notatka wystartowała.
 /// `item` pochodzi z żywego widoku spotkania, więc podpisy nie starzeją się po przeładowaniu.
 struct SummaryModelsSheet: View {
     @Environment(AppModel.self) private var model
@@ -42,24 +42,42 @@ struct SummaryModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Summary model", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
-            VStack(alignment: .leading, spacing: 10) {
-                let context = state.context.trimmingCharacters(in: .whitespacesAndNewlines)
-                note("Template \(template.name) · context: \(context.isEmpty ? "none" : context.replacingOccurrences(of: "\n", with: " "))")
-                    .lineLimit(2)
+        EditorSheet(title: "Improve summary", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
+            VStack(alignment: .leading, spacing: 12) {
+                templateRow
+                contextRow
+                Divider().padding(.vertical, 4)
                 providerAndModel
                 sourceMenu
-                captions
-                HStack(spacing: 10) {
-                    Button(item.notes.summary == nil ? "Generate notes" : "Regenerate") { run() }
-                        .buttonStyle(.pillPrimary).disabled(reason != nil)
-                    if let reason { Text(reason).font(.subheadline).foregroundStyle(.mnText2) }
-                }
+                SheetNote(caption)
+                SheetAction(title: item.notes.summary == nil ? "Generate notes" : "Regenerate", reason: reason) { run() }
             }
             .padding(.top, 8) // odstęp tytułu od pierwszego wiersza
             .disabled(moving) // przenoszenie nagrań: okno tylko do odczytu
         }
         .onAppear { prefill() }
+    }
+
+    private var templateRow: some View {
+        SheetRow(label: "Template") {
+            FieldMenu(label: "Template", value: template.name, width: 300) {
+                Picker("Template", selection: $state.templateID) {
+                    ForEach(model.notes.templates.all()) { t in Text(t.name).tag(t.id) }
+                }
+                .pickerStyle(.inline).labelsHidden()
+            }
+        }
+    }
+
+    private var contextRow: some View {
+        SheetRow(label: "Context") {
+            TextField("Optional: names, topics, what matters", text: $state.context, axis: .vertical)
+                .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...4)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .frame(width: 300, alignment: .leading)
+                .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+        }
     }
 
     private func prefill() {
@@ -74,50 +92,63 @@ struct SummaryModelsSheet: View {
 
     @ViewBuilder private var providerAndModel: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .summary, current: draft.providerID)
-        FieldMenu(label: "Provider", value: provider(draft.providerID)?.roleLabel ?? "None", width: 280) {
-            Picker("Provider", selection: Binding(get: { draft.providerID }, set: { id in
-                guard id != draft.providerID else { return }
-                draft.providerID = id
-                draft.model = "" // model innego dostawcy nie pasuje
-                if provider(id)?.isLocal == true { draft.thinking = nil } // lokalni zawsze bez myślenia
-            })) {
-                ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
+        SheetRow(label: "Provider") {
+            FieldMenu(label: "Provider", value: provider(draft.providerID)?.roleLabel ?? "None", width: 300) {
+                Picker("Provider", selection: Binding(get: { draft.providerID }, set: { id in
+                    guard id != draft.providerID else { return }
+                    draft.providerID = id
+                    draft.model = "" // model innego dostawcy nie pasuje
+                    if provider(id)?.isLocal == true { draft.thinking = nil } // lokalni zawsze bez myślenia
+                })) {
+                    ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
+                }
+                .pickerStyle(.inline).labelsHidden()
             }
-            .pickerStyle(.inline).labelsHidden()
         }
         if let pid = draft.providerID {
-            ModelPicker(providerID: pid, role: .summary, selection: $draft.model).frame(width: 280)
-            if provider(pid)?.isLocal == true {
-                OnThisMacTag()
-            } else {
-                Toggle("Thinking", isOn: Binding(get: { draft.thinking ?? model.settings.summaryThinkingEnabled },
-                                                 set: { draft.thinking = $0 }))
-                    .toggleStyle(.switch).controlSize(.small)
-                    .help("Let the model think before it writes the notes")
+            SheetRow(label: "Model") {
+                ModelPicker(providerID: pid, role: .summary, selection: $draft.model, showProvider: false).frame(width: 300)
+                if provider(pid)?.isLocal == true { OnThisMacTag() }
+            }
+            if provider(pid)?.isLocal != true {
+                SheetRow(label: "Thinking") {
+                    Toggle("Thinking", isOn: Binding(get: { draft.thinking ?? model.settings.summaryThinkingEnabled },
+                                                     set: { draft.thinking = $0 }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        .help("Let the model think before it writes the notes")
+                }
             }
         }
         if override != nil || stale {
-            if let p = preset {
-                Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pill)
-            } else {
-                Button("Use preset (none)") { clearOverride() }.buttonStyle(.pill)
+            SheetRow(label: "") {
+                if let p = preset {
+                    Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pillSmall)
+                } else {
+                    Button("Use preset (none)") { clearOverride() }.buttonStyle(.pillSmall)
+                }
             }
         }
     }
 
     private var sourceMenu: some View {
-        FieldMenu(label: "Source", value: draft.sourceLabel(item), width: 280) {
-            Button("Corrected") { draft.useCorrected = true }.disabled(item.corrected == nil)
-            Button("Original") { draft.useCorrected = false }
+        SheetRow(label: "Source") {
+            FieldMenu(label: "Source", value: draft.sourceLabel(item), width: 300) {
+                Picker("Source", selection: $draft.useCorrected) {
+                    Text("Corrected").tag(true).disabled(item.corrected == nil)
+                    Text("Original").tag(false)
+                }
+                .pickerStyle(.inline).labelsHidden()
+            }
         }
     }
 
-    @ViewBuilder private var captions: some View {
-        note(ModelsSheetRules.correctionOrigin(hasOverride: override != nil, stale: stale,
-                                               presetName: model.notes.presetSummaryChoice(for: item)?.presetName))
-        if let made = item.notes.summary?.model { note("Current notes made with \(model.modelDisplayName(made)) (\(made))") }
-        if let parts = item.notes.summary?.condensedParts { note("Long meeting: condensed in \(parts) parts before summarizing.") }
-        note("Used for future runs in this meeting. Presets stay unchanged.")
+    /// Jedna zwarta linia: skąd wybór, czym zrobiono obecną notatkę.
+    private var caption: String {
+        var parts = [ModelsSheetRules.correctionOrigin(hasOverride: override != nil, stale: stale,
+                                                       presetName: model.notes.presetSummaryChoice(for: item)?.presetName)]
+        if let made = item.notes.summary?.model { parts.append("Current notes: \(model.modelDisplayName(made))") }
+        if let n = item.notes.summary?.condensedParts { parts.append("condensed in \(n) parts") }
+        return parts.joined(separator: " · ")
     }
 
     private func run() {
@@ -138,9 +169,5 @@ struct SummaryModelsSheet: View {
             ui.error = model.lastError
             model.lastError = nil
         }
-    }
-
-    private func note(_ text: String) -> some View {
-        Text(text).font(.subheadline).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
     }
 }

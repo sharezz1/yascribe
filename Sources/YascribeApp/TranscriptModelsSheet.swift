@@ -8,7 +8,7 @@ private final class SheetUIState: ObservableObject {
     var prefilled = false
 }
 
-/// Okno „Models for this meeting" (zakładka Transcript): ponowna transkrypcja i korekta wybranym modelem.
+/// Okno „Improve transcript" (zakładka Transcript): ponowna transkrypcja i korekta wybranym modelem.
 /// Zamyka się tylko wtedy, gdy uruchomienie zostało przyjęte; odmowa zostawia je otwarte z powodem.
 /// `item` pochodzi z żywego widoku spotkania, więc podpisy nie starzeją się po przeładowaniu.
 struct TranscriptModelsSheet: View {
@@ -54,9 +54,10 @@ struct TranscriptModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Models for this meeting", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
-            VStack(alignment: .leading, spacing: 22) {
+        EditorSheet(title: "Improve transcript", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
+            VStack(alignment: .leading, spacing: 18) {
                 transcribeSection
+                Divider()
                 correctSection
             }
             .padding(.top, 8) // odstęp tytułu od pierwszej sekcji
@@ -82,37 +83,41 @@ struct TranscriptModelsSheet: View {
 
     private var transcribeSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .asr, current: draft.asrProviderID)
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("Transcribe again").font(.system(size: 13, weight: .medium))
-            FieldMenu(label: "Provider", value: provider(draft.asrProviderID)?.roleLabel ?? "None", width: 280) {
-                Picker("Provider", selection: Binding(get: { draft.asrProviderID }, set: { id in
-                    guard id != draft.asrProviderID else { return }
-                    draft.asrProviderID = id
-                    draft.asrModel = "" // model innego dostawcy nie pasuje
-                })) {
-                    ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
+        return SheetSection(title: "Transcribe again") {
+            SheetRow(label: "Provider") {
+                FieldMenu(label: "Provider", value: provider(draft.asrProviderID)?.roleLabel ?? "None", width: 300) {
+                    Picker("Provider", selection: Binding(get: { draft.asrProviderID }, set: { id in
+                        guard id != draft.asrProviderID else { return }
+                        draft.asrProviderID = id
+                        draft.asrModel = "" // model innego dostawcy nie pasuje
+                    })) {
+                        ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
                 }
-                .pickerStyle(.inline).labelsHidden()
             }
             if let pid = draft.asrProviderID {
-                ModelPicker(providerID: pid, role: .asr, selection: $draft.asrModel).frame(width: 280)
-                if provider(pid)?.isLocal == true { OnThisMacTag() }
-            }
-            FieldMenu(label: "Language", value: languageName(draft.language), width: 280) {
-                Picker("Language", selection: $draft.language) {
-                    Text("Choose…").tag(LanguageChoice.unset)
-                    ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(LanguageChoice.code(l.code)) }
-                    Divider()
-                    Text("Auto (mixed languages)").tag(LanguageChoice.auto)
+                SheetRow(label: "Model") {
+                    ModelPicker(providerID: pid, role: .asr, selection: $draft.asrModel, showProvider: false).frame(width: 300)
+                    if provider(pid)?.isLocal == true { OnThisMacTag() }
                 }
-                .pickerStyle(.inline).labelsHidden()
+            }
+            SheetRow(label: "Language") {
+                FieldMenu(label: "Language", value: languageName(draft.language), width: 300) {
+                    Picker("Language", selection: $draft.language) {
+                        Text("Choose…").tag(LanguageChoice.unset)
+                        ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(LanguageChoice.code(l.code)) }
+                        Divider()
+                        Text("Auto (mixed languages)").tag(LanguageChoice.auto)
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                }
             }
             if draft.language == .auto {
                 WarnLabel("Lower quality, risk of invented text. Use Auto only for meetings that mix languages.")
             }
-            Text("The current transcript stays until the new one is ready.")
-                .font(.subheadline).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
-            action("Transcribe", reason: transcribeReason) { transcribe() }
+            SheetNote("The current transcript stays until the new one is ready.")
+            SheetAction(title: "Transcribe", reason: transcribeReason) { transcribe() }
         }
     }
 
@@ -132,39 +137,49 @@ struct TranscriptModelsSheet: View {
 
     private var correctSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .correction, current: draft.correctProviderID)
-        return VStack(alignment: .leading, spacing: 10) {
-            Text("Correct the transcript").font(.system(size: 13, weight: .medium))
-            FieldMenu(label: "Provider", value: provider(draft.correctProviderID)?.roleLabel ?? "None", width: 280) {
-                Picker("Provider", selection: Binding(get: { draft.correctProviderID }, set: { id in
-                    guard id != draft.correctProviderID else { return }
-                    draft.correctProviderID = id
-                    draft.correctModel = ""
-                })) {
-                    ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
+        return SheetSection(title: "Correct the transcript") {
+            SheetRow(label: "Provider") {
+                FieldMenu(label: "Provider", value: provider(draft.correctProviderID)?.roleLabel ?? "None", width: 300) {
+                    Picker("Provider", selection: Binding(get: { draft.correctProviderID }, set: { id in
+                        guard id != draft.correctProviderID else { return }
+                        draft.correctProviderID = id
+                        draft.correctModel = ""
+                    })) {
+                        ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
                 }
-                .pickerStyle(.inline).labelsHidden()
             }
             if let pid = draft.correctProviderID {
-                ModelPicker(providerID: pid, role: .correction, selection: $draft.correctModel).frame(width: 280)
-                if provider(pid)?.isLocal == true { OnThisMacTag() }
-            }
-            if hasCorrectionOverride || stale {
-                if let p = presetCorrection {
-                    Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pill)
-                } else {
-                    Button("Use preset (none)") { clearOverride() }.buttonStyle(.pill)
+                SheetRow(label: "Model") {
+                    ModelPicker(providerID: pid, role: .correction, selection: $draft.correctModel, showProvider: false).frame(width: 300)
+                    if provider(pid)?.isLocal == true { OnThisMacTag() }
                 }
             }
-            note(ModelsSheetRules.correctionOrigin(hasOverride: hasCorrectionOverride, stale: stale, presetName: preset?.name))
-            if let c = item.corrected {
-                note("Current corrected version: \(model.modelDisplayName(c.model)) (\(c.model))")
-                if c.failedBatches + c.rejectedLines > 0 { note("\(c.failedBatches + c.rejectedLines) parts kept as heard (failed a check)") }
-                note("Replaces the current corrected version.")
+            if hasCorrectionOverride || stale {
+                SheetRow(label: "") {
+                    if let p = presetCorrection {
+                        Button("Use preset (\(model.modelDisplayName(p.model)))") { draft.resetToPreset(p) }.buttonStyle(.pillSmall)
+                    } else {
+                        Button("Use preset (none)") { clearOverride() }.buttonStyle(.pillSmall)
+                    }
+                }
             }
-            note("Used for future runs in this meeting. Presets stay unchanged.")
+            SheetNote(correctCaption)
             if model.notes.isCorrecting(item.id) { StateLabel(.progress(nil), "Improving the transcript…") }
-            action(item.corrected == nil ? "Improve transcript" : "Improve again", reason: correctReason) { improve() }
+            SheetAction(title: item.corrected == nil ? "Improve transcript" : "Improve again", reason: correctReason) { improve() }
         }
+    }
+
+    /// Jedna zwarta linia: skąd wybór, co jest teraz, że zastąpi obecną wersję.
+    private var correctCaption: String {
+        var parts = [ModelsSheetRules.correctionOrigin(hasOverride: hasCorrectionOverride, stale: stale, presetName: preset?.name)]
+        if let c = item.corrected {
+            parts.append("Current: \(model.modelDisplayName(c.model))")
+            let kept = c.failedBatches + c.rejectedLines
+            if kept > 0 { parts.append("\(kept) parts kept as heard") }
+        }
+        return parts.joined(separator: " · ") + (item.corrected == nil ? "" : ". Replaces the current corrected version.")
     }
 
     private func improve() {
@@ -184,19 +199,6 @@ struct TranscriptModelsSheet: View {
         if !draft.clearOverride(item: item, notes: model.notes) {
             ui.error = model.lastError
             model.lastError = nil
-        }
-    }
-
-    // MARK: Wspólne
-
-    private func note(_ text: String) -> some View {
-        Text(text).font(.subheadline).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func action(_ title: String, reason: String?, run: @escaping () -> Void) -> some View {
-        HStack(spacing: 10) {
-            Button(title, action: run).buttonStyle(.pillPrimary).disabled(reason != nil)
-            if let reason { Text(reason).font(.subheadline).foregroundStyle(.mnText2) }
         }
     }
 }
