@@ -61,8 +61,8 @@ private final class PromptHTTP: HTTPClient, @unchecked Sendable {
         #expect(state.useCorrected)
         let draft = SummaryModelsDraft(item: item(corrected: false), state: state)
         #expect(!draft.useCorrected)
-        #expect(draft.sourceLabel == "Original")
-        #expect(SummaryModelsDraft(item: item(corrected: true), state: state).sourceLabel == "Corrected")
+        #expect(draft.sourceLabel(item(corrected: false)) == "Original")
+        #expect(SummaryModelsDraft(item: item(corrected: true), state: state).sourceLabel(item(corrected: true)) == "Corrected")
     }
 
     @Test func submittedTextIsCorrectedWhenCorrectionExistsAndOriginalWhenChosen() async throws {
@@ -80,6 +80,21 @@ private final class PromptHTTP: HTTPClient, @unchecked Sendable {
         #expect(bodies.count == 2)
         #expect(bodies.first?.contains("CorrectedWord") == true && bodies.first?.contains("OriginalWord") == false)
         #expect(bodies.last?.contains("OriginalWord") == true && bodies.last?.contains("CorrectedWord") == false)
+    }
+
+    /// Korekta zniknęła po otwarciu okna: podpis, wysłany tekst i zapamiętany Source to Original.
+    @Test func sourceFollowsLiveItemWhenCorrectionDisappearsAfterDraftCreated() async throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel(), state = MeetingViewState()
+        let draft = SummaryModelsDraft(item: item(corrected: true), state: state)
+        draft.resetToPreset(preset.summary)
+        let live = item(corrected: false)
+        #expect(draft.sourceLabel(live) == "Original")
+        #expect(submit(draft, live, state, model))
+        try await waitIdle(model)
+        #expect(state.summaryUseCorrected == false)
+        #expect(http.bodies.first?.contains("OriginalWord") == true)
     }
 
     @Test func submitDoesNotChangeTranscriptVersionSelection() async throws {

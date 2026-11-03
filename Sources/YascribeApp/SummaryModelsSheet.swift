@@ -106,7 +106,7 @@ struct SummaryModelsSheet: View {
     }
 
     private var sourceMenu: some View {
-        FieldMenu(label: "Source", value: draft.sourceLabel, width: 280) {
+        FieldMenu(label: "Source", value: draft.sourceLabel(item), width: 280) {
             Button("Corrected") { draft.useCorrected = true }.disabled(item.corrected == nil)
             Button("Original") { draft.useCorrected = false }
         }

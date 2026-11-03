@@ -113,11 +113,14 @@ final class SummaryModelsDraft: ObservableObject {
         useCorrected = state.summaryCorrected && item.corrected != nil
     }
 
-    var sourceLabel: String { useCorrected ? "Corrected" : "Original" }
+    /// Jedna wartość dla podpisu, wysłanego tekstu i zapamiętanego Source: korekta mogła zniknąć po otwarciu okna.
+    func effectiveCorrected(_ item: SessionItem) -> Bool { useCorrected && item.corrected != nil }
+
+    func sourceLabel(_ item: SessionItem) -> String { effectiveCorrected(item) ? "Corrected" : "Original" }
 
     /// Tekst z transkryptu wybranego w oknie, nie z „Version" w Transcript.
     func hasText(_ item: SessionItem) -> Bool {
-        item.transcript(corrected: useCorrected).map { !NotePromptBuilder.transcriptLines($0).isEmpty } ?? false
+        item.transcript(corrected: effectiveCorrected(item)).map { !NotePromptBuilder.transcriptLines($0).isEmpty } ?? false
     }
 
     /// `true` = notatka wystartowała; dopiero wtedy Source zostaje zapamiętany dla spotkania (Regenerate w pasku).
@@ -126,10 +129,9 @@ final class SummaryModelsDraft: ObservableObject {
                 preset: RoleAssignment?) -> Bool {
         guard let draft = ModelsSheetRules.draft(providerID: providerID, model: model, thinking: thinking, preset: preset,
                                                  hasOverride: notes.usableOverride(.summary, for: item) != nil, usePreset: usePreset),
-              notes.generate(item: item, useCorrected: useCorrected && item.corrected != nil, template: template,
-                             context: context, draft: draft)
+              notes.generate(item: item, useCorrected: effectiveCorrected(item), template: template, context: context, draft: draft)
         else { return false }
-        state.summaryUseCorrected = useCorrected
+        state.summaryUseCorrected = effectiveCorrected(item)
         return true
     }
 
