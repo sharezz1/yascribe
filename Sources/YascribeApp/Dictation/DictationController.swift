@@ -4,6 +4,7 @@ import AVFoundation
 import Foundation
 import Observation
 import YascribeDictation
+import YascribeLocalASR
 import YascribeNotes
 import YascribeProviders
 import YascribeTranscription
@@ -11,8 +12,6 @@ import YascribeTranscription
 /// Spina dyktowanie z aplikacją: skrót globalny, silnik, historia i ustawienia z `AppModel`.
 /// `init` bez wejścia-wyjścia i bez okien zgody: tworzy go `AppModel.load()` także w migawkach.
 @MainActor @Observable final class DictationController {
-    static let missingLanguageMessage = "Choose a dictation language in Settings."
-
     @ObservationIgnored private unowned let model: AppModel
     @ObservationIgnored private let capture = MicCapture()
     @ObservationIgnored private let inserter = TextInserter()
@@ -28,6 +27,8 @@ import YascribeTranscription
     @ObservationIgnored private var active = false
     /// Plik historii nie dał się odczytać ani odłożyć: zapis by go nadpisał.
     @ObservationIgnored private var historyLocked = false
+    /// Pokolenie pętli obserwacji: `stop()` + `start()` przed odpaleniem starego `onChange` nie zostawia dwóch łańcuchów.
+    @ObservationIgnored private var trackGeneration = 0
 
     init(model: AppModel) { self.model = model }
 
@@ -39,8 +40,9 @@ import YascribeTranscription
     func start() {
         guard !active else { return }
         active = true
+        trackGeneration += 1
         applySettings()
-        trackPhase()
+        trackPhase(trackGeneration)
     }
 
     /// Zamknięcie aplikacji: tap off, nagrywanie przerwane (mikrofon zwolniony); trwającej transkrypcji nie rusza.
@@ -86,11 +88,11 @@ import YascribeTranscription
 
     /// Obserwacja `engine.phase` z ponownym uzbrajaniem: sesja kończona przez silnik (auto-stop, awaria, odmowa) gasi
     /// „słucham” w maszynie skrótu, inaczej następne naciśnięcie w trybie toggle byłoby martwym `.stop`.
-    private func trackPhase() {
-        guard active else { return }
+    private func trackPhase(_ generation: Int) {
+        guard active, generation == trackGeneration else { return }
         let phase = withObservationTracking { engine.phase } onChange: { [weak self] in
             // `onChange` przychodzi przed zmianą: stan czytamy świeżo w kolejnym obrocie.
-            Task { @MainActor in self?.trackPhase() }
+            Task { @MainActor in self?.trackPhase(generation) }
         }
         monitor.setListening(phase == .listening)
         refreshPermissions()
@@ -101,7 +103,11 @@ import YascribeTranscription
     private func handle(_ action: HotkeyAction) {
         switch action {
         case .start:
-            if admit() { engine.apply(.start) } else { monitor.setListening(false) }
+            if admit() {
+                engine.apply(.start)
+            } else if !engine.isBusy {
+                monitor.setListening(false)   // odmowa: maszyna myśli, że słucha; przy trwającej sesji nie ruszamy jej
+            }
         case .stop, .cancel:
             engine.apply(action)
         }
@@ -115,23 +121,15 @@ import YascribeTranscription
         monitor.setListening(engine.phase == .listening)
     }
 
-    /// `false` = odmowa już pokazana (dźwięk albo pastylka).
+    /// `false` = nie startujemy (odmowa już pokazana albo sesja trwa).
     private func admit() -> Bool {
-        switch DictationGate.canStartDictation(isRecordingMeeting: model.recording.isRecording, isBusy: engine.isBusy) {
-        case .failure(.recordingMeeting):
-            NSSound.beep()   // pastylka jest ukryta w trakcie nagrania spotkania
-            return false
-        case .failure(let refusal):
-            engine.refuse(refusal.message)
-            return false
-        case .success:
-            break
+        switch HotkeyStartDecision.decide(phase: engine.phase, isRecordingMeeting: model.recording.isRecording,
+                                          languageAvailable: language != nil) {
+        case .start: return true
+        case .ignore: return false
+        case .beep: NSSound.beep(); return false
+        case .refuse(let message): engine.refuse(message); return false
         }
-        guard language != nil else {
-            engine.refuse(Self.missingLanguageMessage)
-            return false
-        }
-        return true
     }
 
     /// Jawny język dyktowania, inaczej język aktywnego presetu (preset „Auto" ma `nil`, więc Auto nie przechodzi).
@@ -143,6 +141,8 @@ import YascribeTranscription
     private func buildInput(_ pcm: [Int16]) -> (input: DictationPipelineInput, meta: DictationRecordMeta)? {
         let s = model.settings.dictationOrDefault
         guard let asr = s.asr, let provider = model.provider(asr.providerID) else { return nil }
+        // Brak lokalnego modelu: odmowa przy starcie, a nie po wypowiedzi (sam odczyt magazynu, bez ładowania).
+        if provider.api == .fluidAudio, RunGate.check(status: model.localASR.store.status()) != nil { return nil }
         let correction = s.correctionEnabled ? s.correction?.model : nil
         let meta = DictationRecordMeta(asrModel: asr.model, correctionModel: correction?.model)
         let language = language
@@ -156,9 +156,8 @@ import YascribeTranscription
                                            vocabulary: PromptVocabulary(), removeFillers: fillers, replacement: model.replacementRules), meta)
         }
         guard let client = model.transcriptionClient(for: asr.providerID) else { return nil }   // powód w `lastError`
-        let support = model.localASR
-        let transcriber: any TranscriptionClient = client is ReleasableClient
-            ? ReleasingTranscriber(inner: client) { await MainActor.run { support.endRun() } } : client
+        let transcriber: any TranscriptionClient = client is any ReleasableClient
+            ? ReleasingTranscriber(inner: client, support: model.localASR) : client
 
         var chat: ChatFunction?
         var vocabulary = PromptVocabulary()
@@ -230,17 +229,19 @@ import YascribeTranscription
 }
 
 /// Lokalny ASR trzyma model w pamięci do `release()` (jak po przebiegu spotkania): zwalniamy po każdej transkrypcji.
+/// `beginRun`/`endRun` w tym samym zakresie: póki trwa, model nie da się usunąć.
 private struct ReleasingTranscriber: TranscriptionClient {
     let inner: any TranscriptionClient
-    let ended: @Sendable () async -> Void
+    let support: LocalASRSupport
     var provider: Provider { inner.provider }
 
     func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
+        await support.beginRun()
         let result: Result<TranscriptionResult, any Error>
         do { result = .success(try await inner.transcribe(wav: wav, model: model, language: language, shape: shape)) }
         catch { result = .failure(error) }
         await (inner as? any ReleasableClient)?.release()
-        await ended()
+        await support.endRun()
         return try result.get()
     }
 }

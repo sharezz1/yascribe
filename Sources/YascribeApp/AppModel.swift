@@ -543,7 +543,14 @@ final class AppModel {
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
         guard let c = transcriptionClient(for: providerID) else { return }
-        defer { Task { await (c as? ReleasableClient)?.release() } } // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
+        let local = c is any ReleasableClient, support = localASR
+        if local { support.beginRun() }
+        defer { // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
+            Task {
+                await (c as? ReleasableClient)?.release()
+                if local { support.endRun() }
+            }
+        }
         let r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
         probeCache.record(r)
         save()
@@ -613,7 +620,7 @@ final class AppModel {
         // Przed `updateGate`: ta bramka widzi tylko nagranie spotkania. Dyktowanie i nagranie się wykluczają.
         switch dictation.engine.phase {
         case .listening: dictation.engine.apply(.cancel)   // bez pytania, mikrofon zwolniony
-        case .processing: return .afterDictation
+        case .processing where !isBusy: return .afterDictation   // przy przenoszeniu nagrań: zwykła odmowa niżej
         default: break
         }
         if quitApproved { return recording.isRecording ? .afterRecording : .now }
@@ -968,6 +975,8 @@ final class AppModel {
             return
         }
         transcribing.insert(id)
+        let local = c is any ReleasableClient
+        if local { localASR.beginRun() }
         Task {
             var finished: Transcript?
             do {
@@ -983,7 +992,7 @@ final class AppModel {
             }
             // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
             await (c as? ReleasableClient)?.release()
-            self.localASR.endRun()
+            if local { self.localASR.endRun() }
             self.transcribing.remove(id)
             self.reloadSessions()
             // Łańcuch korekta → autotytuł tylko dla przebiegu, który został bieżącym i się kwalifikuje (R23); wyjątek: pierwsza
