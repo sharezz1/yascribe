@@ -53,11 +53,12 @@ struct TranscriptModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Models for this meeting", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly) {
+        EditorSheet(title: "Models for this meeting", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
             VStack(alignment: .leading, spacing: 22) {
                 transcribeSection
                 correctSection
             }
+            .padding(.top, 8) // odstęp tytułu od pierwszej sekcji
             .disabled(moving) // przenoszenie nagrań: okno tylko do odczytu
         }
         .onAppear { prefill() }

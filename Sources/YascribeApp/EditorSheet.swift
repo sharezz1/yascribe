@@ -33,14 +33,16 @@ struct EditorSheet<Leading: View, Content: View>: View {
     let onCancel: () -> Void
     let onSave: () -> Void
     let footer: EditorSheetFooter
+    /// `nil` = wysokość treści (okna Models są krótkie); formularze zostają przy 640, żeby długie pola miały miejsce.
+    let idealHeight: CGFloat?
     let leading: Leading
     let content: Content
 
     init(title: String, dirty: Bool, error: String?, onCancel: @escaping () -> Void,
-         footer: EditorSheetFooter = .saveCancel, onSave: @escaping () -> Void = {},
+         footer: EditorSheetFooter = .saveCancel, onSave: @escaping () -> Void = {}, idealHeight: CGFloat? = 640,
          @ViewBuilder leading: () -> Leading, @ViewBuilder content: () -> Content) {
         self.title = title; self.dirty = dirty; self.error = error
-        self.onCancel = onCancel; self.onSave = onSave; self.footer = footer
+        self.onCancel = onCancel; self.onSave = onSave; self.footer = footer; self.idealHeight = idealHeight
         self.leading = leading(); self.content = content()
     }
 
@@ -77,7 +79,7 @@ struct EditorSheet<Leading: View, Content: View>: View {
             }
         }
         .frame(width: 560)
-        .frame(minHeight: 360, idealHeight: 640)
+        .frame(minHeight: 360, idealHeight: idealHeight)
         .background(.mnCard)
         .tint(.mnAccent) // arkusz nie dziedziczy akcentu z okna (macos.md §10, odstępstwo 5)
     }
@@ -105,10 +107,10 @@ struct EditorSheet<Leading: View, Content: View>: View {
 
 extension EditorSheet where Leading == EmptyView {
     init(title: String, dirty: Bool, error: String?, onCancel: @escaping () -> Void,
-         footer: EditorSheetFooter = .saveCancel, onSave: @escaping () -> Void = {},
+         footer: EditorSheetFooter = .saveCancel, onSave: @escaping () -> Void = {}, idealHeight: CGFloat? = 640,
          @ViewBuilder content: () -> Content) {
         self.init(title: title, dirty: dirty, error: error, onCancel: onCancel, footer: footer, onSave: onSave,
-                  leading: { EmptyView() }, content: content)
+                  idealHeight: idealHeight, leading: { EmptyView() }, content: content)
     }
 }
 

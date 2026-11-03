@@ -41,7 +41,7 @@ struct SummaryModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Summary model", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly) {
+        EditorSheet(title: "Summary model", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
             VStack(alignment: .leading, spacing: 10) {
                 let context = state.context.trimmingCharacters(in: .whitespacesAndNewlines)
                 note("Template \(template.name) · context: \(context.isEmpty ? "none" : context.replacingOccurrences(of: "\n", with: " "))")
@@ -55,6 +55,7 @@ struct SummaryModelsSheet: View {
                     if let reason { Text(reason).font(.subheadline).foregroundStyle(.mnText2) }
                 }
             }
+            .padding(.top, 8) // odstęp tytułu od pierwszego wiersza
             .disabled(moving) // przenoszenie nagrań: okno tylko do odczytu
         }
         .onAppear { prefill() }
