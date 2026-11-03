@@ -257,32 +257,25 @@ final class NotesModel {
     @discardableResult
     func generate(item: SessionItem, useCorrected: Bool, template: Template, context: String, draft: ModelDraft? = nil) -> Bool {
         let id = item.id
+        // Odmowa szkicu z okna wraca do okna, nie do stanu zakładki: tamtejszy Retry uruchomiłby inny model.
+        func refuse(_ message: String) -> Bool {
+            if draft == nil { generation[id] = .failed(message) } else { report(message) }
+            return false
+        }
         guard !isMoving() else { report(Self.movingMessage); return false }
         guard state(id) != .generating else { return false }
         // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
         guard !isCorrecting(id) else { return false }
-        guard !isTranscribing(id) else {
-            generation[id] = .failed("This meeting is being transcribed.")
-            return false
-        }
-        guard let source = item.transcript(corrected: useCorrected) else {
-            generation[id] = .failed("This meeting has no transcript yet.")
-            return false
-        }
+        guard !isTranscribing(id) else { return refuse("This meeting is being transcribed.") }
+        guard let source = item.transcript(corrected: useCorrected) else { return refuse("This meeting has no transcript yet.") }
         let info = presetsInfo()
         let choice: SummaryChoice? = switch draft {
         case nil: summaryChoice(for: item)
         case .preset?: presetSummaryChoice(for: item)
         case .custom(let o)?: SummaryModel.resolve(frozen: presetFor(item.url), override: o, defaultPresetID: info.defaultID, presets: info.presets)
         }
-        guard let choice else {
-            generation[id] = .failed("No preset has a summary model. Choose one in Presets.")
-            return false
-        }
-        guard let client = clientFor(choice.assignment.providerID) else {
-            generation[id] = .failed("Couldn't reach the summary provider. Check Settings.")
-            return false
-        }
+        guard let choice else { return refuse("No preset has a summary model. Choose one in Presets.") }
+        guard let client = clientFor(choice.assignment.providerID) else { return refuse("Couldn't reach the summary provider. Check Settings.") }
         if let draft {
             guard saveDraft(.summary, draft, item: item) else { return false }
         } else {

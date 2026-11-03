@@ -119,10 +119,12 @@ struct TranscriptModelsSheet: View {
     private func transcribe() {
         guard let pid = draft.asrProviderID, let language = chosenLanguage, let preset else { return }
         ui.error = nil
+        model.lastError = nil // komunikat odmowy ma być z tego kliknięcia, nie z wcześniejszego
         if model.transcribe(sessionURL: item.url, preset: preset, asr: RoleAssignment(providerID: pid, model: draft.asrModel), language: language) {
             onClose()
         } else {
             ui.error = model.lastError
+            model.lastError = nil // odmowa widoczna w oknie, bez drugiego, globalnego alertu
         }
     }
 
@@ -163,10 +165,12 @@ struct TranscriptModelsSheet: View {
 
     private func improve() {
         ui.error = nil
+        model.lastError = nil
         if draft.submitCorrection(item: item, notes: model.notes, preset: presetCorrection) {
             onClose()
         } else {
             ui.error = model.lastError
+            model.lastError = nil // odmowa widoczna w oknie, bez drugiego, globalnego alertu
         }
     }
 

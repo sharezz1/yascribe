@@ -224,8 +224,20 @@ private final class Reports { var messages: [String] = [] }
         let transcribing = makeModel()
         transcribing.isTranscribing = { _ in true }
         #expect(!generate(transcribing, item(), draft("A")))
-        #expect(transcribing.state(item().id) == .failed("This meeting is being transcribed."))
         #expect(saved == nil)
+    }
+
+    /// Odmowa szkicu z okna idzie do okna (report); zakładka nie dostaje błędu z Retry, który puściłby inny model.
+    @Test func generateDraftRefusalReportsWithoutTouchingTabState() throws {
+        try createSession()
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel()
+        model.isTranscribing = { _ in true }
+        #expect(!generate(model, item(), draft("A")))
+        #expect(model.state(item().id) == .idle)
+        #expect(reports.messages == ["This meeting is being transcribed."])
+        #expect(!generate(model, item(), nil)) // pasek: błąd zostaje w zakładce, jak dotąd
+        #expect(model.state(item().id) == .failed("This meeting is being transcribed."))
     }
 
     @Test func generateWithoutDraftStillUsesSavedOverride() async throws {

@@ -121,12 +121,9 @@ struct SummaryModelsSheet: View {
         model.lastError = nil // komunikat odmowy ma być z tego kliknięcia, nie z wcześniejszego
         if draft.submit(item: item, state: state, notes: model.notes, template: template, context: state.context, preset: preset) {
             onClose()
-        } else if let error = model.lastError {
-            ui.error = error
-        } else if case .failed(let message) = model.notes.state(item.id) {
-            ui.error = message
         } else {
-            ui.error = "Couldn't start the notes."
+            ui.error = model.lastError ?? "Couldn't start the notes."
+            model.lastError = nil // odmowa widoczna w oknie, bez drugiego, globalnego alertu
         }
     }
 
