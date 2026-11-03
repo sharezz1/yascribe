@@ -83,9 +83,13 @@ private final class Reports { var messages: [String] = [] }
     @Test func improveTranscriptUsesDraftModelNotStaleItemOverride() async throws {
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
+        let old = RoleOverride(providerID: provider.id, model: "old")
+        try NotesStore(session: session).updateMeta { $0.setOverride(.correction, old) }
+        var it = item()
+        it.notes.meta.setOverride(.correction, old)
         let model = makeModel()
-        #expect(model.improveTranscript(item(), draft: draft("draft")))
-        try await waitUntil { !model.isCorrecting(item().id) }
+        #expect(model.improveTranscript(it, draft: draft("draft")))
+        try await waitUntil { !model.isCorrecting(it.id) }
         #expect(http.models == ["draft"])
         #expect(saved?.correction?.model == "draft")
     }
@@ -134,10 +138,10 @@ private final class Reports { var messages: [String] = [] }
         #expect(!model.canCorrectNow(it))
         #expect(!model.improveTranscript(it, draft: draft("A")))
         model.isMoving = { false }
-        model.isTranscribing = { _ in true }
+        model.transcribing = [item().id]
         #expect(!model.canCorrectNow(it))
         #expect(!model.improveTranscript(it, draft: draft("A")))
-        model.isTranscribing = { _ in false }
+        model.transcribing = []
         model.generation[it.id] = .generating
         #expect(!model.canCorrectNow(it))
         #expect(!model.improveTranscript(it, draft: draft("A")))
@@ -164,7 +168,7 @@ private final class Reports { var messages: [String] = [] }
     @Test func canRetryCorrectionFalseWhileTranscribing() {
         let model = makeModel()
         #expect(model.canRetryCorrection(item()))
-        model.isTranscribing = { _ in true }
+        model.transcribing = [item().id]
         #expect(!model.canRetryCorrection(item()))
     }
 
@@ -222,7 +226,7 @@ private final class Reports { var messages: [String] = [] }
         correcting.setPreview(item().id, correcting: true)
         #expect(!generate(correcting, item(), draft("A")))
         let transcribing = makeModel()
-        transcribing.isTranscribing = { _ in true }
+        transcribing.transcribing = [item().id]
         #expect(!generate(transcribing, item(), draft("A")))
         #expect(saved == nil)
     }
@@ -232,7 +236,7 @@ private final class Reports { var messages: [String] = [] }
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
         let model = makeModel()
-        model.isTranscribing = { _ in true }
+        model.transcribing = [item().id]
         #expect(!generate(model, item(), draft("A")))
         #expect(model.state(item().id) == .idle)
         #expect(reports.messages == ["This meeting is being transcribed."])
@@ -251,36 +255,57 @@ private final class Reports { var messages: [String] = [] }
         #expect(http.models == ["saved"])
     }
 
-    @Test func transcriptionGateRefusesWhileCorrecting() throws {
+    func micAudio() throws { try Data().write(to: session.appendingPathComponent("mic.caf")) }
+
+    /// Ta sama funkcja, którą woła `AppModel.run`: odmowa nie rejestruje przebiegu.
+    func expectRefused(_ model: NotesModel, moving: Bool = false, _ message: String, before: Set<String> = []) {
+        #expect(TranscriptionStartGate.begin(sessionURL: session, notes: model, moving: moving) == message)
+        #expect(model.transcribing == before)
+    }
+
+    @Test func transcriptionGateStartRegistersRunVisibleToNotesGates() throws {
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
-        try Data().write(to: session.appendingPathComponent("mic.caf"))
-        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: false, generating: false, moving: false) == nil)
-        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: true, generating: false, moving: false)
-                == "This transcript is being corrected. Try again when that finishes.")
+        try micAudio()
+        let model = makeModel()
+        #expect(model.canCorrectNow(item()))
+        #expect(TranscriptionStartGate.begin(sessionURL: session, notes: model, moving: false) == nil)
+        #expect(model.isTranscribing(item().id))
+        #expect(!model.canCorrectNow(item())) // korekta i notatka widzą przebieg bez osobnego podpięcia
+        #expect(!generate(model, item(), draft("A")))
+        expectRefused(model, "This recording is already being transcribed.", before: [item().id])
+    }
+
+    @Test func transcriptionGateRefusesWhileMovingOrCorrecting() throws {
+        try createSession()
+        defer { try? FileManager.default.removeItem(at: session) }
+        try micAudio()
+        let model = makeModel()
+        expectRefused(model, moving: true, "Meetings are being moved to a new folder. Transcribe when that finishes.")
+        model.setPreview(item().id, correcting: true)
+        expectRefused(model, "This transcript is being corrected. Try again when that finishes.")
     }
 
     /// Odwrotna kolejność niż przy korekcie: najpierw notatka, potem transkrypcja — też odmowa.
     @Test func transcriptionGateRefusesWhileSummaryGenerates() async throws {
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
-        try Data().write(to: session.appendingPathComponent("mic.caf"))
+        try micAudio()
         let model = makeModel()
         #expect(generate(model, item(), draft("A")))
-        #expect(TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: model.isCorrecting(item().id),
-                                               generating: model.state(item().id) == .generating, moving: false)
-                == "Notes are being generated for this meeting. Try again when that finishes.")
+        expectRefused(model, "Notes are being generated for this meeting. Try again when that finishes.")
         try await waitUntil { model.state(item().id) != .generating }
+        #expect(http.models == ["A"]) // tylko notatka, żadnego innego żądania
     }
 
     @Test func generateOverviewSkippedWhileTranscribing() async throws {
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
         let model = makeModel()
-        model.isTranscribing = { _ in true }
+        model.transcribing = [item().id]
         model.generateOverview(item())
         #expect(!model.titles.isActive(item().id))
-        model.isTranscribing = { _ in false }
+        model.transcribing = []
         model.generateOverview(item())
         #expect(model.titles.isActive(item().id)) // kontrola: bez transkrypcji startuje
         try await waitUntil { !model.titles.isActive(item().id) }
@@ -289,7 +314,8 @@ private final class Reports { var messages: [String] = [] }
     @Test func transcriptionGateRefusesWhenAudioDeleted() throws {
         try createSession()
         defer { try? FileManager.default.removeItem(at: session) }
-        let refusal = TranscriptionStartGate.refusal(sessionURL: session, transcribing: false, correcting: false, generating: false, moving: false)
-        #expect(refusal?.contains("audio was deleted") == true)
+        let model = makeModel()
+        #expect(TranscriptionStartGate.begin(sessionURL: session, notes: model, moving: false)?.contains("audio was deleted") == true)
+        #expect(model.transcribing.isEmpty)
     }
 }

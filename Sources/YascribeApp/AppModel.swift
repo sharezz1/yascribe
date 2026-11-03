@@ -118,7 +118,10 @@ final class AppModel {
     /// Filtr listy spotkań; sesje w nieistniejącym folderze liczą się jako „No folder".
     var meetingFilter: MeetingFilter = .all
     /// Sesje z trwającym przebiegiem — drugi przebieg tej samej sesji płaciłby za te same okna (check S15 #2).
-    private(set) var transcribing: Set<String> = []
+    private(set) var transcribing: Set<String> {
+        get { notes.transcribing }
+        set { notes.transcribing = newValue }
+    }
 
     let recording = RecordingController()
     /// Aktualizacje (Sparkle): bramka restartu i kontroler. Tworzone w `init` (bramka potrzebuje `self`).
@@ -162,7 +165,6 @@ final class AppModel {
         }
         notes.onChange = { [weak self] in self?.reloadSessions() }
         notes.isMoving = { [weak self] in self?.recordingsMove != nil }
-        notes.isTranscribing = { [weak self] id in self?.transcribing.contains(id) ?? false }
         applyRetention()
     }
 
@@ -944,13 +946,10 @@ final class AppModel {
     @discardableResult
     private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: any TranscriptionClient) -> Bool {
         let id = sessionURL.lastPathComponent
-        if let refusal = TranscriptionStartGate.refusal(sessionURL: sessionURL, transcribing: transcribing.contains(id),
-                                                       correcting: notes.isCorrecting(id), generating: notes.state(id) == .generating,
-                                                       moving: recordingsMove != nil) {
+        if let refusal = TranscriptionStartGate.begin(sessionURL: sessionURL, notes: notes, moving: recordingsMove != nil) {
             lastError = refusal
             return false
         }
-        transcribing.insert(id)
         Task {
             var finished: Transcript?
             do {
@@ -995,7 +994,16 @@ extension AppModel: RecordingActivity {
 
 /// Bramki startu transkrypcji, wydzielone z `AppModel.run`, bo `AppModel` nie da się zbudować w teście.
 enum TranscriptionStartGate {
-    static func refusal(sessionURL: URL, transcribing: Bool, correcting: Bool, generating: Bool, moving: Bool) -> String? {
+    /// Odmowa (powód) albo `nil` i sesja zapisana jako transkrybowana, przed pierwszym `await`.
+    @MainActor static func begin(sessionURL: URL, notes: NotesModel, moving: Bool) -> String? {
+        let id = sessionURL.lastPathComponent
+        if let refusal = refusal(sessionURL: sessionURL, transcribing: notes.isTranscribing(id), correcting: notes.isCorrecting(id),
+                                 generating: notes.state(id) == .generating, moving: moving) { return refusal }
+        notes.transcribing.insert(id)
+        return nil
+    }
+
+    private static func refusal(sessionURL: URL, transcribing: Bool, correcting: Bool, generating: Bool, moving: Bool) -> String? {
         if transcribing { return "This recording is already being transcribed." }
         if moving { return "Meetings are being moved to a new folder. Transcribe when that finishes." }
         // Nowy przebieg w trakcie korekty: korekta starego tekstu nadpisałaby wynik albo poszłaby druga (F2, jak w `resume`).

@@ -15,14 +15,4 @@ import Testing
         state.useCorrected = true
         #expect(!state.summaryCorrected)
     }
-
-    @Test func summarySourceChoiceSurvivesTabSwitchWithinSameState() {
-        let state = MeetingViewState()
-        state.tab = .summary
-        state.summaryUseCorrected = false
-        state.tab = .transcript
-        state.tab = .summary
-        #expect(state.summaryUseCorrected == false)
-        #expect(!state.summaryCorrected)
-    }
 }

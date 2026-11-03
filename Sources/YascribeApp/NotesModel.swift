@@ -53,8 +53,10 @@ final class NotesModel {
     /// Trwa przenoszenie folderu nagrań — widok spotkania jest tylko do odczytu, zapisy blokujemy też tutaj (R3),
     /// żeby skrót z menu nie obszedł interfejsu. Zapis po usunięciu starego miejsca odtworzyłby osierocony katalog.
     var isMoving: () -> Bool = { false }
-    /// Trwa transkrypcja tej sesji (klucz: id); podłączane przez `AppModel`.
-    var isTranscribing: (String) -> Bool = { _ in false }
+    /// Sesje w trakcie transkrypcji (klucz: id). Trzyma je ten model, nie `AppModel`: bramki korekty i notatki
+    /// nie zależą od podpięcia, którego test nie sprawdzi (`AppModel` nie da się zbudować w teście).
+    var transcribing: Set<String> = []
+    func isTranscribing(_ id: String) -> Bool { transcribing.contains(id) }
     private static let movingMessage = "Meetings are being moved to a new folder. Try again when that finishes."
 
     /// Trwające generowanie (klucz: id sesji); token odróżnia przebieg anulowany od nowego na tej samej sesji.
