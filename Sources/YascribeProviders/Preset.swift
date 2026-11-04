@@ -157,6 +157,8 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var removeFillers: Bool?
     /// Własna lista przerywników; `nil` = domyślna.
     public var fillerWords: [String]?
+    /// Model odpowiedzi „Ask anything" (osobno od presetów i od embeddingu). Opcjonalne (E6): `nil` = nie wybrano, bez zastępstwa.
+    public var askModel: RoleAssignment?
 
     public static let defaultKeepAudioDays = 30
 
@@ -165,7 +167,9 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
 
     public init(embedding: RoleAssignment? = nil, defaultPresetID: UUID? = nil, recordingsPath: String? = nil,
                 keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil, meetings: MeetingSettings? = nil,
-                summaryThinking: Bool? = nil, removeFillers: Bool? = nil, fillerWords: [String]? = nil) {
+                summaryThinking: Bool? = nil, removeFillers: Bool? = nil, fillerWords: [String]? = nil,
+                askModel: RoleAssignment? = nil) {
+        self.askModel = askModel
         self.removeFillers = removeFillers
         self.fillerWords = fillerWords
         self.summaryThinking = summaryThinking

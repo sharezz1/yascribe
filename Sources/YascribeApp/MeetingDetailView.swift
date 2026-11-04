@@ -16,11 +16,13 @@ final class PlaybackState: ObservableObject {
 struct MeetingDetailView: View {
     @Environment(AppModel.self) private var model
     let item: SessionItem
+    let presentsModelsSheet: Bool
     @StateObject private var playback = PlaybackState()
     @StateObject private var state: MeetingViewState
 
-    init(item: SessionItem, state: MeetingViewState = MeetingViewState()) {
+    init(item: SessionItem, state: MeetingViewState = MeetingViewState(), presentsModelsSheet: Bool = true) {
         self.item = item
+        self.presentsModelsSheet = presentsModelsSheet
         _state = StateObject(wrappedValue: state)
     }
 
@@ -47,19 +49,15 @@ struct MeetingDetailView: View {
             }
         }
         }
-        // Poza przewijaną stroną: okno ma przykryć cały detal, nie przewijać się z treścią.
-        .dismissibleSheet(isPresented: $state.modelsSheet, onDismiss: { state.modelsSheet = false }) {
-            switch state.tab ?? defaultTab {
-            case .transcript: TranscriptModelsSheet(item: item) { state.modelsSheet = false }
-            case .summary: SummaryModelsSheet(item: item, state: state) { state.modelsSheet = false }
-            case .myNotes: EmptyView()
-            }
+        .dismissibleSheet(isPresented: Binding(get: { presentsModelsSheet && state.modelsSheet },
+                                               set: { state.modelsSheet = $0 }), onDismiss: { state.modelsSheet = false }) {
+            Self.modelsSheet(for: item, state: state)
         }
-        .contentBackground()
+        .background(Color.mnCard)
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
         .focusedSceneValue(\.playRecording, isRecording ? nil : { togglePlayback() })
         .navigationTitle(item.title)
-        .navigationBarBackButtonHidden(true) // własna kapsuła „Meetings” w pasku (D5)
+        .navigationBarBackButtonHidden(true) // Powrót jest w nagłówku treści.
         .onAppear {
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
         }
@@ -70,14 +68,43 @@ struct MeetingDetailView: View {
         } message: {
             Text("The meeting folder, with its recordings and notes, goes to the Trash. You can put it back from there.")
         }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button { model.selectedSessionID = nil } label: { Label("Meetings", systemImage: "chevron.left") }
-                    .buttonStyle(.pill)
+
+    }
+
+    /// Notatki są → Summary; jest transkrypt → Transcript; inaczej My notes.
+    private var defaultTab: MeetingTab { Self.defaultTab(for: item) }
+
+    static func defaultTab(for item: SessionItem) -> MeetingTab {
+        if item.notes.summary != nil { return .summary }
+        if item.transcript != nil { return .transcript }
+        return .myNotes
+    }
+
+    @ViewBuilder static func modelsSheet(for item: SessionItem, state: MeetingViewState) -> some View {
+        switch state.tab ?? defaultTab(for: item) {
+        case .transcript: TranscriptModelsSheet(item: item) { state.modelsSheet = false }
+        case .summary: SummaryModelsSheet(item: item, state: state) { state.modelsSheet = false }
+        case .myNotes: EmptyView()
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Button { model.selectedSessionID = nil } label: { Image(systemName: "chevron.left") }
+                    .buttonStyle(.pillSmall)
                     .help("Back to Meetings")
                     .accessibilityLabel("Back to Meetings")
-            }
-            ToolbarItem {
+                TextField("Untitled meeting", text: titleField)
+                    .textFieldStyle(.plain)
+                    .documentTitle()
+                    .onSubmit {
+                        if let edit = state.titleEdit, NoteTitle.isEdit(edit, meta: item.notes.meta, noteTitle: item.notes.summary?.title) {
+                            model.notes.setManualTitle(edit, for: item)
+                        }
+                        state.titleEdit = nil
+                    }
+                    .disabled(model.recordingsMove != nil)
                 Menu {
                     Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
                     Button("Show in Finder") { model.showInFinder(item) }
@@ -87,30 +114,9 @@ struct MeetingDetailView: View {
                     Image(systemName: "ellipsis")
                 }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                .fixedSize()
                 .help("More").accessibilityLabel("More")
             }
-        }
-    }
-
-    /// Notatki są → Summary; jest transkrypt → Transcript; inaczej My notes.
-    private var defaultTab: MeetingTab {
-        if item.notes.summary != nil { return .summary }
-        if item.transcript != nil { return .transcript }
-        return .myNotes
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TextField("Untitled meeting", text: titleField)
-                .textFieldStyle(.plain)
-                .documentTitle()
-                .onSubmit {
-                    if let edit = state.titleEdit, NoteTitle.isEdit(edit, meta: item.notes.meta, noteTitle: item.notes.summary?.title) {
-                        model.notes.setManualTitle(edit, for: item)
-                    }
-                    state.titleEdit = nil
-                }
-                .disabled(model.recordingsMove != nil)
             HStack(spacing: 12) {
                 MetaLine([
                     item.startedAt.formatted(date: .abbreviated, time: .shortened),
