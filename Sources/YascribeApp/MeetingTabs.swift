@@ -139,7 +139,7 @@ struct TranscriptTab: View {
                 if p.isWarning { WarnLabel(p.line) } else { StateLabel(.neutral, p.line) }
             }
             if model.notes.isCorrecting(item.id) {
-                StateLabel(.progress(nil), "After the meeting, we improve the transcript\(modelName.map { " with \(model.modelDisplayName($0))" } ?? "")…")
+                StateLabel(.progress(nil), "\(item.corrected == nil ? "After the meeting, we improve" : "Improving") the transcript\(modelName.map { " with \(model.modelDisplayName($0))" } ?? "")…")
                     .help(modelName ?? "")
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
