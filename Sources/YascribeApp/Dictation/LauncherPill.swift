@@ -127,7 +127,8 @@ import YascribeRecording
         case .dot: CGSize(width: 40, height: 40)
         case .expanded: CGSize(width: 270, height: 44)
         case .status(.error): CGSize(width: 340, height: 56)
-        case .status: CGSize(width: 180, height: 44)
+        case .status(.listening): CGSize(width: 240, height: 44)   // mikrofon + miernik 60 pt + Stop mieszczą się z marginesem
+        case .status: CGSize(width: 190, height: 44)
         }
     }
 
