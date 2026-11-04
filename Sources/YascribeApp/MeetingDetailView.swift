@@ -47,6 +47,14 @@ struct MeetingDetailView: View {
             }
         }
         }
+        // Poza przewijaną stroną: okno ma przykryć cały detal, nie przewijać się z treścią.
+        .dismissibleSheet(isPresented: $state.modelsSheet, onDismiss: { state.modelsSheet = false }) {
+            switch state.tab ?? defaultTab {
+            case .transcript: TranscriptModelsSheet(item: item) { state.modelsSheet = false }
+            case .summary: SummaryModelsSheet(item: item, state: state) { state.modelsSheet = false }
+            case .myNotes: EmptyView()
+            }
+        }
         .background(Color.mnCard)
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
         .focusedSceneValue(\.playRecording, isRecording ? nil : { togglePlayback() })

@@ -121,7 +121,10 @@ final class AppModel {
     /// Filtr listy spotkań; sesje w nieistniejącym folderze liczą się jako „No folder".
     var meetingFilter: MeetingFilter = .all
     /// Sesje z trwającym przebiegiem — drugi przebieg tej samej sesji płaciłby za te same okna (check S15 #2).
-    private(set) var transcribing: Set<String> = []
+    private(set) var transcribing: Set<String> {
+        get { notes.transcribing }
+        set { notes.transcribing = newValue }
+    }
 
     let recording = RecordingController()
     /// Aktualizacje (Sparkle): bramka restartu i kontroler. Tworzone w `init` (bramka potrzebuje `self`).
@@ -941,29 +944,33 @@ final class AppModel {
 
     static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }
 
-    func transcribe(sessionURL: URL, preset: Preset) {
+    /// `true` = przebieg przyjęty i wystartował; odmowa zostawia powód w `lastError`.
+    @discardableResult
+    func transcribe(sessionURL: URL, preset: Preset) -> Bool {
         guard let asr = preset.asr, let provider = provider(asr.providerID) else {
             lastError = "The preset's speech-to-text provider is missing."
-            return
+            return false
         }
-        guard let c = transcriptionClient(for: asr.providerID) else { return } // powód już w lastError
+        guard let c = transcriptionClient(for: asr.providerID) else { return false } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
             let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
                                            modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: localASR.store))
-            run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
-                snapshot: snapshot, client: c)
+            return run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
+                       snapshot: snapshot, client: c)
         } catch RunSnapshotError.chatShapeNotForMeetings {
             lastError = "This model returns no word timings, so it can't be used for meetings."
         } catch {
             lastError = "\(error)"
         }
+        return false
     }
 
     /// „Transcribe again…" (D13): to samo nagranie innym modelem ASR i językiem; kopia presetu tylko na ten przebieg,
     /// zapisany `preset.json` bez zmian. Nowy przebieg (`runs/<id>`) staje się bieżącym transkryptem dopiero ukończony, niepusty
     /// i bez luk (`RunSelection`, R23); stary zostaje na dysku.
-    func transcribe(sessionURL: URL, preset: Preset, asr: RoleAssignment, language: LanguageCode?) {
+    @discardableResult
+    func transcribe(sessionURL: URL, preset: Preset, asr: RoleAssignment, language: LanguageCode?) -> Bool {
         transcribe(sessionURL: sessionURL, preset: preset.withASR(asr, language: language))
     }
 
@@ -991,23 +998,13 @@ final class AppModel {
         run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
     }
 
-    private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: any TranscriptionClient) {
+    @discardableResult
+    private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: any TranscriptionClient) -> Bool {
         let id = sessionURL.lastPathComponent
-        guard !transcribing.contains(id) else {
-            lastError = "This recording is already being transcribed."
-            return
+        if let refusal = TranscriptionStartGate.begin(sessionURL: sessionURL, notes: notes, moving: recordingsMove != nil) {
+            lastError = refusal
+            return false
         }
-        guard recordingsMove == nil else {
-            lastError = "Meetings are being moved to a new folder. Transcribe when that finishes."
-            return
-        }
-        // Bez audio przebieg utworzyłby pusty `runs/<id>/` jako najnowszą próbę (wznowienie, retencja) bez szans na transkrypt.
-        guard !AudioRetention.audioFiles(sessionURL).isEmpty else {
-            let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""
-            lastError = "This meeting's audio was deleted\(days), so it can't be transcribed again."
-            return
-        }
-        transcribing.insert(id)
         Task {
             var finished: Transcript?
             do {
@@ -1033,6 +1030,7 @@ final class AppModel {
             }
             self.reloadSessions()
         }
+        return true
     }
 
     static func sessionName(_ d: Date) -> String {
@@ -1047,4 +1045,29 @@ final class AppModel {
 extension AppModel: RecordingActivity {
     /// Nagrywanie albo przenoszenie nagrań: restart w tym czasie zepsułby dane.
     var isBusy: Bool { recording.isRecording || recordingsMove != nil }
+}
+
+/// Bramki startu transkrypcji, wydzielone z `AppModel.run`, bo `AppModel` nie da się zbudować w teście.
+enum TranscriptionStartGate {
+    /// Odmowa (powód) albo `nil` i sesja zapisana jako transkrybowana, przed pierwszym `await`.
+    @MainActor static func begin(sessionURL: URL, notes: NotesModel, moving: Bool) -> String? {
+        let id = sessionURL.lastPathComponent
+        if let refusal = refusal(sessionURL: sessionURL, transcribing: notes.isTranscribing(id), correcting: notes.isCorrecting(id),
+                                 generating: notes.state(id) == .generating, moving: moving) { return refusal }
+        notes.transcribing.insert(id)
+        return nil
+    }
+
+    private static func refusal(sessionURL: URL, transcribing: Bool, correcting: Bool, generating: Bool, moving: Bool) -> String? {
+        if transcribing { return "This recording is already being transcribed." }
+        if moving { return "Meetings are being moved to a new folder. Transcribe when that finishes." }
+        // Nowy przebieg w trakcie korekty: korekta starego tekstu nadpisałaby wynik albo poszłaby druga (F2, jak w `resume`).
+        if correcting { return "This transcript is being corrected. Try again when that finishes." }
+        // Po przebiegu ruszyłaby autokorekta obok notatki (ten sam lokalny serwer), a notatka ze starego tekstu nadpisałaby nowe.
+        if generating { return "Notes are being generated for this meeting. Try again when that finishes." }
+        // Bez audio przebieg utworzyłby pusty `runs/<id>/` jako najnowszą próbę (wznowienie, retencja) bez szans na transkrypt.
+        guard AudioRetention.audioFiles(sessionURL).isEmpty else { return nil }
+        let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""
+        return "This meeting's audio was deleted\(days), so it can't be transcribed again."
+    }
 }
