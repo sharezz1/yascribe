@@ -101,10 +101,25 @@ import YascribeRecording
         guard let v = NSScreen.screens.first?.visibleFrame else { return }
         let anchor = keepAnchor ? CGPoint(x: panel.frame.midX, y: panel.frame.minY)
             : CGPoint(x: model.settings.dictationOrDefault.launcherOriginX.map { CGFloat($0) } ?? v.midX, y: v.minY + 12)
+        let frame = PillPlacement.frame(size: Self.size(presentation), bottomCenter: anchor, screens: [v])
         placing = true
-        panel.setFrame(PillPlacement.frame(size: Self.size(presentation), bottomCenter: anchor, screens: [v]), display: true)
-        placing = false
-        DispatchQueue.main.async { panel.invalidateShadow() }
+        guard keepAnchor, panel.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            panel.setFrame(frame, display: true)
+            placing = false
+            DispatchQueue.main.async { panel.invalidateShadow() }
+            return
+        }
+        // Rozwijanie i zwijanie: ramka okna płynie, a kapsuła szkła rośnie razem z nią (treść zmienia się przejściem w `LauncherView`).
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.26
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.9, 0.25, 1)
+            panel.animator().setFrame(frame, display: true)
+        } completionHandler: { [weak self, weak panel] in
+            MainActor.assumeIsolated {
+                self?.placing = false
+                panel?.invalidateShadow()
+            }
+        }
     }
 
     static func size(_ p: LauncherPresentation) -> CGSize {
@@ -224,15 +239,22 @@ struct LauncherView: View {
     @ObservedObject var launcher: LauncherPanelController
 
     var body: some View {
-        content.frame(maxWidth: .infinity, maxHeight: .infinity)   // hover: `LauncherHostingView`
+        // Jedna kapsuła szkła na stałe (kółko 40 × 40 to kapsuła o równych bokach), więc przy zmianie rozmiaru okna rośnie płynnie;
+        // zawartość wchodzi i wychodzi przejściem. Hover: `LauncherHostingView`.
+        ZStack { content }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .pillGlass(Capsule())
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: launcher.presentation)
     }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @ViewBuilder private var content: some View {
         switch launcher.presentation {
         case .dot:
             YascribeMark().scaleEffect(0.75).frame(width: 40, height: 40)
                 .overlay(DragHandle())
-                .pillGlass(Circle())
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 .accessibilityElement()
                 .accessibilityLabel("Yascribe dictation")
                 .accessibilityHint("Hover to show Dictate and Record meeting")
@@ -253,13 +275,11 @@ struct LauncherView: View {
                     .accessibilityLabel("Record meeting")
             }
             .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .pillGlass(Capsule())
+            .transition(.opacity.combined(with: .scale(scale: 0.92)))
         case .status(let s):
             HStack(spacing: 8) { status(s) }
                 .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .pillGlass(Capsule())
+                .transition(.opacity)
         }
     }
 

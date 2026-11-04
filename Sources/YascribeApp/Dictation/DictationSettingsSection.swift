@@ -45,6 +45,15 @@ struct DictationSettingsSection: View {
                     .labelsHidden().toggleStyle(.switch)
             }
         }
+        Text("Dictation settings are saved as you change them; Save below applies to the rest of this page.")
+            .font(.system(size: 12)).foregroundStyle(.mnText2).padding(.top, 8).padding(.leading, 2)
+            .onAppear { fixOnDeviceModel() }
+    }
+
+    /// Stan sprzed automatycznego wyboru: dostawca Yascribe zapisany bez nazwy modelu.
+    private func fixOnDeviceModel() {
+        guard let a = s.asr, a.model.isEmpty, model.provider(a.providerID)?.api == .fluidAudio else { return }
+        update { $0.asr = RoleAssignment(providerID: a.providerID, model: LocalASRModels.parakeetV3) }
     }
 
     // MARK: Zapis
@@ -77,7 +86,8 @@ struct DictationSettingsSection: View {
                 FieldMenu(label: "Provider", value: asrProviders.first { $0.id == s.asr?.providerID }?.roleLabel ?? "Choose…", width: 180) {
                     Picker("Provider", selection: Binding(get: { s.asr?.providerID }, set: { id in
                         guard let id, id != s.asr?.providerID else { return }
-                        update { $0.asr = RoleAssignment(providerID: id, model: "") }
+                        let onDevice = model.provider(id)?.api == .fluidAudio   // jedyny model na liście: wybierany od razu
+                        update { $0.asr = RoleAssignment(providerID: id, model: onDevice ? LocalASRModels.parakeetV3 : "") }
                     })) {
                         ForEach(asrProviders) { p in Text(p.roleLabel).tag(Optional(p.id)) }
                     }

@@ -151,7 +151,11 @@ import YascribeTranscription
     /// Wołane z `[]` przy starcie tylko po to, by sprawdzić model: wtedy bez Keychain, sieci i ładowania modeli.
     private func buildInput(_ pcm: [Int16]) -> (input: DictationPipelineInput, meta: DictationRecordMeta)? {
         let s = model.settings.dictationOrDefault
-        guard let asr = s.usableASR, let provider = model.provider(asr.providerID) else { return nil }
+        // Model Yascribe (Parakeet) ma jedną pozycję na liście: wybrany dostawca bez nazwy modelu znaczy właśnie ją.
+        let onDevice = s.asr.flatMap { a in
+            model.provider(a.providerID)?.api == .fluidAudio ? RoleAssignment(providerID: a.providerID, model: LocalASRModels.parakeetV3) : nil
+        }
+        guard let asr = s.usableASR ?? onDevice, let provider = model.provider(asr.providerID) else { return nil }
         // Brak lokalnego modelu: odmowa przy starcie, a nie po wypowiedzi (sam odczyt magazynu, bez ładowania).
         if provider.api == .fluidAudio, RunGate.check(status: model.localASR.store.status()) != nil { return nil }
         let correction = s.usableCorrection
