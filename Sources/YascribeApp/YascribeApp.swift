@@ -22,6 +22,7 @@ struct YascribeApp: App {
             DispatchQueue.main.async { MainActor.assumeIsolated { Snapshots.runAll(model: model) } }
         } else {
             model.monitor.start()
+            model.dictation.start()
         }
     }
 
@@ -98,7 +99,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.onRecordingEnded = reply
             DispatchQueue.main.asyncAfter(deadline: .now() + 15) { MainActor.assumeIsolated { reply() } }
             return .terminateLater
+        case .afterDictation:
+            // Skrót wyłączony od razu (nowa sesja w trakcie czekania nie ruszy); transkrypcja kończy się i wstawia tekst.
+            model.dictation.stop()
+            var replied = false
+            let reply: @MainActor () -> Void = {
+                guard !replied else { return }
+                replied = true
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+            Task { @MainActor in
+                await model.dictation.engine.waitUntilIdle()
+                reply()
+            }
+            // Tylko na zawieszenie: powyżej limitów żądań (ASR 120 s + korekta 2 × 120 s z ponowieniem + wstawienie).
+            DispatchQueue.main.asyncAfter(deadline: .now() + 400) { MainActor.assumeIsolated { reply() } }
+            return .terminateLater
         }
+    }
+
+    /// Także po zamknięciu bez pytania: tap skrótu off, mikrofon dyktowania zwolniony.
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.model?.dictation.stop()
     }
 }
 
@@ -134,7 +156,7 @@ struct ContentView: View {
             case .templates: TemplatesView()
             case .settings: SettingsView()
             case .tasks: LaterPhaseView(title: "Tasks", text: "Tasks with owners across meetings arrive with notes and speaker identity.")
-            case .dictation: LaterPhaseView(title: "Dictation", text: "Dictation arrives in a later phase.")
+            case .dictation: DictationView()
             case .dictionary: DictionaryView()
             }
         }
@@ -153,7 +175,7 @@ struct ContentView: View {
     }
 }
 
-/// Sidebar (D7, macos.md §11.5): Meetings na górze; Presets / Templates / Dictionary / Settings na dole, bez nagłówka sekcji.
+/// Sidebar (D7, macos.md §11.5): Meetings i Dictation na górze; Presets / Templates / Dictionary / Settings na dole, bez nagłówka sekcji.
 /// Dolna grupa to druga lista z tym samym wyborem, przypięta `safeAreaInset` (lista nie umie dosunąć wierszy do dołu).
 struct SidebarList: View {
     @Binding var selection: Section
@@ -161,6 +183,8 @@ struct SidebarList: View {
     var body: some View {
         List(selection: $selection) {
             Label(Section.meetings.rawValue, systemImage: Section.meetings.symbol).tag(Section.meetings)
+                .foregroundStyle(.mnText)
+            Label(Section.dictation.rawValue, systemImage: Section.dictation.symbol).tag(Section.dictation)
                 .foregroundStyle(.mnText)
         }
         .scrollContentBackground(.hidden)

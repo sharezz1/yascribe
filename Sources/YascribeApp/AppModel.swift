@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Foundation
+import YascribeDictation
 import YascribeLocalASR
 import YascribeMeetings
 import YascribeNotes
@@ -139,6 +140,8 @@ final class AppModel {
     let archive = ArchiveModel()
     /// Lokalny ASR (F20): magazyn modelu i faza pobierania/przygotowania; UI w T7.
     let localASR = LocalASRSupport()
+    /// Dyktowanie: powstaje w `load()` (historia), skrót startuje `YascribeApp.init` obok `monitor`.
+    @ObservationIgnored lazy var dictation = DictationController(model: self)
 
     init() {
         recording.model = self
@@ -258,6 +261,7 @@ final class AppModel {
         notes.templates = read(paths.templates, TemplatesFile())
         dictionary = read(paths.dictionary, UserDictionary())
         folders = read(paths.folders, FoldersFile())
+        dictation.loadHistory(stamp: stamp, errors: &errors)
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
     }
@@ -596,7 +600,14 @@ final class AppModel {
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
         guard let c = transcriptionClient(for: providerID) else { return }
-        defer { Task { await (c as? ReleasableClient)?.release() } } // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
+        let local = c is any ReleasableClient, support = localASR
+        if local { support.beginRun() }
+        defer { // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
+            Task {
+                await (c as? ReleasableClient)?.release()
+                if local { support.endRun() }
+            }
+        }
         let r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
         probeCache.record(r)
         save()
@@ -648,16 +659,27 @@ final class AppModel {
             lastError = "Update in progress."
             return false
         }
+        guard DictationGate.canStartMeeting(dictationBusy: dictation.engine.isBusy) else {
+            lastError = "Finish dictating first."
+            return false
+        }
         return true
     }
 
     /// Zakończenie aplikacji (⌘Q, pasek menu, restart Sparkle): z nagraniem w toku pyta, najpierw zatrzymuje je, potem pozwala wyjść.
     /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
-    enum TerminationDecision { case now, cancel, afterRecording }
+    enum TerminationDecision { case now, cancel, afterRecording, afterDictation }
 
     /// `afterRecording`: zgoda jest, ale rejestrator jeszcze finalizuje pliki (`stop()` mógł wrócić od razu, gdy
     /// finalizacja zaczęła się wcześniej na wątku audio); wyjście dopiero po `recordingFinished()`.
+    /// `afterDictation`: trwa transkrypcja dyktowania; wyjście po jej końcu (tekst trafia do celu i historii).
     func terminationDecision() -> TerminationDecision {
+        // Przed `updateGate`: ta bramka widzi tylko nagranie spotkania. Dyktowanie i nagranie się wykluczają.
+        switch dictation.engine.phase {
+        case .listening: dictation.engine.apply(.cancel)   // bez pytania, mikrofon zwolniony
+        case .processing where !isBusy: return .afterDictation   // przy przenoszeniu nagrań: zwykła odmowa niżej
+        default: break
+        }
         if quitApproved { return recording.isRecording ? .afterRecording : .now }
         if updateGate.shouldTerminate() { return .now }
         let alert = NSAlert()
@@ -1005,6 +1027,8 @@ final class AppModel {
             lastError = refusal
             return false
         }
+        let local = c is any ReleasableClient
+        if local { localASR.beginRun() }
         Task {
             var finished: Transcript?
             do {
@@ -1020,7 +1044,7 @@ final class AppModel {
             }
             // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
             await (c as? ReleasableClient)?.release()
-            self.localASR.endRun()
+            if local { self.localASR.endRun() }
             self.transcribing.remove(id)
             self.reloadSessions()
             // Łańcuch korekta → autotytuł tylko dla przebiegu, który został bieżącym i się kwalifikuje (R23); wyjątek: pierwsza
