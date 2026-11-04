@@ -46,6 +46,7 @@ private func build(_ t: Transcript, myNotes: String = "", context: String = "", 
 @Test func notesLanguageFollowsThePreset() throws {
     let p = try #require(build(transcript([utt("Dzień dobry.")]), language: .polish))
     #expect(p.system.contains("Write the notes in Polish."))
+    #expect(p.system.contains("Keep the section titles under Structure exactly as written (do not translate them)"))
 }
 
 @Test func autoNotesLanguageUsesThePredominantOne() throws {

@@ -25,12 +25,14 @@ struct CLI {
                                                                   <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza)
       dictionary-check <katalog sesji> --replacements <plik.tsv> [--vocabulary <plik.txt>]
                                                                   liczy Termy i Aliasy w transkrypcie (surowym i poprawionym) przed i po Replacement (faza 2.1, odbiór §8.1)
+      correct <katalog przebiegu> <baseURL> <model> --language pl --out <plik.json> [--vocabulary <vocabulary.txt>]
+                                                                  korekta transkryptu z przebiegu bez zapisu do przebiegu (klucz: YASCRIBE_API_KEY)
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
     Czasy z transcribe są na osi sesji; czas w pliku ścieżki = czas na osi − przesunięcie z summarize.
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
-    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary"]
+    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary", "--out", "--only"]
     static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output"])
 
     static func main() async {
@@ -52,6 +54,7 @@ struct CLI {
             case "probe": try await probe(args)
             case "transcribe": try await transcribe(args)
             case "dictionary-check": try dictionaryCheck(args)
+            case "correct": try await correct(args)
             case "session-from-file": try await sessionFromFile(args)
             default: print(usage); exit(64)
             }

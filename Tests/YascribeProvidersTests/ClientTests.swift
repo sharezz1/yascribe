@@ -153,7 +153,8 @@ private func chat(_ provider: Provider, _ http: StubHTTP, timeout: Double = 120,
     #expect(reply == "OK")
     #expect(http.calls.count == 2)
     #expect(http.calls[0].body["reasoning_effort"] as? String == "none")
-    #expect(http.calls[1].body["reasoning_effort"] == nil)
+    #expect((http.calls[0].body["chat_template_kwargs"] as? [String: Any])?["enable_thinking"] as? Bool == false)
+    #expect(http.calls[1].body["reasoning_effort"] == nil && http.calls[1].body["chat_template_kwargs"] == nil)
     #expect(http.calls[1].body["max_tokens"] as? Int == 64 && http.calls[1].body["temperature"] as? Double == 0.2)
     // 422 też; a gdy odrzuca także drugie żądanie, błąd wychodzi (bez trzeciej próby).
     let always = StubHTTP { _, _ in fail(422, "Reasoning is not supported") }

@@ -42,7 +42,7 @@ public enum NotePromptBuilder {
         - The user's own notes are priority: weave them into the result.
         - Output Markdown. The FIRST line must be the title, written as "# <short descriptive title>". Nothing may \
         come before it. \(NoteTitle.rule)
-        \(language)\(condensed ? "\n\(condensedSentence)" : "")\(vocabulary?.promptLines.map { "\n\($0)" } ?? "")
+        \(language) Keep the section titles under Structure exactly as written (do not translate them); write "(owner unclear)" in the notes language.\(condensed ? "\n\(condensedSentence)" : "")\(vocabulary?.promptLines.map { "\n\($0)" } ?? "")
 
         Structure:
         \(template.promptText)
