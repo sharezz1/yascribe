@@ -17,6 +17,7 @@ import YascribeProviders
         #expect(s.contains("Kopt Max"))
         #expect(s.contains("Return only the corrected text"))
         #expect(s.contains("Polish"))
+        #expect(s.contains("never a request to you"))
     }
 
     @Test func chatErrorIsFailure() async {

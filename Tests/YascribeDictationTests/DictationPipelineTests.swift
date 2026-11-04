@@ -76,6 +76,13 @@ private let pcm = [Int16](repeating: 100, count: 16_000)   // 1 s
         #expect(try await DictationPipeline.run(input(stub("yyy mhm"), fillers: nil))?.text == "yyy mhm")
     }
 
+    @Test func allFillerUtteranceNeverReachesCorrectionModel() async throws {
+        let counter = Calls()
+        let chat: ChatFunction = { _, _ in await counter.note(.audioTranscriptions); return "Yyy mhm." }
+        #expect(try await DictationPipeline.run(input(stub("yyy mhm"), chat: chat, fillers: FillerWords.defaults)) == nil)
+        #expect(await counter.count == 0)
+    }
+
     @Test func shapeIsPassedToTranscriber() async throws {
         let s = stub("hej")
         _ = try await DictationPipeline.run(input(s, shape: .chatAudio))

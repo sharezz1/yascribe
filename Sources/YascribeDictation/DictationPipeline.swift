@@ -38,6 +38,13 @@ public enum DictationPipeline {
     /// Limit nagrania egzekwuje wołający (silnik); potok go nie przycina.
     public static let maxSeconds = 300.0
 
+    /// `remove` zwraca oryginał, gdy wszystko jest przerywnikiem; sentinel pokazuje, że tak było.
+    private static func isAllFiller(_ text: String, _ words: [String]) -> Bool {
+        let sentinel = "Q9ZX"
+        let probe = FillerWords.remove(sentinel + " " + text, words: words)
+        return probe.trimmingCharacters(in: .punctuationCharacters.union(.whitespaces)) == sentinel
+    }
+
     public static func run(_ input: DictationPipelineInput) async throws -> DictationOutput? {
         guard Double(input.pcm.count) / sampleRate >= minSeconds else { return nil }
         let wav = WAVEncoder.wav(input.pcm, rate: sampleRate)
@@ -45,6 +52,8 @@ public enum DictationPipeline {
         let raw = asr.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return nil }
 
+        // Wypowiedź z samych przerywników nie trafia do modelu korekty (mógłby coś „odpowiedzieć").
+        if let words = input.removeFillers, isAllFiller(raw, words) { return nil }
         var text = raw
         var failed = false
         if let chat = input.chat {
@@ -54,10 +63,7 @@ public enum DictationPipeline {
             }
         }
         if let words = input.removeFillers {
-            // `remove` zwraca oryginał, gdy wszystko jest przerywnikiem; sentinel pokazuje, że tak było.
-            let sentinel = "Q9ZX"
-            let probe = FillerWords.remove(sentinel + " " + text, words: words)
-            if probe.trimmingCharacters(in: .punctuationCharacters.union(.whitespaces)) == sentinel { return nil }
+            if isAllFiller(text, words) { return nil }
             text = FillerWords.remove(text, words: words)
         }
         text = input.replacement.apply(to: text).trimmingCharacters(in: .whitespacesAndNewlines)

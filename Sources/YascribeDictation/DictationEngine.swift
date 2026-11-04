@@ -54,6 +54,8 @@ public enum DictationPhase: Equatable, Sendable {
     private let sleep: @Sendable (Duration) async throws -> Void
     private let maxDuration: Duration
     private let resultVisibleFor: Duration
+    /// Błąd z zachowanym audio: dłuższe okno na „Retry" niż zwykły wynik.
+    private let retryVisibleFor: Duration
     private let buildInput: (_ pcm: [Int16]) -> (input: DictationPipelineInput, meta: DictationRecordMeta)?
     private let record: (DictationEntry) -> Void
 
@@ -70,11 +72,11 @@ public enum DictationPhase: Equatable, Sendable {
 
     public init(capture: any AudioCapturing, inserter: any TextInserting, now: @escaping () -> Date = Date.init,
                 sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-                maxDuration: Duration = .seconds(300), resultVisibleFor: Duration = .seconds(2),
+                maxDuration: Duration = .seconds(300), resultVisibleFor: Duration = .seconds(2), retryVisibleFor: Duration = .seconds(60),
                 buildInput: @escaping (_ pcm: [Int16]) -> (input: DictationPipelineInput, meta: DictationRecordMeta)?,
                 record: @escaping (DictationEntry) -> Void) {
         self.capture = capture; self.inserter = inserter; self.now = now; self.sleep = sleep
-        self.maxDuration = maxDuration; self.resultVisibleFor = resultVisibleFor
+        self.maxDuration = maxDuration; self.resultVisibleFor = resultVisibleFor; self.retryVisibleFor = retryVisibleFor
         self.buildInput = buildInput; self.record = record
     }
 
@@ -155,6 +157,11 @@ public enum DictationPhase: Equatable, Sendable {
         guard phase == .listening else { return }
         let pcm = releaseMic()
         let seconds = now().timeIntervalSince(startedAt)
+        // Zbyt krótkie dotknięcie: bez budowania wejścia (Keychain, klient), bez błędu.
+        guard Double(pcm.count) >= DictationPipeline.minSeconds * DictationPipeline.sampleRate else {
+            phase = .idle
+            return
+        }
         guard let built = buildInput(pcm) else { return finish(.refused(Self.missingModelMessage)) }
         phase = .processing
         process(Retained(input: built.input, meta: built.meta, app: startApp ?? built.meta.app, seconds: seconds, date: startedAt),
@@ -201,14 +208,16 @@ public enum DictationPhase: Equatable, Sendable {
         return capture.stop()
     }
 
-    /// Stan wyniku; po `resultVisibleFor` powrót do `.idle` porzuca zachowane próbki.
+    /// Stan wyniku; po `resultVisibleFor` (przy błędzie z zachowanym audio: `retryVisibleFor`) powrót do `.idle` porzuca próbki.
     private func finish(_ result: DictationPhase) {
         session += 1
         phase = result
         let token = session
         resetTimer?.cancel()
-        resetTimer = Task { [weak self, sleep, resultVisibleFor] in
-            do { try await sleep(resultVisibleFor) } catch { return }
+        var visibleFor = resultVisibleFor
+        if case .failed = result, retained != nil { visibleFor = retryVisibleFor }
+        resetTimer = Task { [weak self, sleep, visibleFor] in
+            do { try await sleep(visibleFor) } catch { return }
             guard !Task.isCancelled, let self, self.session == token else { return }
             self.retained = nil
             self.phase = .idle

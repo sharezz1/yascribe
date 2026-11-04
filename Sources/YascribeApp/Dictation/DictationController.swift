@@ -166,7 +166,17 @@ import YascribeTranscription
                                            transcriber: OpenAICompatibleClient(provider: provider, key: nil), shape: shape, chat: nil,
                                            vocabulary: PromptVocabulary(), removeFillers: fillers, replacement: model.replacementRules), meta)
         }
-        guard let client = model.transcriptionClient(for: asr.providerID) else { return nil }   // powód w `lastError`
+        // Brak klienta przy `.stop` (klucz, model): nagranie jest już zrobione, więc nie odmawiamy po cichu ani nie
+        // wyświetlamy alertu — transkrypcja zgłasza powód i silnik przechodzi w `.failed` z „Retry".
+        let errorBefore = model.lastError
+        guard let client = model.transcriptionClient(for: asr.providerID) else {
+            let reason = model.lastError ?? "Couldn't start transcription."
+            model.lastError = errorBefore
+            return (DictationPipelineInput(pcm: pcm, language: language, asrModel: asr.model,
+                                           transcriber: UnavailableTranscriber(provider: provider, reason: reason), shape: shape,
+                                           chat: nil, vocabulary: PromptVocabulary(), removeFillers: fillers,
+                                           replacement: model.replacementRules), meta)
+        }
         let transcriber: any TranscriptionClient = client is any ReleasableClient
             ? ReleasingTranscriber(inner: client, support: model.localASR) : client
 
@@ -254,5 +264,19 @@ private struct ReleasingTranscriber: TranscriptionClient {
         await (inner as? any ReleasableClient)?.release()
         await support.endRun()
         return try result.get()
+    }
+}
+
+/// Klient, którego nie dało się zbudować przy `.stop`: każda transkrypcja kończy się prawdziwym powodem.
+private struct UnavailableTranscriber: TranscriptionClient {
+    struct Unavailable: LocalizedError {
+        let reason: String
+        var errorDescription: String? { reason }
+    }
+    let provider: Provider
+    let reason: String
+
+    func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
+        throw Unavailable(reason: reason)
     }
 }

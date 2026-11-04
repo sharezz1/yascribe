@@ -88,15 +88,19 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
     var modelAvailable = true
     var meta = DictationRecordMeta(app: "MetaApp", asrModel: "asr-1", correctionModel: nil)
     var chat: ChatFunction?
+    var buildCalls: [Int] = []
     var engine: DictationEngine!
 
     init(capture: FakeCapture = FakeCapture(), inserter: FakeInserter = FakeInserter(),
          asr: [Result<String, Boom>] = [.success("hello")],
-         fire: Set<Duration> = [], maxDuration: Duration = .seconds(300), resultVisibleFor: Duration = .seconds(2)) {
+         fire: Set<Duration> = [], maxDuration: Duration = .seconds(300), resultVisibleFor: Duration = .seconds(2),
+         retryVisibleFor: Duration = .seconds(60)) {
         self.capture = capture; self.inserter = inserter; self.asr = ScriptedASR(asr)
         engine = DictationEngine(capture: capture, inserter: inserter, now: { [unowned self] in clock },
                                  sleep: sleeper(fire: fire), maxDuration: maxDuration, resultVisibleFor: resultVisibleFor,
+                                 retryVisibleFor: retryVisibleFor,
                                  buildInput: { [unowned self] pcm in
+                                     buildCalls.append(pcm.count)
                                      guard modelAvailable else { return nil }
                                      let input = DictationPipelineInput(pcm: pcm, language: nil, asrModel: meta.asrModel ?? "",
                                                                         transcriber: self.asr, shape: .audioTranscriptions, chat: chat,
@@ -159,6 +163,7 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
         #expect(h.inserter.inserted.isEmpty)
         #expect(h.asr.calls == 0)
         #expect(h.capture.stopCount == 1)
+        #expect(h.buildCalls == [0])   // tylko sonda ze startu; wejście z próbkami nie powstało
     }
 
     @Test func missingModelIsRefused() {
@@ -319,7 +324,8 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
     }
 
     @Test func resultReturnsToIdleAndDropsRetry() async {
-        let h = Harness(asr: [.failure(Boom()), .success("hello")], fire: [.milliseconds(1)], resultVisibleFor: .milliseconds(1))
+        let h = Harness(asr: [.failure(Boom()), .success("hello")], fire: [.milliseconds(1)], resultVisibleFor: .milliseconds(1),
+                      retryVisibleFor: .milliseconds(1))
         await h.dictate()
         await h.engine.resetTimer?.value
         #expect(h.engine.phase == .idle)
@@ -375,6 +381,61 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
         #expect(!h.engine.canRetry)
     }
 
+    @Test func failedWithRetainedAudioStaysRetryableForTheLongWindow() async {
+        let h = Harness(asr: [.failure(Boom())], fire: [.seconds(2)])
+        await h.dictate()
+        await h.settle()
+        guard case .failed = h.engine.phase else { Issue.record("phase \(h.engine.phase)"); return }
+        #expect(h.engine.canRetry)   // 2 s minęły, a okno ponowienia trwa 60 s
+
+        let l = Harness(asr: [.failure(Boom())], fire: [.seconds(2), .seconds(60)])
+        await l.dictate()
+        await l.engine.resetTimer?.value
+        #expect(l.engine.phase == .idle)
+        #expect(!l.engine.canRetry)
+    }
+
+    @Test func successResultStillHidesAfterShortWindow() async {
+        let h = Harness(fire: [.seconds(2)])
+        await h.dictate()
+        await h.engine.resetTimer?.value
+        #expect(h.engine.phase == .idle)
+    }
+
+    @Test func failedTranscriberReasonIsShownAndRetryable() async {
+        struct Reason: LocalizedError { var errorDescription: String? { "No API key for Provider." } }
+        let h = Harness()
+        h.engine = DictationEngine(capture: h.capture, inserter: h.inserter, now: { [unowned h] in h.clock }, sleep: sleeper(fire: []),
+                                   buildInput: { [unowned h] pcm in
+                                       (DictationPipelineInput(pcm: pcm, language: nil, asrModel: "m", transcriber: ReasonASR(error: Reason()),
+                                                               shape: .audioTranscriptions, chat: nil, vocabulary: PromptVocabulary(),
+                                                               removeFillers: nil, replacement: ReplacementRules(UserDictionary())), h.meta)
+                                   },
+                                   record: { _ in })
+        await h.dictate()
+        #expect(h.engine.phase == .failed("No API key for Provider."))
+        #expect(h.engine.canRetry)
+    }
+
+    @Test func waitUntilIdleFollowsRetrySwap() async {
+        let h = Harness(asr: [.failure(Boom()), .success("hello")])
+        h.engine.apply(.start)
+        h.clock += 1.5
+        h.engine.apply(.stop)
+        guard let first = h.engine.work else { Issue.record("no work"); return }
+        // `onChange` odpala się przy zmianie na `.failed`, jeszcze w zadaniu `first`; `retry` ląduje w kolejce przed wznowieniem
+        // czekającego (kończy się dopiero `first`), więc kolejność jest deterministyczna.
+        withObservationTracking { _ = h.engine.phase } onChange: {
+            Task { @MainActor in h.engine.retry() }
+        }
+        let waiter = Task { @MainActor in await h.engine.waitUntilIdle() }
+        await waiter.value
+        #expect(h.engine.work != first)
+        #expect(h.engine.phase == .finished(.inserted))
+        #expect(h.records.count == 1)
+        #expect(h.asr.calls == 2)
+    }
+
     @Test func waitUntilIdleWaitsForProcessing() async {
         let h = Harness()
         await h.engine.waitUntilIdle()   // bez sesji: wraca od razu
@@ -385,6 +446,12 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
         #expect(h.engine.phase == .finished(.inserted))
         #expect(h.records.count == 1)
     }
+}
+
+private struct ReasonASR: TranscriptionClient {
+    let provider = Provider(name: "Stub", baseURL: URL(string: "http://localhost:1")!)
+    let error: any Error
+    func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult { throw error }
 }
 
 /// Znacznik dla `onChange` obserwacji (wołanego poza głównym aktorem). Stan pod `lock`.
