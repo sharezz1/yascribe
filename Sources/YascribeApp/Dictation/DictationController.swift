@@ -19,6 +19,8 @@ import YascribeTranscription
                                                           buildInput: { [weak self] in self?.buildInput($0) },
                                                           record: { [weak self] in self?.record($0) })
     @ObservationIgnored private lazy var monitor = GlobalHotkeyMonitor { [weak self] in self?.handle($0) }
+    /// Panel powstaje dopiero przy pierwszym pokazaniu (po `start()`), więc migawki go nie tworzą.
+    @ObservationIgnored private lazy var launcher = LauncherPanelController(controller: self, model: model)
 
     private(set) var history = DictationHistoryFile()
     private(set) var permissions: (inputMonitoring: Bool, accessibility: Bool, microphone: Bool) = (false, false, false)
@@ -51,6 +53,7 @@ import YascribeTranscription
         monitor.stop()
         monitorRunning = false
         engine.apply(.cancel)
+        launcher.hide()
     }
 
     /// Po każdej zmianie ustawień dyktowania i po nadaniu uprawnienia.
@@ -61,6 +64,7 @@ import YascribeTranscription
         monitor.setListening(engine.phase == .listening)
         refreshPermissions()
         guard active else { return }
+        if s.showLauncherOrDefault { launcher.show() } else { launcher.hide() }
         if permissions.inputMonitoring {
             monitorRunning = monitor.start()
         } else {
