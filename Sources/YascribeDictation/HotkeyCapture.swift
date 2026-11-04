@@ -1,11 +1,9 @@
 import YascribeProviders
 
 /// Decyzje pola „Press a key…” w Settings (bez AppKit): z zachowania klawiatury robi `DictationHotkey`.
-/// Przyjmowane: sam Fn, modyfikator(y) + klawisz, klawisz funkcyjny, zwykły klawisz. Samotny Command/Option/Control/Shift
-/// jest odrzucany: monitor sprowadza lewą i prawą stronę do jednego bitu, więc taki skrót działałby na obu klawiszach.
+/// Przyjmowane: sam modyfikator (Fn albo konkretna strona Command/Option/Control/Shift), modyfikator(y) + klawisz,
+/// klawisz funkcyjny, zwykły klawisz.
 public struct HotkeyCapture: Sendable {
-    public static let loneModifierMessage = "Use Fn, or a modifier together with another key."
-
     private static let escape: UInt16 = 53
     private static let tab: UInt16 = 48
     private static let fn: UInt16 = 63
@@ -35,9 +33,7 @@ public struct HotkeyCapture: Sendable {
             guard pending == keyCode else { return nil }
             pending = nil
             if combined { return nil }
-            if keyCode == Self.fn { return .fn }
-            message = Self.loneModifierMessage
-            return nil
+            return DictationHotkey(keyCode: keyCode, flags: 0, isModifierOnly: true)
         case let .keyDown(keyCode, flags, isRepeat):
             if isRepeat { return nil }
             // Tab opuszcza pole (nawigacja klawiaturą), tak jak Esc; nie bywa skrótem.

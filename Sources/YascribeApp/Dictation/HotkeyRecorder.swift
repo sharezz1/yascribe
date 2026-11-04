@@ -38,6 +38,7 @@ final class HotkeyField: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
+        focusRingType = .none   // własna obwódka poniżej; systemowy niebieski pierścień zostaje wyłączony
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: 13)
         label.lineBreakMode = .byTruncatingTail
@@ -152,8 +153,9 @@ final class HotkeyField: NSView {
             layer?.cornerRadius = 7
             layer?.cornerCurve = .continuous
             layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
-            layer?.borderWidth = capture != nil ? 1.5 : 0.5
-            layer?.borderColor = (capture != nil ? NSColor.controlAccentColor : NSColor.separatorColor).cgColor
+            layer?.borderWidth = capture != nil ? 1 : 0.5
+            // Bez niebieskiego akcentu systemu: w trakcie przechwytywania wystarcza ciemniejsza, neutralna obwódka i napis „Press a key…".
+            layer?.borderColor = (capture != nil ? NSColor.labelColor.withAlphaComponent(0.45) : NSColor.separatorColor).cgColor
         }
     }
 }

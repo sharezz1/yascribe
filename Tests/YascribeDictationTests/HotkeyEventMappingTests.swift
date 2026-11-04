@@ -43,3 +43,21 @@ private let command: UInt64 = 0x100000 // CGEventFlags.maskCommand
             == .keyDown(keyCode: 2, flags: option, isRepeat: true))
     #expect(HotkeyEventMapping.event(keyCode: 2, flags: option, type: .keyUp) == .keyUp(keyCode: 2))
 }
+
+@Test func rightOptionReleasedWhileLeftOptionHeldIsUp() {
+    // Szeroki bit Option zostaje (lewy trzymany), ale bit prawej strony zniknął.
+    let heldLeft: UInt64 = 0x80000 | 0x20
+    #expect(HotkeyEventMapping.isDown(keyCode: 61, flags: heldLeft) == false)
+    #expect(HotkeyEventMapping.isDown(keyCode: 58, flags: heldLeft) == true)
+    #expect(HotkeyEventMapping.isDown(keyCode: 61, flags: 0x80000 | 0x20 | 0x40) == true)
+}
+
+@Test func virtualKeyboardWithoutDeviceBitsFallsBackToSharedBit() {
+    #expect(HotkeyEventMapping.isDown(keyCode: 61, flags: 0x80000) == true)
+    #expect(HotkeyEventMapping.isDown(keyCode: 61, flags: 0) == false)
+}
+
+@Test func everySidedModifierHasItsOwnDeviceBit() {
+    let bits = [59, 62, 56, 60, 55, 54, 58, 61].compactMap { HotkeyEventMapping.deviceBit(for: UInt16($0)) }
+    #expect(bits.count == 8 && Set(bits).count == 8)
+}

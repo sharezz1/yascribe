@@ -30,18 +30,13 @@ private func key(_ code: UInt16, flags: UInt64 = 0, repeated: Bool = false) -> H
     #expect(c.cancelled)
 }
 
-@Test func loneSidedModifierIsRejected() {
+@Test func loneSidedModifierCommitsThatSide() {
     for code: UInt16 in [55, 54, 56, 60, 58, 61, 59, 62] {
         var c = HotkeyCapture()
         #expect(c.handle(down(code, flags: option)) == nil)
-        #expect(c.handle(up(code)) == nil)
-        #expect(c.message == "Use Fn, or a modifier together with another key.")
+        #expect(c.handle(up(code)) == DictationHotkey(keyCode: code, flags: 0, isModifierOnly: true))
+        #expect(c.message == nil)
     }
-    // komunikat znika przy następnym zdarzeniu
-    var c = HotkeyCapture()
-    _ = c.handle(down(58)); _ = c.handle(up(58))
-    _ = c.handle(key(49, flags: 0))
-    #expect(c.message == nil)
 }
 
 @Test func twoModifiersWithoutKeyCommitNothing() {
