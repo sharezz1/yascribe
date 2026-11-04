@@ -89,6 +89,8 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
     var meta = DictationRecordMeta(app: "MetaApp", asrModel: "asr-1", correctionModel: nil)
     var chat: ChatFunction?
     var buildCalls: [Int] = []
+    /// Gdy ustawiony, następne wejścia dostają ten transkrybent zamiast `asr`.
+    var failingTranscriber: (any TranscriptionClient)?
     var engine: DictationEngine!
 
     init(capture: FakeCapture = FakeCapture(), inserter: FakeInserter = FakeInserter(),
@@ -103,7 +105,7 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
                                      buildCalls.append(pcm.count)
                                      guard modelAvailable else { return nil }
                                      let input = DictationPipelineInput(pcm: pcm, language: nil, asrModel: meta.asrModel ?? "",
-                                                                        transcriber: self.asr, shape: .audioTranscriptions, chat: chat,
+                                                                        transcriber: failingTranscriber ?? self.asr, shape: .audioTranscriptions, chat: chat,
                                                                         vocabulary: PromptVocabulary(), removeFillers: nil,
                                                                         replacement: ReplacementRules(UserDictionary()))
                                      return (input, meta)
@@ -405,16 +407,38 @@ private func sleeper(fire: Set<Duration>) -> @Sendable (Duration) async throws -
     @Test func failedTranscriberReasonIsShownAndRetryable() async {
         struct Reason: LocalizedError { var errorDescription: String? { "No API key for Provider." } }
         let h = Harness()
-        h.engine = DictationEngine(capture: h.capture, inserter: h.inserter, now: { [unowned h] in h.clock }, sleep: sleeper(fire: []),
-                                   buildInput: { [unowned h] pcm in
-                                       (DictationPipelineInput(pcm: pcm, language: nil, asrModel: "m", transcriber: ReasonASR(error: Reason()),
-                                                               shape: .audioTranscriptions, chat: nil, vocabulary: PromptVocabulary(),
-                                                               removeFillers: nil, replacement: ReplacementRules(UserDictionary())), h.meta)
-                                   },
-                                   record: { _ in })
+        h.failingTranscriber = ReasonASR(error: Reason())
         await h.dictate()
         #expect(h.engine.phase == .failed("No API key for Provider."))
         #expect(h.engine.canRetry)
+        h.engine.retry()   // buduje wejście od nowa (tu znów atrapa z błędem)
+        await h.engine.work?.value
+        #expect(h.buildCalls == [0, 16_000, 16_000])
+    }
+
+    @Test func retryRebuildsInputSoLateFixedKeyWorks() async {
+        let h = Harness()
+        h.failingTranscriber = ReasonASR(error: Boom())
+        await h.dictate()
+        guard case .failed = h.engine.phase else { Issue.record("phase \(h.engine.phase)"); return }
+        #expect(h.engine.canRetry)
+        h.failingTranscriber = nil   // użytkownik dodał klucz w oknie ponowienia
+        h.engine.retry()
+        await h.engine.work?.value
+        #expect(h.engine.phase == .finished(.inserted))
+        #expect(h.records.count == 1)
+        #expect(h.records.first?.seconds == 1.5)
+        #expect(h.buildCalls == [0, 16_000, 16_000])
+    }
+
+    @Test func retryRefusedWhenModelGoneKeepsAudio() async {
+        let h = Harness(asr: [.failure(Boom())])
+        await h.dictate()
+        h.modelAvailable = false
+        h.engine.retry()
+        #expect(h.engine.phase == .refused(DictationEngine.missingModelMessage))
+        #expect(h.engine.retained != nil)
+        #expect(h.asr.calls == 1)
     }
 
     @Test func waitUntilIdleFollowsRetrySwap() async {

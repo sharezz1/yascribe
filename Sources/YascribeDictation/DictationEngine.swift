@@ -120,7 +120,14 @@ public enum DictationPhase: Equatable, Sendable {
     }
 
     public func retry() {
-        guard canRetry, let r = retained else { return }
+        guard canRetry, var r = retained else { return }
+        // Wejście budujemy od nowa: w oknie ponowienia użytkownik mógł dodać klucz albo pobrać model.
+        guard let built = buildInput(r.input.pcm) else {
+            resetTimer?.cancel()
+            return finish(.refused(Self.missingModelMessage))   // audio zostaje do końca okna wyniku
+        }
+        r.input = built.input
+        r.meta = built.meta
         retained = nil
         resetTimer?.cancel()
         session += 1

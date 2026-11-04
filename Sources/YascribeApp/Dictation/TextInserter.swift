@@ -8,6 +8,7 @@ import YascribeDictation
 final class TextInserter: TextInserting, @unchecked Sendable {
     static let passwordMessage = "A password field is focused."
     static let secureInputMessage = "Secure input is on (another app). Nothing was pasted."
+    static let secureInputCopiedMessage = "Secure input is on (another app). The text was copied. Paste it with ⌘V."
     static let accessibilityMessage = "Allow Accessibility to paste automatically."
     static let appChangedMessage = "The active app changed. Text copied."
     static let noTextFieldMessage = "No text field is focused. Text copied."
@@ -39,7 +40,7 @@ final class TextInserter: TextInserting, @unchecked Sendable {
         // Secure input bywa włączony przez inną aplikację (np. Secure Keyboard Entry w terminalu). Gdy zaufanie i fokus
         // są znane i to nie pole hasła, tekst jest bezpieczny w schowku; przy niepewności blokujemy.
         if secureInput {
-            return trusted && focusedRole != nil ? .copy(secureInputMessage) : .block(secureInputMessage)
+            return trusted && focusedRole != nil ? .copy(secureInputCopiedMessage) : .block(secureInputMessage)
         }
         guard trusted else { return .copy(accessibilityMessage) }
         guard sameApp else { return .copy(appChangedMessage) }

@@ -9,8 +9,8 @@ private func decide(secure: Bool = false, trusted: Bool = true, role: String? = 
 
 @Test func inserterPastesOnlyWhenSure() {
     #expect(decide() == .paste)
-    #expect(decide(secure: true) == .copy(TextInserter.secureInputMessage))   // secure input z innej aplikacji
-    #expect(decide(secure: true, text: false) == .copy(TextInserter.secureInputMessage))
+    #expect(decide(secure: true) == .copy(TextInserter.secureInputCopiedMessage))   // secure input z innej aplikacji
+    #expect(decide(secure: true, text: false) == .copy(TextInserter.secureInputCopiedMessage))
     #expect(decide(secure: true, trusted: false) == .block(TextInserter.secureInputMessage))
     #expect(decide(secure: true, role: nil) == .block(TextInserter.secureInputMessage))
     #expect(decide(secure: true, role: "AXSecureTextField") == .block(TextInserter.passwordMessage))
