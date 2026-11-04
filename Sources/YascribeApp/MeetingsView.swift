@@ -96,23 +96,7 @@ struct MeetingsView: View {
                 // `.id`: bez niego SwiftUI zostawia ten sam widok przy zmianie wyboru (Record, „Open Note") i tekst z jednej
                 // sesji trafiłby do drugiej (Review Focus #9).
                 if let item = model.sessions.first(where: { $0.id == id }) {
-                    HStack(alignment: .top, spacing: 0) {
-                        VStack(spacing: 0) {
-                            if askState.pane == .meetings || askState.showingSource {
-                                MeetingDetailView(item: item).id(item.id)
-                            } else {
-                                ArchiveChatView(state: askState)
-                            }
-                            AskBar(state: askState)
-                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                        ScrollView {
-                            OverviewPanel(item: item).padding(24)
-                        }
-                        .frame(width: 280).frame(maxHeight: .infinity, alignment: .top)
-                        .background(Color.mnOverview)
-                        .overlay(alignment: .leading) { Rectangle().fill(.mnLine2).frame(width: 0.5) }
-                    }
-                    .background(Color.mnCard)
+                    MeetingDestinationView(item: item, askState: askState).id(item.id)
                 }
             }
             .navigationTitle("Meetings")
@@ -122,6 +106,37 @@ struct MeetingsView: View {
                     askState.pane = .chat
                 }
             }
+        }
+    }
+}
+
+
+/// Wspólny obszar modalny obejmuje środek i Overview, aby okno Improve mieściło się także przy minimalnej szerokości.
+private struct MeetingDestinationView: View {
+    let item: SessionItem
+    @ObservedObject var askState: AskBarState
+    @StateObject private var detailState = MeetingViewState()
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                if askState.pane == .meetings || askState.showingSource {
+                    MeetingDetailView(item: item, state: detailState, presentsModelsSheet: false).id(item.id)
+                } else {
+                    ArchiveChatView(state: askState)
+                }
+                AskBar(state: askState)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScrollView {
+                OverviewPanel(item: item).padding(24)
+            }
+            .frame(width: 280).frame(maxHeight: .infinity, alignment: .top)
+            .background(Color.mnOverview)
+            .overlay(alignment: .leading) { Rectangle().fill(.mnLine2).frame(width: 0.5) }
+        }
+        .background(Color.mnCard)
+        .dismissibleSheet(isPresented: $detailState.modelsSheet, onDismiss: { detailState.modelsSheet = false }) {
+            MeetingDetailView.modelsSheet(for: item, state: detailState)
         }
     }
 }

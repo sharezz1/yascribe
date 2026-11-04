@@ -16,11 +16,13 @@ final class PlaybackState: ObservableObject {
 struct MeetingDetailView: View {
     @Environment(AppModel.self) private var model
     let item: SessionItem
+    let presentsModelsSheet: Bool
     @StateObject private var playback = PlaybackState()
     @StateObject private var state: MeetingViewState
 
-    init(item: SessionItem, state: MeetingViewState = MeetingViewState()) {
+    init(item: SessionItem, state: MeetingViewState = MeetingViewState(), presentsModelsSheet: Bool = true) {
         self.item = item
+        self.presentsModelsSheet = presentsModelsSheet
         _state = StateObject(wrappedValue: state)
     }
 
@@ -47,13 +49,9 @@ struct MeetingDetailView: View {
             }
         }
         }
-        // Poza przewijaną stroną: okno ma przykryć cały detal, nie przewijać się z treścią.
-        .dismissibleSheet(isPresented: $state.modelsSheet, onDismiss: { state.modelsSheet = false }) {
-            switch state.tab ?? defaultTab {
-            case .transcript: TranscriptModelsSheet(item: item) { state.modelsSheet = false }
-            case .summary: SummaryModelsSheet(item: item, state: state) { state.modelsSheet = false }
-            case .myNotes: EmptyView()
-            }
+        .dismissibleSheet(isPresented: Binding(get: { presentsModelsSheet && state.modelsSheet },
+                                               set: { state.modelsSheet = $0 }), onDismiss: { state.modelsSheet = false }) {
+            Self.modelsSheet(for: item, state: state)
         }
         .background(Color.mnCard)
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
@@ -74,10 +72,20 @@ struct MeetingDetailView: View {
     }
 
     /// Notatki są → Summary; jest transkrypt → Transcript; inaczej My notes.
-    private var defaultTab: MeetingTab {
+    private var defaultTab: MeetingTab { Self.defaultTab(for: item) }
+
+    static func defaultTab(for item: SessionItem) -> MeetingTab {
         if item.notes.summary != nil { return .summary }
         if item.transcript != nil { return .transcript }
         return .myNotes
+    }
+
+    @ViewBuilder static func modelsSheet(for item: SessionItem, state: MeetingViewState) -> some View {
+        switch state.tab ?? defaultTab(for: item) {
+        case .transcript: TranscriptModelsSheet(item: item) { state.modelsSheet = false }
+        case .summary: SummaryModelsSheet(item: item, state: state) { state.modelsSheet = false }
+        case .myNotes: EmptyView()
+        }
     }
 
     private var header: some View {
