@@ -41,6 +41,12 @@ import Testing
                 == .status(.error(reason)))
     }
 
+    @Test func originXIsClampedToMainScreen() {
+        #expect(LauncherState.originX(500, minX: 0, maxX: 1440) == 500)
+        #expect(LauncherState.originX(2000, minX: 0, maxX: 1440) == 1440)
+        #expect(LauncherState.originX(-300, minX: 0, maxX: 1440) == 0)
+    }
+
     @Test func refusedMapsToErrorWithMessage() {
         let s = LauncherState()
         #expect(s.presentation(phase: .refused("Choose a dictation language in Settings."), meetingRecording: false, now: 0)

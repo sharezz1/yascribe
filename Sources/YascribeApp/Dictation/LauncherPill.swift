@@ -39,6 +39,7 @@ import YascribeRecording
         enabled = false
         generation += 1
         collapseTask?.cancel()
+        saveTask?.cancel()
         stopLevel()
         panel?.orderOut(nil)
     }
@@ -107,7 +108,7 @@ import YascribeRecording
         switch p {
         case .dot: CGSize(width: 40, height: 40)
         case .expanded: CGSize(width: 270, height: 44)
-        case .status(.error): CGSize(width: 320, height: 44)
+        case .status(.error): CGSize(width: 340, height: 56)
         case .status: CGSize(width: 180, height: 44)
         }
     }
@@ -134,8 +135,9 @@ import YascribeRecording
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
-            guard !Task.isCancelled, let self, let panel = self.panel else { return }
-            let x = Double(panel.frame.midX)
+            guard !Task.isCancelled, let self, let panel = self.panel, let v = NSScreen.screens.first?.visibleFrame else { return }
+            // Przeciągnięcie na drugi ekran nie może zapisać X spoza głównego.
+            let x = LauncherState.originX(Double(panel.frame.midX), minX: Double(v.minX), maxX: Double(v.maxX))
             var d = self.model.settings.dictationOrDefault
             guard d.launcherOriginX != x else { return }
             d.launcherOriginX = x
@@ -178,9 +180,31 @@ import YascribeRecording
     }
 }
 
-/// Pierwszy klik w nieaktywnej aplikacji trafia od razu w przyciski.
+/// Pierwszy klik w nieaktywnej aplikacji trafia od razu w przyciski. Hover z własnego `NSTrackingArea` z `.activeAlways`:
+/// panel nigdy nie jest kluczem, a aplikacja zwykle nieaktywna, więc nie polegamy na `.onHover` SwiftUI.
 private final class LauncherHostingView: NSHostingView<LauncherView> {
+    private var hoverArea: NSTrackingArea?
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// AppKit woła to także po zmianie rozmiaru (kółko ⇄ pigułka); `.inVisibleRect` i tak śledzi bieżące granice.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self)
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        rootView.launcher.hoverChanged(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        rootView.launcher.hoverChanged(false)
+    }
 }
 
 /// `WindowDragGesture` z `pillGlass` działa tylko w oknie klucza, a ten panel nim nie bywa: uchwyt przeciąga okno sam.
@@ -197,9 +221,7 @@ struct LauncherView: View {
     @ObservedObject var launcher: LauncherPanelController
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onHover { launcher.hoverChanged($0) }
+        content.frame(maxWidth: .infinity, maxHeight: .infinity)   // hover: `LauncherHostingView`
     }
 
     @ViewBuilder private var content: some View {
@@ -223,7 +245,7 @@ struct LauncherView: View {
                     .accessibilityLabel("Dictate")
                 Button { launcher.recordMeeting() } label: { Text("Record meeting").lineLimit(1).fixedSize() }
                     .buttonStyle(PillButtonStyle(kind: .secondary))
-                    .disabled(busy)
+                    .disabled(busy)   // zabezpieczenie: w trakcie sesji status zastępuje pigułkę
                     .help(busy ? "Finish dictating first." : "Start recording a meeting")
                     .accessibilityLabel("Record meeting")
             }
@@ -261,7 +283,7 @@ struct LauncherView: View {
             Text("Copied").font(.callout).foregroundStyle(.mnText)
         case .error(let message):
             Image(systemName: "exclamationmark.triangle").foregroundStyle(.mnWarn).accessibilityHidden(true)
-            Text(message).font(.caption).foregroundStyle(.mnText).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+            Text(message).font(.caption).foregroundStyle(.mnText).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
             if launcher.controller.engine.canRetry {
                 Button("Retry") { launcher.controller.engine.retry() }.buttonStyle(PillButtonStyle(kind: .small))
             }

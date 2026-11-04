@@ -24,6 +24,9 @@ public struct LauncherState: Equatable, Sendable {
         hovering = inside
     }
 
+    /// Zapisywane X (środek dolnej krawędzi) wsunięte w poziomy zakres głównego ekranu.
+    public static func originX(_ x: Double, minX: Double, maxX: Double) -> Double { min(max(x, minX), maxX) }
+
     /// Status wygrywa z hoverem w każdej fazie poza `idle` (inaczej „Retry” po błędzie byłby nieosiągalny).
     public func presentation(phase: DictationPhase, meetingRecording: Bool, now: TimeInterval) -> LauncherPresentation? {
         // Dyktowanie i nagrywanie spotkania się wykluczają: w trakcie spotkania jest pigułka nagrania.
