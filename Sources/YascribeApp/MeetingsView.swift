@@ -15,8 +15,12 @@ final class MeetingsViewState: ObservableObject {
 struct MeetingsView: View {
     @Environment(AppModel.self) private var model
     @StateObject private var state: MeetingsViewState
+    @StateObject private var askState: AskBarState
 
-    init(state: MeetingsViewState = MeetingsViewState()) { _state = StateObject(wrappedValue: state) }
+    init(state: MeetingsViewState = MeetingsViewState(), askState: AskBarState = AskBarState()) {
+        _state = StateObject(wrappedValue: state)
+        _askState = StateObject(wrappedValue: askState)
+    }
 
     private var days: [(Date, [SessionItem])] {
         let cal = Calendar.current
@@ -36,12 +40,14 @@ struct MeetingsView: View {
         @Bindable var model = model
         NavigationStack {
             HStack(alignment: .top, spacing: 0) {
-               ScrollPage(600, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Co minutę: „in 8 min” i wejście spotkania w okno 60 min. Kalendarz czyta tylko `ComingUpHeader`.
+               VStack(spacing: 0) {
                     TimelineView(.everyMinute) { ctx in
-                        ComingUpHeader(state: state, now: state.preview?.now ?? ctx.date)
+                        ComingUpHeader(state: state, now: state.preview?.now ?? ctx.date, showUpcoming: askState.pane == .meetings)
                     }
+                    .padding(.horizontal, 22).padding(.top, 22)
+                    if askState.pane == .meetings {
+                      ScrollPage(600, showsIndicators: false) {
+                       VStack(alignment: .leading, spacing: 0) {
                     FolderMenu()
                         .padding(.bottom, 14)
                     if model.sessions.isEmpty {
@@ -66,15 +72,20 @@ struct MeetingsView: View {
                             }
                         }
                     }
-                }
-            }
-               .frame(maxWidth: .infinity)
+                       }
+                      }
+                    } else {
+                        ArchiveChatView(state: askState)
+                    }
+                    AskBar(state: askState)
+               }.frame(maxWidth: .infinity, maxHeight: .infinity)
                    ScrollView {
                        OverviewPanel(item: model.sessions.first { $0.id == state.overviewID })
                            .padding(24)
                    }
                    .frame(width: 280)
                    .frame(maxHeight: .infinity, alignment: .top)
+                   .background(Color.mnOverview)
                    .overlay(alignment: .leading) {
                        Rectangle().fill(.mnLine2).frame(width: 0.5)
                    }
@@ -84,9 +95,48 @@ struct MeetingsView: View {
             .navigationDestination(item: $model.selectedSessionID) { id in
                 // `.id`: bez niego SwiftUI zostawia ten sam widok przy zmianie wyboru (Record, „Open Note") i tekst z jednej
                 // sesji trafiłby do drugiej (Review Focus #9).
-                if let item = model.sessions.first(where: { $0.id == id }) { MeetingDetailView(item: item).id(item.id) }
+                if let item = model.sessions.first(where: { $0.id == id }) {
+                    MeetingDestinationView(item: item, askState: askState).id(item.id)
+                }
             }
             .navigationTitle("Meetings")
+            .onChange(of: model.selectedSessionID) { _, id in
+                if id == nil && askState.showingSource {
+                    askState.showingSource = false
+                    askState.pane = .chat
+                }
+            }
+        }
+    }
+}
+
+
+/// Wspólny obszar modalny obejmuje środek i Overview, aby okno Improve mieściło się także przy minimalnej szerokości.
+private struct MeetingDestinationView: View {
+    let item: SessionItem
+    @ObservedObject var askState: AskBarState
+    @StateObject private var detailState = MeetingViewState()
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(spacing: 0) {
+                if askState.pane == .meetings || askState.showingSource {
+                    MeetingDetailView(item: item, state: detailState, presentsModelsSheet: false).id(item.id)
+                } else {
+                    ArchiveChatView(state: askState)
+                }
+                AskBar(state: askState)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            ScrollView {
+                OverviewPanel(item: item).padding(24)
+            }
+            .frame(width: 280).frame(maxHeight: .infinity, alignment: .top)
+            .background(Color.mnOverview)
+            .overlay(alignment: .leading) { Rectangle().fill(.mnLine2).frame(width: 0.5) }
+        }
+        .background(Color.mnCard)
+        .dismissibleSheet(isPresented: $detailState.modelsSheet, onDismiss: { detailState.modelsSheet = false }) {
+            MeetingDetailView.modelsSheet(for: item, state: detailState)
         }
     }
 }
@@ -134,6 +184,7 @@ struct ComingUpHeader: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: MeetingsViewState
     let now: Date
+    var showUpcoming = true
 
     private func recordButton(recording: Bool, primary: Bool) -> some View {
         Button {
@@ -170,14 +221,14 @@ struct ComingUpHeader: View {
             if model.activePreset?.isAutoLanguage == true {
                 WarnLabel("Auto language: the preset has no fixed language").font(.system(size: 11)).padding(.bottom, 14)
             }
-            if let next = up.next {
+            if showUpcoming, let next = up.next {
                 NextMeetingCard(event: next, now: now, recording: recording).padding(.bottom, 8)
                 if !up.later.isEmpty {
                     Text(Self.laterLine(up.later)).font(.system(size: 11)).foregroundStyle(.mnText2).monospacedDigit()
                         .lineLimit(1).truncationMode(.tail).padding(.horizontal, 4)
                 }
                 Color.clear.frame(height: 22)
-            } else {
+            } else if showUpcoming {
                 HStack(spacing: 12) {
                     Text(!connected ? "See your meetings here and start recording from them."
                          : up.later.isEmpty ? "No more meetings today." : Self.laterLine(up.later))

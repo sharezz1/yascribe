@@ -157,6 +157,8 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var removeFillers: Bool?
     /// Własna lista przerywników; `nil` = domyślna.
     public var fillerWords: [String]?
+    /// Model odpowiedzi „Ask anything" (osobno od presetów i od embeddingu). Opcjonalne (E6): `nil` = nie wybrano, bez zastępstwa.
+    public var askModel: RoleAssignment?
     /// Ustawienia dyktowania (opcjonalne, E6). Czytaj przez `dictationOrDefault`.
     public var dictation: DictationSettings?
 
@@ -169,7 +171,8 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public init(embedding: RoleAssignment? = nil, defaultPresetID: UUID? = nil, recordingsPath: String? = nil,
                 keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil, meetings: MeetingSettings? = nil,
                 summaryThinking: Bool? = nil, removeFillers: Bool? = nil, fillerWords: [String]? = nil,
-                dictation: DictationSettings? = nil) {
+                askModel: RoleAssignment? = nil, dictation: DictationSettings? = nil) {
+        self.askModel = askModel
         self.dictation = dictation
         self.removeFillers = removeFillers
         self.fillerWords = fillerWords

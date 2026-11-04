@@ -6,6 +6,7 @@ import SwiftUI
 /// Szkic ustawień globalnych: Save / Cancel obejmuje Archive search, Correction i Summary; dostawcy zapisują się od razu (plan 1.5-B, T4).
 final class SettingsDraft: ObservableObject {
     @Published var embedding: RoleAssignment?
+    @Published var askModel: RoleAssignment?
     @Published var confirming = false
     @Published var saved = false
     /// Sekcja Correction: przełącznik i pole „Words" (F20 P2).
@@ -15,7 +16,7 @@ final class SettingsDraft: ObservableObject {
     @Published var summaryThinking = true
 
     func load(_ s: GlobalSettings) {
-        embedding = s.embedding; saved = false
+        embedding = s.embedding; askModel = s.askModel; saved = false
         removeFillers = s.removeFillersEnabled
         summaryThinking = s.summaryThinkingEnabled
         fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
@@ -65,6 +66,7 @@ struct SettingsView: View {
 
     private var isDirty: Bool {
         draft.embedding != model.settings.embedding
+            || draft.askModel != model.settings.askModel
             || draft.removeFillers != model.settings.removeFillersEnabled
             || draft.summaryThinking != model.settings.summaryThinkingEnabled
             || FillerWords.parse(draft.fillers) != (model.settings.fillerWords ?? FillerWords.defaults)
@@ -114,7 +116,7 @@ struct SettingsView: View {
             Button("Change Model", role: .destructive) { commit() }
             Button("Keep Current Model", role: .cancel) {}
         } message: {
-            Text("Changing the embedding model means the whole archive will be re-indexed when archive search arrives. Change it?")
+            Text("The archive index will be rebuilt the next time you ask. Change it?")
         }
     }
 
@@ -169,6 +171,8 @@ struct SettingsView: View {
         candidates.first { $0.id == draft.embedding?.providerID } ?? (candidates.count == 1 ? candidates.first : nil)
     }
 
+    private var askCandidates: [Provider] { model.providers.providers.filter { $0.supports(.summary) } }
+
     @ViewBuilder private var archiveSearch: some View {
         SectionHeader("Archive search")
         Card {
@@ -200,6 +204,28 @@ struct SettingsView: View {
                                 draft.embedding = a
                             }))
                     }
+                }
+            }
+            RowDivider()
+            FormRow(label: "Ask provider") {
+                FieldMenu(label: "Ask provider", value: askCandidates.first(where: { $0.id == draft.askModel?.providerID })?.name ?? "Choose…", width: 180) {
+                    Picker("Ask provider", selection: Binding<UUID?>(
+                        get: { draft.askModel?.providerID },
+                        set: { id in
+                            if let id { draft.askModel = RoleAssignment(providerID: id, model: draft.askModel?.providerID == id ? draft.askModel?.model ?? "" : "") }
+                            else { draft.askModel = nil }
+                        })) {
+                        Text("None").tag(UUID?.none)
+                        ForEach(askCandidates) { p in Text(p.name).tag(Optional(p.id)) }
+                    }.pickerStyle(.inline).labelsHidden()
+                }
+            }
+            if let p = askCandidates.first(where: { $0.id == draft.askModel?.providerID }) {
+                RowDivider()
+                FormRow(label: "Ask model") {
+                    ModelPicker(providerID: p.id, role: .summary, selection: Binding(
+                        get: { draft.askModel?.model ?? "" },
+                        set: { draft.askModel?.model = $0 }))
                 }
             }
         }
@@ -237,6 +263,7 @@ struct SettingsView: View {
     private func commit() {
         let words = FillerWords.parse(draft.fillers)
         model.settings.embedding = draft.embedding
+        model.settings.askModel = draft.askModel
         model.settings.removeFillers = draft.removeFillers
         model.settings.fillerWords = words == FillerWords.defaults ? nil : words
         model.settings.summaryThinking = draft.summaryThinking

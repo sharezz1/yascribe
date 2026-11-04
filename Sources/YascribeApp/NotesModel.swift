@@ -87,6 +87,9 @@ final class NotesModel {
     /// Jest treść czekająca na autozapis (klucz: id sesji).
     func hasPendingNotes(_ id: String) -> Bool { pendingSaves[id] != nil }
 
+    /// Niezapisany jeszcze tekst My notes (bufor autozapisu, także po nieudanym zapisie); `nil` = nic nie czeka.
+    func pendingMyNotes(_ id: String) -> String? { pendingSaves[id]?.text }
+
     func state(_ id: String) -> GenState { generation[id] ?? .idle }
 
     /// Model podsumowania dla tego nagrania: z jego presetu, a gdy go tam nie ma — z presetu domyślnego (patrz `SummaryModel`).
