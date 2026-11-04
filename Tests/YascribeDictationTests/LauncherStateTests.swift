@@ -15,6 +15,17 @@ import Testing
         #expect(s.presentation(phase: .idle, meetingRecording: false, now: 1.5) == .dot)
     }
 
+    @Test func resetClearsHovering() {
+        var s = LauncherState()
+        s.hoverChanged(true, at: 0)
+        s.reset()
+        #expect(s.presentation(phase: .idle, meetingRecording: false, now: 100) == .dot)
+        s.hoverChanged(true, at: 1)
+        s.hoverChanged(false, at: 2)
+        s.reset()
+        #expect(s.presentation(phase: .idle, meetingRecording: false, now: 2.1) == .dot)
+    }
+
     @Test func statusWinsOverHoverWhileListening() {
         var s = LauncherState()
         s.hoverChanged(true, at: 0)

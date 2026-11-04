@@ -64,7 +64,10 @@ private func fnUp() -> HotkeyEvent { .modifier(keyCode: fnKey, flags: 0, isDown:
     #expect(m.handle(.keyDown(keyCode: 2, flags: 0, isRepeat: false)) == nil)
     #expect(m.handle(.keyDown(keyCode: 2, flags: shift, isRepeat: false)) == nil)
     #expect(!m.isListening)
-    #expect(m.handle(.keyDown(keyCode: 2, flags: option | shift, isRepeat: false)) == .start)
+    #expect(m.handle(.keyDown(keyCode: 2, flags: option | shift, isRepeat: false)) == nil)   // dokładnie ⌥, nie ⇧⌥
+    #expect(!m.isListening)
+    // caps lock (1<<16), klawiatura numeryczna (1<<21) i fn (1<<23) nie liczą się do maski
+    #expect(m.handle(.keyDown(keyCode: 2, flags: option | 1 << 16 | 1 << 21 | 1 << 23, isRepeat: false)) == .start)
     #expect(m.handle(.keyUp(keyCode: 2)) == .stop)
     #expect(!m.isListening)
 }

@@ -19,6 +19,12 @@ public struct LauncherState: Equatable, Sendable {
 
     public init() {}
 
+    /// Panel znika bez zdarzenia „kursor wyszedł": zerujemy hover, inaczej zostaje „wciśnięty" na zawsze.
+    public mutating func reset() {
+        hovering = false
+        leftAt = nil
+    }
+
     public mutating func hoverChanged(_ inside: Bool, at time: TimeInterval) {
         if !inside, hovering { leftAt = time }
         hovering = inside

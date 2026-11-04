@@ -63,6 +63,13 @@ final class HotkeyField: NSView {
         window?.makeFirstResponder(self)
     }
 
+    /// VoiceOver „naciśnij": to samo co kliknięcie, które zaczyna przechwytywanie.
+    override func accessibilityPerformPress() -> Bool {
+        clicked = true
+        defer { clicked = false }
+        return window?.makeFirstResponder(self) ?? false
+    }
+
     override func becomeFirstResponder() -> Bool {
         capture = HotkeyCapture()
         onMessage(nil)

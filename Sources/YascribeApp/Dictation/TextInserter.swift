@@ -11,6 +11,9 @@ final class TextInserter: TextInserting, @unchecked Sendable {
     static let accessibilityMessage = "Allow Accessibility to paste automatically."
     static let appChangedMessage = "The active app changed. Text copied."
     static let noTextFieldMessage = "No text field is focused. Text copied."
+    /// Konwencja menedżerów schowka (nspasteboard.org): wpis tymczasowy / poufny nie trafia do historii schowka.
+    static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+    static let concealedType = "org.nspasteboard.ConcealedType"
 
     enum Decision: Equatable { case paste, copy(String), block(String) }
 
@@ -24,12 +27,20 @@ final class TextInserter: TextInserting, @unchecked Sendable {
         return app?.localizedName
     }
 
+    /// Poufnego zapisu (hasło z menedżera) nie przywracamy: po wklejeniu czyścimy schowek zamiast zostawiać tekst dyktowania.
+    static func shouldRestore(snapshotTypes: [String]) -> Bool {
+        !snapshotTypes.isEmpty && !snapshotTypes.contains(concealedType)
+    }
+
     /// Czysta bramka: przy jakiejkolwiek niepewności nie wysyłamy Cmd-V.
     static func decide(secureInput: Bool, trusted: Bool, focusedRole: String?, focusedSubrole: String?,
                        focusIsText: Bool, sameApp: Bool) -> Decision {
         if focusedRole == "AXSecureTextField" || focusedSubrole == kAXSecureTextFieldSubrole { return .block(passwordMessage) }
-        // Secure input bywa włączony przez inną aplikację (terminal, menedżer haseł) bez fokusu w polu hasła.
-        if secureInput { return .block(secureInputMessage) }
+        // Secure input bywa włączony przez inną aplikację (np. Secure Keyboard Entry w terminalu). Gdy zaufanie i fokus
+        // są znane i to nie pole hasła, tekst jest bezpieczny w schowku; przy niepewności blokujemy.
+        if secureInput {
+            return trusted && focusedRole != nil ? .copy(secureInputMessage) : .block(secureInputMessage)
+        }
         guard trusted else { return .copy(accessibilityMessage) }
         guard sameApp else { return .copy(appChangedMessage) }
         guard focusIsText else { return .copy(noTextFieldMessage) }
@@ -52,9 +63,9 @@ final class TextInserter: TextInserting, @unchecked Sendable {
             await MainActor.run { Self.copy(text) }
             return .copiedOnly(reason: reason)
         case .paste:
-            let (saved, written) = await MainActor.run { () -> ([NSPasteboard.PasteboardType: Data], Int) in
+            let (saved, written) = await MainActor.run { () -> ([[NSPasteboard.PasteboardType: Data]], Int) in
                 let saved = Self.snapshot()
-                Self.copy(text)
+                Self.copy(text, transient: true)
                 Self.sendPaste()
                 return (saved, NSPasteboard.general.changeCount)
             }
@@ -63,10 +74,14 @@ final class TextInserter: TextInserting, @unchecked Sendable {
             await MainActor.run {
                 // Tylko gdy nikt (ani użytkownik) nie zapisał schowka po nas.
                 guard NSPasteboard.general.changeCount == written, !saved.isEmpty else { return }
-                let item = NSPasteboardItem()
-                for (type, data) in saved { item.setData(data, forType: type) }
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.writeObjects([item])
+                guard Self.shouldRestore(snapshotTypes: saved.flatMap { $0.keys.map(\.rawValue) }) else { return }
+                let items = saved.map { types -> NSPasteboardItem in
+                    let item = NSPasteboardItem()
+                    for (type, data) in types { item.setData(data, forType: type) }
+                    return item
+                }
+                NSPasteboard.general.writeObjects(items)
             }
             return .inserted
         }
@@ -74,17 +89,20 @@ final class TextInserter: TextInserting, @unchecked Sendable {
 
     // MARK: - Wywołania systemu
 
-    @MainActor private static func copy(_ text: String) {
+    /// `transient` tylko przy wklejaniu (tymczasowy wpis); przy samym kopiowaniu tekst ma zostać w schowku i w jego historii.
+    @MainActor private static func copy(_ text: String, transient: Bool = false) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+        if transient { NSPasteboard.general.setData(Data(), forType: transientType) }
     }
 
-    /// Wszystkie typy pierwszego elementu schowka.
-    @MainActor private static func snapshot() -> [NSPasteboard.PasteboardType: Data] {
-        guard let item = NSPasteboard.general.pasteboardItems?.first else { return [:] }
-        var out: [NSPasteboard.PasteboardType: Data] = [:]
-        for type in item.types { if let data = item.data(forType: type) { out[type] = data } }
-        return out
+    /// Wszystkie typy wszystkich elementów schowka.
+    @MainActor private static func snapshot() -> [[NSPasteboard.PasteboardType: Data]] {
+        (NSPasteboard.general.pasteboardItems ?? []).map { item in
+            var out: [NSPasteboard.PasteboardType: Data] = [:]
+            for type in item.types { if let data = item.data(forType: type) { out[type] = data } }
+            return out
+        }.filter { !$0.isEmpty }
     }
 
     private static func sendPaste() {

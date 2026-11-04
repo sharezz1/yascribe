@@ -10,7 +10,7 @@ public struct HotkeyCapture: Sendable {
     private static let tab: UInt16 = 48
     private static let fn: UInt16 = 63
     /// Command, Option, Control, Shift (`CGEventFlags`); bez Fn, który klawisze strzałek i funkcyjne dokładają same.
-    private static let modifierMask: UInt64 = 0x100000 | 0x80000 | 0x40000 | 0x20000
+    static let modifierMask: UInt64 = 0x100000 | 0x80000 | 0x40000 | 0x20000
 
     /// Esc albo Tab: użytkownik zrezygnował, pole kończy przechwytywanie bez zmiany.
     public private(set) var cancelled = false

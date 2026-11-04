@@ -59,7 +59,9 @@ public struct HotkeyMachine: Sendable {
                 isListening = false
                 return .cancel
             }
-            guard keyCode == hotkey.keyCode, flags & hotkey.flags == hotkey.flags else { return nil }
+            // Dokładnie cztery modyfikatory (⌥Space nie odpala na ⌘⌥Space); caps lock, fn i klawiatura numeryczna są ignorowane.
+            let mask = HotkeyCapture.modifierMask
+            guard keyCode == hotkey.keyCode, flags & mask == hotkey.flags & mask else { return nil }
             return press()
         case let .keyUp(keyCode):
             guard !hotkey.isModifierOnly, keyCode == hotkey.keyCode else { return nil }

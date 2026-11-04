@@ -39,6 +39,7 @@ import YascribeRecording
         enabled = false
         generation += 1
         collapseTask?.cancel()
+        state.reset()
         saveTask?.cancel()
         stopLevel()
         panel?.orderOut(nil)
@@ -80,6 +81,8 @@ import YascribeRecording
     private func refresh() {
         guard enabled, let p = state.presentation(phase: controller.engine.phase,
                                                   meetingRecording: model.recording.isRecording, now: Self.clock) else {
+            collapseTask?.cancel()
+            state.reset()
             stopLevel()
             panel?.orderOut(nil)
             return
