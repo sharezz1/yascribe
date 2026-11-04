@@ -47,11 +47,11 @@ struct MeetingDetailView: View {
             }
         }
         }
-        .contentBackground()
+        .background(Color.mnCard)
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
         .focusedSceneValue(\.playRecording, isRecording ? nil : { togglePlayback() })
         .navigationTitle(item.title)
-        .navigationBarBackButtonHidden(true) // własna kapsuła „Meetings” w pasku (D5)
+        .navigationBarBackButtonHidden(true) // Powrót jest w nagłówku treści.
         .onAppear {
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
         }
@@ -62,26 +62,7 @@ struct MeetingDetailView: View {
         } message: {
             Text("The meeting folder, with its recordings and notes, goes to the Trash. You can put it back from there.")
         }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button { model.selectedSessionID = nil } label: { Label("Meetings", systemImage: "chevron.left") }
-                    .buttonStyle(.pill)
-                    .help("Back to Meetings")
-                    .accessibilityLabel("Back to Meetings")
-            }
-            ToolbarItem {
-                Menu {
-                    Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
-                    Button("Show in Finder") { model.showInFinder(item) }
-                    Divider()
-                    Button("Delete meeting…", role: .destructive) { model.pendingDelete = item.id }.disabled(!model.canDelete(item))
-                } label: {
-                    Image(systemName: "ellipsis")
-                }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden)
-                .help("More").accessibilityLabel("More")
-            }
-        }
+
     }
 
     /// Notatki są → Summary; jest transkrypt → Transcript; inaczej My notes.
@@ -93,16 +74,33 @@ struct MeetingDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("Untitled meeting", text: titleField)
-                .textFieldStyle(.plain)
-                .documentTitle()
-                .onSubmit {
-                    if let edit = state.titleEdit, NoteTitle.isEdit(edit, meta: item.notes.meta, noteTitle: item.notes.summary?.title) {
-                        model.notes.setManualTitle(edit, for: item)
+            HStack(spacing: 12) {
+                Button { model.selectedSessionID = nil } label: { Image(systemName: "chevron.left") }
+                    .buttonStyle(.pillSmall)
+                    .help("Back to Meetings")
+                    .accessibilityLabel("Back to Meetings")
+                TextField("Untitled meeting", text: titleField)
+                    .textFieldStyle(.plain)
+                    .documentTitle()
+                    .onSubmit {
+                        if let edit = state.titleEdit, NoteTitle.isEdit(edit, meta: item.notes.meta, noteTitle: item.notes.summary?.title) {
+                            model.notes.setManualTitle(edit, for: item)
+                        }
+                        state.titleEdit = nil
                     }
-                    state.titleEdit = nil
+                    .disabled(model.recordingsMove != nil)
+                Menu {
+                    Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
+                    Button("Show in Finder") { model.showInFinder(item) }
+                    Divider()
+                    Button("Delete meeting…", role: .destructive) { model.pendingDelete = item.id }.disabled(!model.canDelete(item))
+                } label: {
+                    Image(systemName: "ellipsis")
                 }
-                .disabled(model.recordingsMove != nil)
+                .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                .fixedSize()
+                .help("More").accessibilityLabel("More")
+            }
             HStack(spacing: 12) {
                 MetaLine([
                     item.startedAt.formatted(date: .abbreviated, time: .shortened),

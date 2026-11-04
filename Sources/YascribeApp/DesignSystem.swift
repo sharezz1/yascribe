@@ -27,6 +27,7 @@ private func hex(_ v: UInt32, _ alpha: CGFloat = 1) -> NSColor {
 extension ShapeStyle where Self == Color {
     static var mnBackground: Color { dynamic(hex(0xF7F6F2), hex(0x1C1C1B)) }
     static var mnCard: Color { dynamic(hex(0xFFFFFF), hex(0x262624)) }
+    static var mnOverview: Color { dynamic(hex(0xFBFAF7), hex(0x212120)) }
     /// Pole tekstowe i popup: w ciemnym ciemniejsze od karty (`#2E2E2C`), w jasnym jak karta.
     static var mnField: Color { dynamic(hex(0xFFFFFF), hex(0x2E2E2C)) }
     static var mnSunk: Color { dynamic(hex(0xF1EFE9), hex(0x2E2E2C)) }

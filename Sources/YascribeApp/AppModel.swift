@@ -87,7 +87,10 @@ final class AppModel {
     var section: Section = .meetings
     var providers = ProvidersFile()
     var presets = PresetsFile()
-    var settings = GlobalSettings()
+    var settings = GlobalSettings() {
+        // Zmiana embeddingu czyści indeks archiwum, zmiana modelu odpowiedzi anuluje trwające pytanie (także poza Settings → Save).
+        didSet { archive.settingsDidChange(old: oldValue, new: settings) }
+    }
     var probeCache = ProbeCache()
     /// Tabela id modelu -> nazwa z listy dostawcy; zapełnia się przy pobraniu listy modeli.
     var modelNames = ModelNameCache()
@@ -129,6 +132,8 @@ final class AppModel {
     /// Wykrywanie spotkań (faza 1.6); startuje `YascribeApp.init`, nie `AppModel.init` (migawki i testy go nie chcą).
     let monitor = MeetingMonitor()
     let notes = NotesModel()
+    /// Indeks archiwum i „Ask anything" (TASK-21/24); podłączany w `init`.
+    let archive = ArchiveModel()
     /// Lokalny ASR (F20): magazyn modelu i faza pobierania/przygotowania; UI w T7.
     let localASR = LocalASRSupport()
 
@@ -162,7 +167,56 @@ final class AppModel {
         }
         notes.onChange = { [weak self] in self?.reloadSessions() }
         notes.isMoving = { [weak self] in self?.recordingsMove != nil }
+        wireArchive()
         applyRetention()
+    }
+
+    /// Indeks to dane pochodne: plik leży obok ustawień, a przenoszenie nagrań go nie kopiuje.
+    private func wireArchive() {
+        archive.indexURL = paths.root.appendingPathComponent("archive-index.json")
+        archive.sources = { [weak self] in
+            guard let self else { return [] }
+            return sessions.map { ArchiveModel.source(for: $0, notes: notes, transcript: transcript(of: $0, corrected: true)) }
+        }
+        archive.sourceFor = { [weak self] id in
+            guard let self, let item = sessions.first(where: { $0.id == id }) else { return nil }
+            return ArchiveModel.source(for: item, notes: notes, transcript: transcript(of: item, corrected: true))
+        }
+        archive.labels = { [weak self] in
+            guard let self else { return [:] }
+            return Dictionary(sessions.map { item in
+                (item.id, item.startedAt == .distantPast ? item.title : "\(item.title) · \(item.startedAt.formatted(date: .abbreviated, time: .omitted))")
+            }, uniquingKeysWith: { first, _ in first })
+        }
+        archive.embedding = { [weak self] in self?.settings.embedding }
+        archive.askModel = { [weak self] in self?.settings.askModel }
+        archive.makeClient = { [weak self] id in
+            self?.makeClient(for: id) ?? .failure(ClientProblem(message: "This provider is no longer available."))
+        }
+        archive.providerFor = { [weak self] id in self?.provider(id) }
+        archive.isMoving = { [weak self] in self?.recordingsMove != nil }
+        archive.report = { [weak self] in self?.lastError = $0 }
+        archive.chatsURL = paths.root.appendingPathComponent("chats", isDirectory: true)
+        // Zakres nowej rozmowy dziedziczy miejsce użytkownika: otwarte spotkanie, filtr folderu / bez folderu albo całe archiwum.
+        archive.captureScope = { [weak self] in
+            guard let self else { return .all }
+            if let id = selectedSessionID, sessions.contains(where: { $0.id == id }) { return .meeting(id) }
+            switch meetingFilter {
+            case .all: return .all
+            case .unfiled: return .unfiled
+            case .folder(let id): return .folder(id)
+            }
+        }
+        archive.resolveSavedScope = { [weak self] ref in
+            guard let self else { return nil }
+            return ref.resolve(sessions: sessions, folderID: { $0.notes.meta.folderID },
+                               folderName: { folders.folder($0)?.name })
+        }
+        archive.resolveScope = { [weak self] scope in
+            guard let self else { return nil }
+            return ArchiveModel.resolve(scope, sessions: sessions, matches: matchesFilter,
+                                        listLabel: meetingFilter == .all ? "All meetings" : filterLabel, selectedID: selectedSessionID)
+        }
     }
 
     var activePreset: Preset? {
@@ -759,6 +813,7 @@ final class AppModel {
                 try FileManager.default.moveItem(at: item.url, to: trash.appendingPathComponent(item.url.lastPathComponent))
             }
             if selectedSessionID == id { selectedSessionID = nil }
+            archive.forget(id)
         } catch {
             lastError = "Couldn't move the meeting to the Trash: \(error.localizedDescription)"
         }
