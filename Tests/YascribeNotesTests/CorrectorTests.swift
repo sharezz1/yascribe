@@ -355,3 +355,149 @@ private func longTranscript(_ n: Int = 100) -> Transcript {
         UserDictionary(terms: (1...n).map { DictionaryTerm("Termin\(String(format: "%03d", $0))Alfa") })
     }
 }
+
+// MARK: Odporność na przenumerowanie (TASK-91)
+
+private let distinct = [
+    "budżet projektu przekroczył pierwotne założenia", "zespół zaplanował migrację bazy danych", "klient prosi o raport kwartalny",
+    "serwer produkcyjny wymaga pilnej aktualizacji", "umowa z dostawcą kończy się w grudniu", "nowy pracownik zaczyna w poniedziałek",
+    "wdrożenie przesunięto na następny tydzień", "testy wydajnościowe wypadły całkiem dobrze",
+]
+
+private func distinctTranscript(_ n: Int) -> Transcript { transcript((0..<n).map { utt(distinct[$0], at: Double($0) * 5) }) }
+
+/// Model, który dla partii wielolinijkowych przenumerowuje (`broken`), a pojedyncze linie poprawia poprawnie.
+private func breaksUnlessSingle(_ broken: @escaping @Sendable (String) -> String) -> ChatStub {
+    ChatStub { call in call.user.components(separatedBy: "\n").count > 1 ? broken(call.user) : capitalizing(call.user) }
+}
+
+private func lineTexts(_ user: String) -> [String] {
+    user.components(separatedBy: "\n").compactMap { l in l.firstIndex(of: "]").map { String(l[l.index(after: $0)...]).trimmingCharacters(in: .whitespaces) } }
+}
+
+@Test func similarityIgnoresCaseInflectionAndDeletedFillers() {
+    #expect(CorrectionRules.similarity("no to jest test", "No to jest test.") == 1)
+    #expect(CorrectionRules.similarity("z dobry kolega", "Z dobrym kolegą.") == 1) // fleksja: klucz = 4 pierwsze znaki
+    #expect(CorrectionRules.similarity("yyy eee mhm um uh przeanalizowaliśmy odpowiedzialność", "Przeanalizowaliśmy odpowiedzialność.") == 1)
+    #expect(CorrectionRules.similarity("dane trafiają do bazy postgres", "Dane te zapisywane są w bazie PostgreSQL") < 0.5)
+    // multizbiór, nie zbiór: powtórzone słowo liczy się tyle razy, ile razy występuje
+    #expect(CorrectionRules.similarity("tak tak tak tak tak nie", "tak nie nie nie nie nie") < 0.5)
+}
+
+@Test func similarityBoundaryIsInclusiveAndShortLinesAreSkipped() {
+    #expect(CorrectionRules.similar(original: "aaaa bbbb cccc dddd", corrected: "aaaa bbbb xxxx yyyy")) // dokładnie 0,5
+    #expect(!CorrectionRules.similar(original: "aaaa bbbb cccc dddd", corrected: "aaaa xxxx yyyy zzzz"))
+    #expect(CorrectionRules.similar(original: "Tak, jasne.", corrected: "Nie, nigdy.")) // < 3 słów: bramka pominięta
+}
+
+@Test func paraphraseWithCorrectNumberingAndLengthStaysOriginal() async {
+    let t = distinctTranscript(2)
+    let r = await corrector(ChatStub { _ in "[1] Budżet projektu przekroczył pierwotne założenia.\n[2] Pracownicy wdrożyli nową wersję wczoraj wieczorem." })
+        .correct(t, language: .polish)
+    #expect(r.transcript.utterances[0].text == "Budżet projektu przekroczył pierwotne założenia.")
+    #expect(r.transcript.utterances[1].text == distinct[1])
+    #expect(r.rejectedLines == 1 && r.failedBatches == 0)
+}
+
+@Test func contentShiftedByOneLineIsRejectedEvenWithPerfectNumbering() async {
+    // Model oddał treść linii k pod numerem k−1 (liczba i numery OK) — bez bramki podobieństwa przechodziłoby.
+    let t = distinctTranscript(4)
+    let shifted = "[1] \(distinct[1]).\n[2] \(distinct[2]).\n[3] \(distinct[3]).\n[4] \(distinct[3])."
+    let r = await corrector(ChatStub { _ in shifted }).correct(t, language: .polish)
+    #expect(r.transcript.utterances.map(\.text) == [distinct[0], distinct[1], distinct[2], distinct[3] + "."])
+    #expect(r.rejectedLines == 3 && r.failedBatches == 0)
+}
+
+@Test func splitLongLineRenumberingIsRetriedInSmallerPieces() async {
+    // Problem 1 z odtworzenia: model dzieli linię na zdania i numeruje dalej (N → N+3 numery).
+    let t = distinctTranscript(6)
+    let stub = breaksUnlessSingle { user in (lineTexts(user) + ["a", "b", "c"]).enumerated().map { "[\($0.offset + 1)] \($0.element)" }.joined(separator: "\n") }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(r.transcript.utterances.map(\.text) == distinct.prefix(6).map { $0.prefix(1).uppercased() + $0.dropFirst() + "." })
+    #expect(r.batches == 1 && r.failedBatches == 0 && r.rejectedLines == 0 && r.firstError == nil)
+    #expect(stub.calls.count > 1 && stub.calls.count <= 2 * 6 - 1)
+}
+
+@Test func mergedFragmentsRenumberingIsRetriedInSmallerPieces() async {
+    // Problem 1: model skleja urywki (N → N−1 numerów).
+    let t = distinctTranscript(5)
+    let stub = breaksUnlessSingle { user in lineTexts(user).dropLast().enumerated().map { "[\($0.offset + 1)] \($0.element)" }.joined(separator: "\n") }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(r.transcript.utterances.allSatisfy { $0.text.hasSuffix(".") })
+    #expect(r.failedBatches == 0 && r.rejectedLines == 0)
+}
+
+@Test func unnumberedContinuationLineTriggersRetryInsteadOfLosingTheTail() async {
+    let t = transcript([utt("Dzisiaj szczegółowo omawiamy budżet i głosujemy."), utt("zespół zaplanował migrację bazy danych", at: 5)])
+    let stub = ChatStub { call in
+        call.user.contains("\n") ? "[1] Dzisiaj szczegółowo omawiamy budżet\ni głosujemy.\n[2] Zespół zaplanował migrację bazy danych." : call.user
+    }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(r.transcript.utterances[0].text == "Dzisiaj szczegółowo omawiamy budżet i głosujemy.")
+    #expect(r.failedBatches == 0 && stub.calls.count == 3)
+}
+
+@Test func alwaysBrokenNumberingStopsAtTheLeavesAndKeepsEveryOriginal() async {
+    final class Counter: @unchecked Sendable { var n = 0 }
+    let counter = Counter(), n = 7
+    // Zabezpieczenie przed zapętleniem (mutacja bez warunku „> 1"): po przekroczeniu budżetu stub rzuca błąd, więc test kończy się, nie wisi.
+    let stub = ChatStub { _ in counter.n += 1; if counter.n > 4 * n { throw StubHTTPError(status: 500, body: "{}") }; return "[9] x" }
+    let t = transcript((0..<n).map { utt("wypowiedź \(["a1", "b2", "c3", "d4", "e5", "f6", "g7"][$0]) testowa", at: Double($0)) })
+    let r2 = await corrector(stub).correct(t, language: .polish)
+    #expect(counter.n <= 2 * n - 1)
+    #expect(r2.failedBatches == 1 && r2.failedCompletely && r2.firstError == "The model's answer didn't match the numbered lines.")
+    #expect(r2.transcript.utterances.map(\.text) == t.utterances.map(\.text))
+}
+
+@Test func transportErrorIsNotRetriedInHalves() async {
+    let t = distinctTranscript(4)
+    let stub = ChatStub { _ in throw StubHTTPError(status: 500, body: "{}") }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(stub.calls.count == 1 && r.failedBatches == 1 && r.failedCompletely)
+}
+
+@Test func recoveredHalfIsKeptWhenTheOtherHalfFailsAndIsCountedAsRejected() async {
+    // Korzeń: zła numeracja → połówki; pierwsza OK, druga HTTP 500. Partia NIE jest „failed" (są poprawione linie), utracone linie → rejected.
+    let t = distinctTranscript(4)
+    let stub = ChatStub { call in
+        if call.user.components(separatedBy: "\n").count == 4 { return "[1] x" }
+        if call.user.contains(distinct[2]) || call.user.contains(distinct[3]) { throw StubHTTPError(status: 500, body: "{}") }
+        return capitalizing(call.user)
+    }
+    let r = await corrector(stub).correct(t, language: .polish)
+    #expect(r.transcript.utterances.map(\.text) == [distinct[0] + ".", distinct[1] + ".", distinct[2], distinct[3]].enumerated().map { $0.offset < 2 ? $0.element.prefix(1).uppercased() + $0.element.dropFirst() : $0.element })
+    #expect(r.failedBatches == 0 && !r.failedCompletely && r.rejectedLines == 2 && r.firstError == nil)
+    // I odwrotna kolejność: pierwsza połowa pada, druga przechodzi.
+    let rev = ChatStub { call in
+        if call.user.components(separatedBy: "\n").count == 4 { return "[1] x" }
+        if call.user.contains(distinct[0]) { throw StubHTTPError(status: 500, body: "{}") }
+        return capitalizing(call.user)
+    }
+    let r2 = await corrector(rev).correct(t, language: .polish)
+    #expect(r2.failedBatches == 0 && r2.rejectedLines == 2 && r2.transcript.utterances[3].text.hasSuffix("."))
+}
+
+@Test func parsedButFullyRejectedBatchIsNotCountedAsFailed() async {
+    let t = distinctTranscript(2)
+    let r = await corrector(ChatStub { _ in "[1] Zupełnie inna treść wypowiedzi tutaj.\n[2] Kolejna zupełnie inna treść wypowiedzi." }).correct(t, language: .polish)
+    #expect(r.failedBatches == 0 && r.rejectedLines == 2 && r.firstError == nil)
+}
+
+@Test func cancellationDuringRetriesStopsFurtherModelCalls() async {
+    let t = distinctTranscript(4)
+    let stub = ChatStub { _ in "[1] x" }
+    final class Gate: @unchecked Sendable { var calls = 0 }
+    let gate = Gate()
+    let r = await corrector(stub).correct(t, language: .polish, isCancelled: { gate.calls += 1; return gate.calls > 1 }) // pętla partii (1.) przechodzi, anulowanie przed ponowieniem
+    #expect(stub.calls.count == 1)
+    #expect(r.failedBatches == 1 && r.transcript.utterances.map(\.text) == t.utterances.map(\.text))
+}
+
+@Test func retryMapsIndicesBackWithAFlaggedUtteranceAndAnOddBatch() async {
+    let t = transcript([utt(distinct[0]), utt("GIBBERISH", at: 3, flagged: true), utt(distinct[1], at: 6), utt(distinct[2], at: 9),
+                        utt(distinct[3], at: 12), utt(distinct[4], at: 15)])
+    let r = await corrector(breaksUnlessSingle { _ in "[1] x" }).correct(t, language: .polish)
+    #expect(r.transcript.utterances[1].text == "GIBBERISH")
+    #expect(r.transcript.utterances.enumerated().allSatisfy { $0.offset == 1 || $0.element.text.hasSuffix(".") })
+    #expect(r.failedBatches == 0 && r.rejectedLines == 0)
+}
