@@ -12,6 +12,14 @@ import Testing
         #expect(state.tab == .myNotes)
     }
 
+    /// TASK-95: tor mikrofonu może zacząć wcześniej niż oś sesji (system.caf) — start < 0 nie może dać „0:00:-21".
+    @Test func timeNeverShowsMinus() {
+        #expect(MeetingDetailView.time(-21.9) == "0:00:00")
+        #expect(MeetingDetailView.time(-0.001) == "0:00:00")
+        #expect(MeetingDetailView.time(0) == "0:00:00")
+        #expect(MeetingDetailView.time(3725.9) == "1:02:05")
+    }
+
     @Test func summarySourceFollowsTranscriptVersionUntilSet() {
         let state = MeetingViewState()
         #expect(state.summaryCorrected)

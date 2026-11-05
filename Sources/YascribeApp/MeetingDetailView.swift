@@ -235,8 +235,9 @@ struct MeetingDetailView: View {
         }
     }
 
+    /// Start < 0 = mowa przed osią sesji (mikrofon ruszył wcześniej niż tap systemowy) — pokazujemy 0:00:00.
     static func time(_ s: Double) -> String {
-        let i = Int(s)
+        let i = Int(max(0, s))
         return String(format: "%d:%02d:%02d", i / 3600, i / 60 % 60, i % 60)
     }
 }
