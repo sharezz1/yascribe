@@ -60,6 +60,8 @@ struct TranscriptModelsSheet: View {
                 transcribeSection
                 Divider()
                 correctSection
+                Divider()
+                actionRow
             }
             .padding(.top, 8) // odstęp tytułu od pierwszej sekcji
             .disabled(moving) // przenoszenie nagrań: okno tylko do odczytu
@@ -82,11 +84,11 @@ struct TranscriptModelsSheet: View {
         draft.usePreset = false
     }
 
-    // MARK: Transcribe again
+    // MARK: Speech to text
 
     private var transcribeSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .asr, current: draft.asrProviderID)
-        return SheetSection(title: "Transcribe and correct") {
+        return SheetSection(title: "Speech to text") {
             SheetRow(label: "Provider") {
                 FieldMenu(label: "Provider", value: provider(draft.asrProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.asrProviderID }, set: { id in
@@ -119,8 +121,23 @@ struct TranscriptModelsSheet: View {
             if draft.language == .auto {
                 WarnLabel("Lower quality, risk of invented text. Use Auto only for meetings that mix languages.")
             }
-            SheetNote("The current transcript stays until the new one is ready. Then it is corrected with the model below.")
-            SheetAction(title: "Transcribe + correct", reason: transcribeReason) { transcribe() }
+        }
+    }
+
+    /// Dwa przyciski na dole: „Improve" poprawia obecny transkrypt, „Transcribe + improve" robi nową transkrypcję i potem poprawę.
+    private var actionRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SheetNote("Improve keeps the current transcription. Transcribe + improve replaces it with a new one, then improves it.")
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+                Button("Improve") { improve() }.buttonStyle(.pillSmall).disabled(correctReason != nil)
+                    .help(correctReason ?? "Improve the current transcript with the model above")
+                Button("Transcribe + improve") { transcribe() }.buttonStyle(.pillPrimary).disabled(transcribeReason != nil)
+                    .help(transcribeReason ?? "Transcribe again, then improve the result")
+            }
+            if let r = transcribeReason ?? correctReason {
+                Text(r).font(.subheadline).foregroundStyle(.mnText2).frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
     }
 
@@ -139,11 +156,11 @@ struct TranscriptModelsSheet: View {
         }
     }
 
-    // MARK: Correct the transcript
+    // MARK: Text improvement
 
     private var correctSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .correction, current: draft.correctProviderID)
-        return SheetSection(title: "Correct only") {
+        return SheetSection(title: "Text improvement") {
             SheetRow(label: "Provider") {
                 FieldMenu(label: "Provider", value: provider(draft.correctProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.correctProviderID }, set: { id in
@@ -173,7 +190,6 @@ struct TranscriptModelsSheet: View {
             }
             SheetNote(correctCaption)
             if model.notes.isCorrecting(item.id) { StateLabel(.progress(nil), "Improving the transcript…") }
-            SheetAction(title: item.corrected == nil ? "Correct" : "Correct again", reason: correctReason) { improve() }
         }
     }
 
