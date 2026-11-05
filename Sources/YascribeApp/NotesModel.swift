@@ -149,6 +149,10 @@ final class NotesModel {
         return setOverride(role, o, item: item)
     }
 
+    /// Zapis wyboru korekty bez uruchamiania jej (korektę puści `afterTranscription` po transkrypcji).
+    @discardableResult
+    func saveCorrectionChoice(_ draft: ModelDraft, item: SessionItem) -> Bool { saveDraft(.correction, draft, item: item) }
+
     func isCorrecting(_ id: String) -> Bool { corrections.isActive(id) }
     func isTitling(_ id: String) -> Bool { titles.isActive(id) }
     func correctionFailureMessage(_ id: String) -> String? { correctionFailure[id] }

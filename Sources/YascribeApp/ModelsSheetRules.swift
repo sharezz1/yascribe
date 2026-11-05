@@ -96,11 +96,27 @@ final class TranscriptModelsDraft: ObservableObject {
     /// `true` = korekta wystartowała (okno wolno zamknąć).
     @MainActor
     func submitCorrection(item: SessionItem, notes: NotesModel, preset: RoleAssignment?) -> Bool {
-        guard let draft = ModelsSheetRules.draft(providerID: correctProviderID, model: correctModel, thinking: nil, preset: preset,
-                                                 hasOverride: notes.usableOverride(.correction, for: item) != nil, usePreset: usePreset)
-        else { return false }
+        guard let draft = correctionDraft(item: item, notes: notes, preset: preset) else { return false }
         return notes.improveTranscript(item, draft: draft)
     }
+
+    @MainActor
+    func correctionDraft(item: SessionItem, notes: NotesModel, preset: RoleAssignment?) -> ModelDraft? {
+        ModelsSheetRules.draft(providerID: correctProviderID, model: correctModel, thinking: nil, preset: preset,
+                               hasOverride: notes.usableOverride(.correction, for: item) != nil, usePreset: usePreset)
+    }
+
+    /// „Transcribe": korekta po przebiegu idzie modelem pokazanym w oknie. `afterTranscription` czyta zapisane nadpisanie sesji,
+    /// więc wybór zapisujemy tak samo jak przy „Improve" (wybór równy presetowi bez nadpisania zostaje `.preset`). Bez wyboru: nic.
+    /// `false` = zapis padł (powód w `lastError` notatek): transkrypcji nie startujemy.
+    @MainActor
+    func persistCorrectionChoice(item: SessionItem, notes: NotesModel, preset: RoleAssignment?) -> Bool {
+        guard let draft = correctionDraft(item: item, notes: notes, preset: preset) else { return true }
+        return notes.saveCorrectionChoice(draft, item: item)
+    }
+
+    /// Dostawca korekty wybrany, a model pusty: niedokończony wybór, z którym Transcribe po cichu użyłby innego modelu.
+    var correctionIncomplete: Bool { correctProviderID != nil && correctModel.trimmingCharacters(in: .whitespaces).isEmpty }
 
     /// Preset bez modelu korekty: „Use preset (none)" od razu czyści nadpisanie i niczego nie uruchamia. `false` = zapis padł.
     @MainActor

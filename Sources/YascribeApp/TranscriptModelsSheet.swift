@@ -38,7 +38,8 @@ struct TranscriptModelsSheet: View {
     }
 
     private var transcribeReason: String? {
-        ModelsSheetRules.transcribeReason(
+        if draft.correctionIncomplete { return "Choose a correction model first." }
+        return ModelsSheetRules.transcribeReason(
             blocker: ModelsSheetRules.transcribeBlocker(item: item, model: model), correcting: model.notes.isCorrecting(item.id),
             generating: model.notes.state(item.id) == .generating, hasPreset: preset != nil, providerChosen: draft.asrProviderID != nil,
             modelEmpty: draft.asrModel.trimmingCharacters(in: .whitespaces).isEmpty, languageChosen: chosenLanguage != nil)
@@ -127,6 +128,12 @@ struct TranscriptModelsSheet: View {
         guard let pid = draft.asrProviderID, let language = chosenLanguage, let preset else { return }
         ui.error = nil
         model.lastError = nil // komunikat odmowy ma być z tego kliknięcia, nie z wcześniejszego
+        // Korekta po transkrypcji czyta nadpisanie sesji, więc wybór z okna zapisujemy przed startem; padnięty zapis = bez startu.
+        guard draft.persistCorrectionChoice(item: item, notes: model.notes, preset: presetCorrection) else {
+            ui.error = model.lastError
+            model.lastError = nil
+            return
+        }
         if model.transcribe(sessionURL: item.url, preset: preset, asr: RoleAssignment(providerID: pid, model: draft.asrModel), language: language) {
             onClose()
         } else {
