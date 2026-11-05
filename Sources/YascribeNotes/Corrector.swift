@@ -11,11 +11,15 @@ public struct CorrectedTranscript: Codable, Equatable, Sendable {
     public var rejectedLines: Int
     /// Pierwszy powód niepowodzenia partii (limit czasu, błąd HTTP, zła numeracja) — do komunikatu „Correction failed".
     public var firstError: String?
+    /// Dostawca, który poprawiał (okno Improve pokazuje „ostatnio użyty"); `nil` w starych `corrected.json`.
+    public var providerID: UUID?
 
     /// Żadna partia nie przeszła: nic nie zostało poprawione (to jest „Correction failed", a nie „parts kept as heard").
     public var failedCompletely: Bool { batches > 0 && failedBatches == batches }
 
-    public init(transcript: Transcript, model: String, batches: Int, failedBatches: Int, rejectedLines: Int, firstError: String? = nil) {
+    public init(transcript: Transcript, model: String, batches: Int, failedBatches: Int, rejectedLines: Int, firstError: String? = nil,
+                providerID: UUID? = nil) {
+        self.providerID = providerID
         self.firstError = firstError
         self.transcript = transcript
         self.model = model
@@ -159,7 +163,7 @@ public struct Corrector: Sendable {
         if lines.isEmpty, !all.isEmpty, let budget {
             // Kontekst za mały nawet na prompt albo na każdą wypowiedź: jawny błąd, nigdy wysyłka.
             return CorrectedTranscript(transcript: out, model: assignment.model, batches: 1, failedBatches: 1, rejectedLines: 0,
-                                       firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction.")
+                                       firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction.", providerID: assignment.providerID)
         }
         let batches = CorrectionBatches.split(lines, maxChars: limit)
         let system = system(language: language)
@@ -209,6 +213,7 @@ public struct Corrector: Sendable {
             for l in lines { out.utterances[l.n - 1].text = FillerWords.remove(out.utterances[l.n - 1].text, words: fillerWords) }
         }
         return CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
-                                   failedBatches: failed, rejectedLines: rejected, firstError: firstError)
+                                   failedBatches: failed, rejectedLines: rejected, firstError: firstError,
+                                   providerID: assignment.providerID)
     }
 }
