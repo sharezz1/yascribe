@@ -131,7 +131,7 @@ struct PinnedBarPage<Bar: View, Content: View>: View {
                 VStack(alignment: .leading, spacing: spacing) { bar }
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.mnBackground)
+                    .background(Color.mnCard)
             }
         }
     }
