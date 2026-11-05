@@ -100,6 +100,9 @@ struct MeetingDetailView: View {
                     .fixedSize().padding(.bottom, 9)
             }
         }
+        // Stała wysokość rzędu: przyciski Transcript/Summary (wyrównane do linii bazowej) dawały 37,5 pkt zamiast 37,
+        // więc nagłówek skakał o 0,5 pkt przy zmianie karty.
+        .frame(height: 38, alignment: .top)
     }
 
     static func defaultTab(for item: SessionItem) -> MeetingTab {
