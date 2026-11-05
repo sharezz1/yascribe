@@ -29,6 +29,10 @@ public enum DictionaryEdit {
         case .aliasTaken(let a, let by): return (.alias, "“\(a)” already belongs to “\(by)”.")
         case .aliasIsTerm(let a, let owner):
             return same(a, draftTerm) ? (.term, "“\(a)” is already an alias of “\(owner)”.") : (.alias, "“\(a)” is already a term, so it can’t be an alias.")
+        case .invalidInflection: return (.alias, "Endings need at least 3 characters and a final letter or digit.")
+        case .inflectionAmbiguous(let a, let t):
+            return same(t, draftTerm) ? (.term, "“\(t)” would clash with the alias “\(a)”, which matches endings.")
+                : (.alias, "“\(a)” with endings would clash with the term “\(t)”.")
         case .emptyAlias: return (.alias, "Type an alias first.")
         }
     }

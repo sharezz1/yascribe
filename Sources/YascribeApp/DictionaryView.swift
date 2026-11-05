@@ -238,11 +238,12 @@ private struct DictionaryRow: View {
     private var aliasLine: String {
         guard !term.aliases.isEmpty else { return "No aliases · hint for the model only" }
         return term.aliases.map { a in
+            let text = a.inflecting ? a.text + "*" : a.text
             switch (a.risky, a.enabled) {
-            case (true, false): "\(a.text) (risky, off)"
-            case (true, true): "\(a.text) (risky)"
-            case (false, false): "\(a.text) (off)"
-            default: a.text
+            case (true, false): return "\(text) (risky, off)"
+            case (true, true): return "\(text) (risky)"
+            case (false, false): return "\(text) (off)"
+            default: return text
             }
         }.joined(separator: ", ")
     }
@@ -290,6 +291,10 @@ struct DictionaryTermSheet: View {
     }
     private var aliases: [DictionaryAlias] { state.draft?.aliases ?? [] }
 
+    private func inflects(_ i: Int) -> Binding<Bool> {
+        Binding(get: { alias(i).wrappedValue.inflecting }, set: { state.draft?.aliases[i].inflects = $0 ? true : nil })
+    }
+
     /// Dostęp do wiersza po indeksie z ochroną: po usunięciu wiersza SwiftUI jeszcze raz pyta o jego wiązanie.
     private func alias(_ i: Int) -> Binding<DictionaryAlias> {
         Binding(get: { state.draft.flatMap { $0.aliases.indices.contains(i) ? $0.aliases[i] : nil } ?? DictionaryAlias("") },
@@ -322,6 +327,7 @@ struct DictionaryTermSheet: View {
                     Card {
                         HStack(spacing: 12) {
                             Text("Alias").frame(maxWidth: .infinity, alignment: .leading)
+                            Text("Endings").frame(width: 66, alignment: .leading)
                             Text("Risky").frame(width: 62, alignment: .leading)
                             Text("On").frame(width: 38, alignment: .center)
                             Color.clear.frame(width: 18, height: 1)
@@ -332,7 +338,7 @@ struct DictionaryTermSheet: View {
                         if aliases.count > 7 { ScrollView { aliasRows }.frame(maxHeight: 280) } else { aliasRows }
                         RowDivider(inset: 0)
                         HStack(spacing: 8) {
-                            TextField("Add alias", text: $state.newAlias).textFieldStyle(.plain).fieldBox()
+                            TextField("Add alias (Genesis* also matches endings)", text: $state.newAlias).textFieldStyle(.plain).fieldBox()
                                 .onSubmit { _ = addAlias() }
                                 .onChange(of: state.newAlias) { _, _ in state.aliasError = nil }
                             Button("Add") { _ = addAlias() }.buttonStyle(.pillSmall)
@@ -341,7 +347,7 @@ struct DictionaryTermSheet: View {
                         .padding(10)
                     }
                     if let e = state.aliasError { StateLabel(.bad, e).wrapping().padding(.top, 8).padding(.leading, 2) }
-                    Text("Risky means the alias is also an ordinary word (Rok is a name). It is added switched off; turn it on only if you accept that it may replace correct text.")
+                    Text("Risky means the alias is also an ordinary word (Rok is a name). It is added switched off; turn it on only if you accept that it may replace correct text. Endings also match inflected forms of the alias and keep the ending (Genesis* turns Genesisa into Genesysa); use at least 3 letters.")
                         .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 10).padding(.leading, 2)
                 }
@@ -380,6 +386,8 @@ struct DictionaryTermSheet: View {
                 HStack(spacing: 12) {
                     Text(alias(i).wrappedValue.text).foregroundStyle(alias(i).wrappedValue.enabled ? .mnText : .mnText2)
                         .lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading)
+                    Toggle("Endings", isOn: inflects(i)).toggleStyle(.checkbox).frame(width: 66, alignment: .leading)
+                        .accessibilityLabel("\(alias(i).wrappedValue.text) matches endings")
                     Toggle("Risky", isOn: alias(i).risky).toggleStyle(.checkbox).frame(width: 62, alignment: .leading)
                         .accessibilityLabel("\(alias(i).wrappedValue.text) is risky")
                     Toggle("", isOn: alias(i).enabled).toggleStyle(.switch).labelsHidden().controlSize(.small).frame(width: 38)
@@ -400,13 +408,15 @@ struct DictionaryTermSheet: View {
     /// Dodaje Alias z pola do kopii roboczej, jeśli cały słownik by go przyjął (reguły `upsert`); `false` = błąd pokazany przy polu.
     private func addAlias() -> Bool {
         guard var d = state.draft else { return true }
-        let text = state.newAlias.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Końcowa `*` = alias z odmianą (jak w `replacements.tsv`).
+        let typed = DictionaryAlias.parseTyped(state.newAlias)
+        let text = typed.text
         guard !text.isEmpty else { return true }
         if d.aliases.contains(where: { UserDictionary.key($0.text) == UserDictionary.key(text) }) {
             state.aliasError = "“\(text)” is already in this list."
             return false
         }
-        d.aliases.append(DictionaryAlias(text))
+        d.aliases.append(DictionaryAlias(text, inflects: typed.inflects))
         // Próba na kopii słownika; pusty Term nie może zasłonić błędów Aliasu, błędy samego Terma wychodzą dopiero przy Save.
         var trial = d, scratch = model.dictionary
         if UserDictionary.key(trial.text).isEmpty { trial.text = "New term" }
