@@ -40,6 +40,7 @@ struct MeetingsView: View {
         @Bindable var model = model
         NavigationStack {
             HStack(alignment: .top, spacing: 0) {
+               ZStack(alignment: .bottom) {
                VStack(spacing: 0) {
                     TimelineView(.everyMinute) { ctx in
                         ComingUpHeader(state: state, now: state.preview?.now ?? ctx.date, showUpcoming: askState.pane == .meetings)
@@ -74,11 +75,15 @@ struct MeetingsView: View {
                     }
                        }
                       }
+                      .contentMargins(.bottom, askState.height, for: .scrollContent)
                     } else {
-                        ArchiveChatView(state: askState)
+                        ArchiveChatView(state: askState, bottomInset: askState.height)
                     }
-                    AskBar(state: askState)
                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+               AskBar(state: askState)
+                   .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { askState.height = $0 }
+               }
+                   if askState.pane == .meetings {
                    ScrollView {
                        OverviewPanel(item: model.sessions.first { $0.id == state.overviewID })
                            .padding(24)
@@ -88,6 +93,7 @@ struct MeetingsView: View {
                    .background(Color.mnOverview)
                    .overlay(alignment: .leading) {
                        Rectangle().fill(.mnLine2).frame(width: 0.5)
+                   }
                    }
             }
             .frame(minWidth: 720)
@@ -117,24 +123,26 @@ private struct MeetingDestinationView: View {
     @ObservedObject var askState: AskBarState
     @StateObject private var detailState = MeetingViewState()
 
+
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                if askState.pane == .meetings || askState.showingSource {
-                    MeetingDetailView(item: item, state: detailState, presentsModelsSheet: false).id(item.id)
-                } else {
-                    ArchiveChatView(state: askState)
-                }
-                AskBar(state: askState)
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-            ScrollView {
-                OverviewPanel(item: item).padding(24)
+        ZStack(alignment: .bottom) {
+            if askState.pane == .meetings || askState.showingSource {
+                MeetingDetailView(item: item, state: detailState, presentsModelsSheet: false, bottomInset: askState.height).id(item.id)
+            } else {
+                ArchiveChatView(state: askState, bottomInset: askState.height)
             }
-            .frame(width: 280).frame(maxHeight: .infinity, alignment: .top)
-            .background(Color.mnOverview)
-            .overlay(alignment: .leading) { Rectangle().fill(.mnLine2).frame(width: 0.5) }
+            AskBar(state: askState)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { askState.height = $0 }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.mnCard)
+        .onAppear { if askState.showingSource { detailState.tab = .transcript } }
+        .onChange(of: askState.showingSource) { _, showing in
+            if showing { detailState.tab = .transcript }
+        }
+        .onChange(of: item.id) { _, _ in
+            if askState.showingSource { detailState.tab = .transcript }
+        }
         .dismissibleSheet(isPresented: $detailState.modelsSheet, onDismiss: { detailState.modelsSheet = false }) {
             MeetingDetailView.modelsSheet(for: item, state: detailState)
         }
@@ -437,7 +445,7 @@ struct FolderMenu: View {
                 .foregroundStyle(.mnText)
                 .padding(.horizontal, 8).frame(height: 28)
                 .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .accessibilityLabel("Folder filter")

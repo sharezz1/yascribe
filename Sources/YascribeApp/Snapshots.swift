@@ -179,7 +179,11 @@ enum Snapshots {
                     let section = model.section
                     model.section = .meetings
                     try render("window-meetings", size: CGSize(width: 1280, height: 760), dark: dark, model: model) { ContentView() }
-                    try render("window-meetings-minimum", size: CGSize(width: 960, height: 760), dark: dark, model: model) { ContentView() }
+                    try render("window-meetings-minimum", size: CGSize(width: 960, height: 520), dark: dark, model: model) { ContentView() }
+                    model.selectedSessionID = model.sessions[index].id
+                    try render("window-summary-minimum", size: CGSize(width: 960, height: 520), dark: dark, model: model) { ContentView() }
+                    try render("window-summary-wide", size: CGSize(width: 1280, height: 760), dark: dark, model: model) { ContentView() }
+                    model.selectedSessionID = nil
                     model.section = .presets
                     try render("window-presets", size: CGSize(width: 960, height: 760), dark: dark, model: model) { ContentView() }
                     model.section = .templates
@@ -293,6 +297,7 @@ enum Snapshots {
                         var notCorrected = picked
                         notCorrected.corrected = nil
                         try render("meeting-transcript-not-corrected", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: notCorrected, state: transcriptView) }
+                        try render("meeting-transcript-not-corrected-narrow", size: CGSize(width: 468, height: 400), dark: dark, model: model) { MeetingDetailView(item: notCorrected, state: transcriptView) }
                         // Okno „Models…" (Transcript): wprost, otwarte nad widokiem spotkania, w trakcie korekty i po usunięciu audio.
                         try render("models-transcript", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: picked) {} }
                         let sheetOpen = MeetingViewState(); sheetOpen.tab = .transcript; sheetOpen.modelsSheet = true
@@ -333,7 +338,9 @@ enum Snapshots {
                     model.notes.setPreview(split.id)
                     // Uwaga 7: „Add context” rozwinięte w miejscu (pole rośnie z treścią).
                     let contextOpen = MeetingViewState(); contextOpen.tab = .summary; contextOpen.showContext = true
-                    try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: contextOpen) }
+                    contextOpen.context = "Discuss the staffing forecast and next steps."
+                    var contextItem = withNotes; contextItem.notes.summary = nil
+                    try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: contextItem, state: contextOpen) }
                     // Faza 1.6 T12: okno „Select calendar event" (dane przykładowe) i nagłówek z powiązanym wydarzeniem.
                     let at = withNotes.startedAt
                     let sample = [CalendarEventInfo(title: "Weekly staffing review", start: at, end: at + 1800, attendees: [.init(name: "Piotr Nowak"), .init(name: "Ada Lis"), .init(email: "team@example.com"), .init(name: "Jan Kos")]),

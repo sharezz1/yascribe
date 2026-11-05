@@ -17,37 +17,50 @@ struct MeetingDetailView: View {
     @Environment(AppModel.self) private var model
     let item: SessionItem
     let presentsModelsSheet: Bool
+    let bottomInset: CGFloat
     @StateObject private var playback = PlaybackState()
     @StateObject private var state: MeetingViewState
 
-    init(item: SessionItem, state: MeetingViewState = MeetingViewState(), presentsModelsSheet: Bool = true) {
+    init(item: SessionItem, state: MeetingViewState = MeetingViewState(), presentsModelsSheet: Bool = true, bottomInset: CGFloat = 0) {
         self.item = item
         self.presentsModelsSheet = presentsModelsSheet
+        self.bottomInset = bottomInset
         _state = StateObject(wrappedValue: state)
     }
 
     private var isRecording: Bool { SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory) }
 
-    /// Uwaga 7 z odbioru: cały widok to jedna przewijana strona — tytuł, zakładki i treść w jednym
-    /// `ScrollView` na całą szerokość detalu (pasek przy krawędzi okna), kolumna 640 w środku, bez wewnętrznych przewijań.
-    /// `ScrollPage`: kolumna nie przeskakuje, gdy stały pasek przewijania pojawia się na dłuższej zakładce (błąd 5).
+    /// Nagłówek i karty zostają na miejscu; przewija się tylko treść wybranej karty.
     var body: some View {
-        ScrollPage(640) {
         VStack(alignment: .leading, spacing: 0) {
-            header
-            if isRecording {
-                MyNotesTab(state: state, item: item).padding(.top, 16)
-                Text("Transcript and notes arrive after the meeting.").font(.callout).foregroundStyle(.mnText2).padding(.top, 8)
-            } else {
-                MeetingTabBar(selection: Binding(get: { state.tab ?? defaultTab }, set: { state.tab = $0 }))
-                    .padding(.top, 18).padding(.bottom, 16)
-                switch state.tab ?? defaultTab {
-                case .myNotes: MyNotesTab(state: state, item: item)
-                case .transcript: TranscriptTab(state: state, item: item) { play($0) }
-                case .summary: SummaryTab(state: state, item: item)
+            VStack(alignment: .leading, spacing: 18) {
+                header
+                if !isRecording {
+                    ViewThatFits(in: .horizontal) {
+                        tabRow(compact: false)
+                        tabRow(compact: true)
+                    }
                 }
             }
-        }
+            .frame(maxWidth: 640, alignment: .leading)
+            .padding(.horizontal, 28).padding(.top, 24)
+            .frame(maxWidth: .infinity, alignment: .top)
+
+            ScrollPage(640, showsIndicators: false) {
+                if isRecording {
+                    VStack(alignment: .leading, spacing: 8) {
+                        MyNotesTab(state: state, item: item)
+                        Text("Transcript and notes arrive after the meeting.").font(.callout).foregroundStyle(.mnText2)
+                    }
+                } else {
+                    switch state.tab ?? defaultTab {
+                    case .myNotes: MyNotesTab(state: state, item: item)
+                    case .transcript: TranscriptTab(state: state, item: item) { play($0) }
+                    case .summary: SummaryTab(state: state, item: item)
+                    }
+                }
+            }
+            .contentMargins(.bottom, bottomInset, for: .scrollContent)
         }
         .dismissibleSheet(isPresented: Binding(get: { presentsModelsSheet && state.modelsSheet },
                                                set: { state.modelsSheet = $0 }), onDismiss: { state.modelsSheet = false }) {
@@ -57,8 +70,8 @@ struct MeetingDetailView: View {
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
         .focusedSceneValue(\.playRecording, isRecording ? nil : { togglePlayback() })
         .navigationTitle(item.title)
-        .navigationBarBackButtonHidden(true) // Powrót jest w nagłówku treści.
         .onAppear {
+            if isRecording, state.tab == nil { state.tab = .myNotes }
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
         }
         .confirmationDialog("Move “\(item.title)” to the Trash?", isPresented: Binding(
@@ -74,10 +87,23 @@ struct MeetingDetailView: View {
     /// Notatki są → Summary; jest transkrypt → Transcript; inaczej My notes.
     private var defaultTab: MeetingTab { Self.defaultTab(for: item) }
 
+    private func tabRow(compact: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            MeetingTabBar(selection: Binding(get: { state.tab ?? defaultTab }, set: { state.tab = $0 }))
+                .fixedSize(horizontal: true, vertical: false)
+            Spacer(minLength: 0)
+            if (state.tab ?? defaultTab) == .summary, let summary = item.notes.summary {
+                SummaryActions(state: state, summary: summary, compact: compact)
+                    .fixedSize().padding(.bottom, 9)
+            } else if (state.tab ?? defaultTab) == .transcript {
+                TranscriptActions(state: state, item: item, compact: compact)
+                    .fixedSize().padding(.bottom, 9)
+            }
+        }
+    }
+
     static func defaultTab(for item: SessionItem) -> MeetingTab {
-        if item.notes.summary != nil { return .summary }
-        if item.transcript != nil { return .transcript }
-        return .myNotes
+        .summary
     }
 
     @ViewBuilder static func modelsSheet(for item: SessionItem, state: MeetingViewState) -> some View {
@@ -98,6 +124,7 @@ struct MeetingDetailView: View {
                 TextField("Untitled meeting", text: titleField)
                     .textFieldStyle(.plain)
                     .documentTitle()
+                    .fixedSize(horizontal: false, vertical: true)
                     .onSubmit {
                         if let edit = state.titleEdit, NoteTitle.isEdit(edit, meta: item.notes.meta, noteTitle: item.notes.summary?.title) {
                             model.notes.setManualTitle(edit, for: item)
@@ -106,6 +133,9 @@ struct MeetingDetailView: View {
                     }
                     .disabled(model.recordingsMove != nil)
                 Menu {
+                    if (state.tab ?? defaultTab) == .transcript {
+                        Button("Transcript options…") { state.modelsSheet = true }
+                    }
                     Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
                     Button("Show in Finder") { model.showInFinder(item) }
                     Divider()
@@ -124,12 +154,14 @@ struct MeetingDetailView: View {
                     model.presetFor(sessionURL: item.url).map { "Preset \($0.name)" } ?? "",
                     item.audioDeletedAfterDays.map { "Audio deleted after \($0) days" } ?? "",
                 ])
-                EventPickerChip(item: item)
-                FolderChip(item: item)
                 if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
                 ForEach(item.trackProblems, id: \.trackID) { problemButton($0) }
             }
-            EventAttendeesLine(link: item.notes.meta.calendarEvent)
+            HStack(spacing: 12) {
+                EventPickerChip(item: item)
+                FolderChip(item: item)
+                EventAttendeesLine(link: item.notes.meta.calendarEvent)
+            }
             // R3: na czas przenoszenia folderu nagrań spotkanie jest tylko do odczytu.
             if model.recordingsMove != nil { StateLabel(.progress(nil), "Moving recordings…") }
             if !item.notes.problems.isEmpty {

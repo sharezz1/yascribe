@@ -3,6 +3,7 @@ import SwiftUI
 struct ArchiveChatView: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: AskBarState
+    var bottomInset: CGFloat = 0
 
     private func newChat() {
         model.archive.newChat()
@@ -23,7 +24,9 @@ struct ArchiveChatView: View {
                 Text(state.pane == .history ? "Past chats" : (model.archive.currentChatTitle.isEmpty ? "New chat" : model.archive.currentChatTitle))
                     .font(.system(size: 14, weight: .semibold)).lineLimit(1)
                 Spacer(minLength: 4)
-                Button("New chat", action: newChat).buttonStyle(.pillSmall)
+                if state.pane == .history || !model.archive.turns.isEmpty {
+                    Button("New chat", action: newChat).buttonStyle(.pillSmall)
+                }
             }
             if state.pane == .history {
                 history
@@ -59,6 +62,7 @@ struct ArchiveChatView: View {
                 }
             }
         }
+        .contentMargins(.bottom, bottomInset, for: .scrollContent)
     }
 
     private var conversation: some View {
@@ -83,6 +87,7 @@ struct ArchiveChatView: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
+            .contentMargins(.bottom, bottomInset, for: .scrollContent)
             .onChange(of: model.archive.turns) { _, turns in
                 if let id = turns.last?.id { proxy.scrollTo(id, anchor: .bottom) }
             }

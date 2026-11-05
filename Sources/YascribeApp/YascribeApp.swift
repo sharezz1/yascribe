@@ -33,6 +33,8 @@ struct YascribeApp: App {
                 .environment(model)
                 .frame(minWidth: 960, minHeight: 520)
         }
+        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentMinSize)
         .commands {
             // Po „About Yascribe”: Sparkle pyta o nową wersję, a instalacja nigdy nie przerywa nagrania (RestartGate).
@@ -132,7 +134,21 @@ struct CheckForUpdatesButton: View {
     }
 }
 
+enum AppAppearance: String, CaseIterable {
+    case system, light, dark
+
+    var name: String { rawValue.capitalized }
+    var native: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
 struct ContentView: View {
+    @AppStorage("appearance") private var appearance = AppAppearance.system
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -165,7 +181,25 @@ struct ContentView: View {
         // Uwaga 1 z odbioru 2026-10-16 (§11.5): pasek bez własnego tła i tytułu; ciepłe tło do górnej krawędzi.
         // `navigationTitle` zostaje w widokach — nazwa okna w menu Window i dla VoiceOver.
         .toolbar(removing: .title)
-        .toolbar(.hidden, for: .windowToolbar)
+        .toolbar(.visible, for: .windowToolbar)
+        .toolbarBackground(.hidden, for: .windowToolbar)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    Picker("Appearance", selection: $appearance) {
+                        ForEach(AppAppearance.allCases, id: \.self) { mode in
+                            Text(mode.name).tag(mode)
+                        }
+                    }.pickerStyle(.inline).labelsHidden()
+                } label: {
+                    Image(systemName: "circle.lefthalf.filled")
+                }
+                .help("Appearance: " + appearance.name)
+                .accessibilityLabel("Appearance")
+            }
+        }
+        .onAppear { NSApp.appearance = appearance.native }
+        .onChange(of: appearance) { _, value in NSApp.appearance = value.native }
         .sheet(isPresented: $model.showSetup) { SetupView() }
         .alert("Something went wrong", isPresented: Binding(get: { model.lastError != nil }, set: { if !$0 { model.lastError = nil } })) {
             Button("OK") { model.lastError = nil }

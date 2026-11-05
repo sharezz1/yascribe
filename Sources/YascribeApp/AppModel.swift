@@ -86,6 +86,7 @@ final class AppModel {
     let secrets: any SecretStore = KeychainSecretStore()
 
     var section: Section = .meetings
+    var scrollToDictationSettings = false
     var providers = ProvidersFile()
     var presets = PresetsFile()
     var settings = GlobalSettings() {

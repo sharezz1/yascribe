@@ -7,12 +7,13 @@ final class DictationSettingsUI: ObservableObject {
     @Published var hotkeyMessage: String?
 }
 
-/// Karta „Dictation" w Settings. Zmiany zapisują się od razu (bez przycisku Save): skrót musi działać w tej samej chwili.
+/// Karta „Dictation" edytuje wspólny szkic ustawień.
 struct DictationSettingsSection: View {
     @Environment(AppModel.self) private var model
     @StateObject private var ui = DictationSettingsUI()
+    @Binding var settings: DictationSettings
 
-    private var s: DictationSettings { model.settings.dictationOrDefault }
+    private var s: DictationSettings { settings }
     private var asrProviders: [Provider] { RoleProviders.choices(model.providers.providers, role: .asr, current: s.asr?.providerID) }
     private var correctionProviders: [Provider] { RoleProviders.choices(model.providers.providers, role: .correction, current: s.correction?.model?.providerID) }
     /// Język, z którym dyktowanie naprawdę ruszy: jawny, inaczej język aktywnego presetu (Auto nie przechodzi).
@@ -45,15 +46,6 @@ struct DictationSettingsSection: View {
                     .labelsHidden().toggleStyle(.switch)
             }
         }
-        Text("Dictation settings are saved as you change them; Save below applies to the rest of this page.")
-            .font(.system(size: 12)).foregroundStyle(.mnText2).padding(.top, 8).padding(.leading, 2)
-            .onAppear { fixOnDeviceModel() }
-    }
-
-    /// Stan sprzed automatycznego wyboru: dostawca Yascribe zapisany bez nazwy modelu.
-    private func fixOnDeviceModel() {
-        guard let a = s.asr, a.model.isEmpty, model.provider(a.providerID)?.api == .fluidAudio else { return }
-        update { $0.asr = RoleAssignment(providerID: a.providerID, model: LocalASRModels.parakeetV3) }
     }
 
     // MARK: Zapis
@@ -61,9 +53,7 @@ struct DictationSettingsSection: View {
     private func update(_ change: (inout DictationSettings) -> Void) {
         var next = s
         change(&next)
-        model.settings.dictation = next
-        model.save()
-        model.dictation.applySettings()
+        settings = next
     }
 
     // MARK: Skrót

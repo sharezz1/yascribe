@@ -5,7 +5,7 @@ import YascribeTranscription
 import SwiftUI
 
 enum MeetingTab: String, CaseIterable, Identifiable {
-    case myNotes = "My notes", transcript = "Transcript", summary = "Summary"
+    case summary = "Summary", myNotes = "My notes", transcript = "Transcript"
     var id: String { rawValue }
 }
 
@@ -43,6 +43,7 @@ struct MeetingTabBar: View {
                     Text(tab.rawValue)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(selected ? Color.mnText : Color.mnText2)
+                        .frame(height: 28)
                         .padding(.bottom, 9)
                         .overlay(alignment: .bottom) {
                             if selected { RoundedRectangle(cornerRadius: 1).fill(.mnText).frame(height: 2).offset(y: 0.5) }
@@ -75,7 +76,7 @@ struct ErrorLine: View {
     }
 }
 
-/// Kontekst dla modelu, rozwinięty w miejscu we wnęce paska: pole `field` + obwódka 0,5 pt + promień 7,
+/// Kontekst dla modelu, rozwinięty w miejscu we wnęce paska: pole `field` + obwódka 1 pt + promień 7,
 /// rośnie z treścią (uwaga 7 — bez własnego przewijania).
 private struct ContextEditor: View {
     @Binding var text: String
@@ -88,7 +89,7 @@ private struct ContextEditor: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 7)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
     }
 }
 
@@ -122,6 +123,47 @@ struct MyNotesTab: View {
 
 // MARK: Transcript
 
+struct TranscriptActions: View {
+    @Environment(AppModel.self) private var model
+    @ObservedObject var state: MeetingViewState
+    let item: SessionItem
+    let compact: Bool
+
+    var body: some View {
+        if item.transcript != nil {
+            HStack(spacing: 8) {
+                if item.corrected != nil {
+                    Button("Improve") { state.modelsSheet = true }
+                        .buttonStyle(.pill).help("Improve or redo the transcript with another model")
+                } else if model.notes.correctionFailureMessage(item.id) == nil, model.notes.canRetryCorrection(item) {
+                    Button(compact ? "Improve" : "Improve transcript") { model.notes.retryCorrection(item) }
+                        .buttonStyle(.pillPrimary)
+                        .accessibilityLabel("Improve transcript")
+                        .disabled(model.recordingsMove != nil || model.isTranscribing(item))
+                        .help("Run the correction model on this transcript")
+                }
+                Button { copy() } label: {
+                    if compact { Image(systemName: "doc.on.doc") } else { Label("Copy", systemImage: "doc.on.doc") }
+                }
+                    .accessibilityLabel("Copy")
+                    .buttonStyle(.pill).help("Copy the transcript")
+            }
+        }
+    }
+
+    private func copy() {
+        guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return }
+        let text = TranscriptTab.lines(t, item: item).map { line in
+            switch line {
+            case .utterance(let u): "[\(MeetingDetailView.time(u.start))] \(u.speaker == .me ? "Me" : "Them"): \(u.text)"
+            case .mute(let m): "[\(MeetingDetailView.time(m.start))] \(m.line)"
+            }
+        }.joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
 struct TranscriptTab: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: MeetingViewState
@@ -150,52 +192,18 @@ struct TranscriptTab: View {
             // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
             if busy, item.transcript != nil, item.attemptNotPromoted == nil { StateLabel(.progress(nil), "Transcribing again…") }
             attemptBanner
-            // Jedna linia nad listą: wersja po lewej; „Improve transcript" (tylko przed pierwszą korektą), Models… i Copy po prawej.
-            if item.transcript != nil {
-                HStack(spacing: 8) {
-                    if item.corrected != nil {
-                        FieldMenu(label: "Version", value: state.useCorrected ? "Corrected" : "Original", width: 120) {
-                            Picker("Version", selection: $state.useCorrected) {
-                                Text("Corrected").tag(true)
-                                Text("Original").tag(false)
-                            }
-                            .pickerStyle(.inline).labelsHidden()
-                        }
+            if item.transcript != nil, item.corrected != nil {
+                FieldMenu(label: "Version", value: state.useCorrected ? "Corrected" : "Original", width: 120) {
+                    Picker("Version", selection: $state.useCorrected) {
+                        Text("Corrected").tag(true)
+                        Text("Original").tag(false)
                     }
-                    Spacer(minLength: 0)
-                    if canImprove, item.corrected == nil {
-                        Button("Improve transcript") { model.notes.retryCorrection(item) }
-                            .buttonStyle(.pillPrimary)
-                            .layoutPriority(2)
-                            .disabled(moving || busy)
-                            .help("Run the correction model on this transcript")
-                    }
-                    modelsButton(label: item.corrected != nil)
-                    copyButton
+                    .pickerStyle(.inline).labelsHidden()
                 }
                 .padding(.bottom, 4)
             }
             content
         }
-    }
-
-    /// Bez wyświetlonego błędu korekty (ten ma własne Retry) — ten sam warunek co dawny przycisk na pasku.
-    private var canImprove: Bool { model.notes.correctionFailureMessage(item.id) == nil && model.notes.canRetryCorrection(item) }
-    /// Wybór modeli i ponowne uruchomienia są w oknie; informacje o korekcie to jego podpisy.
-    /// Po pierwszej korekcie „Improve" (okno ze wszystkimi opcjami); przed nią sama ikona obok „Improve transcript".
-    @ViewBuilder private func modelsButton(label: Bool) -> some View {
-        if label {
-            Button { state.modelsSheet = true } label: { Text("Improve") }
-                .buttonStyle(.pill).layoutPriority(2).help("Improve or redo the transcript with another model")
-        } else {
-            Button { state.modelsSheet = true } label: { Image(systemName: "slider.horizontal.3") }
-                .buttonStyle(.pill).layoutPriority(2).help("More options: choose models, transcribe again")
-                .accessibilityLabel("More options")
-        }
-    }
-
-    private var copyButton: some View {
-        Button { copy() } label: { Label("Copy", systemImage: "doc.on.doc") }.buttonStyle(.pill).help("Copy the transcript")
     }
 
     /// Baner R23: najnowsza próba nie jest bieżącym przebiegiem (trwa, padła, z lukami albo pusta).
@@ -257,7 +265,7 @@ struct TranscriptTab: View {
                         .padding(.bottom, 8)
                 }
                 Rectangle().fill(.mnLine2).frame(height: 0.5)
-                ForEach(Array(lines(t).enumerated()), id: \.offset) { i, line in
+                ForEach(Array(Self.lines(t, item: item).enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
                     case .utterance(let u): UtteranceRow(utterance: u, isAuto: isAuto) { onJump(u) }
@@ -291,7 +299,8 @@ struct TranscriptTab: View {
                             Button(resumeLabel) { model.resume(item, runID: item.latestAttemptID) }.buttonStyle(.pill).disabled(correcting)
                         }
                         // D13 (F6): po próbie bez transkryptu inny model i język też do wyboru (okno Improve).
-                        modelsButton(label: true)
+                        Button("Improve") { state.modelsSheet = true }
+                            .buttonStyle(.pill).help("Improve or redo the transcript with another model")
                     }
                     .disabled(moving)
                 }
@@ -299,10 +308,10 @@ struct TranscriptTab: View {
         }
     }
 
-    private enum Line { case utterance(Utterance), mute(MuteNote) }
+    enum Line { case utterance(Utterance), mute(MuteNote) }
 
     /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12”, macos.md §11.5) w kolejności czasu.
-    private func lines(_ t: Transcript) -> [Line] {
+    static func lines(_ t: Transcript, item: SessionItem) -> [Line] {
         var mutes = MuteNote.of(summary: item.summary)[...]
         var out: [Line] = []
         for u in t.utterances {
@@ -311,21 +320,25 @@ struct TranscriptTab: View {
         }
         return out + mutes.map(Line.mute)
     }
-
-    private func copy() {
-        guard let t = shown else { return }
-        let text = lines(t).map { line in
-            switch line {
-            case .utterance(let u): "[\(MeetingDetailView.time(u.start))] \(u.speaker == .me ? "Me" : "Them"): \(u.text)"
-            case .mute(let m): "[\(MeetingDetailView.time(m.start))] \(m.line)"
-            }
-        }.joined(separator: "\n")
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-    }
 }
 
 // MARK: Summary
+
+struct SummaryActions: View {
+    @ObservedObject var state: MeetingViewState
+    let summary: NoteSummary
+    let compact: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(summary.markdown, forType: .string) } label: {
+                if compact { Image(systemName: "doc.on.doc") } else { Label("Copy", systemImage: "doc.on.doc") }
+            }.buttonStyle(.pill).help("Copy the notes").accessibilityLabel("Copy")
+            Button("Improve…") { state.modelsSheet = true }
+                .buttonStyle(.pill).help("Change the template, context or model and regenerate")
+        }
+    }
+}
 
 struct SummaryTab: View {
     @Environment(AppModel.self) private var model
@@ -361,10 +374,18 @@ struct SummaryTab: View {
     }
 
     /// Uwaga 7 (b-summary0.png, b-meeting.png): bez karty — ten sam pasek we wnęce przed i po generowaniu, pod nim
-    /// linie stanu i notatka albo jedna linia stanu pustego. Przewija strona widoku spotkania.
+    /// linie stanu i notatka albo jedna linia stanu pustego. Przewija się treść pod kartami.
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            bar(item.notes.summary)
+            if item.notes.summary == nil { bar(nil) }
+            if item.attemptNotPromoted != nil || (model.transcript(of: item, corrected: corrected).map { t in
+                !t.failedChunks.isEmpty || t.utterances.contains(where: { $0.excludedFromNotes })
+            } ?? false) {
+                HStack {
+                    WarnLabel("The transcript may be incomplete or contain excluded content.")
+                    Button("View transcript") { state.tab = .transcript }.buttonStyle(.link)
+                }
+            }
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
             if gen == .generating { generatingRow }

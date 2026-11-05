@@ -101,11 +101,11 @@ struct EditorNameField: View {
             .padding(.horizontal, 10)
             .frame(height: 32)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
     }
 }
 
-/// Wieloliniowe pole tekstowe (prompt korekty, instrukcje szablonu): `field`, obwódka 0,5 pt, promień 7.
+/// Wieloliniowe pole tekstowe (prompt korekty, instrukcje szablonu): `field`, obwódka 1 pt, promień 7.
 struct EditorPromptField: View {
     @Binding var text: String
     var minHeight: CGFloat = 58
@@ -116,7 +116,7 @@ struct EditorPromptField: View {
             .padding(.horizontal, 5).padding(.vertical, 4)
             .frame(minHeight: minHeight)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
     }
 }
 

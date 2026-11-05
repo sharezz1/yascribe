@@ -9,7 +9,6 @@ struct SheetRow<Control: View>: View {
         HStack(alignment: .center, spacing: 12) {
             Text(label).font(.system(size: 13)).foregroundStyle(.mnText2).frame(width: 78, alignment: .leading)
             control
-            Spacer(minLength: 0)
         }
     }
 }
