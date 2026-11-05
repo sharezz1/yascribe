@@ -86,6 +86,44 @@ import YascribeProviders
         #expect(draft.hasText(item))
     }
 
+    private func snapshot(provider: Provider, asrModel: String) throws -> RunSnapshot {
+        let preset = Preset(name: "P", language: .polish, asr: RoleAssignment(providerID: provider.id, model: asrModel))
+        return try RunSnapshot(preset: preset, provider: provider, probe: nil)
+    }
+
+    @Test func asrPrefillTakesCurrentRunNotPreset() throws {
+        let used = Provider(name: "Used", baseURL: URL(string: "https://used.test/v1")!)
+        let presetAsr = RoleAssignment(providerID: pid, model: "preset-asr")
+        let run = try snapshot(provider: used, asrModel: "voxtral")
+        let known: Set<UUID> = [used.id, pid]
+        #expect(ModelsSheetRules.asrPrefill(run: run, preset: presetAsr, knownProviders: known) == RoleAssignment(providerID: used.id, model: "voxtral"))
+        #expect(ModelsSheetRules.asrPrefill(run: nil, preset: presetAsr, knownProviders: known) == presetAsr)
+        // Dostawca przebiegu usunięty: preset (o ile jego dostawca istnieje), a gdy też usunięty: nic.
+        #expect(ModelsSheetRules.asrPrefill(run: run, preset: presetAsr, knownProviders: [pid]) == presetAsr)
+        #expect(ModelsSheetRules.asrPrefill(run: run, preset: presetAsr, knownProviders: []) == nil)
+    }
+
+    @Test func correctionPrefillTakesCorrectedFileEvenWhenEqualToPreset() {
+        let empty = Transcript(utterances: [], failedChunks: [])
+        func c(_ p: UUID?, _ m: String) -> CorrectedTranscript {
+            CorrectedTranscript(transcript: empty, model: m, batches: 1, failedBatches: 0, rejectedLines: 0, providerID: p)
+        }
+        let other = UUID()
+        // Zapisany dostawca i model wygrywają z obowiązującym wyborem, także gdy równe presetowi.
+        #expect(ModelsSheetRules.correctionPrefill(corrected: c(pid, "m"), assigned: RoleAssignment(providerID: other, model: "x"), knownProviders: [pid, other])
+                == RoleAssignment(providerID: pid, model: "m"))
+        // Stary plik bez dostawcy, brak pliku albo dostawca usunięty: obowiązujący wybór, bez zgadywania.
+        let assigned = RoleAssignment(providerID: other, model: "x")
+        #expect(ModelsSheetRules.correctionPrefill(corrected: c(nil, "m"), assigned: assigned, knownProviders: [pid, other]) == assigned)
+        #expect(ModelsSheetRules.correctionPrefill(corrected: nil, assigned: assigned, knownProviders: [pid, other]) == assigned)
+        #expect(ModelsSheetRules.correctionPrefill(corrected: c(pid, "m"), assigned: assigned, knownProviders: [other]) == assigned)
+    }
+
+    @Test func prefilledChoiceEqualToPresetStillFollowsPreset() {
+        // „Podążaj za presetem" bez zmian: pokazany ostatni model równy presetowi nie przypina nadpisania.
+        #expect(ModelsSheetRules.draft(providerID: pid, model: "m", thinking: nil, preset: preset, hasOverride: false, usePreset: false) == .preset)
+    }
+
     @Test func correctionOriginCaptions() {
         #expect(ModelsSheetRules.correctionOrigin(hasOverride: true, stale: true, presetName: "P") == "The model you chose is no longer available")
         #expect(ModelsSheetRules.correctionOrigin(hasOverride: true, stale: false, presetName: "P") == "Chosen for this meeting")

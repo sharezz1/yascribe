@@ -3,9 +3,10 @@ import YascribeNotes
 import YascribeProviders
 import SwiftUI
 
-/// Szkic ustawień globalnych: Save / Cancel obejmuje Archive search, Correction i Summary; dostawcy zapisują się od razu (plan 1.5-B, T4).
+/// Szkic ustawień globalnych; dostawcy zapisują się osobno.
 final class SettingsDraft: ObservableObject {
     @Published var embedding: RoleAssignment?
+    @Published var askModel: RoleAssignment?
     @Published var confirming = false
     @Published var saved = false
     /// Sekcja Correction: przełącznik i pole „Words" (F20 P2).
@@ -13,9 +14,18 @@ final class SettingsDraft: ObservableObject {
     @Published var fillers = ""
     /// Sekcja Summary: „Thinking" (F20 P1).
     @Published var summaryThinking = true
+    @Published var dictation = DictationSettings()
+
+    static func comparableDictation(_ settings: DictationSettings) -> DictationSettings {
+        var settings = settings
+        settings.launcherOriginX = nil
+        return settings
+    }
+
+    var dictationForComparison: DictationSettings { Self.comparableDictation(dictation) }
 
     func load(_ s: GlobalSettings) {
-        embedding = s.embedding; saved = false
+        embedding = s.embedding; askModel = s.askModel; dictation = s.dictationOrDefault; saved = false
         removeFillers = s.removeFillersEnabled
         summaryThinking = s.summaryThinkingEnabled
         fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
@@ -65,13 +75,16 @@ struct SettingsView: View {
 
     private var isDirty: Bool {
         draft.embedding != model.settings.embedding
+            || draft.askModel != model.settings.askModel
             || draft.removeFillers != model.settings.removeFillersEnabled
             || draft.summaryThinking != model.settings.summaryThinkingEnabled
+            || draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
             || FillerWords.parse(draft.fillers) != (model.settings.fillerWords ?? FillerWords.defaults)
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            ScrollViewReader { proxy in
             ScrollPage(640) {
                 VStack(alignment: .leading, spacing: 0) {
                     PageTitle("Settings").padding(.bottom, 4)
@@ -88,6 +101,7 @@ struct SettingsView: View {
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     UpdatesSection()
                     MeetingSettingsSections()
+                    DictationSettingsSection(settings: $draft.dictation).id("dictation-settings")
                     correctionSection
                     summarySection
                     archiveSearch
@@ -103,17 +117,31 @@ struct SettingsView: View {
                     .font(.system(size: 12)).foregroundStyle(.mnText2).padding(.top, 6).padding(.leading, 2)
                 }
             }
+            .onAppear {
+                if model.scrollToDictationSettings {
+                    DispatchQueue.main.async {
+                        proxy.scrollTo("dictation-settings", anchor: .top)
+                        model.scrollToDictationSettings = false
+                    }
+                }
+            }
+            }
             footer
         }
         .contentBackground()
         .navigationTitle("Settings")
-        .onAppear { draft.load(model.settings) }
+        .onAppear {
+            draft.load(model.settings)
+            if let asr = draft.dictation.asr, asr.model.isEmpty, model.provider(asr.providerID)?.api == .fluidAudio {
+                draft.dictation.asr = RoleAssignment(providerID: asr.providerID, model: LocalASRModels.parakeetV3)
+            }
+        }
         .sheet(isPresented: $sheet.showing) { ProviderSetupSheet(state: sheet) }
         .confirmationDialog("Change the embedding model?", isPresented: $draft.confirming) {
             Button("Change Model", role: .destructive) { commit() }
             Button("Keep Current Model", role: .cancel) {}
         } message: {
-            Text("Changing the embedding model means the whole archive will be re-indexed when archive search arrives. Change it?")
+            Text("The archive index will be rebuilt the next time you ask. Change it?")
         }
     }
 
@@ -168,6 +196,8 @@ struct SettingsView: View {
         candidates.first { $0.id == draft.embedding?.providerID } ?? (candidates.count == 1 ? candidates.first : nil)
     }
 
+    private var askCandidates: [Provider] { model.providers.providers.filter { $0.supports(.summary) } }
+
     @ViewBuilder private var archiveSearch: some View {
         SectionHeader("Archive search")
         Card {
@@ -201,10 +231,32 @@ struct SettingsView: View {
                     }
                 }
             }
+            RowDivider()
+            FormRow(label: "Ask provider") {
+                FieldMenu(label: "Ask provider", value: askCandidates.first(where: { $0.id == draft.askModel?.providerID })?.name ?? "Choose…", width: 180) {
+                    Picker("Ask provider", selection: Binding<UUID?>(
+                        get: { draft.askModel?.providerID },
+                        set: { id in
+                            if let id { draft.askModel = RoleAssignment(providerID: id, model: draft.askModel?.providerID == id ? draft.askModel?.model ?? "" : "") }
+                            else { draft.askModel = nil }
+                        })) {
+                        Text("None").tag(UUID?.none)
+                        ForEach(askCandidates) { p in Text(p.name).tag(Optional(p.id)) }
+                    }.pickerStyle(.inline).labelsHidden()
+                }
+            }
+            if let p = askCandidates.first(where: { $0.id == draft.askModel?.providerID }) {
+                RowDivider()
+                FormRow(label: "Ask model") {
+                    ModelPicker(providerID: p.id, role: .summary, selection: Binding(
+                        get: { draft.askModel?.model ?? "" },
+                        set: { draft.askModel?.model = $0 }))
+                }
+            }
         }
     }
 
-    /// Dolny pasek: Cancel / Save obejmuje tylko „Archive search".
+    /// Dolny pasek zapisuje lub odrzuca wspólny szkic.
     private var footer: some View {
         HStack(spacing: 8) {
             if draft.saved && !isDirty { StateLabel(.ok, "Saved") }
@@ -236,10 +288,18 @@ struct SettingsView: View {
     private func commit() {
         let words = FillerWords.parse(draft.fillers)
         model.settings.embedding = draft.embedding
+        model.settings.askModel = draft.askModel
         model.settings.removeFillers = draft.removeFillers
         model.settings.fillerWords = words == FillerWords.defaults ? nil : words
         model.settings.summaryThinking = draft.summaryThinking
+        let dictationChanged = draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
+        if dictationChanged {
+            var dictation = draft.dictation
+            dictation.launcherOriginX = model.settings.dictationOrDefault.launcherOriginX
+            model.settings.dictation = dictation
+        }
         model.save()
+        if dictationChanged { model.dictation.applySettings() }
         draft.fillers = FillerWords.format(words)
         draft.saved = true
     }
@@ -398,7 +458,9 @@ struct ProviderSetupSheet: View {
                     Text(preset.role).font(.system(size: 11)).foregroundStyle(.mnText2)
                 }
             }
-            .padding(.bottom, 12)
+            .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
+            ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
             if editableAddress {
                 FormRow(label: "Address", labelWidth: 70) { TextField("https://example.com/v1", text: $state.url).textFieldStyle(.plain).fieldBox() }
                 FormRow(label: "Name", labelWidth: 70) { TextField("Name", text: $state.name).textFieldStyle(.plain).fieldBox() }
@@ -426,15 +488,25 @@ struct ProviderSetupSheet: View {
                 }
             }
             testLine.padding(.leading, 98).padding(.trailing, 8).padding(.top, 4)
+            }
+            .padding(.horizontal, 20).padding(.bottom, 20)
+            }
+            if let error = state.error {
+                StateLabel(.bad, error).wrapping()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20).padding(.vertical, 10)
+                    .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
+            }
             HStack(spacing: 8) {
                 Spacer()
                 Button("Cancel") { state.showing = false }.buttonStyle(.pill).keyboardShortcut(.cancelAction)
                 Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
             }
-            .padding(.top, 18).padding(.trailing, 8)
+            .padding(.horizontal, 20).padding(.vertical, 14)
+            .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }
         }
-        .padding(.horizontal, 16).padding(.vertical, 20)
-        .frame(width: 480)
+        .frame(width: 560)
+        .frame(minHeight: 360, idealHeight: 640)
         .background(.mnCard)
         .onChange(of: state.key) { _, _ in state.result = nil; state.note = nil; state.error = nil }
         .onChange(of: state.context) { _, _ in state.error = nil }
@@ -468,8 +540,6 @@ struct ProviderSetupSheet: View {
     @ViewBuilder private var resultLabel: some View {
         if state.testing {
             StateLabel(.progress(nil), "Testing…")
-        } else if let e = state.error {
-            StateLabel(.bad, e).wrapping()
         } else if let r = state.result {
             switch r {
             case .verified(let n): StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s") available")
@@ -551,6 +621,6 @@ extension View {
     func fieldBox() -> some View {
         padding(.horizontal, 10).frame(height: 28)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
     }
 }

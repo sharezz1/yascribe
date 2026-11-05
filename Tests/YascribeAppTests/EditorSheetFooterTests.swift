@@ -18,6 +18,13 @@ struct EditorSheetFooterTests {
         ])
     }
 
+    @Test func closeActionGroupsCloseBeforePrimaryAction() {
+        #expect(EditorSheetFooter.closeAction("Generate notes").buttons == [
+            FooterButton(title: "Close", role: .close, shortcuts: [.escape]),
+            FooterButton(title: "Generate notes", role: .save, shortcuts: []),
+        ])
+    }
+
     @Test @MainActor func convenienceInitWithoutLeadingBuilds() {
         let sheet = EditorSheet(title: "Title", dirty: false, error: nil, onCancel: {}, footer: .closeOnly) {
             Text("x")

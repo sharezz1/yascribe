@@ -195,7 +195,7 @@ struct TemplateForm: View {
             GrowingField(placeholder: "Describe the kind of meeting and what matters in its notes.", text: about, weight: .regular, color: .mnText)
                 .padding(.horizontal, 10).padding(.vertical, 10)
                 .background(.mnField, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
             SectionHeader("Sections") { Text("in this order").font(.system(size: 11)).foregroundStyle(.mnText2) }
             if !sections.wrappedValue.isEmpty {
                 Card {

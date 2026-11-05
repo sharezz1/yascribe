@@ -153,7 +153,8 @@ private func chat(_ provider: Provider, _ http: StubHTTP, timeout: Double = 120,
     #expect(reply == "OK")
     #expect(http.calls.count == 2)
     #expect(http.calls[0].body["reasoning_effort"] as? String == "none")
-    #expect(http.calls[1].body["reasoning_effort"] == nil)
+    #expect((http.calls[0].body["chat_template_kwargs"] as? [String: Any])?["enable_thinking"] as? Bool == false)
+    #expect(http.calls[1].body["reasoning_effort"] == nil && http.calls[1].body["chat_template_kwargs"] == nil)
     #expect(http.calls[1].body["max_tokens"] as? Int == 64 && http.calls[1].body["temperature"] as? Double == 0.2)
     // 422 też; a gdy odrzuca także drugie żądanie, błąd wychodzi (bez trzeciej próby).
     let always = StubHTTP { _, _ in fail(422, "Reasoning is not supported") }
@@ -357,4 +358,48 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     let r = try await OpenAICompatibleClient(provider: ollamaLocal, key: nil, http: http)
         .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .chatAudio)
     #expect(r.text == "raz dwa trzy")
+}
+
+// TASK-87: Voxtral odrzuca `timestamp_granularities: ["word"]` kodem 400 bez diagnostycznej treści.
+@Test(arguments: [400, 422]) func rejectedWordTimestampsAreRetriedOnceWithoutTheField(status: Int) async throws {
+    let http = StubHTTP { _, body in
+        body["timestamp_granularities"] != nil ? fail(status, "Provider returned \(status)")
+            : ok(["text": "raz dwa", "segments": [["start": 0.0, "end": 1.0, "text": "raz dwa"]]])
+    }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    let r = try await c.transcribe(wav: ProbeClips.polish.wav, model: "mistralai/voxtral-small-transcribe-3-0", language: .polish,
+                                   shape: .audioTranscriptions)
+    #expect(http.calls.count == 2)
+    #expect(http.calls[1].body["timestamp_granularities"] == nil)
+    #expect(http.calls[1].body["response_format"] as? String == "verbose_json")
+    #expect(http.calls[1].body["language"] as? String == "pl")
+    #expect(r.text == "raz dwa")
+    #expect(r.words == nil)
+}
+
+@Test func wordTimestampFallbackHappensOnlyOnce() async {
+    let http = StubHTTP { _, _ in fail(400, "Provider returned 400") }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    await #expect(throws: ProviderError.http(400, "Provider returned 400")) {
+        _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    #expect(http.calls.count == 2)
+}
+
+@Test(arguments: [401, 429, 500]) func otherTranscriptionErrorsAreNotRetriedByTheClient(status: Int) async {
+    let http = StubHTTP { _, _ in fail(status) }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    await #expect(throws: ProviderError.self) {
+        _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    #expect(http.calls.count == 1)
+}
+
+@Test func chatAudioShapeIsNotRetriedOn400() async {
+    let http = StubHTTP { _, _ in fail(400) }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    await #expect(throws: ProviderError.self) {
+        _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .chatAudio)
+    }
+    #expect(http.calls.count == 1)
 }

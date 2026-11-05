@@ -92,10 +92,62 @@ enum Snapshots {
         model.showSetup = false
     }
 
+    /// Syntetyczne stany rozmowy; nie uruchamiają indeksowania ani sieci.
+    static func archiveSnapshots(model: AppModel, dark: Bool) throws {
+        let original = model.sessions
+        let originalSelection = model.selectedSessionID
+        defer { model.sessions = original; model.selectedSessionID = originalSelection; model.archive.clear(); model.archive.scope = .list }
+        guard !original.isEmpty else { return }
+        let items = original
+        let sources = items.prefix(3).enumerated().map { i, item in
+            ArchiveIndex.Chunk(sessionID: item.id, start: Double(i * 12), text: "Synthetic excerpt")
+        }
+        let answer = ArchiveAsk.Answer(text: "The team will review the forecast [1][2][3].", sources: sources)
+        func turn(_ question: String, _ state: ArchiveModel.TurnState) -> ArchiveModel.Turn {
+            .init(id: UUID(), question: question, scopeLabel: "All meetings", scopeIDs: Set(items.map(\.id)), state: state)
+        }
+        let first = turn("What did the team decide?", .answered(answer))
+        let cases: [(String, [ArchiveModel.Turn], (Int, String, String)?)] = [
+            ("answer", [first], nil),
+            ("follow-up", [first, turn("Who will follow up?", .answered(answer))], nil),
+            ("no-answer", [turn("What happened?", .noAnswer("I couldn't find a supported answer in All meetings."))], nil),
+            ("failure", [turn("What happened?", .failed("Couldn't get an answer from the provider.", opensSettings: false))], nil),
+            ("missing-model", [turn("What happened?", .failed("Choose an Ask model in Settings → Archive search.", opensSettings: true))], nil),
+            ("working", [turn("What happened?", .working("Answering…"))], nil),
+            ("consent", [turn("What happened?", .working("Waiting for your OK"))], (3, "Example provider", "example-model"))
+        ]
+        for size in [CGSize(width: 960, height: 520), CGSize(width: 1400, height: 860)] {
+            let suffix = Int(size.width)
+            model.sessions = []
+            model.archive.clear()
+            try render("ask-empty-\(suffix)", size: size, dark: dark, model: model) { MeetingsView() }
+            model.sessions = (0..<100).map { i in
+                var item = items[i % items.count]
+                item.url = item.url.deletingLastPathComponent().appendingPathComponent("synthetic-\(i)")
+                item.notes.meta.manualTitle = "Synthetic meeting \(i + 1)"
+                return item
+            }
+            try render("ask-100-\(suffix)", size: size, dark: dark, model: model) { MeetingsView() }
+            model.sessions = items
+            for (name, turns, consent) in cases {
+                model.archive.setPreview(turns, consent: consent)
+                let bar = AskBarState(); bar.expanded = true
+                try render("ask-\(name)-\(suffix)", size: size, dark: dark, model: model) { MeetingsView(askState: bar) }
+            }
+            model.archive.clear()
+            model.selectedSessionID = items[0].id
+            model.archive.scope = .meeting
+            try render("ask-detail-\(suffix)", size: size, dark: dark, model: model) { MeetingsView() }
+            model.selectedSessionID = nil
+            model.archive.scope = .list
+        }
+    }
+
     static func runAll(model: AppModel) {
         do {
             try seed(model)
             for dark in [false, true] {
+                try archiveSnapshots(model: model, dark: dark)
                 if var example = model.sessions.first {
                     example.transcript = try JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8))
                     example.notes.meta.manualTitle = "Quarterly forecast review"
@@ -103,10 +155,10 @@ enum Snapshots {
                     example.notes.meta.overviewRunID = "fixture-run"
                     example.notes.meta.overviewTranscriptFingerprint = Overview.fingerprint(example.transcript)
                     example.notes.meta.overview = "The team reviewed a synthetic forecast."
-                    try render("overview-filled", size: CGSize(width: 290, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).contentBackground() }
+                    try render("overview-filled", size: CGSize(width: 290, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).background(Color.mnOverview) }
                     example.notes.meta.overview = nil
-                    try render("overview-empty", size: CGSize(width: 290, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).contentBackground() }
-                    try render("overview-narrow", size: CGSize(width: 200, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).contentBackground() }
+                    try render("overview-empty", size: CGSize(width: 290, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).background(Color.mnOverview) }
+                    try render("overview-narrow", size: CGSize(width: 200, height: 220), dark: dark, model: model) { OverviewPanel(item: example).padding(20).background(Color.mnOverview) }
                 }
                 if !model.sessions.isEmpty {
                     let index = 0
@@ -127,7 +179,11 @@ enum Snapshots {
                     let section = model.section
                     model.section = .meetings
                     try render("window-meetings", size: CGSize(width: 1280, height: 760), dark: dark, model: model) { ContentView() }
-                    try render("window-meetings-minimum", size: CGSize(width: 960, height: 760), dark: dark, model: model) { ContentView() }
+                    try render("window-meetings-minimum", size: CGSize(width: 960, height: 520), dark: dark, model: model) { ContentView() }
+                    model.selectedSessionID = model.sessions[index].id
+                    try render("window-summary-minimum", size: CGSize(width: 960, height: 520), dark: dark, model: model) { ContentView() }
+                    try render("window-summary-wide", size: CGSize(width: 1280, height: 760), dark: dark, model: model) { ContentView() }
+                    model.selectedSessionID = nil
                     model.section = .presets
                     try render("window-presets", size: CGSize(width: 960, height: 760), dark: dark, model: model) { ContentView() }
                     model.section = .templates
@@ -241,6 +297,7 @@ enum Snapshots {
                         var notCorrected = picked
                         notCorrected.corrected = nil
                         try render("meeting-transcript-not-corrected", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: notCorrected, state: transcriptView) }
+                        try render("meeting-transcript-not-corrected-narrow", size: CGSize(width: 468, height: 400), dark: dark, model: model) { MeetingDetailView(item: notCorrected, state: transcriptView) }
                         // Okno „Models…" (Transcript): wprost, otwarte nad widokiem spotkania, w trakcie korekty i po usunięciu audio.
                         try render("models-transcript", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: picked) {} }
                         let sheetOpen = MeetingViewState(); sheetOpen.tab = .transcript; sheetOpen.modelsSheet = true
@@ -281,7 +338,9 @@ enum Snapshots {
                     model.notes.setPreview(split.id)
                     // Uwaga 7: „Add context” rozwinięte w miejscu (pole rośnie z treścią).
                     let contextOpen = MeetingViewState(); contextOpen.tab = .summary; contextOpen.showContext = true
-                    try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: withNotes, state: contextOpen) }
+                    contextOpen.context = "Discuss the staffing forecast and next steps."
+                    var contextItem = withNotes; contextItem.notes.summary = nil
+                    try render("meeting-summary-context", size: CGSize(width: 900, height: 640), dark: dark, model: model) { MeetingDetailView(item: contextItem, state: contextOpen) }
                     // Faza 1.6 T12: okno „Select calendar event" (dane przykładowe) i nagłówek z powiązanym wydarzeniem.
                     let at = withNotes.startedAt
                     let sample = [CalendarEventInfo(title: "Weekly staffing review", start: at, end: at + 1800, attendees: [.init(name: "Piotr Nowak"), .init(name: "Ada Lis"), .init(email: "team@example.com"), .init(name: "Jan Kos")]),

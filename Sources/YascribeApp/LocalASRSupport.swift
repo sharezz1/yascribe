@@ -15,8 +15,8 @@ final class LocalASRSupport: ObservableObject {
     /// Powód ostatniego nieudanego pobrania; czyszczony przy starcie następnego.
     @Published private(set) var downloadError: String?
     private var highest = 0.0
-    /// Od `.preparing` (pierwsze ładowanie przebiegu) do `endRun()` — wtedy model jest w użyciu i `remove()` odmawia.
-    private var runActive = false
+    /// Przebiegi trzymające model (`beginRun()`…`endRun()`); póki nie zero, `remove()` odmawia.
+    private var runs = ModelRunCount()
 
     init(store: ModelStore = ModelStore()) {
         self.store = store
@@ -49,9 +49,9 @@ final class LocalASRSupport: ObservableObject {
     }
 
     /// Usunięcie modelu po kliknięciu. Wyklucza się z pobieraniem (`phase` ≠ `.idle`) i z przebiegiem, który trzyma klienta
-    /// (`runActive`: od pierwszego ładowania do `endRun()`).
+    /// (`runs`: od `beginRun()` do `endRun()` każdego przebiegu).
     func remove() {
-        guard phase == .idle, !runActive else {
+        guard phase == .idle, runs.isIdle else {
             downloadError = "Can't remove the on-device model while it is downloading or in use."
             return
         }
@@ -65,20 +65,25 @@ final class LocalASRSupport: ObservableObject {
         guard phase == .idle || phase == .preparing else { return }
         switch p {
         case .preparing:
-            runActive = true
             downloadError = nil
             phase = .preparing
-        case .ready, .idle:
+        case .ready:
             phase = .idle
+        case .idle:
+            // `release()` jednego przebiegu nie gasi „Preparing…” innego; własny przebieg zgasi je w `endRun()`.
+            if runs.isIdle { phase = .idle }
         case .failed(let reason):
             phase = .idle
             downloadError = "Couldn't load the on-device model: \(reason)"
         }
     }
 
-    /// Po przebiegu: nieudane ładowanie nie wysyła `.ready`, więc „Preparing…" nie może zostać.
+    /// Przed przebiegiem lokalnego klienta (spotkanie, dyktowanie, sonda); para z `endRun()` w tym samym zakresie.
+    func beginRun() { runs.begin() }
+
+    /// Po przebiegu: nieudane ładowanie nie wysyła `.ready`, więc „Preparing…" nie może zostać — gdy żaden inny przebieg nie trwa.
     func endRun() {
-        runActive = false
-        if phase == .preparing { phase = .idle }
+        runs.end()
+        if runs.isIdle, phase == .preparing { phase = .idle }
     }
 }

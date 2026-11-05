@@ -10,6 +10,7 @@ struct FooterButton: Equatable {
 
 enum EditorSheetFooter: Equatable {
     case saveCancel, closeOnly
+    case closeAction(String)
 
     var buttons: [FooterButton] {
         switch self {
@@ -18,6 +19,9 @@ enum EditorSheetFooter: Equatable {
              FooterButton(title: "Save", role: .save, shortcuts: [.commandReturn, .commandS])]
         case .closeOnly:
             [FooterButton(title: "Close", role: .close, shortcuts: [.escape])]
+        case .closeAction(let title):
+            [FooterButton(title: "Close", role: .close, shortcuts: [.escape]),
+             FooterButton(title: title, role: .save, shortcuts: [])]
         }
     }
 }
@@ -33,16 +37,17 @@ struct EditorSheet<Leading: View, Content: View>: View {
     let onCancel: () -> Void
     let onSave: () -> Void
     let footer: EditorSheetFooter
+    let actionReason: String?
     /// `nil` = wysokość treści (okna Models są krótkie); formularze zostają przy 640, żeby długie pola miały miejsce.
     let idealHeight: CGFloat?
     let leading: Leading
     let content: Content
 
     init(title: String, dirty: Bool, error: String?, onCancel: @escaping () -> Void,
-         footer: EditorSheetFooter = .saveCancel, onSave: @escaping () -> Void = {}, idealHeight: CGFloat? = 640,
+         footer: EditorSheetFooter = .saveCancel, actionReason: String? = nil, onSave: @escaping () -> Void = {}, idealHeight: CGFloat? = 640,
          @ViewBuilder leading: () -> Leading, @ViewBuilder content: () -> Content) {
         self.title = title; self.dirty = dirty; self.error = error
-        self.onCancel = onCancel; self.onSave = onSave; self.footer = footer; self.idealHeight = idealHeight
+        self.onCancel = onCancel; self.onSave = onSave; self.footer = footer; self.actionReason = actionReason; self.idealHeight = idealHeight
         self.leading = leading(); self.content = content()
     }
 
@@ -62,6 +67,7 @@ struct EditorSheet<Leading: View, Content: View>: View {
             HStack(spacing: 8) {
                 leading
                 Spacer(minLength: 12)
+                if let actionReason { Text(actionReason).font(.subheadline).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true) }
                 ForEach(Array(footer.buttons.enumerated()), id: \.offset) { _, button in
                     footerButton(button)
                 }
@@ -85,7 +91,7 @@ struct EditorSheet<Leading: View, Content: View>: View {
     }
 
     @ViewBuilder private func footerButton(_ button: FooterButton) -> some View {
-        if button.role == .cancel {
+        if button.role != .save {
             shortcutButton(button, shortcut: button.shortcuts.first).buttonStyle(.pill)
         } else {
             shortcutButton(button, shortcut: button.shortcuts.first).buttonStyle(.pillPrimary)
@@ -107,9 +113,9 @@ struct EditorSheet<Leading: View, Content: View>: View {
 
 extension EditorSheet where Leading == EmptyView {
     init(title: String, dirty: Bool, error: String?, onCancel: @escaping () -> Void,
-         footer: EditorSheetFooter = .saveCancel, onSave: @escaping () -> Void = {}, idealHeight: CGFloat? = 640,
+         footer: EditorSheetFooter = .saveCancel, actionReason: String? = nil, onSave: @escaping () -> Void = {}, idealHeight: CGFloat? = 640,
          @ViewBuilder content: () -> Content) {
-        self.init(title: title, dirty: dirty, error: error, onCancel: onCancel, footer: footer, onSave: onSave,
+        self.init(title: title, dirty: dirty, error: error, onCancel: onCancel, footer: footer, actionReason: actionReason, onSave: onSave,
                   idealHeight: idealHeight, leading: { EmptyView() }, content: content)
     }
 }

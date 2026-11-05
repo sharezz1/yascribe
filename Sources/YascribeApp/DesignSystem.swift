@@ -27,6 +27,7 @@ private func hex(_ v: UInt32, _ alpha: CGFloat = 1) -> NSColor {
 extension ShapeStyle where Self == Color {
     static var mnBackground: Color { dynamic(hex(0xF7F6F2), hex(0x1C1C1B)) }
     static var mnCard: Color { dynamic(hex(0xFFFFFF), hex(0x262624)) }
+    static var mnOverview: Color { dynamic(hex(0xFBFAF7), hex(0x212120)) }
     /// Pole tekstowe i popup: w ciemnym ciemniejsze od karty (`#2E2E2C`), w jasnym jak karta.
     static var mnField: Color { dynamic(hex(0xFFFFFF), hex(0x2E2E2C)) }
     static var mnSunk: Color { dynamic(hex(0xF1EFE9), hex(0x2E2E2C)) }
@@ -112,6 +113,27 @@ struct ScrollPage<Content: View>: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths.inner = $0 }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths.outer = $0 }
+    }
+}
+
+/// Belka stanu + lista: belka przypięta do górnej krawędzi `ScrollPage`, gdy nagłówek strony się przewinie (TASK-90).
+/// Wysokość belki ograniczona: błąd dłuższy niż 3 linie jest ucięty (pełny w podpowiedzi).
+struct PinnedBarPage<Bar: View, Content: View>: View {
+    var spacing: CGFloat = 10
+    @ViewBuilder let bar: Bar
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        LazyVStack(alignment: .leading, spacing: spacing, pinnedViews: [.sectionHeaders]) {
+            SwiftUI.Section {
+                content
+            } header: {
+                VStack(alignment: .leading, spacing: spacing) { bar }
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.mnBackground)
+            }
+        }
     }
 }
 
@@ -258,7 +280,7 @@ struct WarnLabel: View {
 
 // MARK: - Popupy jak pole (D8, §11.4 `FieldMenuStyle`)
 
-/// Popup wyglądający jak pole: `field`, obwódka 0,5, promień 7, mały ⌄. Pod spodem standardowe `Menu`;
+/// Popup wyglądający jak pole: `field`, obwódka 1 pt, promień 7, mały ⌄. Pod spodem standardowe `Menu`;
 /// wybór z listy to `Picker(...).pickerStyle(.inline)` w treści menu (zaznaczenie ✓ robi system).
 struct FieldMenu<Content: View>: View {
     /// Nazwa dla VoiceOver („Language”).
@@ -268,6 +290,7 @@ struct FieldMenu<Content: View>: View {
     /// Dopisek przed wartością w `text2` (jak dostawca w `ModelField`).
     var prefix: String?
     var width: CGFloat?
+    var flexible = false
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -280,15 +303,15 @@ struct FieldMenu<Content: View>: View {
             }
             .font(.system(size: 13))
             .padding(.horizontal, 10)
-            .frame(minWidth: width, maxWidth: width, minHeight: 28, maxHeight: 28)
+            .frame(minWidth: flexible ? nil : width, maxWidth: flexible ? .infinity : width, minHeight: 28, maxHeight: 28)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .fixedSize()
+        .fixedSize(horizontal: !flexible, vertical: true)
         .accessibilityLabel(label)
         .accessibilityValue(value)
     }
@@ -345,7 +368,7 @@ struct PillButtonStyle: ButtonStyle {
         }
 
         private var background: Color {
-            if kind == .primary { return isEnabled ? .mnPrimary : .mnSunk }
+            if kind == .primary { return isEnabled ? .mnAccent : .mnSunk }
             return hover.hovering && isEnabled ? .mnSunk : .mnCard
         }
     }

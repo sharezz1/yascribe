@@ -1,6 +1,7 @@
 import Foundation
 import YascribeNotes
 import YascribeProviders
+import YascribeTranscription
 
 /// Czyste reguły okna „Models…" (bez widoków), żeby dało się je testować bez `AppModel`.
 enum ModelsSheetRules {
@@ -13,6 +14,23 @@ enum ModelsSheetRules {
         guard let providerID, !model.isEmpty else { return nil }
         if providerID == preset?.providerID, model == preset?.model, thinking == nil, !hasOverride { return .preset }
         return .custom(RoleOverride(providerID: providerID, model: model, thinking: thinking))
+    }
+
+    /// ASR w oknie: dostawca i model bieżącego przebiegu, o ile dostawca jeszcze istnieje; inaczej preset (też tylko z istniejącym dostawcą).
+    /// Samo okno niczego nie przypina: „Transcribe again" wysyła ten wybór, a preset sesji zostaje jak był.
+    static func asrPrefill(run: RunSnapshot?, preset: RoleAssignment?, knownProviders: Set<UUID>) -> RoleAssignment? {
+        if let run, knownProviders.contains(run.providerID), !run.model.trimmingCharacters(in: .whitespaces).isEmpty {
+            return RoleAssignment(providerID: run.providerID, model: run.model)
+        }
+        return preset.flatMap { knownProviders.contains($0.providerID) ? $0 : nil }
+    }
+
+    /// Korekta w oknie: dostawca i model z `corrected.json`, gdy zapisano dostawcę i ten jeszcze istnieje (także gdy równe presetowi);
+    /// inaczej wybór obowiązujący (nadpisanie albo preset). Sama nazwa modelu bez dostawcy (stare pliki) nie wystarcza: nie zgadujemy.
+    static func correctionPrefill(corrected: CorrectedTranscript?, assigned: RoleAssignment?, knownProviders: Set<UUID>) -> RoleAssignment? {
+        guard let corrected, let pid = corrected.providerID, knownProviders.contains(pid),
+              !corrected.model.trimmingCharacters(in: .whitespaces).isEmpty else { return assigned }
+        return RoleAssignment(providerID: pid, model: corrected.model)
     }
 
     static func transcribeReason(blocker: String?, correcting: Bool, generating: Bool, hasPreset: Bool, providerChosen: Bool,

@@ -27,6 +27,8 @@ public struct YascribePaths: Sendable {
     public var dictionary: URL { root.appendingPathComponent("dictionary.json") }
     /// Foldery spotkań (TASK-26); brak pliku = brak folderów.
     public var folders: URL { root.appendingPathComponent("folders.json") }
+    /// Historia dyktowania (tylko tekst, bez audio).
+    public var dictationHistory: URL { root.appendingPathComponent("dictation-history.json") }
     public var sessions: URL { root.appendingPathComponent("sessions") }
 }
 

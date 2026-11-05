@@ -26,9 +26,10 @@ let package = Package(
         .target(name: "YascribeUpdates", dependencies: [.product(name: "Sparkle", package: "Sparkle")]),
         .target(name: "YascribeNotes", dependencies: ["YascribeSessionFormat", "YascribeProviders", "YascribeTranscription",
                                                        "YascribeMeetings"]),
+        .target(name: "YascribeDictation", dependencies: ["YascribeProviders", "YascribeNotes", "YascribeTranscription"]),
         .executableTarget(name: "yascribe-cli", dependencies: ["YascribeRecording", "YascribeProviders", "YascribeTranscription", "YascribeLocalASR", "YascribeNotes"]),
         .executableTarget(name: "YascribeApp", dependencies: ["YascribeRecording", "YascribeProviders", "YascribeTranscription", "YascribeNotes",
-                                                       "YascribeMeetings", "YascribeLocalASR", "YascribeUpdates"]),
+                                                       "YascribeMeetings", "YascribeLocalASR", "YascribeUpdates", "YascribeDictation"]),
         .testTarget(name: "YascribeSessionFormatTests", dependencies: ["YascribeSessionFormat"]),
         .testTarget(name: "YascribeRecordingTests", dependencies: ["YascribeRecording"]),
         .testTarget(name: "YascribeProvidersTests", dependencies: ["YascribeProviders"], exclude: ["Fixtures"]),
@@ -38,6 +39,7 @@ let package = Package(
         .testTarget(name: "YascribeLocalASRTests", dependencies: ["YascribeLocalASR", "YascribeProviders", "YascribeTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
         .testTarget(name: "YascribeMeetingsTests", dependencies: ["YascribeMeetings"]),
         .testTarget(name: "YascribeUpdatesTests", dependencies: ["YascribeUpdates"]),
+        .testTarget(name: "YascribeDictationTests", dependencies: ["YascribeDictation", "YascribeProviders", "YascribeNotes", "YascribeTranscription"]),
         .testTarget(name: "YascribeAppTests", dependencies: ["YascribeApp", "YascribeNotes", "YascribeProviders", "YascribeTranscription"]),
     ]
 )

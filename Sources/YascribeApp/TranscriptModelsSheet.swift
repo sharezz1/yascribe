@@ -70,11 +70,13 @@ struct TranscriptModelsSheet: View {
     private func prefill() {
         guard !ui.prefilled else { return }
         ui.prefilled = true
-        draft.asrProviderID = preset?.asr?.providerID
-        draft.asrModel = preset?.asr?.model ?? ""
+        let known = Set(model.providers.providers.map(\.id))
+        let asr = ModelsSheetRules.asrPrefill(run: item.runSnapshot, preset: preset?.asr, knownProviders: known)
+        draft.asrProviderID = asr?.providerID
+        draft.asrModel = asr?.model ?? ""
         let run = model.runLanguage(item)
         draft.language = ModelsSheetRules.languageChoice(isAuto: run.isAuto, language: run.language)
-        let c = model.notes.correctionAssignment(for: item)
+        let c = ModelsSheetRules.correctionPrefill(corrected: item.corrected, assigned: model.notes.correctionAssignment(for: item), knownProviders: known)
         draft.correctProviderID = c?.providerID
         draft.correctModel = c?.model ?? ""
         draft.usePreset = false
@@ -86,7 +88,7 @@ struct TranscriptModelsSheet: View {
         let providers = RoleProviders.choices(model.providers.providers, role: .asr, current: draft.asrProviderID)
         return SheetSection(title: "Transcribe again") {
             SheetRow(label: "Provider") {
-                FieldMenu(label: "Provider", value: provider(draft.asrProviderID)?.roleLabel ?? "None", width: 300) {
+                FieldMenu(label: "Provider", value: provider(draft.asrProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.asrProviderID }, set: { id in
                         guard id != draft.asrProviderID else { return }
                         draft.asrProviderID = id
@@ -99,12 +101,12 @@ struct TranscriptModelsSheet: View {
             }
             if let pid = draft.asrProviderID {
                 SheetRow(label: "Model") {
-                    ModelPicker(providerID: pid, role: .asr, selection: $draft.asrModel, showProvider: false).frame(width: 300)
+                    ModelPicker(providerID: pid, role: .asr, selection: $draft.asrModel, showProvider: false).frame(maxWidth: .infinity)
                     if provider(pid)?.isLocal == true { OnThisMacTag() }
                 }
             }
             SheetRow(label: "Language") {
-                FieldMenu(label: "Language", value: languageName(draft.language), width: 300) {
+                FieldMenu(label: "Language", value: languageName(draft.language), width: nil, flexible: true) {
                     Picker("Language", selection: $draft.language) {
                         Text("Choose…").tag(LanguageChoice.unset)
                         ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(LanguageChoice.code(l.code)) }
@@ -143,7 +145,7 @@ struct TranscriptModelsSheet: View {
         let providers = RoleProviders.choices(model.providers.providers, role: .correction, current: draft.correctProviderID)
         return SheetSection(title: "Correct the transcript") {
             SheetRow(label: "Provider") {
-                FieldMenu(label: "Provider", value: provider(draft.correctProviderID)?.roleLabel ?? "None", width: 300) {
+                FieldMenu(label: "Provider", value: provider(draft.correctProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.correctProviderID }, set: { id in
                         guard id != draft.correctProviderID else { return }
                         draft.correctProviderID = id
@@ -156,7 +158,7 @@ struct TranscriptModelsSheet: View {
             }
             if let pid = draft.correctProviderID {
                 SheetRow(label: "Model") {
-                    ModelPicker(providerID: pid, role: .correction, selection: $draft.correctModel, showProvider: false).frame(width: 300)
+                    ModelPicker(providerID: pid, role: .correction, selection: $draft.correctModel, showProvider: false).frame(maxWidth: .infinity)
                     if provider(pid)?.isLocal == true { OnThisMacTag() }
                 }
             }

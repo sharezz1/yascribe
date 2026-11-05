@@ -60,6 +60,7 @@ public enum DictionaryTransfer {
         var mode: Mode
         /// Niepusta trzecia (lub dalsza) kolumna: plik nie jest w formacie `fraza<TAB>zapis`, więc wiersz idzie do `rejected` (R15b).
         var extraColumns = false
+        var inflects = false
     }
 
     public static func importFiles(vocabulary: String?, replacements: String?, into d: UserDictionary)
@@ -95,6 +96,8 @@ public enum DictionaryTransfer {
                 // Tekst Terma jest już cudzym Aliasem: nie dodajemy, a dalsze linie tego celu zgłosi przebieg 2.
                 if let owner = dict.owner(ofAlias: text) {
                     report.conflicts.append(.init(alias: text, keptBy: owner.text, skippedFor: text))
+                } else if case DictionaryError.inflectionAmbiguous(let alias, _) = error {
+                    report.conflicts.append(.init(alias: alias, keptBy: dict.owner(ofAlias: alias)?.text ?? alias, skippedFor: text))
                 }
             }
         }
@@ -112,7 +115,7 @@ public enum DictionaryTransfer {
             }
             let ak = UserDictionary.key(row.phrase)
             if term.aliases.contains(where: { UserDictionary.key($0.text) == ak }) { continue }
-            if row.phrase == term.text { continue } // upsert i tak by go zgubił; to nie konflikt
+            if row.phrase == term.text && !row.inflects { continue } // upsert i tak by go zgubił; to nie konflikt
             if let other = dict.terms.first(where: { $0.id != term.id && UserDictionary.key($0.text) == ak }) {
                 report.conflicts.append(.init(alias: row.phrase, keptBy: other.text, skippedFor: term.text))
                 continue
@@ -122,13 +125,17 @@ public enum DictionaryTransfer {
                 continue
             }
             let flags = row.mode.flags
-            term.aliases.append(DictionaryAlias(row.phrase, risky: flags.risky, enabled: flags.enabled))
+            term.aliases.append(DictionaryAlias(row.phrase, risky: flags.risky, enabled: flags.enabled, inflects: row.inflects))
             do {
                 try dict.upsert(term)
                 report.aliasesAdded += 1
                 if flags.risky && !flags.enabled { report.riskyLeftOff += 1 }
             } catch DictionaryError.invalidCharacters {
                 report.rejected += 1
+            } catch DictionaryError.invalidInflection {
+                report.rejected += 1
+            } catch DictionaryError.inflectionAmbiguous(_, let other) {
+                report.conflicts.append(.init(alias: row.phrase, keptBy: other, skippedFor: term.text))
             } catch {
                 report.conflicts.append(.init(alias: row.phrase, keptBy: "?", skippedFor: term.text))
             }
@@ -170,9 +177,10 @@ public enum DictionaryTransfer {
             if line.hasPrefix("#!") { mode = .riskyOff } else if line.hasPrefix("#+") { mode = .riskyOn } else if line.hasPrefix("#-") { mode = .disabled } else if line.hasPrefix("# ---") { mode = .normal } else if line.hasPrefix("#") || line.isEmpty { continue } else {
                 let parts = line.components(separatedBy: "\t")
                 guard parts.count >= 2 else { continue }
-                let phrase = UserDictionary.clean(parts[0]), target = UserDictionary.clean(parts[1])
+                let typed = DictionaryAlias.parseTyped(parts[0]), target = UserDictionary.clean(parts[1])
+                let phrase = typed.text
                 let extra = parts.dropFirst(2).contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-                if !phrase.isEmpty, !target.isEmpty { out.append(Row(phrase: phrase, target: target, mode: mode, extraColumns: extra)) }
+                if !phrase.isEmpty, !target.isEmpty { out.append(Row(phrase: phrase, target: target, mode: mode, extraColumns: extra, inflects: typed.inflects)) }
             }
         }
         return out
@@ -191,7 +199,7 @@ public enum DictionaryTransfer {
         for s in sections {
             var body: [String] = []
             for t in d.terms {
-                for a in t.aliases where a.risky == s.risky && a.enabled == s.enabled { body.append("\(a.text)\t\(t.text)") }
+                for a in t.aliases where a.risky == s.risky && a.enabled == s.enabled { body.append("\(a.tsvPhrase)\t\(t.text)") }
             }
             if !body.isEmpty { out += [s.header] + body + [""] }
         }
