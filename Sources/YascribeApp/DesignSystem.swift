@@ -116,6 +116,27 @@ struct ScrollPage<Content: View>: View {
     }
 }
 
+/// Belka stanu + lista: belka przypięta do górnej krawędzi `ScrollPage`, gdy nagłówek strony się przewinie (TASK-90).
+/// Wysokość belki ograniczona: błąd dłuższy niż 3 linie jest ucięty (pełny w podpowiedzi).
+struct PinnedBarPage<Bar: View, Content: View>: View {
+    var spacing: CGFloat = 10
+    @ViewBuilder let bar: Bar
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        LazyVStack(alignment: .leading, spacing: spacing, pinnedViews: [.sectionHeaders]) {
+            SwiftUI.Section {
+                content
+            } header: {
+                VStack(alignment: .leading, spacing: spacing) { bar }
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.mnBackground)
+            }
+        }
+    }
+}
+
 /// Nagłówek sekcji / karty: SF 13 Semibold, opcjonalny dopisek („— optional”) i kontrolka po prawej.
 struct SectionHeader<Trailing: View>: View {
     let title: String

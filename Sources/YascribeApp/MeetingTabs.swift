@@ -67,7 +67,7 @@ struct ErrorLine: View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
-                Text(message).fixedSize(horizontal: false, vertical: true)
+                Text(message).fixedSize(horizontal: false, vertical: true).help(message)
             }
             .font(.callout).foregroundStyle(.mnRec)
             .accessibilityElement(children: .combine)
@@ -175,7 +175,7 @@ struct TranscriptTab: View {
     private var correcting: Bool { model.notes.isCorrecting(item.id) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        PinnedBarPage {
             // Poprawka 6: ta sama linia co w nagłówku spotkania (problem toru nagrania).
             ForEach(item.trackProblems, id: \.trackID) { p in
                 if p.isWarning { WarnLabel(p.line) } else { StateLabel(.neutral, p.line) }
@@ -202,6 +202,7 @@ struct TranscriptTab: View {
                 }
                 .padding(.bottom, 4)
             }
+        } content: {
             content
         }
     }
@@ -376,7 +377,14 @@ struct SummaryTab: View {
     /// Uwaga 7 (b-summary0.png, b-meeting.png): bez karty — ten sam pasek we wnęce przed i po generowaniu, pod nim
     /// linie stanu i notatka albo jedna linia stanu pustego. Przewija się treść pod kartami.
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // Linie stanu (postęp + Cancel, błąd) przypięte nad notatką, żeby nie znikały po przewinięciu (TASK-90).
+        PinnedBarPage(spacing: 12) {
+            if gen == .generating { generatingRow }
+            if correcting, gen != .generating, hasText {
+                Text("Generate notes once the transcript has been improved.").font(.callout).foregroundStyle(.mnText2)
+            }
+            errorView
+        } content: {
             if item.notes.summary == nil { bar(nil) }
             if item.attemptNotPromoted != nil || (model.transcript(of: item, corrected: corrected).map { t in
                 !t.failedChunks.isEmpty || t.utterances.contains(where: { $0.excludedFromNotes })
@@ -388,11 +396,6 @@ struct SummaryTab: View {
             }
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
-            if gen == .generating { generatingRow }
-            if correcting, gen != .generating, hasText {
-                Text("Generate notes once the transcript has been improved.").font(.callout).foregroundStyle(.mnText2)
-            }
-            errorView
             if let s = item.notes.summary {
                 MarkdownView(blocks: MarkdownBlocks.group(s.markdown)).padding(.top, 8)
             } else if gen != .generating, hasText {
