@@ -116,7 +116,15 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             var body: [String: Any] = ["model": model, "input_audio": audio, "response_format": "verbose_json",
                                        "timestamp_granularities": ["word"]]
             if let language { body["language"] = language.rawValue }
-            let obj = try await json(try request("audio/transcriptions", body: body))
+            let obj: [String: Any]
+            do {
+                obj = try await json(try request("audio/transcriptions", body: body))
+            } catch ProviderError.http(let status, _) where status == 400 || status == 422 {
+                // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
+                // bez pola. Zostają same `segments` (bez czasów słów) — `words` = nil, Merger bierze tekst okna.
+                body["timestamp_granularities"] = nil
+                obj = try await json(try request("audio/transcriptions", body: body))
+            }
             guard let text = obj["text"] as? String else { throw ProviderError.badResponse("no text") }
             return TranscriptionResult(text: text, words: Self.words(obj))
         case .chatAudio:
