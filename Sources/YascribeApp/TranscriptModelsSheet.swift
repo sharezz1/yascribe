@@ -69,11 +69,13 @@ struct TranscriptModelsSheet: View {
     private func prefill() {
         guard !ui.prefilled else { return }
         ui.prefilled = true
-        draft.asrProviderID = preset?.asr?.providerID
-        draft.asrModel = preset?.asr?.model ?? ""
+        let known = Set(model.providers.providers.map(\.id))
+        let asr = ModelsSheetRules.asrPrefill(run: item.runSnapshot, preset: preset?.asr, knownProviders: known)
+        draft.asrProviderID = asr?.providerID
+        draft.asrModel = asr?.model ?? ""
         let run = model.runLanguage(item)
         draft.language = ModelsSheetRules.languageChoice(isAuto: run.isAuto, language: run.language)
-        let c = model.notes.correctionAssignment(for: item)
+        let c = ModelsSheetRules.correctionPrefill(corrected: item.corrected, assigned: model.notes.correctionAssignment(for: item), knownProviders: known)
         draft.correctProviderID = c?.providerID
         draft.correctModel = c?.model ?? ""
         draft.usePreset = false
