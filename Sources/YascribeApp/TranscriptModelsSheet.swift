@@ -55,7 +55,7 @@ struct TranscriptModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Improve transcript", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
+        EditorSheet(title: "Improve", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
             VStack(alignment: .leading, spacing: 18) {
                 transcribeSection
                 Divider()
@@ -86,7 +86,7 @@ struct TranscriptModelsSheet: View {
 
     private var transcribeSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .asr, current: draft.asrProviderID)
-        return SheetSection(title: "Transcribe again") {
+        return SheetSection(title: "Transcribe and correct") {
             SheetRow(label: "Provider") {
                 FieldMenu(label: "Provider", value: provider(draft.asrProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.asrProviderID }, set: { id in
@@ -119,8 +119,8 @@ struct TranscriptModelsSheet: View {
             if draft.language == .auto {
                 WarnLabel("Lower quality, risk of invented text. Use Auto only for meetings that mix languages.")
             }
-            SheetNote("The current transcript stays until the new one is ready.")
-            SheetAction(title: "Transcribe", reason: transcribeReason) { transcribe() }
+            SheetNote("The current transcript stays until the new one is ready. Then it is corrected with the model below.")
+            SheetAction(title: "Transcribe + correct", reason: transcribeReason) { transcribe() }
         }
     }
 
@@ -143,7 +143,7 @@ struct TranscriptModelsSheet: View {
 
     private var correctSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .correction, current: draft.correctProviderID)
-        return SheetSection(title: "Correct the transcript") {
+        return SheetSection(title: "Correct only") {
             SheetRow(label: "Provider") {
                 FieldMenu(label: "Provider", value: provider(draft.correctProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.correctProviderID }, set: { id in
@@ -173,7 +173,7 @@ struct TranscriptModelsSheet: View {
             }
             SheetNote(correctCaption)
             if model.notes.isCorrecting(item.id) { StateLabel(.progress(nil), "Improving the transcript…") }
-            SheetAction(title: item.corrected == nil ? "Improve transcript" : "Improve again", reason: correctReason) { improve() }
+            SheetAction(title: item.corrected == nil ? "Correct" : "Correct again", reason: correctReason) { improve() }
         }
     }
 
