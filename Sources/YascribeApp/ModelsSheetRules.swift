@@ -34,13 +34,14 @@ enum ModelsSheetRules {
     }
 
     static func transcribeReason(blocker: String?, correcting: Bool, generating: Bool, hasPreset: Bool, providerChosen: Bool,
-                                 modelEmpty: Bool, languageChosen: Bool) -> String? {
+                                 modelEmpty: Bool, languageChosen: Bool, correctionIncomplete: Bool = false) -> String? {
         if let blocker { return blocker }
         if correcting { return "Correction is running." }
         if generating { return "Notes are being generated." }
         if !hasPreset { return "This meeting has no preset." }
         if !providerChosen || modelEmpty { return "Choose a model." }
         if !languageChosen { return "Choose a language." }
+        if correctionIncomplete { return "Choose a correction model." }
         return nil
     }
 
@@ -93,6 +94,20 @@ final class TranscriptModelsDraft: ObservableObject {
     @Published var correctModel = "" { didSet { usePreset = false } }
     @Published var usePreset = false
 
+    /// Wybrany dostawca korekty bez modelu (po zmianie dostawcy): niedokończony wybór, nie „brak korekty".
+    var correctionIncomplete: Bool { correctProviderID != nil && correctModel.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Transcribe zapisuje wybór korekty jako nadpisanie sesji, bo korekta po przebiegu czyta zapisane nadpisanie, nie okno.
+    /// Zapis pada albo wybór niedokończony: `start` nie jest wołany. Brak korekty w ogóle (nic nie wybrano): bez zapisu.
+    @MainActor
+    func startTranscribe(item: SessionItem, notes: NotesModel, preset: RoleAssignment?, start: () -> Bool) -> Bool {
+        if correctionIncomplete { notes.report("Choose a correction model first."); return false }
+        if let choice = ModelsSheetRules.draft(providerID: correctProviderID, model: correctModel, thinking: nil, preset: preset,
+                                               hasOverride: notes.usableOverride(.correction, for: item) != nil, usePreset: usePreset),
+           !notes.saveDraft(.correction, choice, item: item) { return false }
+        return start()
+    }
+
     /// `true` = korekta wystartowała (okno wolno zamknąć).
     @MainActor
     func submitCorrection(item: SessionItem, notes: NotesModel, preset: RoleAssignment?) -> Bool {
@@ -105,6 +120,8 @@ final class TranscriptModelsDraft: ObservableObject {
     /// Preset bez modelu korekty: „Use preset (none)" od razu czyści nadpisanie i niczego nie uruchamia. `false` = zapis padł.
     @MainActor
     func clearOverride(item: SessionItem, notes: NotesModel) -> Bool {
+        // W trakcie ASR korekta po przebiegu czyta to nadpisanie: zdjęcie go teraz po cichu pominęłoby wybraną korektę.
+        guard !notes.isTranscribing(item.id) else { notes.report("Transcription is running."); return false }
         guard notes.setOverride(.correction, nil, item: item) else { return false }
         correctProviderID = nil
         correctModel = ""

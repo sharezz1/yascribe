@@ -142,7 +142,7 @@ final class NotesModel {
     }
 
     /// Zapis szkicu przed uruchomieniem; odmowa bez zapisu, gdy model pusty albo dostawca zniknął w trakcie otwartego okna.
-    private func saveDraft(_ role: Role, _ draft: ModelDraft, item: SessionItem) -> Bool {
+    func saveDraft(_ role: Role, _ draft: ModelDraft, item: SessionItem) -> Bool {
         guard case .custom(let o) = draft else { return setOverride(role, nil, item: item) }
         guard !o.model.trimmingCharacters(in: .whitespaces).isEmpty else { report("Choose a model first."); return false }
         guard knownProviderIDs().contains(o.providerID) else { report("That provider is no longer available."); return false }
