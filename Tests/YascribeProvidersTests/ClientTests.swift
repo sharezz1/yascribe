@@ -359,3 +359,47 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
         .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .chatAudio)
     #expect(r.text == "raz dwa trzy")
 }
+
+// TASK-87: Voxtral odrzuca `timestamp_granularities: ["word"]` kodem 400 bez diagnostycznej treści.
+@Test(arguments: [400, 422]) func rejectedWordTimestampsAreRetriedOnceWithoutTheField(status: Int) async throws {
+    let http = StubHTTP { _, body in
+        body["timestamp_granularities"] != nil ? fail(status, "Provider returned \(status)")
+            : ok(["text": "raz dwa", "segments": [["start": 0.0, "end": 1.0, "text": "raz dwa"]]])
+    }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    let r = try await c.transcribe(wav: ProbeClips.polish.wav, model: "mistralai/voxtral-small-transcribe-3-0", language: .polish,
+                                   shape: .audioTranscriptions)
+    #expect(http.calls.count == 2)
+    #expect(http.calls[1].body["timestamp_granularities"] == nil)
+    #expect(http.calls[1].body["response_format"] as? String == "verbose_json")
+    #expect(http.calls[1].body["language"] as? String == "pl")
+    #expect(r.text == "raz dwa")
+    #expect(r.words == nil)
+}
+
+@Test func wordTimestampFallbackHappensOnlyOnce() async {
+    let http = StubHTTP { _, _ in fail(400, "Provider returned 400") }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    await #expect(throws: ProviderError.http(400, "Provider returned 400")) {
+        _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    #expect(http.calls.count == 2)
+}
+
+@Test(arguments: [401, 429, 500]) func otherTranscriptionErrorsAreNotRetriedByTheClient(status: Int) async {
+    let http = StubHTTP { _, _ in fail(status) }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    await #expect(throws: ProviderError.self) {
+        _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    #expect(http.calls.count == 1)
+}
+
+@Test func chatAudioShapeIsNotRetriedOn400() async {
+    let http = StubHTTP { _, _ in fail(400) }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    await #expect(throws: ProviderError.self) {
+        _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .chatAudio)
+    }
+    #expect(http.calls.count == 1)
+}

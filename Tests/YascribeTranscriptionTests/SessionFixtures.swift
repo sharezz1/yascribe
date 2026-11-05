@@ -29,14 +29,20 @@ final class ListeningASR: HTTPClient, @unchecked Sendable {
     private(set) var requests = 0
     let word: String
     let failWhen: @Sendable (Int) -> Bool
+    let delayMillis: Int
+    private var inFlight = 0
+    private(set) var maxInFlight = 0
 
-    init(word: String = "słowo", failWhen: @escaping @Sendable (Int) -> Bool = { _ in false }) {
+    init(word: String = "słowo", delayMillis: Int = 0, failWhen: @escaping @Sendable (Int) -> Bool = { _ in false }) {
         self.word = word
+        self.delayMillis = delayMillis
         self.failWhen = failWhen
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let n = lock.withLock { requests += 1; return requests }
+        let n = lock.withLock { requests += 1; inFlight += 1; maxInFlight = max(maxInFlight, inFlight); return requests }
+        defer { lock.withLock { inFlight -= 1 } }
+        if delayMillis > 0 { try await Task.sleep(for: .milliseconds(delayMillis)) }
         let url = request.url!
         if failWhen(n) {
             return (Data("{\"error\":\"boom\"}".utf8), HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: nil)!)

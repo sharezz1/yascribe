@@ -85,10 +85,12 @@ public struct TranscriptionRunner: Sendable {
     public let gate: EnergyGate
     public let crosstalk: CrosstalkFilter
     public let offlineAEC: OfflineAEC.Configuration?
+    /// Opóźnienia przed ponowieniem okna po 429/5xx (`ASRRetry`); `[]` = bez ponawiania.
+    public let retryDelays: [Duration]
 
     public init(session: URL, runID: String, snapshot: RunSnapshot, client: any TranscriptionClient,
                 maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter(),
-                offlineAEC: OfflineAEC.Configuration? = .init()) {
+                offlineAEC: OfflineAEC.Configuration? = .init(), retryDelays: [Duration] = ASRRetry.delays) {
         self.session = SessionDirectory(url: session)
         self.runID = runID
         self.snapshot = snapshot
@@ -97,6 +99,7 @@ public struct TranscriptionRunner: Sendable {
         self.gate = gate
         self.crosstalk = crosstalk
         self.offlineAEC = offlineAEC
+        self.retryDelays = retryDelays
     }
 
     /// „Oni" = ścieżka systemowa; „ja" = mikrofon po AEC, a gdy go brak albo gdy jego ścieżka
@@ -172,10 +175,14 @@ public struct TranscriptionRunner: Sendable {
                 results.append(saved)
             } else {
                 do {
-                    requests += 1
-                    secondsSent += Double(item.chunk.length) / Resampler.asrRate
-                    let r = try await client.transcribe(wav: WAVEncoder.encode(item.chunk, samples: item.samples),
-                                                        model: snapshot.model, language: snapshot.language, shape: snapshot.shape)
+                    let wav = WAVEncoder.encode(item.chunk, samples: item.samples)
+                    // Każda próba to osobne, płatne żądanie.
+                    let r = try await ASRRetry.run(delays: retryDelays) {
+                        requests += 1
+                        secondsSent += Double(item.chunk.length) / Resampler.asrRate
+                        return try await client.transcribe(wav: wav, model: snapshot.model, language: snapshot.language,
+                                                           shape: snapshot.shape)
+                    }
                     let cr = ChunkResult(track: item.track, chunk: item.chunk, result: r)
                     try JSONFile.save(cr, to: file)
                     results.append(cr)

@@ -53,7 +53,8 @@ import YascribeSessionFormat
     let (samples, _) = burstTrack(seconds: 600, rate: 16_000) // 60 fragmentów → kilka okien
     let dir = try makeSession(system: samples)
     let first = ListeningASR(failWhen: { $0 >= 2 })
-    let t1 = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(first)).run()
+    let t1 = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(), client: client(first),
+                                          retryDelays: []).run()
     let total = first.requests
     #expect(total >= 3)
     #expect(t1.failedChunks.count == total - 1) // luki jawne, nie cisza udająca treść
@@ -123,7 +124,8 @@ import YascribeSessionFormat
     let (samples, _) = burstTrack(seconds: 600, rate: 16_000)
     let dir = try makeSession(system: samples)
     _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
-                                      client: client(ListeningASR(failWhen: { $0 >= 2 }))).run()
+                                      client: client(ListeningASR(failWhen: { $0 >= 2 })),
+                                      retryDelays: []).run()
     let saved = try #require(try JSONFile.load(RunInput?.self, from: RunDirectory(session: dir, runID: "r1").input, default: nil)).snapshot
     let expected = Sent(model: saved.model, language: saved.language?.rawValue)
     // bieżący preset z innym modelem i językiem: odmowa albo migawka z pliku — nic innego nie wychodzi
