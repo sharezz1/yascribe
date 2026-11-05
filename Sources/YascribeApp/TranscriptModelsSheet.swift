@@ -41,7 +41,8 @@ struct TranscriptModelsSheet: View {
         ModelsSheetRules.transcribeReason(
             blocker: ModelsSheetRules.transcribeBlocker(item: item, model: model), correcting: model.notes.isCorrecting(item.id),
             generating: model.notes.state(item.id) == .generating, hasPreset: preset != nil, providerChosen: draft.asrProviderID != nil,
-            modelEmpty: draft.asrModel.trimmingCharacters(in: .whitespaces).isEmpty, languageChosen: chosenLanguage != nil)
+            modelEmpty: draft.asrModel.trimmingCharacters(in: .whitespaces).isEmpty, languageChosen: chosenLanguage != nil,
+            correctionIncomplete: draft.correctionIncomplete)
     }
 
     private var correctReason: String? {
@@ -125,7 +126,10 @@ struct TranscriptModelsSheet: View {
         guard let pid = draft.asrProviderID, let language = chosenLanguage, let preset else { return }
         ui.error = nil
         model.lastError = nil // komunikat odmowy ma być z tego kliknięcia, nie z wcześniejszego
-        if model.transcribe(sessionURL: item.url, preset: preset, asr: RoleAssignment(providerID: pid, model: draft.asrModel), language: language) {
+        let asr = RoleAssignment(providerID: pid, model: draft.asrModel)
+        if draft.startTranscribe(item: item, notes: model.notes, preset: presetCorrection, start: {
+            model.transcribe(sessionURL: item.url, preset: preset, asr: asr, language: language)
+        }) {
             onClose()
         } else {
             ui.error = model.lastError

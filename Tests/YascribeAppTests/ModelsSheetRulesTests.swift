@@ -176,6 +176,75 @@ private final class SeenHTTP: HTTPClient, @unchecked Sendable {
         #expect(http.models == ["preset-corr"])
     }
 
+    /// Przebieg po Transcribe: ta sama ścieżka, którą woła AppModel.run po ASR (migawka z presetem, nadpisanie z dysku).
+    func afterRun(_ model: NotesModel) async throws {
+        let id = "2026-10-23T09-00-00Z-bbbb"
+        let run = RunDirectory(session: session, runID: id)
+        try FileManager.default.createDirectory(at: run.url, withIntermediateDirectories: true)
+        try JSONFile.save(text, to: run.transcript)
+        let withASR = preset.withASR(RoleAssignment(providerID: provider.id, model: "asr"), language: .polish)
+        let snapshot = try RunSnapshot(preset: withASR, provider: provider, probe: nil)
+        await model.afterTranscription(sessionURL: session, runID: id, snapshot: snapshot, transcript: text)
+    }
+
+    @Test func transcribeSavesChosenCorrectionAndPostRunCorrectionUsesIt() async throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel()
+        let draft = TranscriptModelsDraft()
+        draft.correctProviderID = provider.id; draft.correctModel = "picked"
+        var started = false
+        #expect(draft.startTranscribe(item: item(), notes: model, preset: preset.correction) { started = true; return true })
+        #expect(started)
+        try await afterRun(model)
+        #expect(http.models == ["picked"])
+    }
+
+    @Test func transcribeWithPresetChoiceWritesNoOverrideAndKeepsPresetModel() async throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel()
+        let draft = TranscriptModelsDraft()
+        draft.correctProviderID = provider.id; draft.correctModel = "preset-corr"
+        #expect(draft.startTranscribe(item: item(), notes: model, preset: preset.correction) { true })
+        #expect(NotesStore(session: session).readMeta().modelOverrides?.correction == nil)
+        try await afterRun(model)
+        #expect(http.models == ["preset-corr"])
+    }
+
+    @Test func transcribeRefusesIncompleteOrUnsavableCorrectionAndStartsNothing() throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel()
+        let draft = TranscriptModelsDraft()
+        var started = false
+        draft.correctProviderID = provider.id; draft.correctModel = "  " // po zmianie dostawcy model jest pusty
+        #expect(draft.correctionIncomplete)
+        #expect(!draft.startTranscribe(item: item(), notes: model, preset: preset.correction) { started = true; return true })
+        draft.correctProviderID = UUID(); draft.correctModel = "x" // dostawca zniknął
+        #expect(!draft.startTranscribe(item: item(), notes: model, preset: preset.correction) { started = true; return true })
+        #expect(!started)
+        #expect(NotesStore(session: session).readMeta().modelOverrides?.correction == nil)
+    }
+
+    @Test func transcribeWithNothingChosenStartsWithoutTouchingOverrides() throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel()
+        #expect(TranscriptModelsDraft().startTranscribe(item: item(), notes: model, preset: nil) { true })
+        #expect(NotesStore(session: session).readMeta().modelOverrides == nil)
+    }
+
+    @Test func clearOverrideRefusedWhileTranscribing() throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        try NotesStore(session: session).updateMeta { $0.setOverride(.correction, RoleOverride(providerID: provider.id, model: "mine")) }
+        let model = makeModel()
+        model.transcribing.insert(session.lastPathComponent)
+        #expect(!TranscriptModelsDraft().clearOverride(item: item(), notes: model))
+        #expect(NotesStore(session: session).readMeta().modelOverrides?.correction?.model == "mine")
+    }
+
     @Test func clearOverrideWithoutPresetModelRemovesPersistedOverrideAndRunsNothing() throws {
         try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: session) }
