@@ -130,7 +130,7 @@ struct TranscriptModelsSheet: View {
             SheetNote("Improve keeps the current transcription. Transcribe + improve replaces it with a new one, then improves it.")
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
-                Button("Improve") { improve() }.buttonStyle(.pillSmall).disabled(correctReason != nil)
+                Button("Improve") { improve() }.buttonStyle(.pill).disabled(correctReason != nil)
                     .help(correctReason ?? "Improve the current transcript with the model above")
                 Button("Transcribe + improve") { transcribe() }.buttonStyle(.pillPrimary).disabled(transcribeReason != nil)
                     .help(transcribeReason ?? "Transcribe again, then improve the result")
