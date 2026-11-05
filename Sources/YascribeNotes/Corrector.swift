@@ -46,6 +46,30 @@ public enum CorrectionRules {
         guard o > 0, c > 0 else { return false }
         return band.contains(Double(c) / Double(o))
     }
+
+    /// Minimalne podobieństwo słów linii poprawionej do oryginału (przesunięcie linii i parafraza dają zwykle < 0,4).
+    public static let minSimilarity = 0.5
+
+    /// Współczynnik nakładania `|wspólne| / min(|a|, |b|)` na multizbiorze słów. Klucz słowa = 4 pierwsze znaki
+    /// (małe litery, bez interpunkcji): znosi polską fleksję, a usunięcie przerywników nie obniża wyniku.
+    public static func similarity(_ a: String, _ b: String) -> Double {
+        func keys(_ s: String) -> [String: Int] {
+            var m: [String: Int] = [:]
+            for w in s.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber }) { m[String(w.prefix(4)), default: 0] += 1 }
+            return m
+        }
+        let x = keys(a), y = keys(b)
+        let smaller = min(x.values.reduce(0, +), y.values.reduce(0, +))
+        guard smaller > 0 else { return 0 }
+        return Double(x.reduce(0) { $0 + min($1.value, y[$1.key] ?? 0) }) / Double(smaller)
+    }
+
+    /// Bramka podobieństwa dla `Corrector`. shortcut: oryginał < 3 słów pomijany (poprawka jednego słowa to cała linia),
+    /// zostaje samo pasmo długości; zapis cyfrowy liczb i sąsiednie niemal identyczne linie bramka nie rozróżni.
+    public static func similar(original: String, corrected: String) -> Bool {
+        let words = original.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).count
+        return words < 3 || similarity(original, corrected) >= minSimilarity
+    }
 }
 
 public enum CorrectionBatches {
@@ -79,7 +103,11 @@ public enum CorrectionBatches {
         for raw in reply.components(separatedBy: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard line.hasPrefix("["), let close = line.firstIndex(of: "]"),
-                  let n = Int(line[line.index(after: line.startIndex)..<close]) else { continue }
+                  let n = Int(line[line.index(after: line.startIndex)..<close]) else {
+                // Niepusta linia bez `[n]` po pierwszej numerowanej to ucięty ogon (model podzielił linię): nie gubimy go cicho.
+                if !got.isEmpty, !line.isEmpty, !line.hasPrefix("```") { return nil }
+                continue
+            }
             got.append((n, String(line[line.index(after: close)...]).trimmingCharacters(in: .whitespaces)))
         }
         guard got.map(\.0) == expected else { return nil }
@@ -145,6 +173,66 @@ public struct Corrector: Sendable {
                    budget.pairedInputChars(fixedChars: system(language: language).count, replyFactor: ContextBudget.correctionReplyFactor))
     }
 
+    /// Wynik jednej partii top-level (z ponowieniami): `answered` = linie, których odpowiedź przeszła `parse`
+    /// (zastosowana albo odrzucona bramkami); linie bez odpowiedzi trafiają do `rejected`. Partia „pada" ⇔ `answered == 0`.
+    struct BatchOutcome {
+        var applied: [(n: Int, text: String)] = []
+        var rejected = 0
+        var answered = 0
+        var error: String?
+    }
+
+    /// Jedna partia → jedno wywołanie modelu; zła numeracja (nie błąd transportu) → ponowienie połówkami, aż do pojedynczej linii.
+    /// Całe drzewo ponowień dzieli JEDEN budżet `batchTimeout` (od `started`): ≤ 2N−1 wywołań i nigdy dłużej niż limit partii.
+    func process(_ batch: [(n: Int, text: String)], system: String, started: ContinuousClock.Instant,
+                 isCancelled: @Sendable () -> Bool, retry: Bool = false) async -> BatchOutcome {
+        var result = BatchOutcome()
+        func unanswered(_ reason: String) -> BatchOutcome {
+            BatchOutcome(rejected: batch.count, error: reason)
+        }
+        if retry, isCancelled() { return unanswered("Correction was cancelled.") } // partia top-level: pętla `correct` już sprawdziła
+        let elapsed = ContinuousClock.now - started
+        let remaining = batchTimeout - Double(elapsed.components.seconds) - Double(elapsed.components.attoseconds) / 1e18
+        if remaining <= 0 { return unanswered("The model didn't finish correcting this part in time.") }
+        do {
+            let model = assignment.model
+            // Numeracja 1…N w każdej partii (spec §14 pkt 3): dziury po pominiętych liniach model wypełniał i cała partia
+            // przepadała. Numer lokalny `k` wraca na wypowiedź `batch[k − 1]`.
+            let numbered = batch.enumerated().map { (n: $0.offset + 1, text: $0.element.text) }
+            let user = CorrectionBatches.render(numbered)
+            let maxTokens = budget.map { _ in ContextBudget.maxTokens(inputChars: user.count, replyFactor: ContextBudget.correctionReplyFactor) }
+            let client = client, chatTimeout = chatTimeout, temperature = temperature
+            let reply = try await withDeadline(remaining) {
+                // Korekta tekstu nie potrzebuje myślenia; z nim model hybrydowy potrafi milczeć ponad `batchTimeout` (F20 P1).
+                try await client.chat(model: model, system: system, user: user, timeout: chatTimeout, maxTokens: maxTokens,
+                                      temperature: temperature, thinking: false)
+            }
+            guard let fixed = CorrectionBatches.parse(reply, expected: numbered.map(\.n)) else {
+                let why = "The model's answer didn't match the numbered lines."
+                guard batch.count > 1 else { return unanswered(why) }
+                let mid = batch.count / 2
+                var left = await process(Array(batch[..<mid]), system: system, started: started, isCancelled: isCancelled, retry: true)
+                let right = await process(Array(batch[mid...]), system: system, started: started, isCancelled: isCancelled, retry: true)
+                left.applied += right.applied
+                left.rejected += right.rejected
+                left.answered += right.answered
+                left.error = why // pierwsza przyczyna to numeracja rodzica
+                return left
+            }
+            for (k, l) in batch.enumerated() {
+                result.answered += 1
+                guard let new = fixed[k + 1], CorrectionRules.accepts(original: l.text, corrected: new),
+                      CorrectionRules.similar(original: l.text, corrected: new) else { result.rejected += 1; continue }
+                result.applied.append((l.n, new))
+            }
+            return result
+        } catch {
+            let hinted = ContextError.localHint(provider: client.provider, error, transport: chatTimeout) != nil
+            return unanswered(ContextError.isCutOff(error) || ContextError.isEmptyReply(error) || ContextError.isInputTruncated(error) || hinted
+                ? ContextError.describe(model: assignment.model, error, provider: client.provider, transport: chatTimeout) : "\(error)")
+        }
+    }
+
     public func correct(_ original: Transcript, language: LanguageCode?,
                         isCancelled: @Sendable () -> Bool = { Task.isCancelled }) async -> CorrectedTranscript {
         var out = original
@@ -172,35 +260,13 @@ public struct Corrector: Sendable {
                 if firstError == nil { firstError = "Correction was cancelled." }
                 break
             }
-            do {
-                let model = assignment.model
-                // Numeracja 1…N w każdej partii (spec §14 pkt 3): dziury po pominiętych liniach model wypełniał i cała partia
-                // przepadała. Numer lokalny `k` wraca na wypowiedź `batch[k − 1]`.
-                let numbered = batch.enumerated().map { (n: $0.offset + 1, text: $0.element.text) }
-                let user = CorrectionBatches.render(numbered)
-                let maxTokens = budget.map { _ in ContextBudget.maxTokens(inputChars: user.count, replyFactor: ContextBudget.correctionReplyFactor) }
-                let client = client, chatTimeout = chatTimeout, temperature = temperature
-                let reply = try await withDeadline(batchTimeout) {
-                    // Korekta tekstu nie potrzebuje myślenia; z nim model hybrydowy potrafi milczeć ponad `batchTimeout` (F20 P1).
-                    try await client.chat(model: model, system: system, user: user, timeout: chatTimeout, maxTokens: maxTokens,
-                                          temperature: temperature, thinking: false)
-                }
-                guard let fixed = CorrectionBatches.parse(reply, expected: numbered.map(\.n)) else {
-                    failed += 1
-                    if firstError == nil { firstError = "The model's answer didn't match the numbered lines." }
-                    continue
-                }
-                for (k, l) in batch.enumerated() {
-                    guard let new = fixed[k + 1], CorrectionRules.accepts(original: l.text, corrected: new) else { rejected += 1; continue }
-                    out.utterances[l.n - 1].text = new
-                }
-            } catch {
+            let started = ContinuousClock.now
+            let outcome = await process(batch, system: system, started: started, isCancelled: isCancelled)
+            for (n, text) in outcome.applied { out.utterances[n - 1].text = text }
+            rejected += outcome.rejected
+            if outcome.answered == 0 {
                 failed += 1
-                if firstError == nil {
-                    let hinted = ContextError.localHint(provider: client.provider, error, transport: chatTimeout) != nil
-                    firstError = ContextError.isCutOff(error) || ContextError.isEmptyReply(error) || ContextError.isInputTruncated(error) || hinted
-                        ? ContextError.describe(model: assignment.model, error, provider: client.provider, transport: chatTimeout) : "\(error)"
-                }
+                if firstError == nil { firstError = outcome.error }
             }
         }
         // Filtr po modelu (F20 P2): działa też na liniach, których model nie poprawił (odrzucone, nieudana partia). Całkowita porażka
