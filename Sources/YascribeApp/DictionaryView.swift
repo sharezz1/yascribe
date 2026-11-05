@@ -96,7 +96,7 @@ struct DictionaryView: View {
                 }
                 .padding(.horizontal, 12).frame(width: 260, height: 28)
                 .background(.mnField, in: Capsule())
-                .overlay(Capsule().strokeBorder(.mnLine, lineWidth: 0.5))
+                .overlay(Capsule().strokeBorder(.mnLine, lineWidth: 1))
                 Spacer(minLength: 0)
                 Text(countLine).font(.system(size: 11)).monospacedDigit().foregroundStyle(.mnText2)
             }
@@ -504,7 +504,7 @@ struct DictionaryImportSheet: View {
             }
             HStack {
                 Spacer()
-                Button("Done") { onDone() }.buttonStyle(.pillPrimary).keyboardShortcut(.defaultAction)
+                Button("Done") { onDone() }.buttonStyle(.pill).keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
             .overlay(alignment: .top) { Rectangle().fill(.mnLine2).frame(height: 0.5) }

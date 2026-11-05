@@ -42,7 +42,7 @@ struct SummaryModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Improve summary", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
+        EditorSheet(title: "Improve summary", dirty: reason == nil, error: ui.error, onCancel: onClose, footer: .closeAction(item.notes.summary == nil ? "Generate notes" : "Regenerate"), actionReason: reason, onSave: run, idealHeight: nil) {
             VStack(alignment: .leading, spacing: 12) {
                 templateRow
                 contextRow
@@ -50,7 +50,6 @@ struct SummaryModelsSheet: View {
                 providerAndModel
                 sourceMenu
                 SheetNote(caption)
-                SheetAction(title: item.notes.summary == nil ? "Generate notes" : "Regenerate", reason: reason) { run() }
             }
             .padding(.top, 8) // odstęp tytułu od pierwszego wiersza
             .disabled(moving) // przenoszenie nagrań: okno tylko do odczytu
@@ -60,7 +59,7 @@ struct SummaryModelsSheet: View {
 
     private var templateRow: some View {
         SheetRow(label: "Template") {
-            FieldMenu(label: "Template", value: template.name, width: 300) {
+            FieldMenu(label: "Template", value: template.name, width: nil, flexible: true) {
                 Picker("Template", selection: $state.templateID) {
                     ForEach(model.notes.templates.all()) { t in Text(t.name).tag(t.id) }
                 }
@@ -74,9 +73,9 @@ struct SummaryModelsSheet: View {
             TextField("Optional: names, topics, what matters", text: $state.context, axis: .vertical)
                 .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...4)
                 .padding(.horizontal, 10).padding(.vertical, 6)
-                .frame(width: 300, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+                .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
         }
     }
 
@@ -93,7 +92,7 @@ struct SummaryModelsSheet: View {
     @ViewBuilder private var providerAndModel: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .summary, current: draft.providerID)
         SheetRow(label: "Provider") {
-            FieldMenu(label: "Provider", value: provider(draft.providerID)?.roleLabel ?? "None", width: 300) {
+            FieldMenu(label: "Provider", value: provider(draft.providerID)?.roleLabel ?? "None", width: nil, flexible: true) {
                 Picker("Provider", selection: Binding(get: { draft.providerID }, set: { id in
                     guard id != draft.providerID else { return }
                     draft.providerID = id
@@ -107,7 +106,7 @@ struct SummaryModelsSheet: View {
         }
         if let pid = draft.providerID {
             SheetRow(label: "Model") {
-                ModelPicker(providerID: pid, role: .summary, selection: $draft.model, showProvider: false).frame(width: 300)
+                ModelPicker(providerID: pid, role: .summary, selection: $draft.model, showProvider: false).frame(maxWidth: .infinity)
                 if provider(pid)?.isLocal == true { OnThisMacTag() }
             }
             if provider(pid)?.isLocal != true {
@@ -132,7 +131,7 @@ struct SummaryModelsSheet: View {
 
     private var sourceMenu: some View {
         SheetRow(label: "Source") {
-            FieldMenu(label: "Source", value: draft.sourceLabel(item), width: 300) {
+            FieldMenu(label: "Source", value: draft.sourceLabel(item), width: nil, flexible: true) {
                 Picker("Source", selection: $draft.useCorrected) {
                     Text("Corrected").tag(true).disabled(item.corrected == nil)
                     Text("Original").tag(false)

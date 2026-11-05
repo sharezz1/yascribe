@@ -51,7 +51,7 @@ struct ModelPicker: View {
             .padding(.horizontal, 10)
             .frame(height: 28)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

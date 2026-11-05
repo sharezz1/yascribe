@@ -9,6 +9,21 @@ import YascribeNotes
 import YascribeProviders
 import YascribeTranscription
 
+struct HotkeySettingsGate {
+    private(set) var pending = false
+
+    mutating func request(listening: Bool) -> Bool {
+        pending = listening
+        return !listening
+    }
+
+    mutating func phaseChanged(listening: Bool) -> Bool {
+        guard pending, !listening else { return false }
+        pending = false
+        return true
+    }
+}
+
 /// Spina dyktowanie z aplikacją: skrót globalny, silnik, historia i ustawienia z `AppModel`.
 /// `init` bez wejścia-wyjścia i bez okien zgody: tworzy go `AppModel.load()` także w migawkach.
 @MainActor @Observable final class DictationController {
@@ -31,6 +46,7 @@ import YascribeTranscription
     @ObservationIgnored private var historyLocked = false
     /// Pokolenie pętli obserwacji: `stop()` + `start()` przed odpaleniem starego `onChange` nie zostawia dwóch łańcuchów.
     @ObservationIgnored private var trackGeneration = 0
+    @ObservationIgnored private var hotkeySettingsGate = HotkeySettingsGate()
 
     init(model: AppModel) { self.model = model }
 
@@ -59,9 +75,10 @@ import YascribeTranscription
     /// Po każdej zmianie ustawień dyktowania i po nadaniu uprawnienia.
     func applySettings() {
         let s = model.settings.dictationOrDefault
-        monitor.configure(hotkey: s.hotkeyOrDefault, mode: s.triggerModeOrDefault)
-        // `configure` buduje nową maszynę: trwająca sesja toggle musi dalej kończyć się naciśnięciem.
-        monitor.setListening(engine.phase == .listening)
+        if hotkeySettingsGate.request(listening: engine.phase == .listening) {
+            monitor.configure(hotkey: s.hotkeyOrDefault, mode: s.triggerModeOrDefault)
+            monitor.setListening(false)
+        }
         refreshPermissions()
         guard active else { return }
         if s.showLauncherOrDefault { launcher.show() } else { launcher.hide() }
@@ -106,6 +123,7 @@ import YascribeTranscription
             Task { @MainActor in self?.trackPhase(generation) }
         }
         monitor.setListening(phase == .listening)
+        if hotkeySettingsGate.phaseChanged(listening: phase == .listening) { applySettings() }
         refreshPermissions()
     }
 

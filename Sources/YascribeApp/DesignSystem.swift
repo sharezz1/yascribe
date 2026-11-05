@@ -259,7 +259,7 @@ struct WarnLabel: View {
 
 // MARK: - Popupy jak pole (D8, §11.4 `FieldMenuStyle`)
 
-/// Popup wyglądający jak pole: `field`, obwódka 0,5, promień 7, mały ⌄. Pod spodem standardowe `Menu`;
+/// Popup wyglądający jak pole: `field`, obwódka 1 pt, promień 7, mały ⌄. Pod spodem standardowe `Menu`;
 /// wybór z listy to `Picker(...).pickerStyle(.inline)` w treści menu (zaznaczenie ✓ robi system).
 struct FieldMenu<Content: View>: View {
     /// Nazwa dla VoiceOver („Language”).
@@ -269,6 +269,7 @@ struct FieldMenu<Content: View>: View {
     /// Dopisek przed wartością w `text2` (jak dostawca w `ModelField`).
     var prefix: String?
     var width: CGFloat?
+    var flexible = false
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -281,15 +282,15 @@ struct FieldMenu<Content: View>: View {
             }
             .font(.system(size: 13))
             .padding(.horizontal, 10)
-            .frame(minWidth: width, maxWidth: width, minHeight: 28, maxHeight: 28)
+            .frame(minWidth: flexible ? nil : width, maxWidth: flexible ? .infinity : width, minHeight: 28, maxHeight: 28)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .fixedSize()
+        .fixedSize(horizontal: !flexible, vertical: true)
         .accessibilityLabel(label)
         .accessibilityValue(value)
     }
@@ -346,7 +347,7 @@ struct PillButtonStyle: ButtonStyle {
         }
 
         private var background: Color {
-            if kind == .primary { return isEnabled ? .mnPrimary : .mnSunk }
+            if kind == .primary { return isEnabled ? .mnAccent : .mnSunk }
             return hover.hovering && isEnabled ? .mnSunk : .mnCard
         }
     }

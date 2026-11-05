@@ -64,7 +64,7 @@ struct DictationView: View {
         return VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text("Shortcut: \(HotkeyCapture.label(hotkey)) · \(settings.triggerModeOrDefault == .hold ? "hold to talk" : "press to toggle").")
-                Button("Change in Settings") { model.section = .settings }.buttonStyle(.plain).foregroundStyle(.mnAccent)
+                Button("Change in Settings") { model.scrollToDictationSettings = true; model.section = .settings }.buttonStyle(.plain).foregroundStyle(.mnAccent)
             }
             if hotkey == .fn { Text(DictationPresentation.fnHint) }
         }
@@ -77,7 +77,7 @@ struct DictationView: View {
         VStack(alignment: .leading, spacing: 8) {
             if !p.inputMonitoring {
                 Banner(text: "Dictation needs Input Monitoring to hear its shortcut.") {
-                    Button("Allow Input Monitoring") { dictation.requestInputMonitoring(); dictation.applySettings() }.buttonStyle(.pillSmallPrimary)
+                    Button("Allow Input Monitoring") { dictation.requestInputMonitoring(); dictation.applySettings() }.buttonStyle(.pillSmall)
                     Button("Open System Settings") { open(Self.inputMonitoringPane) }.buttonStyle(.pillSmall)
                 }
             } else if !dictation.monitorRunning {
@@ -87,7 +87,7 @@ struct DictationView: View {
             }
             if !p.accessibility {
                 Banner(text: "Without Accessibility access, dictated text is only copied to the clipboard.") {
-                    Button("Allow Accessibility") { dictation.requestAccessibility() }.buttonStyle(.pillSmallPrimary)
+                    Button("Allow Accessibility") { dictation.requestAccessibility() }.buttonStyle(.pillSmall)
                     Button("Open System Settings") { open(Self.accessibilityPane) }.buttonStyle(.pillSmall)
                 }
             }
@@ -107,12 +107,10 @@ struct DictationView: View {
     // MARK: Historia
 
     private var emptyState: some View {
-        Card {
-            Text(DictationPresentation.emptyHint(hotkey: settings.hotkeyOrDefault, mode: settings.triggerModeOrDefault))
-                .font(.callout).foregroundStyle(.mnText2)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(16)
-        }
+        Text(DictationPresentation.emptyHint(hotkey: settings.hotkeyOrDefault, mode: settings.triggerModeOrDefault))
+            .font(.callout).foregroundStyle(.mnText2)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.leading, 2)
     }
 
     private var list: some View {
