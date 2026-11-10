@@ -231,10 +231,10 @@ final class NotesModel {
             ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: assignment.model)) : nil
         let vocabulary = DictionaryPrompt.make(dict, link: link, maxChars: DictionaryPrompt.maxChars(budget: budget))
         let used = vocabulary.isEmpty ? nil : vocabulary
-        var result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
-                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used,
-                                     body: prompts.body(.correction))
-            .correct(input, language: language)
+        let corrector = Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
+                                  temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used,
+                                  body: prompts.body(.correction))
+        var result = await corrector.correct(input, language: language)
         result.prompt = prompts.trace(.correction)
         // Komunikat należy do najnowszej korekty sesji, wynik — do najnowszej korekty tego przebiegu (F2): starsza, kończąc się
         // później, nie nadpisuje `corrected.json` ani śladu nowszej. Sprawdzenie i zapis bez `await` pomiędzy.
@@ -249,7 +249,13 @@ final class NotesModel {
             // Katalogu spotkania, którego już nie ma, nie odtwarzamy późnym zapisem (TASK-25): także sam zapis
             // nie tworzy rodziców, więc usunięcie w trakcie korekty kończy się porażką zapisu, nie nową sesją.
             guard FileManager.default.fileExists(atPath: sessionURL.path) else { return transcript }
+            // „Improve again" nadpisuje `corrected.json`: poprzednia korekta idzie najpierw do `corrections/` (porównanie modeli i poleceń).
+            if let error = CorrectionHistory.archive(run: run) { report("Couldn't keep the previous correction: \(error)") }
             let saved = (try? JSONFile.save(result, to: run.corrected, createParents: false)) != nil
+            // Polecenie, które poszło do modelu, obok wyniku (też tylko po zapisie): bez niego nie wiadomo, którą wersją promptu poprawiono.
+            if saved {
+                try? corrector.system(language: language).write(to: run.url.appendingPathComponent("correction-system.txt"), atomically: true, encoding: .utf8)
+            }
             // Ślad do odbioru §8.4 tylko po zapisanej korekcie (R18): stary ślad obok nowego `corrected.json` kłamałby.
             if let error = VocabularyTrace.update(promptLines: used?.promptLines, at: run.url.appendingPathComponent("vocabulary.txt"),
                                                   correctionSaved: saved) {

@@ -21,6 +21,7 @@ struct CLI {
       tap-rate [--seconds N] [--with-mic] [--with-output]                         mierzy częstotliwości tapa i rzeczywiste dostarczanie (faza 2.0.2)
       models <baseURL>                                            lista modeli (klucz: YASCRIBE_API_KEY)
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
+      note <przebieg> <baseURL> <model> --language pl --out plik.json [--source raw|corrected] [--thinking on|off] [--context 16384] [--vocabulary vocabulary.txt]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
                                                                   <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza)
       dictionary-check <katalog sesji> --replacements <plik.tsv> [--vocabulary <plik.txt>]
@@ -32,7 +33,7 @@ struct CLI {
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
-    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary", "--out", "--only"]
+    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary", "--out", "--only", "--source", "--thinking", "--context"]
     static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output"])
 
     static func main() async {
@@ -47,6 +48,7 @@ struct CLI {
             switch cmd {
             case "record": try await record(args)
             case "summarize": try summarize(args)
+            case "note": try await note(args)
             case "fit": try fit(args)
             case "check-system-audio": print(await SystemAudioCheck.run())
             case "tap-rate": try await tapRate(args)
