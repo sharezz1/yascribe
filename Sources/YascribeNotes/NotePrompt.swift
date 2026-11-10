@@ -10,23 +10,36 @@ public struct NotePrompt: Equatable, Sendable {
     public var chars: Int { system.count + user.count }
 }
 
+/// Polecenie podsumowania: edytowalne reguły (Settings, TASK-96); wstęp, format wyjścia, język i `Structure` są stałe.
+public enum SummaryPrompt {
+    public static let defaultBody = """
+        - Use only what is in the transcript, the user's own notes and the user's context. Never invent facts, names, \
+        numbers or decisions.
+        - If the transcript is inconsistent, fragmentary or garbled, say so plainly in the notes (for example: "The \
+        transcript is too fragmented to extract reliable notes") and list only what is clearly supported. Do not guess.
+        - Be concrete: keep numbers, names, dates and the options that were discussed. No generic filler.
+        - The user's own notes are priority: weave them into the result.
+        """
+}
+
 /// Czysta funkcja: szablon + transkrypt + My notes + kontekst → prompt. `nil`, gdy nie ma czego streszczać
 /// (pusta albo w całości wykluczona transkrypcja) — wtedy model nie jest wołany (Review Focus #1).
 public enum NotePromptBuilder {
     /// `condensed`: wejście to wynik etapu map (map-reduce), nie pełny zapis — jedno dopisane zdanie (spec fazy 2.0 §11.4).
     public static func build(template: Template, transcript: Transcript, myNotes: String, context: String,
                              notesLanguage: LanguageCode?, condensed: Bool = false,
-                             vocabulary: PromptVocabulary? = nil) -> NotePrompt? {
+                             vocabulary: PromptVocabulary? = nil, rulesBody: String = SummaryPrompt.defaultBody) -> NotePrompt? {
         let lines = transcriptLines(transcript)
         guard !lines.isEmpty else { return nil }
         return prompt(template: template, lines: lines, myNotes: myNotes, context: context, notesLanguage: notesLanguage,
-                      condensed: condensed, vocabulary: vocabulary)
+                      condensed: condensed, vocabulary: vocabulary, rulesBody: rulesBody)
     }
 
     /// Ten sam prompt z gotowych linii `[m:ss] Me|Them: …` (reduce dostaje wyjście mapy, nie `Transcript`); bez bramki „pusto".
     /// `vocabulary` (F21): linie Termów i uczestników w `system`, po regułach i zdaniu o języku, przed „Structure"; w `user` ich nie ma.
     static func prompt(template: Template, lines: [String], myNotes: String, context: String, notesLanguage: LanguageCode?,
-                       condensed: Bool = false, vocabulary: PromptVocabulary? = nil) -> NotePrompt {
+                       condensed: Bool = false, vocabulary: PromptVocabulary? = nil,
+                       rulesBody: String = SummaryPrompt.defaultBody) -> NotePrompt {
         let language = notesLanguage.map { "Write the notes in \($0.englishName)." }
             ?? "Write the notes in the language that predominates in the transcript."
         let system = """
@@ -34,12 +47,7 @@ public enum NotePromptBuilder {
         everyone else on the call.
 
         Rules:
-        - Use only what is in the transcript, the user's own notes and the user's context. Never invent facts, names, \
-        numbers or decisions.
-        - If the transcript is inconsistent, fragmentary or garbled, say so plainly in the notes (for example: "The \
-        transcript is too fragmented to extract reliable notes") and list only what is clearly supported. Do not guess.
-        - Be concrete: keep numbers, names, dates and the options that were discussed. No generic filler.
-        - The user's own notes are priority: weave them into the result.
+        \(rulesBody.trimmingCharacters(in: .whitespacesAndNewlines))
         - Output Markdown. The FIRST line must be the title, written as "# <short descriptive title>". Nothing may \
         come before it. \(NoteTitle.rule)
         \(language) Keep the section titles under Structure exactly as written (do not translate them); write "(owner unclear)" in the notes language.\(condensed ? "\n\(condensedSentence)" : "")\(vocabulary?.promptLines.map { "\n\($0)" } ?? "")
