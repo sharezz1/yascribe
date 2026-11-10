@@ -86,3 +86,18 @@ import Testing
     #expect(try dec.decode(CorrectedTranscript.self, from: enc.encode(c)).prompt == nil)
     #expect(try dec.decode(CorrectedTranscript.self, from: enc.encode(withTrace)).prompt == PromptTrace(source: .custom, text: "mine"))
 }
+
+@Test func applyingOnlyTouchesFieldsTheUserChanged() throws {
+    let stale = PromptOverrides(correction: PromptEntry(text: "mine", basedOn: "000000000000"))
+    // Niezmieniony stary własny tekst zostaje stary (notka nie znika po cichu).
+    let untouched = try stale.applying([.correction: "mine", .summary: SummaryPrompt.defaultBody])
+    #expect(untouched == stale && untouched.isStale(.correction))
+    // „Keep mine": ten sam tekst, nowe `basedOn`.
+    let kept = try stale.applying([.correction: "mine"], keepMine: [.correction])
+    #expect(kept.body(.correction) == "mine" && !kept.isStale(.correction))
+    // „Use new default" / Reset: tekst domyślny kasuje wpis.
+    #expect(try stale.applying([.correction: CorrectionPrompt.defaultBody]).correction == nil)
+    // Zmiana zapisuje z bieżącym skrótem; ponad limit — błąd, nic nie jest zwracane.
+    #expect(try stale.applying([.correction: "mine2"]).isStale(.correction) == false)
+    #expect(throws: PromptOverrides.SetError.tooLong(max: 2_000)) { try stale.applying([.summary: String(repeating: "x", count: 2_001)]) }
+}

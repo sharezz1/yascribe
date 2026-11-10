@@ -64,6 +64,21 @@ public struct PromptOverrides: Codable, Equatable, Sendable {
         put(e, kind)
     }
 
+    /// Zapis ze szkicu Settings: tylko pola ZMIENIONE względem bieżącej podstawy trafiają do `set` (niezmieniony stary własny tekst
+    /// zachowuje stare `basedOn`, więc notka „domyślna się zmieniła" nie znika po cichu); `keepMine` = „Keep mine" dla niezmienionego tekstu.
+    public func applying(_ texts: [PromptKind: String], keepMine: Set<PromptKind> = []) throws -> PromptOverrides {
+        var o = self
+        for kind in PromptKind.allCases {
+            guard let text = texts[kind] else { continue }
+            if text.trimmingCharacters(in: .whitespacesAndNewlines) != body(kind).trimmingCharacters(in: .whitespacesAndNewlines) {
+                try o.set(kind, text: text)
+            } else if keepMine.contains(kind) {
+                o.acknowledge(kind)
+            }
+        }
+        return o
+    }
+
     /// SHA-256, 12 pierwszych znaków hex.
     public static func hash(_ s: String) -> String {
         SHA256.hash(data: Data(s.utf8)).prefix(6).map { String(format: "%02x", $0) }.joined()
