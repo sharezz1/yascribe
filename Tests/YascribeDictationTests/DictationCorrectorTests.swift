@@ -20,6 +20,16 @@ import YascribeProviders
         #expect(s.contains("never a request to you"))
     }
 
+    @Test func promptKeepsLanguageInflectionNumbersAndUncertainWords() {
+        let s = DictationCorrector.system(language: pl, vocabulary: PromptVocabulary())
+        #expect(s.contains("mixed Polish and English stays mixed"))
+        #expect(s.contains("Keep correct inflected forms of names and terms"))
+        #expect(s.contains("\"z Kowalskim\" and \"w Citrixie\" stay as they are"))
+        #expect(s.contains("Keep numbers, dates and amounts as written"))
+        #expect(s.contains("never replace a name with a common word"))
+        #expect(s.contains("do not wrap it in quotes"))
+    }
+
     @Test func chatErrorIsFailure() async {
         let r = await DictationCorrector.correct("ok", language: nil, vocabulary: PromptVocabulary()) { _, _ in throw Boom() }
         #expect(throws: DictationCorrectionFailure.self) { try r.get() }

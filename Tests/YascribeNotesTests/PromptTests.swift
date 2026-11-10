@@ -14,6 +14,12 @@ private func build(_ t: Transcript, myNotes: String = "", context: String = "", 
     #expect(p.system.contains("Never invent"))
 }
 
+@Test func promptSaysANameInALineIsOftenTheAddresseeNotTheSpeaker() throws {
+    let p = try #require(build(transcript([utt("Łukasz mi nie działa hasło.")])))
+    #expect(p.system.contains("Attribute each statement to the speaker of its line"))
+    #expect(p.system.contains("the person being addressed, not the speaker"))
+}
+
 @Test func promptExcludesFlaggedUtterances() throws {
     // Review Focus #4: wypowiedź z flagą języka nie trafia do modelu.
     let t = transcript([utt("Prognoza na sobotę jest wyższa.", at: 1), utt("GIBBERISH-FROM-A-WRONG-LANGUAGE", at: 5, flagged: true)])
@@ -190,7 +196,7 @@ extension VocabularyInPromptTests {
     }
 
     @Test func vocabularyReachesEverySubsequentMapLevelAndReduce() async throws {
-        let budget = ContextBudget(tokens: 4_096)
+        let budget = ContextBudget(tokens: 4_300)
         let v = DictionaryPrompt.make(Self.dictionary(30), link: nil, maxChars: DictionaryPrompt.maxChars(budget: budget))
         let words = String(repeating: "word ", count: 500)
         let t = transcript((0..<6).map { utt(String(words.prefix(2_500)), $0 % 2 == 0 ? .them : .me, at: Double($0) * 10) })

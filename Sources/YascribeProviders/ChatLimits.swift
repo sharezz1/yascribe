@@ -26,7 +26,7 @@ public struct ChatLimits: Equatable, Sendable {
         if provider.isLocal {
             switch call {
             case .note: return ChatLimits(soft: 600, transport: 660, maxTokens: localNoteMaxTokens)
-            case .correctionBatch: return ChatLimits(soft: 300, transport: 330, temperature: 0.2)
+            case .correctionBatch: return ChatLimits(soft: 300, transport: 330, temperature: 0) // powtarzalne porównania modeli i poleceń
             case .title: return ChatLimits(soft: 120, transport: 150, maxTokens: 64)
             case .mapPart: return ChatLimits(soft: 300, transport: 330, temperature: 0.2)
             }
