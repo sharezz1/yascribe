@@ -21,7 +21,7 @@ private let allCalls: [ChatCall] = [.note, .correctionBatch, .title, .mapPart]
 
 @Test func localValuesMatchTheDecidedTable() {
     #expect(ChatLimits.for(local, call: .note) == ChatLimits(soft: 600, transport: 660, maxTokens: 2048, temperature: nil))
-    #expect(ChatLimits.for(local, call: .correctionBatch) == ChatLimits(soft: 300, transport: 330, maxTokens: nil, temperature: 0.2))
+    #expect(ChatLimits.for(local, call: .correctionBatch) == ChatLimits(soft: 300, transport: 330, maxTokens: nil, temperature: 0))
     #expect(ChatLimits.for(local, call: .title) == ChatLimits(soft: 120, transport: 150, maxTokens: 64, temperature: nil))
     #expect(ChatLimits.for(local, call: .mapPart) == ChatLimits(soft: 300, transport: 330, maxTokens: nil, temperature: 0.2))
     #expect(ChatLimits.localNoteMaxTokens == 2048)

@@ -13,6 +13,8 @@ public struct NotePrompt: Equatable, Sendable {
 /// Polecenie podsumowania: edytowalne reguły (Settings, TASK-96); wstęp, format wyjścia, język i `Structure` są stałe.
 public enum SummaryPrompt {
     public static let defaultBody = """
+        - Attribute each statement to the speaker of its line. A name inside a line is often the person being addressed, not \
+        the speaker.
         - Use only what is in the transcript, the user's own notes and the user's context. Never invent facts, names, \
         numbers or decisions.
         - If the transcript is inconsistent, fragmentary or garbled, say so plainly in the notes (for example: "The \
