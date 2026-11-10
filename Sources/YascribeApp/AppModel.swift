@@ -94,6 +94,8 @@ final class AppModel {
         didSet { archive.settingsDidChange(old: oldValue, new: settings) }
     }
     var probeCache = ProbeCache()
+    /// Własne polecenia korekty i podsumowania (TASK-96, `prompts.json`). Zapis przez `savePrompts`.
+    var prompts = PromptOverrides()
     /// Tabela id modelu -> nazwa z listy dostawcy; zapełnia się przy pobraniu listy modeli.
     var modelNames = ModelNameCache()
     /// Słownik użytkownika (F21): Termy do poleceń, Aliasy do Replacement. Zapis przez `saveDictionary()`.
@@ -168,6 +170,7 @@ final class AppModel {
         notes.summaryThinking = { [weak self] in self?.settings.summaryThinkingEnabled ?? true }
         notes.dictionary = { [weak self] in self?.dictionary ?? UserDictionary() }
         notes.replacementRules = { [weak self] in self?.replacementRules ?? ReplacementRules(UserDictionary()) }
+        notes.prompts = { [weak self] in self?.prompts ?? PromptOverrides() }
         notes.fillerWords = { [weak self] in
             guard let s = self?.settings, s.removeFillersEnabled else { return [] }
             return s.fillerWords ?? FillerWords.defaults
@@ -258,6 +261,9 @@ final class AppModel {
         presets = read(paths.presets, PresetsFile())
         settings = read(paths.settings, GlobalSettings())
         probeCache = read(paths.probeCache, ProbeCache())
+        let loadedPrompts = PromptStore.load(from: paths.prompts)
+        prompts = loadedPrompts.overrides
+        if let problem = loadedPrompts.problem { errors.append(problem) }
         modelNames = read(paths.modelNames, ModelNameCache())
         notes.templates = read(paths.templates, TemplatesFile())
         dictionary = read(paths.dictionary, UserDictionary())
@@ -380,6 +386,17 @@ final class AppModel {
             try JSONFile.save(probeCache, to: paths.probeCache)
         } catch {
             lastError = "Couldn't save your settings: \(error)"
+        }
+    }
+
+    /// Zapis własnych poleceń: stan aktywny zmienia się dopiero po udanym zapisie pliku. `nil` = zapisano, inaczej komunikat.
+    func savePrompts(_ new: PromptOverrides) -> String? {
+        do {
+            try PromptStore.save(new, to: paths.prompts)
+            prompts = new
+            return nil
+        } catch {
+            return "Couldn't save your prompts: \(error)"
         }
     }
 

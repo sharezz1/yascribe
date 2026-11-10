@@ -44,6 +44,8 @@ final class NotesModel {
     var summaryThinking: () -> Bool = { true }
     /// Przerywniki do usunięcia z poprawionego tekstu (F20 P2); pusta lista = nic nie usuwamy.
     var fillerWords: () -> [String] = { [] }
+    /// Własne polecenia korekty i podsumowania (TASK-96); czytane raz, przed pierwszym `await` przebiegu.
+    var prompts: () -> PromptOverrides = { PromptOverrides() }
     /// Słownik użytkownika i jego reguły Replacement (F21); przebieg czyta je razem, przed pierwszym `await`.
     var dictionary: () -> UserDictionary = { UserDictionary() }
     var replacementRules: () -> ReplacementRules = { ReplacementRules(UserDictionary()) }
@@ -218,7 +220,7 @@ final class NotesModel {
         }
         // Słownik, reguły i uczestnicy z jednej chwili, przed pierwszym `await`: edycja słownika w trakcie sondy kontekstu
         // nie miesza wersji wejścia i polecenia. Uczestnicy z `meta.json` teraz, więc późne powiązanie wydarzenia też się liczy.
-        let dict = dictionary(), rules = replacementRules()
+        let dict = dictionary(), rules = replacementRules(), prompts = prompts()
         let link = store(sessionURL).readMeta().calendarEvent
         let input = Replacement.apply(transcript, rules: rules)
         correctionFailure[id] = nil
@@ -229,9 +231,11 @@ final class NotesModel {
             ? ContextBudget.resolve(provider: client.provider, detected: await ContextProbe.detect(client: client, model: assignment.model)) : nil
         let vocabulary = DictionaryPrompt.make(dict, link: link, maxChars: DictionaryPrompt.maxChars(budget: budget))
         let used = vocabulary.isEmpty ? nil : vocabulary
-        let result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
-                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used)
+        var result = await Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
+                                     temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used,
+                                     body: prompts.body(.correction))
             .correct(input, language: language)
+        result.prompt = prompts.trace(.correction)
         // Komunikat należy do najnowszej korekty sesji, wynik — do najnowszej korekty tego przebiegu (F2): starsza, kończąc się
         // później, nie nadpisuje `corrected.json` ani śladu nowszej. Sprawdzenie i zapis bez `await` pomiędzy.
         let outcome = corrections.finish(ticket)
@@ -292,6 +296,9 @@ final class NotesModel {
                                       chatTimeout: limits.transport, maxTokens: limits.maxTokens,
                                       requiresExistingSession: true)
         generator.thinking = choice.thinking ?? summaryThinking()
+        let prompts = prompts() // z chwili kliknięcia, jak słownik niżej
+        generator.rulesBody = prompts.body(.summary)
+        generator.promptTrace = prompts.trace(.summary)
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url
