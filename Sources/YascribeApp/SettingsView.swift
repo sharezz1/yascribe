@@ -15,6 +15,19 @@ final class SettingsDraft: ObservableObject {
     /// Sekcja Summary: „Thinking" (F20 P1).
     @Published var summaryThinking = true
     @Published var dictation = DictationSettings()
+    /// Podstawy poleceń korekty i podsumowania (TASK-96): pole pokazuje własny tekst albo domyślny; `keepMine` = „Keep mine" po zmianie domyślnego.
+    @Published var promptTexts: [PromptKind: String] = [:]
+    @Published var keepMine: Set<PromptKind> = []
+
+    func loadPrompts(_ o: PromptOverrides) {
+        for kind in PromptKind.allCases { promptTexts[kind] = o.body(kind) }
+        keepMine = []
+    }
+
+    /// Stan po zapisie szkicu; `nil` = tekst ponad limitem (Save zablokowany).
+    func promptsApplied(to base: PromptOverrides) -> PromptOverrides? {
+        try? base.applying(promptTexts, keepMine: keepMine)
+    }
 
     static func comparableDictation(_ settings: DictationSettings) -> DictationSettings {
         var settings = settings
@@ -80,7 +93,11 @@ struct SettingsView: View {
             || draft.summaryThinking != model.settings.summaryThinkingEnabled
             || draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
             || FillerWords.parse(draft.fillers) != (model.settings.fillerWords ?? FillerWords.defaults)
+            || draft.promptsApplied(to: model.prompts) != model.prompts
     }
+
+    /// Tekst polecenia ponad limitem: Save zablokowany, licznik czerwony.
+    private var promptsInvalid: Bool { draft.promptsApplied(to: model.prompts) == nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -132,6 +149,7 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .onAppear {
             draft.load(model.settings)
+            draft.loadPrompts(model.prompts)
             if let asr = draft.dictation.asr, asr.model.isEmpty, model.provider(asr.providerID)?.api == .fluidAudio {
                 draft.dictation.asr = RoleAssignment(providerID: asr.providerID, model: LocalASRModels.parakeetV3)
             }
@@ -168,6 +186,49 @@ struct SettingsView: View {
                     }
                 }
             }
+            RowDivider()
+            promptRow(.correction, caption: "The base instruction for the correction model. The line format, language, filler and dictionary lines are added after it, and the length checks always apply.")
+            promptNotice(.correction)
+        }
+    }
+
+    // MARK: Własne polecenia (TASK-96)
+
+    private func promptRow(_ kind: PromptKind, caption: String) -> some View {
+        let text = Binding(get: { draft.promptTexts[kind] ?? kind.defaultBody }, set: { draft.promptTexts[kind] = $0 })
+        let count = text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).count
+        let local = model.providers.providers.contains { $0.isLocal }
+        return FormRow(label: "Prompt", caption: caption + (local ? " Long prompts leave less room for the transcript in a local model's context window." : "")) {
+            VStack(alignment: .leading, spacing: 6) {
+                EditorPromptField(text: text, minHeight: 110)
+                HStack(spacing: 8) {
+                    Text("\(count) / \(kind.maxChars)").font(.subheadline).foregroundStyle(count > kind.maxChars ? .mnRec : .mnText2)
+                    Spacer()
+                    Button("Reset") { draft.promptTexts[kind] = kind.defaultBody; draft.keepMine.remove(kind) }
+                        .buttonStyle(.pillSmall).help("Back to the default prompt")
+                        .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines) == kind.defaultBody.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+            }
+        }
+    }
+
+    /// Własny tekst oparty na starej domyślnej podstawie: nic nie podmieniamy po cichu, użytkownik wybiera.
+    @ViewBuilder private func promptNotice(_ kind: PromptKind) -> some View {
+        if model.prompts.isStale(kind), !draft.keepMine.contains(kind),
+           draft.promptTexts[kind] == model.prompts.body(kind) {
+            RowDivider()
+            VStack(alignment: .leading, spacing: 6) {
+                Text("The default prompt changed in this version. Your own prompt is unchanged.").font(.subheadline).foregroundStyle(.mnText2)
+                DisclosureGroup("Show new default") {
+                    Text(kind.defaultBody).font(.system(size: 12)).foregroundStyle(.mnText2).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(spacing: 8) {
+                    Button("Use new default") { draft.promptTexts[kind] = kind.defaultBody }.buttonStyle(.pillSmall)
+                    Button("Keep mine") { draft.keepMine.insert(kind) }.buttonStyle(.pillSmall)
+                }
+            }
+            .padding(.vertical, 10).padding(.horizontal, 16)
         }
     }
 
@@ -184,6 +245,9 @@ struct SettingsView: View {
                     set: { draft.summaryThinking = $0 }))
                     .labelsHidden().toggleStyle(.switch)
             }
+            RowDivider()
+            promptRow(.summary, caption: "The rules the summary model follows. The title line, notes language and the template structure are added after them.")
+            promptNotice(.summary)
         }
     }
 
@@ -261,8 +325,8 @@ struct SettingsView: View {
         HStack(spacing: 8) {
             if draft.saved && !isDirty { StateLabel(.ok, "Saved") }
             Spacer()
-            Button("Cancel") { draft.load(model.settings) }.buttonStyle(.pill).disabled(!isDirty)
-            Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut("s", modifiers: .command).disabled(!isDirty)
+            Button("Cancel") { draft.load(model.settings); draft.loadPrompts(model.prompts) }.buttonStyle(.pill).disabled(!isDirty)
+            Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut("s", modifiers: .command).disabled(!isDirty || promptsInvalid)
         }
         .padding(.horizontal, 28)
         .frame(height: 56)
@@ -286,6 +350,12 @@ struct SettingsView: View {
     }
 
     private func commit() {
+        // Polecenia najpierw: przy błędzie zapisu pliku nic się nie zmienia, szkic zostaje „dirty" (TASK-96).
+        guard let newPrompts = draft.promptsApplied(to: model.prompts) else { return }
+        if newPrompts != model.prompts, let failure = model.savePrompts(newPrompts) {
+            model.lastError = failure
+            return
+        }
         let words = FillerWords.parse(draft.fillers)
         model.settings.embedding = draft.embedding
         model.settings.askModel = draft.askModel
@@ -301,6 +371,7 @@ struct SettingsView: View {
         model.save()
         if dictationChanged { model.dictation.applySettings() }
         draft.fillers = FillerWords.format(words)
+        draft.loadPrompts(model.prompts)
         draft.saved = true
     }
 }

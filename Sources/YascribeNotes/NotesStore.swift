@@ -11,9 +11,12 @@ public struct NoteSummary: Codable, Equatable, Sendable {
     /// Liczba części pierwszego przebiegu kondensacji, gdy transkrypt był dzielony (map-reduce, spec fazy 2.0 §11.1); `nil` = jeden przebieg.
     /// Pole opcjonalne: stare `summary.json` go nie mają (lekcja E6).
     public var condensedParts: Int?
+    /// Podstawa polecenia użyta do tej notatki (TASK-96); `nil` w starych `summary.json`.
+    public var prompt: PromptTrace?
 
     public init(title: String?, markdown: String, templateID: String, model: String, context: String, generatedAt: Date,
-                condensedParts: Int? = nil) {
+                condensedParts: Int? = nil, prompt: PromptTrace? = nil) {
+        self.prompt = prompt
         self.condensedParts = condensedParts
         self.title = title
         self.markdown = markdown

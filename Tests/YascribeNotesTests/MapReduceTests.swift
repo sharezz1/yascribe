@@ -525,3 +525,54 @@ private func waitForFirstCall(_ stub: ChatStub) async throws {
     #expect(!stub.calls.contains(where: isReduce))
     #expect(summaryFiles(session).isEmpty)
 }
+
+// MARK: własne reguły podsumowania (TASK-96)
+
+@Test func customRulesReachTheSingleCallAndTheReduceButNeverTheMap() async throws {
+    let rules = "- Always list owners first."
+    func gen(_ stub: ChatStub) -> NoteGenerator {
+        var g = NoteGenerator(client: localChatClient(stub), model: "local-model")
+        g.rulesBody = rules
+        g.promptTrace = PromptTrace(source: .custom, text: rules)
+        return g
+    }
+    // Jeden przebieg: krótki transkrypt mieści się w budżecie.
+    let one = tempDir(); defer { try? FileManager.default.removeItem(at: one) }
+    let s1 = ChatStub { _ in "# T\nbody" }
+    let summary = try await run(s1, session: one, transcript: transcript([utt("Prognoza na sobotę.")]), generator: gen(s1))
+    #expect(s1.calls.count == 1 && s1.calls[0].system.contains(rules) && !s1.calls[0].system.contains("Be concrete"))
+    #expect(summary.prompt == PromptTrace(source: .custom, text: rules)) // ślad dociera do zapisanej notatki
+    // Map-reduce: reduce (i tylko on) dostaje reguły; mapa jest parsowana, więc ich nie widzi.
+    let many = tempDir(); defer { try? FileManager.default.removeItem(at: many) }
+    let s2 = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+    _ = try await run(s2, session: many, transcript: bigTranscript(count: 6, chars: 2_500), generator: gen(s2))
+    let maps = s2.calls.filter(isMap), reduces = s2.calls.filter(isReduce)
+    #expect(!maps.isEmpty && reduces.count == 1)
+    #expect(maps.allSatisfy { !$0.system.contains(rules) } && reduces[0].system.contains(rules))
+}
+
+@Test func customRulesCountAgainstTheBudgetAndTheErrorNamesThem() async throws {
+    // Budżet, na którym domyślne reguły jeszcze się mieszczą w samym prompcie szablonu, a 2000 znaków własnych już nie:
+    // błąd musi pochodzić z `bare`, nie z późniejszej bramki.
+    func bare(_ rules: String) -> Int {
+        NotePromptBuilder.prompt(template: .standard, lines: [], myNotes: "", context: "", notesLanguage: .polish, condensed: true, rulesBody: rules).chars
+    }
+    let custom = words(2_000)
+    let middle = Double(bare(SummaryPrompt.defaultBody) + bare(custom)) / 2
+    let tokens = Int((middle / ContextBudget.charsPerToken).rounded(.up)) + ContextBudget.marginTokens + ContextBudget.noteReplyTokens
+    let limit = ContextBudget(tokens: tokens).promptChars(replyTokens: ContextBudget.noteReplyTokens)
+    #expect(bare(SummaryPrompt.defaultBody) <= limit && bare(custom) > limit)
+    func attempt(_ rules: String) async -> (String?, Int) {
+        let session = tempDir(); defer { try? FileManager.default.removeItem(at: session) }
+        let stub = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+        var g = NoteGenerator(client: localChatClient(stub), model: "local-model")
+        g.rulesBody = rules
+        let m = await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500), budget: ContextBudget(tokens: tokens), generator: g)
+        return (m, stub.calls.count)
+    }
+    let (defaultMessage, _) = await attempt(SummaryPrompt.defaultBody)
+    #expect(defaultMessage?.contains("too small for notes") != true)
+    let (message, calls) = await attempt(custom)
+    #expect(message == "local-model's Context window (\(tokens) tokens) is too small for notes. Your custom summary prompt is 2000 characters; shorten it or reset it in Settings.")
+    #expect(calls == 0)
+}

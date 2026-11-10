@@ -501,3 +501,17 @@ private func lineTexts(_ user: String) -> [String] {
     #expect(r.transcript.utterances.enumerated().allSatisfy { $0.offset == 1 || $0.element.text.hasSuffix(".") })
     #expect(r.failedBatches == 0 && r.rejectedLines == 0)
 }
+
+// MARK: własna podstawa korekty (TASK-96)
+
+@Test func longerCustomCorrectionBodyShrinksTheBatchAndIsNamedInTheTooSmallError() async {
+    let small = ContextBudget(tokens: 4_096)
+    func make(_ body: String, budget: ContextBudget = small) -> Corrector {
+        Corrector(client: chatClient(ChatStub { $0.user }), assignment: assignment, budget: budget, body: body)
+    }
+    let short = make(CorrectionPrompt.defaultBody), long = make(String(repeating: "x", count: 1_500))
+    #expect(long.batchLimit(language: .polish) < short.batchLimit(language: .polish)) // `batchLimit` liczy faktyczny `system`
+    let r = await make(String(repeating: "x", count: 1_500), budget: ContextBudget(tokens: 300))
+        .correct(transcript([utt("no to jest test")]), language: nil)
+    #expect(r.firstError?.hasSuffix("Your custom correction prompt is 1500 characters; shorten it or reset it in Settings.") == true)
+}

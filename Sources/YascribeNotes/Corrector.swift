@@ -13,6 +13,8 @@ public struct CorrectedTranscript: Codable, Equatable, Sendable {
     public var firstError: String?
     /// Dostawca, który poprawiał (okno Improve pokazuje „ostatnio użyty"); `nil` w starych `corrected.json`.
     public var providerID: UUID?
+    /// Podstawa polecenia użyta do tej korekty (TASK-96); `nil` w starych `corrected.json`. Ustawia `NotesModel` po udanej korekcie.
+    public var prompt: PromptTrace?
 
     /// Żadna partia nie przeszła: nic nie zostało poprawione (to jest „Correction failed", a nie „parts kept as heard").
     public var failedCompletely: Bool { batches > 0 && failedBatches == batches }
@@ -119,6 +121,18 @@ public enum CorrectionBatches {
     }
 }
 
+/// Polecenie korekty: edytowalna podstawa (Settings, TASK-96) i stała reguła formatu, od której zależy `CorrectionBatches.parse`.
+public enum CorrectionPrompt {
+    public static let defaultBody = """
+        You correct speech-to-text transcripts line by line. Fix recognition errors, punctuation and casing. \
+        Do not add, remove, merge or reorder content, and do not summarize or translate.
+        """
+    static let formatRule = """
+        The input is numbered lines like "[12] text". Reply with exactly the same numbers, one corrected line per \
+        input line, in the same order, and nothing else.
+        """
+}
+
 /// Korekta po transkrypcji (spec 1.5 §4.1): model z presetu poprawia wypowiedzi partiami. Czas, mówca i flagi języka
 /// zostają z oryginału (kopiujemy transkrypt i podmieniamy tylko `text`); wypowiedzi z flagą nie idą do modelu.
 public struct Corrector: Sendable {
@@ -136,10 +150,13 @@ public struct Corrector: Sendable {
     public var fillerWords: [String]
     /// Termy i uczestnicy do polecenia (F21, D6): dane dla modelu, nie instrukcje. `nil` = polecenie bajt w bajt jak dotąd.
     public var vocabulary: PromptVocabulary?
+    /// Edytowalna podstawa polecenia (TASK-96); reguła formatu `[n] tekst` jest stała i dochodzi po niej.
+    public var body: String
 
     public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120,
                 chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil, fillerWords: [String] = [],
-                vocabulary: PromptVocabulary? = nil) {
+                vocabulary: PromptVocabulary? = nil, body: String = CorrectionPrompt.defaultBody) {
+        self.body = body
         self.fillerWords = fillerWords
         self.vocabulary = vocabulary
         self.budget = budget
@@ -152,12 +169,8 @@ public struct Corrector: Sendable {
     }
 
     public func system(language: LanguageCode?) -> String {
-        var s = """
-        You correct speech-to-text transcripts line by line. Fix recognition errors, punctuation and casing. \
-        Do not add, remove, merge or reorder content, and do not summarize or translate.
-        The input is numbered lines like "[12] text". Reply with exactly the same numbers, one corrected line per \
-        input line, in the same order, and nothing else.
-        """
+        // Edytowalna podstawa, potem stałe bloki: reguła formatu stoi PO podstawie, żeby miała ostatnie słowo (TASK-96).
+        var s = body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n" + CorrectionPrompt.formatRule
         if !fillerWords.isEmpty {
             s += "\nException: remove filler sounds and hesitations (for example: \(fillerWords.prefix(8).joined(separator: ", "))). "
                 + "Keep every word that carries meaning."
@@ -168,6 +181,12 @@ public struct Corrector: Sendable {
             s += "\nExtra instructions from the user: \(extra)"
         }
         return s
+    }
+
+    /// Dopisek do błędu budżetu, gdy użytkownik ma własną podstawę: to ona mogła zjeść okno.
+    var customPromptHint: String {
+        let b = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return b == CorrectionPrompt.defaultBody ? "" : " Your custom correction prompt is \(b.count) characters; shorten it or reset it in Settings."
     }
 
     /// Limit znaków tekstu w jednej partii: z budżetu (dwie reguły z `ContextBudget`, plus limit czasowy) albo `maxBatchChars`.
@@ -251,7 +270,7 @@ public struct Corrector: Sendable {
         if lines.isEmpty, !all.isEmpty, let budget {
             // Kontekst za mały nawet na prompt albo na każdą wypowiedź: jawny błąd, nigdy wysyłka.
             return CorrectedTranscript(transcript: out, model: assignment.model, batches: 1, failedBatches: 1, rejectedLines: 0,
-                                       firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction.", providerID: assignment.providerID)
+                                       firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction." + customPromptHint, providerID: assignment.providerID)
         }
         let batches = CorrectionBatches.split(lines, maxChars: limit)
         let system = system(language: language)
