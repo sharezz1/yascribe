@@ -67,6 +67,7 @@ private func corrector(fillers: [String] = [], prompt: String? = nil) -> Correct
     let s = p.system
     let body = try #require(s.range(of: "- Write like a pirate.")), title = try #require(s.range(of: "# <short descriptive title>"))
     #expect(body.upperBound <= title.lowerBound) // stałe reguły po podstawie: mają ostatnie słowo
+    #expect(s.contains("\n- Write like a pirate.\n- Output Markdown. The FIRST line must be the title"))
     #expect(s.contains(NoteTitle.rule) && s.contains("Write the notes in Polish.") && s.contains("\n\nStructure:\n"))
     #expect(s.contains("\"Me\" is the user's microphone") && !s.contains("Be concrete"))
 }

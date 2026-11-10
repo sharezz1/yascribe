@@ -552,13 +552,27 @@ private func waitForFirstCall(_ stub: ChatStub) async throws {
 }
 
 @Test func customRulesCountAgainstTheBudgetAndTheErrorNamesThem() async throws {
-    // 2560 tokenów: domyślne reguły jeszcze się mieszczą (sprawdza `contextTooSmallForThePromptItself…`: tam sam szablon ponad budżet),
-    // więc tu bierzemy budżet, na którym zawodzi dopiero długi własny tekst.
-    let session = tempDir(); defer { try? FileManager.default.removeItem(at: session) }
-    var g = NoteGenerator(client: localChatClient(ChatStub { _ in "# T\nbody" }), model: "local-model")
-    g.rulesBody = words(2_000)
-    let stub = ChatStub { _ in "# T\nbody" }
-    let message = await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500), budget: ContextBudget(tokens: 2_560), generator: g)
-    #expect(message?.hasSuffix("Your custom summary prompt is 2000 characters; shorten it or reset it in Settings.") == true)
-    #expect(stub.calls.isEmpty)
+    // Budżet, na którym domyślne reguły jeszcze się mieszczą w samym prompcie szablonu, a 2000 znaków własnych już nie:
+    // błąd musi pochodzić z `bare`, nie z późniejszej bramki.
+    func bare(_ rules: String) -> Int {
+        NotePromptBuilder.prompt(template: .standard, lines: [], myNotes: "", context: "", notesLanguage: .polish, condensed: true, rulesBody: rules).chars
+    }
+    let custom = words(2_000)
+    let middle = Double(bare(SummaryPrompt.defaultBody) + bare(custom)) / 2
+    let tokens = Int((middle / ContextBudget.charsPerToken).rounded(.up)) + ContextBudget.marginTokens + ContextBudget.noteReplyTokens
+    let limit = ContextBudget(tokens: tokens).promptChars(replyTokens: ContextBudget.noteReplyTokens)
+    #expect(bare(SummaryPrompt.defaultBody) <= limit && bare(custom) > limit)
+    func attempt(_ rules: String) async -> (String?, Int) {
+        let session = tempDir(); defer { try? FileManager.default.removeItem(at: session) }
+        let stub = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+        var g = NoteGenerator(client: localChatClient(stub), model: "local-model")
+        g.rulesBody = rules
+        let m = await failure(stub, session: session, transcript: bigTranscript(count: 6, chars: 2_500), budget: ContextBudget(tokens: tokens), generator: g)
+        return (m, stub.calls.count)
+    }
+    let (defaultMessage, _) = await attempt(SummaryPrompt.defaultBody)
+    #expect(defaultMessage?.contains("too small for notes") != true)
+    let (message, calls) = await attempt(custom)
+    #expect(message == "local-model's Context window (\(tokens) tokens) is too small for notes. Your custom summary prompt is 2000 characters; shorten it or reset it in Settings.")
+    #expect(calls == 0)
 }
