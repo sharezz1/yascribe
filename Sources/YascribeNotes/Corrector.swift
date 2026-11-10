@@ -13,6 +13,8 @@ public struct CorrectedTranscript: Codable, Equatable, Sendable {
     public var firstError: String?
     /// Dostawca, który poprawiał (okno Improve pokazuje „ostatnio użyty"); `nil` w starych `corrected.json`.
     public var providerID: UUID?
+    /// Podstawa polecenia użyta do tej korekty (TASK-96); `nil` w starych `corrected.json`. Ustawia `NotesModel` po udanej korekcie.
+    public var prompt: PromptTrace?
 
     /// Żadna partia nie przeszła: nic nie zostało poprawione (to jest „Correction failed", a nie „parts kept as heard").
     public var failedCompletely: Bool { batches > 0 && failedBatches == batches }
@@ -181,6 +183,12 @@ public struct Corrector: Sendable {
         return s
     }
 
+    /// Dopisek do błędu budżetu, gdy użytkownik ma własną podstawę: to ona mogła zjeść okno.
+    var customPromptHint: String {
+        let b = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return b == CorrectionPrompt.defaultBody ? "" : " Your custom correction prompt is \(b.count) characters; shorten it or reset it in Settings."
+    }
+
     /// Limit znaków tekstu w jednej partii: z budżetu (dwie reguły z `ContextBudget`, plus limit czasowy) albo `maxBatchChars`.
     public func batchLimit(language: LanguageCode?) -> Int {
         guard let budget else { return maxBatchChars }
@@ -262,7 +270,7 @@ public struct Corrector: Sendable {
         if lines.isEmpty, !all.isEmpty, let budget {
             // Kontekst za mały nawet na prompt albo na każdą wypowiedź: jawny błąd, nigdy wysyłka.
             return CorrectedTranscript(transcript: out, model: assignment.model, batches: 1, failedBatches: 1, rejectedLines: 0,
-                                       firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction.", providerID: assignment.providerID)
+                                       firstError: "\(assignment.model)'s Context window (\(budget.tokens) tokens) is too small for correction." + customPromptHint, providerID: assignment.providerID)
         }
         let batches = CorrectionBatches.split(lines, maxChars: limit)
         let system = system(language: language)
