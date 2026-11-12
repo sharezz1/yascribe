@@ -18,6 +18,43 @@ final class SettingsDraft: ObservableObject {
     /// Podstawy poleceń korekty i podsumowania (TASK-96): pole pokazuje własny tekst albo domyślny; `keepMine` = „Keep mine" po zmianie domyślnego.
     @Published var promptTexts: [PromptKind: String] = [:]
     @Published var keepMine: Set<PromptKind> = []
+    /// Okno edycji własnego polecenia: które i tekst w polu okna (do szkicu trafia dopiero po Save okna).
+    @Published var editingPrompt: PromptKind?
+    @Published var promptSheetText = ""
+
+    private static func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// „Custom" = tekst różni się od domyślnego.
+    func isCustom(_ kind: PromptKind) -> Bool {
+        Self.trimmed(promptTexts[kind] ?? kind.defaultBody) != Self.trimmed(kind.defaultBody)
+    }
+
+    func openPromptEditor(_ kind: PromptKind) {
+        promptSheetText = promptTexts[kind] ?? kind.defaultBody
+        editingPrompt = kind
+    }
+
+    var promptSheetChanged: Bool {
+        guard let kind = editingPrompt else { return false }
+        return Self.trimmed(promptSheetText) != Self.trimmed(promptTexts[kind] ?? kind.defaultBody)
+    }
+
+    var promptSheetIsDefault: Bool {
+        guard let kind = editingPrompt else { return true }
+        return Self.trimmed(promptSheetText) == Self.trimmed(kind.defaultBody)
+    }
+
+    func savePromptSheet() {
+        guard let kind = editingPrompt else { return }
+        promptTexts[kind] = promptSheetText
+        editingPrompt = nil
+    }
+
+    /// Przełącznik na „Default": domyślny tekst w szkicu, decyzja „Keep mine" przestaje mieć sens.
+    func useDefaultPrompt(_ kind: PromptKind) {
+        promptTexts[kind] = kind.defaultBody
+        keepMine.remove(kind)
+    }
 
     func loadPrompts(_ o: PromptOverrides) {
         for kind in PromptKind.allCases { promptTexts[kind] = o.body(kind) }
@@ -155,6 +192,12 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $sheet.showing) { ProviderSetupSheet(state: sheet) }
+        .dismissibleSheet(isPresented: Binding(get: { draft.editingPrompt != nil }, set: { if !$0 { draft.editingPrompt = nil } }),
+                          onDismiss: { draft.editingPrompt = nil }) {
+            if let kind = draft.editingPrompt {
+                PromptEditorSheet(kind: kind, draft: draft, localModel: model.providers.providers.contains { $0.isLocal })
+            }
+        }
         .confirmationDialog("Change the embedding model?", isPresented: $draft.confirming) {
             Button("Change Model", role: .destructive) { commit() }
             Button("Keep Current Model", role: .cancel) {}
@@ -198,15 +241,20 @@ struct SettingsView: View {
         let text = Binding(get: { draft.promptTexts[kind] ?? kind.defaultBody }, set: { draft.promptTexts[kind] = $0 })
         let count = text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).count
         let local = model.providers.providers.contains { $0.isLocal }
+        let custom = draft.isCustom(kind)
+        let mode = Binding<Bool>(get: { custom }, set: { wantsCustom in
+            if wantsCustom { if !custom { draft.openPromptEditor(kind) } } else { draft.useDefaultPrompt(kind) }
+        })
         return FormRow(label: "Prompt", caption: caption + (local ? " Long prompts leave less room for the transcript in a local model's context window." : "")) {
-            VStack(alignment: .leading, spacing: 6) {
-                EditorPromptField(text: text, minHeight: 110)
-                HStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Picker("Prompt", selection: mode) {
+                    Text("Default").tag(false)
+                    Text("Custom").tag(true)
+                }
+                .labelsHidden().pickerStyle(.segmented).fixedSize()
+                if custom {
+                    Button("Edit…") { draft.openPromptEditor(kind) }.buttonStyle(.pillSmall)
                     Text("\(count) / \(kind.maxChars)").font(.subheadline).foregroundStyle(count > kind.maxChars ? .mnRec : .mnText2)
-                    Spacer()
-                    Button("Reset") { draft.promptTexts[kind] = kind.defaultBody; draft.keepMine.remove(kind) }
-                        .buttonStyle(.pillSmall).help("Back to the default prompt")
-                        .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines) == kind.defaultBody.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             }
         }
