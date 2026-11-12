@@ -51,7 +51,7 @@ release_main() {
 
     # (1) stan repozytorium
     [ -z "$(git status --porcelain)" ] || die "drzewo robocze nie jest czyste"
-    [ "$(git rev-parse --abbrev-ref HEAD)" = "master" ] || die "wydanie tylko z gałęzi master"
+    # Nazwa gałęzi nie ma znaczenia (worktree'e, odłączony HEAD): liczy się, że HEAD to dokładnie czubek zdalnego mastera (niżej).
     [ "$VERSION" = "$(tr -d '[:space:]' < VERSION)" ] || die "wersja $VERSION różni się od pliku VERSION"
     git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null && die "tag v$VERSION już istnieje lokalnie"
     [ -z "$(git ls-remote --tags origin "refs/tags/v$VERSION")" ] || die "tag v$VERSION już istnieje zdalnie"

@@ -101,7 +101,12 @@ expect_refused() { # nazwa; reszta: wywołanie jest przygotowane przez wołając
 ARGS=(0.1.0 --dry-run)
 
 mkrepo dirty; echo x > "$W/dirty.txt"; run_release; expect_refused dirty-tree-rejected
-mkrepo branch; git -C "$W" checkout -q -b feature; run_release; expect_refused wrong-branch-rejected
+# gałąź o innej nazwie i odłączony HEAD są dobre, gdy wskazują czubek zdalnego mastera (worktree'e); commit przed nim jest odrzucany niżej
+mkrepo otherbranch; git -C "$W" checkout -q -b feature; run_release
+if [ "$RC" -eq 0 ] && ! gh_called; then ok; else fail "branch-at-remote-head-accepted (RC=$RC)"; fi
+mkrepo detached; git -C "$W" checkout -q --detach; run_release
+if [ "$RC" -eq 0 ] && ! gh_called; then ok; else fail "detached-head-at-remote-head-accepted (RC=$RC)"; fi
+mkrepo featureahead; git -C "$W" checkout -q -b feature; echo z > "$W/z.txt"; git -C "$W" add z.txt; git -C "$W" commit -q -m ahead; run_release; expect_refused branch-ahead-of-remote-rejected
 mkrepo version; ARGS=(0.2.0 --dry-run); run_release; expect_refused version-mismatch-rejected; ARGS=(0.1.0 --dry-run)
 mkrepo unpushed; echo y > "$W/y.txt"; git -C "$W" add y.txt; git -C "$W" commit -q -m local; run_release; expect_refused head-not-pushed-rejected
 mkrepo adhoc; run_release FAKE_IDENTITY=adhoc; expect_refused adhoc-signature-rejected
