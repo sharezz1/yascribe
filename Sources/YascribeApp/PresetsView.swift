@@ -117,6 +117,29 @@ struct EditorPromptField: View {
             .frame(minHeight: minHeight)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
+            .background(AutohideTextScroller())
+    }
+}
+
+/// `TextEditor` to natywny NSScrollView: przy stałych paskach (Ustawienia systemu) pokazuje pusty tor nawet wtedy, gdy tekst się mieści.
+/// Ustawiamy mu `autohidesScrollers`: pasek jest tylko przy przepełnieniu. Szukamy NSScrollView pod środkiem tego widoku (SwiftUI nie daje do niego dostępu).
+private struct AutohideTextScroller: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let root = view.window?.contentView else { return }
+            let center = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+            func apply(_ v: NSView) {
+                if let scroll = v as? NSScrollView, scroll.documentView is NSTextView,
+                   scroll.convert(scroll.bounds, to: nil).contains(center) {
+                    scroll.autohidesScrollers = true
+                    scroll.tile() // bez tego pasek znika dopiero przy następnym układzie
+                }
+                v.subviews.forEach(apply)
+            }
+            apply(root)
+        }
     }
 }
 
