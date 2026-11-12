@@ -36,6 +36,15 @@ private func capitalizing(_ user: String) -> String {
     #expect(r.guardedChanges == 1)
 }
 
+@Test func correctorRevertsAWordTheSpellCheckerRejects() async {
+    // Model zepsuł poprawne słowo („oddziałów" → „odziałów"): kontrola pisowni z aplikacji cofa tylko to słowo.
+    let t = transcript([utt("z help desk oddziałów mamy plan")])
+    var c = corrector(ChatStub { _ in "[1] Z help desk odziałów mamy plan" })
+    c.isMisspelled = { $0 == "odziałów" }
+    let r = await c.correct(t, language: .polish)
+    #expect(r.transcript.utterances.map(\.text) == ["Z help desk oddziałów mamy plan"] && r.guardedChanges == 1)
+}
+
 @Test func batchWithWrongNumbersStaysOriginal() async {
     let t = transcript([utt("no to jest test"), utt("tak dokładnie tak", at: 5)])
     let r = await corrector(ChatStub { _ in "[1] x\n[3] y" }).correct(t, language: .polish)

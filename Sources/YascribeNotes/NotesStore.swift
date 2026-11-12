@@ -13,9 +13,12 @@ public struct NoteSummary: Codable, Equatable, Sendable {
     public var condensedParts: Int?
     /// Podstawa polecenia użyta do tej notatki (TASK-96); `nil` w starych `summary.json`.
     public var prompt: PromptTrace?
+    /// Liczby z notatki, których nie ma w materiale (`NumberCheck`); `nil` = wszystkie znalezione albo starsze `summary.json`.
+    public var unverifiedNumbers: [String]?
 
     public init(title: String?, markdown: String, templateID: String, model: String, context: String, generatedAt: Date,
-                condensedParts: Int? = nil, prompt: PromptTrace? = nil) {
+                condensedParts: Int? = nil, prompt: PromptTrace? = nil, unverifiedNumbers: [String]? = nil) {
+        self.unverifiedNumbers = unverifiedNumbers
         self.prompt = prompt
         self.condensedParts = condensedParts
         self.title = title

@@ -5,6 +5,7 @@ import Foundation
 /// - zmiany zapisu liczb i godzin (`13.30` → `13:30`, „dwunastej" → `12:00`, `2` → „dwa"): prompt każe zostawić zapis;
 /// - nowe słowa z artefaktem (`_` w środku, zdublowana litera z ogonkiem `podepnąą`, trzy takie same litery z rzędu);
 /// - wstawkę dwóch lub więcej nowych słów bez odpowiednika w oryginale (halucynacja typu „jest try to.").
+/// - nowe słowo z błędem pisowni, gdy wszystkie zastąpione słowa były poprawne (`oddziałów` → `odziałów`); tylko z `isMisspelled`.
 /// Wielkość liter i interpunkcja na brzegach słów nie są zmianą (porównujemy klucze), więc zwykłe poprawki zostają.
 /// shortcut: nie rozpoznajemy podstawienia Termu za niepodobne słowo (`Ogowanie` → `GoOne`): podobieństwo znaków nie odróżnia go od
 /// dobrej poprawki `Gołana` → `GoOne`; przeniesione do pomiaru, gdy będzie miara fonetyczna.
@@ -14,7 +15,10 @@ public enum CorrectionGuard {
         public var reverted: Int
     }
 
-    public static func apply(original: String, corrected: String) -> Result {
+    /// `isMisspelled`: słownik systemowy (aplikacja); `nil` = bez kontroli pisowni. `terms`: Termy ze słownika użytkownika
+    /// (też ich odmienione formy) nie są uznawane za błąd.
+    public static func apply(original: String, corrected: String, isMisspelled: (@Sendable (String) -> Bool)? = nil,
+                             terms: [String] = []) -> Result {
         let o = original.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         let c = corrected.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         guard !o.isEmpty, !c.isEmpty else { return Result(text: corrected, reverted: 0) }
@@ -25,7 +29,7 @@ public enum CorrectionGuard {
             case .same(_, let j): out.append(c[j])
             case .changed(let oi, let ci):
                 let before = Array(o[oi]), after = Array(c[ci])
-                if suspicious(original: before, corrected: after) { out += before; reverted += 1 } else { out += after }
+                if suspicious(original: before, corrected: after, isMisspelled: isMisspelled, terms: terms) { out += before; reverted += 1 } else { out += after }
             }
         }
         return reverted == 0 ? Result(text: corrected, reverted: 0) : Result(text: out.joined(separator: " "), reverted: reverted)
@@ -60,11 +64,36 @@ public enum CorrectionGuard {
         return steps
     }
 
-    static func suspicious(original: [String], corrected: [String]) -> Bool {
+    static func suspicious(original: [String], corrected: [String], isMisspelled: (@Sendable (String) -> Bool)? = nil,
+                           terms: [String] = []) -> Bool {
         func hasDigit(_ ts: [String]) -> Bool { ts.contains { $0.contains(where: \.isNumber) } }
         if hasDigit(original) || hasDigit(corrected) { return true }
         if original.isEmpty && corrected.filter({ $0.contains(where: \.isLetter) }).count >= 2 { return true }
-        return corrected.contains(where: hasArtifact)
+        if corrected.contains(where: hasArtifact) { return true }
+        guard let isMisspelled else { return false }
+        let words = original.map(spellable)
+        let known = !words.isEmpty && words.allSatisfy { $0 == nil || !isMisspelled($0!) } && words.contains { $0 != nil }
+        return known && corrected.contains { token in
+            guard let w = spellable(token), !isTerm(w, terms), isMisspelled(w) else { return false }
+            return true
+        }
+    }
+
+    /// Słowo do sprawdzenia pisowni: same litery, co najmniej 4, nie same wielkie (skróty). Inne tokeny pomijamy.
+    static func spellable(_ token: String) -> String? {
+        let w = token.trimmingCharacters(in: .punctuationCharacters.union(.symbols)) // wielkość liter zostaje: nazwy własne
+        guard w.count >= 4, w.allSatisfy(\.isLetter), w != w.uppercased() else { return nil }
+        return w
+    }
+
+    /// Term ze słownika albo jego odmieniona forma (wspólny początek bez dwóch ostatnich liter).
+    static func isTerm(_ word: String, _ terms: [String]) -> Bool {
+        let w = word.lowercased()
+        return terms.contains { t in
+            let t = t.lowercased()
+            let stem = t.count >= 5 ? String(t.dropLast(2)) : String(t.dropLast(1))
+            return t == w || (stem.count >= 3 && w.hasPrefix(stem))
+        }
     }
 
     /// Znak `_`, znak zastępczy, trzy takie same litery z rzędu albo dwie takie same litery z ogonkiem (`ąą`, `łł`).
