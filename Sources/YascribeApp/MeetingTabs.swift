@@ -395,7 +395,7 @@ struct SummaryTab: View {
                 }
             }
             if let numbers = item.notes.summary?.unverifiedNumbers, !numbers.isEmpty {
-                WarnLabel("Not in the transcript: \(numbers.joined(separator: ", ")). Check these numbers in the notes.")
+                WarnLabel("Not written as digits in the transcript: \(numbers.joined(separator: ", ")). Check these numbers in the notes.")
             }
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
