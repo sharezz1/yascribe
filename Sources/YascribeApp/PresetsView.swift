@@ -128,17 +128,19 @@ private struct AutohideTextScroller: NSViewRepresentable {
 
     func updateNSView(_ view: NSView, context: Context) {
         DispatchQueue.main.async {
-            guard let root = view.window?.contentView else { return }
-            let center = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
-            func apply(_ v: NSView) {
-                if let scroll = v as? NSScrollView, scroll.documentView is NSTextView,
-                   scroll.convert(scroll.bounds, to: nil).contains(center) {
-                    scroll.autohidesScrollers = true
-                    scroll.tile() // bez tego pasek znika dopiero przy następnym układzie
+            MainActor.assumeIsolated { // blok z main.async nie jest dla kompilatora izolowany do MainActor
+                guard let root = view.window?.contentView else { return }
+                let center = view.convert(NSPoint(x: view.bounds.midX, y: view.bounds.midY), to: nil)
+                @MainActor func apply(_ v: NSView) {
+                    if let scroll = v as? NSScrollView, scroll.documentView is NSTextView,
+                       scroll.convert(scroll.bounds, to: nil).contains(center) {
+                        scroll.autohidesScrollers = true
+                        scroll.tile() // bez tego pasek znika dopiero przy następnym układzie
+                    }
+                    v.subviews.forEach(apply)
                 }
-                v.subviews.forEach(apply)
+                apply(root)
             }
-            apply(root)
         }
     }
 }
