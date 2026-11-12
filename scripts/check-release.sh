@@ -8,6 +8,10 @@ T="${TMPDIR:-/tmp}/mn-$(uuidgen)"; mkdir -p "$T" # wzorzec sprzątający test.sh
 trap 'rm -rf "$T"' EXIT
 FAILS=0
 CASES=0
+INNER="${1:-}" # --inner: wywołanie z testu izolacji (argument, nie env, bo env bywa dziedziczony)
+
+# Harness nie dziedziczy zewnętrznych YASCRIBE_*/FAKE_* (np. YASCRIBE_OUT_DIR z prawdziwego wydania); przypadki ustawiają je jawnie.
+for v in $(compgen -e | grep -E '^(YASCRIBE|FAKE)_'); do unset "$v"; done
 
 ok()   { CASES=$((CASES + 1)); }
 fail() { CASES=$((CASES + 1)); FAILS=$((FAILS + 1)); echo "check-release: FAIL $1" >&2; }
@@ -148,6 +152,13 @@ if [ "$RC" -ne 0 ]; then ok; else fail "feed-never-matching-fails (RC=$RC)"; fi
 # publikacja odmówiona, gdy bajty szkicu się różnią
 mkrepo tamper; ARGS=(0.1.0); run_release FAKE_GH_TAMPER=1
 if [ "$RC" -ne 0 ] && gh_called && ! grep -q 'draft=false' "$FAKE_DIR/gh.log"; then ok; else fail "publish-refused-when-draft-bytes-differ (RC=$RC)"; fi
+
+# izolacja env (TASK-63): zewnętrzne YASCRIBE_OUT_DIR nie może dostać żadnych plików, a potomek ma przejść
+if [ "$INNER" != "--inner" ]; then
+    EXT="$T/ext"; mkdir -p "$EXT"
+    YASCRIBE_OUT_DIR="$EXT" FAKE_SIGN=empty "$SRC/scripts/check-release.sh" --inner > "$T/inner.log" 2>&1; IRC=$?
+    if [ "$IRC" -eq 0 ] && [ -z "$(ls -A "$EXT")" ]; then ok; else fail "external-env-not-inherited (inner RC=$IRC, pliki: $(ls -A "$EXT" | tr '\n' ' '))"; fi
+fi
 
 [ "$FAILS" -eq 0 ] || { echo "check-release: $FAILS z $CASES przypadków nie przeszło" >&2; exit 1; }
 echo "check-release: OK ($CASES przypadków)"
