@@ -25,6 +25,10 @@ final class TextInserter: TextInserting, @unchecked Sendable {
     var frontmostAppName: String? {
         let app = NSWorkspace.shared.frontmostApplication
         lock.lock(); targetPID = app?.processIdentifier; lock.unlock()
+        // Electron/Chromium buduje drzewo AX dopiero na żądanie; włączamy je teraz, żeby było gotowe przy wklejaniu.
+        if let pid = app?.processIdentifier, AXIsProcessTrusted() {
+            DispatchQueue.global(qos: .userInitiated).async { Self.wakeAccessibility(pid) }
+        }
         return app?.localizedName
     }
 
@@ -50,8 +54,8 @@ final class TextInserter: TextInserting, @unchecked Sendable {
 
     func insert(_ text: String) async -> InsertResult {
         let trusted = AXIsProcessTrusted()
-        let focus = trusted ? Self.focusedElement() : nil
         let target = lock.withLock { targetPID }
+        let focus = trusted ? Self.focusedElement(appPID: target) : nil
         let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let decision = Self.decide(secureInput: IsSecureEventInputEnabled(), trusted: trusted,
                                    focusedRole: focus.flatMap { Self.string($0, kAXRoleAttribute) },
@@ -115,11 +119,29 @@ final class TextInserter: TextInserting, @unchecked Sendable {
         }
     }
 
-    private static func focusedElement() -> AXUIElement? {
+    private static func wakeAccessibility(_ pid: pid_t) {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.5)
+        _ = AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        // ChatGPT (Chromium) odrzuca AXManualAccessibility (-25205); drzewo AX włącza dopiero AXEnhancedUserInterface (zwraca -25208, ale działa).
+        _ = AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+    }
+
+    /// Element systemowy zawodzi w Electronie (-25204); wtedy pytamy o fokus samą aplikację docelową.
+    private static func focusedElement(appPID: pid_t?) -> AXUIElement? {
         let system = AXUIElementCreateSystemWide()
         AXUIElementSetMessagingTimeout(system, 0.5)
+        if let el = focused(in: system) { return el }
+        guard let appPID else { return nil }
+        wakeAccessibility(appPID)
+        let app = AXUIElementCreateApplication(appPID)
+        AXUIElementSetMessagingTimeout(app, 0.5)
+        return focused(in: app)
+    }
+
+    private static func focused(in root: AXUIElement) -> AXUIElement? {
         var v: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &v) == .success,
+        guard AXUIElementCopyAttributeValue(root, kAXFocusedUIElementAttribute as CFString, &v) == .success,
               let v, CFGetTypeID(v) == AXUIElementGetTypeID() else { return nil }
         return (v as! AXUIElement)
     }
