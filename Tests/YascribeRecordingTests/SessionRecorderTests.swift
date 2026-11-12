@@ -468,3 +468,21 @@ private func mutes(_ dir: URL, _ track: String) throws -> [[Int]]? {
     #expect(try SessionDirectory(url: dir).summarize().tracks.first { $0.id == "system" }?.failure == nil)
     #expect(try CAFReader(url: dir.appendingPathComponent("system.caf")).samples.allSatisfy { $0 == 0 })
 }
+
+@Test func levelOfATrackWithoutNewChunksFadesAfterThreeSeconds() throws {
+    // Tor, który stanął, nie może wyglądać na żywy (TASK-61): po 3 s bez porcji nie ma poziomu, żywy tor zostaje.
+    let dir = sessionDir()
+    let tone = sine(frames: 1_600, channels: 1, rate: 16_000, amp: 0.5)
+    let sys = FileSource(trackID: "system", samples: tone, sampleRate: 16_000, channels: 1, startHostTime: 0, timebase: ns, chunkFrames: 1_600)
+    let mic = FileSource(trackID: "mic_raw", samples: tone + tone, sampleRate: 16_000, channels: 1, startHostTime: 0, timebase: ns, chunkFrames: 1_600)
+    let clock = ManualHostClock()
+    let r = SessionRecorder(directory: dir, sources: [sys, mic], conditions: [], clock: clock, timebase: ns, zeroWatch: [:])
+    try r.start()
+    #expect(Set(r.currentLevels().keys) == ["system", "mic_raw"])
+    clock.set(2_999_000_000)
+    #expect(Set(r.currentLevels().keys) == ["system", "mic_raw"])
+    clock.set(3_000_000_000) // dokładnie 3 s od jedynej porcji toru system; mic dostał drugą porcję o 0,1 s później
+    #expect(Set(r.currentLevels().keys) == ["mic_raw"])
+    clock.set(3_200_000_000)
+    #expect(r.currentLevels().isEmpty)
+}

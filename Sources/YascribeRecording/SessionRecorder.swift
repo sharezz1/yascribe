@@ -42,10 +42,17 @@ public final class SessionRecorder: @unchecked Sendable {
 
     public var onEnded: (@Sendable (EndReason) -> Void)?
 
+    /// Tor, który od tylu sekund nie dostał porcji, nie ma poziomu (pigułka pokazuje „—”, nie ostatnią porcję) — decyzja 2026-11-12.
+    public static let levelFadeSeconds = 3.0
+
     /// Ostatni poziom (dBFS RMS) każdej ścieżki — dla wskaźnika na pigułce. Czyta pod tą samą blokadą co zapis.
+    /// Tory bez porcji od `levelFadeSeconds` są pominięte.
     public func currentLevels() -> [String: Double] {
+        let now = clock.now()
         lock.lock(); defer { lock.unlock() }
-        return levels
+        return levels.filter { id, _ in
+            lastChunkByTrack[id].map { timebase.secondsBetween(now, $0) < Self.levelFadeSeconds } ?? false
+        }
     }
 
     /// Tory po `stalled…`, które jeszcze nie dostały porcji (znikają po `track.recovered`) — dla informacji na pigułce.
