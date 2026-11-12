@@ -85,7 +85,7 @@ final class RecordingController {
         self.directory = directory
         self.presetLabel = presetLabel
         self.eventTitle = eventTitle
-        pill.mode = .recording // start zdejmuje ofertę/pytanie; to samo okno staje się pigułką nagrania
+        pill.reset() // start zdejmuje ofertę/pytanie; to samo okno staje się pigułką nagrania, zawsze zwiniętą
         isRecording = r.endReason == nil
         muted = []
         muteWarning = false
@@ -201,6 +201,7 @@ final class RecordingController {
         mic = nil
         selectedInputUID = nil
         directory = nil
+        pill.reset() // jawnie na koniec nagrania: następne startuje zwinięte (TASK-61)
         hidePanel()
         model?.recordingFinished() // odroczony restart i oczekujące zamknięcie ruszają dopiero po zapisie
     }
@@ -219,8 +220,7 @@ final class RecordingController {
 
     private func hidePanel() {
         panel?.orderOut(nil)
-        pill.expanded = false
-        pill.mode = .recording
+        pill.reset()
     }
 
     // MARK: Oferta i pytanie o koniec (faza 1.6, T9)
@@ -277,6 +277,12 @@ final class PillState: ObservableObject {
     var onSecondary: () -> Void = {}
     /// Kiedy pytanie „Meeting ended?” samo zatrzyma nagranie; czyta je widok pytania.
     var endDeadline: Date?
+
+    /// Stan wyjściowy: zwinięta pigułka nagrania.
+    func reset() {
+        expanded = false
+        mode = .recording
+    }
 }
 
 /// Okno ma dokładnie rozmiar treści (bez przezroczystego marginesu łapiącego kliknięcia), a treść ma stały
