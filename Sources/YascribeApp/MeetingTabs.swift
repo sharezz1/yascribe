@@ -394,6 +394,9 @@ struct SummaryTab: View {
                     Button("View transcript") { state.tab = .transcript }.buttonStyle(.link)
                 }
             }
+            if let numbers = item.notes.summary?.unverifiedNumbers, !numbers.isEmpty {
+                WarnLabel("Not in the transcript: \(numbers.joined(separator: ", ")). Check these numbers in the notes.")
+            }
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
             if let s = item.notes.summary {

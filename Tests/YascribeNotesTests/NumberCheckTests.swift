@@ -22,6 +22,12 @@ import Testing
         #expect(NumberCheck.unverified(in: "ID 770, potem znowu 770", sources: ["nic"]) == ["770"])
     }
 
+    @Test func fullHourMatchesTheShortSpokenForm() {
+        #expect(NumberCheck.unverified(in: "Spotkanie o 11:00.", sources: ["to chyba na 11 jakieś krótkie połączenie"]).isEmpty)
+        #expect(NumberCheck.unverified(in: "Spotkanie o 11.", sources: ["o 11:00"]).isEmpty)
+        #expect(NumberCheck.unverified(in: "Spotkanie o 12:00.", sources: ["na 11"]) == ["12:00"])
+    }
+
     @Test func numberFromMyNotesOrContextCounts() {
         #expect(NumberCheck.unverified(in: "Ticket 4521", sources: ["transkrypt", "ticket 4521 z mojej notatki"]).isEmpty)
     }
