@@ -9,8 +9,14 @@ public enum NumberCheck {
         var seen = Set<String>()
         return numbers(in: note).filter { n in
             let d = digits(n)
-            return d.count >= 2 && !known.contains(d) && seen.insert(d).inserted
+            return d.count >= 2 && !matches(d, known) && seen.insert(d).inserted
         }
+    }
+
+    /// Pełna godzina bywa wypowiedziana jako „na 11", a zapisana „11:00" (i odwrotnie): `1100` pasuje do `11`.
+    /// shortcut: liczby `1500` i `15:00` nie są rozróżniane (porównujemy cyfry), więc `1500` przy wypowiedzianym „15" nie zostanie zgłoszone.
+    private static func matches(_ d: String, _ known: Set<String>) -> Bool {
+        known.contains(d) || known.contains(d + "00") || (d.hasSuffix("00") && d.count <= 4 && known.contains(String(d.dropLast(2))))
     }
 
     /// Liczby z tekstu, w kolejności; znaczniki list („12. ") na początku linii nie są liczbami.

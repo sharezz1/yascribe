@@ -38,7 +38,7 @@ private final class ProblemLog: @unchecked Sendable {
                                                onProblem: { problems.add($0) })
     #expect(s.unverifiedNumbers == ["770"])
     #expect(try NotesStore(session: session).readSummary()?.unverifiedNumbers == ["770"])
-    #expect(problems.all.contains { $0.contains("770") && $0.contains("not in the transcript") })
+    #expect(problems.all.isEmpty) // ostrzeżenie jest w notatce (widok), nie w oknie błędu
 }
 
 @Test func numberFromTheUsersContextIsNotFlagged() async throws {
