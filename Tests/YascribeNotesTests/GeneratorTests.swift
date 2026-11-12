@@ -7,6 +7,13 @@ import YascribeProviders
 private func generator(_ stub: ChatStub) -> NoteGenerator { NoteGenerator(client: chatClient(stub), model: "notes-model") }
 private let now = Date(timeIntervalSince1970: 5_000)
 
+private final class ProblemLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String] = []
+    func add(_ s: String) { lock.lock(); items.append(s); lock.unlock() }
+    var all: [String] { lock.lock(); defer { lock.unlock() }; return items }
+}
+
 @Test func generatorStoresTheNoteWithItsTitleAndTemplate() async throws {
     let session = tempDir()
     defer { try? FileManager.default.removeItem(at: session) }
@@ -18,6 +25,30 @@ private let now = Date(timeIntervalSince1970: 5_000)
     #expect(s.markdown.hasPrefix("## Topic"))
     #expect(s.templateID == "standard" && s.model == "notes-model" && s.context == "Piotr, Adrian")
     #expect(try NotesStore(session: session).readSummary() == s)
+}
+
+@Test func generatorFlagsNumbersThatAreNotInTheTranscript() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "# T\n\n- Zgłoszenie ID 770 otwarte, 130 defektów" }
+    let problems = ProblemLog()
+    let s = try await generator(stub).generate(session: session, template: .standard,
+                                               transcript: transcript([utt("Zrobiłem 130 defektów.")]),
+                                               context: "", notesLanguage: .polish, now: now,
+                                               onProblem: { problems.add($0) })
+    #expect(s.unverifiedNumbers == ["770"])
+    #expect(try NotesStore(session: session).readSummary()?.unverifiedNumbers == ["770"])
+    #expect(problems.all.contains { $0.contains("770") && $0.contains("not in the transcript") })
+}
+
+@Test func numberFromTheUsersContextIsNotFlagged() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "# T\n\n- Ticket 4521 otwarty" }
+    let s = try await generator(stub).generate(session: session, template: .standard,
+                                               transcript: transcript([utt("Rozmawialiśmy o zgłoszeniu.")]),
+                                               context: "Ticket 4521", notesLanguage: .polish, now: now)
+    #expect(s.unverifiedNumbers == nil)
 }
 
 @Test func generatorWithNothingToSummarizeSkipsTheModel() async throws {

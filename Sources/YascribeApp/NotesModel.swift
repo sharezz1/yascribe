@@ -233,7 +233,7 @@ final class NotesModel {
         let used = vocabulary.isEmpty ? nil : vocabulary
         let corrector = Corrector(client: client, assignment: assignment, batchTimeout: limits.soft, chatTimeout: limits.transport,
                                   temperature: limits.temperature, budget: budget, fillerWords: fillerWords(), vocabulary: used,
-                                  body: prompts.body(.correction))
+                                  body: prompts.body(.correction), isMisspelled: SystemSpelling.isMisspelled)
         var result = await corrector.correct(input, language: language)
         result.prompt = prompts.trace(.correction)
         // Komunikat należy do najnowszej korekty sesji, wynik — do najnowszej korekty tego przebiegu (F2): starsza, kończąc się

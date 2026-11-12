@@ -45,4 +45,34 @@ import Testing
     @Test func emptySidesAreReturnedUnchanged() {
         #expect(apply("", "x").text == "x" && apply("x", "").text == "")
     }
+
+    // Kontrola pisowni: słownik podstawiony (w aplikacji NSSpellChecker).
+    private static let polish: Set<String> = ["oddziałów", "oddział", "mamy", "dobry", "plan", "spotkanie", "piątek", "Michał"]
+    private let speller: @Sendable (String) -> Bool = { !CorrectionGuardTests.polish.contains($0) }
+    private func spelled(_ o: String, _ c: String, terms: [String] = []) -> CorrectionGuard.Result {
+        CorrectionGuard.apply(original: o, corrected: c, isMisspelled: speller, terms: terms)
+    }
+
+    @Test func correctWordBecomingMisspelledIsReverted() {
+        let r = spelled("z help desk oddziałów mamy plan", "Z help desk odziałów mamy plan")
+        #expect(r.text == "Z help desk oddziałów mamy plan" && r.reverted == 1) // wielka litera zostaje, błędne słowo wraca
+    }
+
+    @Test func misspelledOriginalMayBecomeAnyWordAndWithoutCheckerNothingIsReverted() {
+        // Oryginał też błędny (błąd ASR): poprawka zostaje, nawet jeśli nowe słowo nie jest w słowniku.
+        #expect(spelled("spotkanie w piontek", "spotkanie w piątkek").reverted == 0)
+        #expect(CorrectionGuard.apply(original: "z oddziałów mamy plan", corrected: "z odziałów mamy plan").reverted == 0)
+    }
+
+    @Test func termsAndTheirInflectedFormsAreNotMisspellings() {
+        // „mamy" → „Lekcie": nowe słowo nie jest w słowniku, ale to odmieniony Term.
+        #expect(spelled("spotkanie mamy dobry", "spotkanie Lekcie dobry", terms: ["Lekta"]).reverted == 0)
+        #expect(spelled("spotkanie mamy dobry", "spotkanie Lekcie dobry").reverted == 1)
+    }
+
+    @Test func shortWordsAbbreviationsAndNonLettersAreNotChecked() {
+        #expect(spelled("spotkanie mamy dobry", "spotkanie HTTPS dobry").reverted == 0)   // skrót wielkimi
+        #expect(spelled("spotkanie mamy dobry", "spotkanie ab dobry").reverted == 0)     // za krótkie
+        #expect(spelled("spotkanie mamy dobry", "spotkanie e-mail dobry").reverted == 0) // nie same litery
+    }
 }

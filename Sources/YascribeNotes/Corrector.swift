@@ -161,10 +161,14 @@ public struct Corrector: Sendable {
     public var vocabulary: PromptVocabulary?
     /// Edytowalna podstawa polecenia (TASK-96); reguła formatu `[n] tekst` jest stała i dochodzi po niej.
     public var body: String
+    /// Kontrola pisowni dla `CorrectionGuard` (aplikacja: słownik systemowy); `nil` = bez niej.
+    public var isMisspelled: (@Sendable (String) -> Bool)?
 
     public init(client: OpenAICompatibleClient, assignment: RoleAssignment, maxBatchChars: Int = 6_000, batchTimeout: Double = 120,
                 chatTimeout: Double = 120, temperature: Double? = nil, budget: ContextBudget? = nil, fillerWords: [String] = [],
-                vocabulary: PromptVocabulary? = nil, body: String = CorrectionPrompt.defaultBody) {
+                vocabulary: PromptVocabulary? = nil, body: String = CorrectionPrompt.defaultBody,
+                isMisspelled: (@Sendable (String) -> Bool)? = nil) {
+        self.isMisspelled = isMisspelled
         self.body = body
         self.fillerWords = fillerWords
         self.vocabulary = vocabulary
@@ -257,7 +261,7 @@ public struct Corrector: Sendable {
                 result.answered += 1
                 guard let new = fixed[k + 1], CorrectionRules.accepts(original: l.text, corrected: new),
                       CorrectionRules.similar(original: l.text, corrected: new) else { result.rejected += 1; continue }
-                let guarded = CorrectionGuard.apply(original: l.text, corrected: new)
+                let guarded = CorrectionGuard.apply(original: l.text, corrected: new, isMisspelled: isMisspelled, terms: vocabulary?.terms ?? [])
                 result.reverted += guarded.reverted
                 result.applied.append((l.n, guarded.text))
             }

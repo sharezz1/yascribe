@@ -85,11 +85,15 @@ public struct NoteGenerator: Sendable {
         try Task.checkCancellation()
         let (title, body) = NoteTitle.parse(reply)
         guard !body.isEmpty else { throw NoteGenerationError.failed("\(model) returned an empty reply.") }
+        // Liczby, których nie ma w materiale, to zwykle wymysł modelu: zapisujemy je przy notatce i mówimy o tym użytkownikowi.
+        let unverified = NumberCheck.unverified(in: body, sources: NotePromptBuilder.transcriptLines(transcript) + [myNotes, context])
         let summary = NoteSummary(title: title, markdown: body, templateID: template.id, model: model,
-                                  context: context, generatedAt: now, condensedParts: condensedParts, prompt: promptTrace)
+                                  context: context, generatedAt: now, condensedParts: condensedParts, prompt: promptTrace,
+                                  unverifiedNumbers: unverified.isEmpty ? nil : unverified)
         do {
             // Nieczytelny stary summary.json został odłożony na bok przed zapisem — powiedz to użytkownikowi.
             if let problem = try store.writeSummary(summary, now: now) { onProblem(problem) }
+            if !unverified.isEmpty { onProblem("These numbers are in the notes but not in the transcript: \(unverified.joined(separator: ", ")). Check them.") }
         } catch {
             throw NoteGenerationError.failed("Couldn't save the notes: \(error)")
         }
