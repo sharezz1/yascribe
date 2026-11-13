@@ -10,6 +10,7 @@ private actor FakeEngine: LocalASREngine {
     private(set) var loads = 0
     private(set) var unloads = 0
     private(set) var transcribed: [Int] = []
+    private(set) var languages: [LanguageCode?] = []
     private(set) var isLoaded = false
     private(set) var unloadedWhileLoading = false
     private var loadInFlight = false
@@ -34,7 +35,7 @@ private actor FakeEngine: LocalASREngine {
         if let failure { throw failure }
         isLoaded = true
     }
-    func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) { transcribed.append(samples.count); return result }
+    func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord]) { transcribed.append(samples.count); languages.append(language); return result }
     func unload() async {
         unloads += 1
         if loadInFlight { unloadedWhileLoading = true }
@@ -125,12 +126,14 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     #expect(phases.all == [.preparing, .ready, .idle, .preparing, .ready])
 }
 
-@Test func ignoresTheLanguageParameter() async throws {
-    let c = client(FakeEngine(), store: try readyStore())
+@Test func passesTheLanguageParameterToTheEngine() async throws {
+    let engine = FakeEngine()
+    let c = client(engine, store: try readyStore())
     let pl = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: .polish, shape: .audioTranscriptions)
     let en = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: .english, shape: .audioTranscriptions)
     let none = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
     #expect(pl == en && en == none)
+    #expect(await engine.languages == [.polish, .english, nil])
 }
 
 @Test func chatShapeIsRejected() async throws {

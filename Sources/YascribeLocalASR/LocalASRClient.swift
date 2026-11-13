@@ -4,7 +4,7 @@ import YascribeProviders
 /// Szew do atrapy; prawdziwy silnik to `FluidAudioEngine` (jedyny plik z `import FluidAudio` poza `ModelStore`).
 public protocol LocalASREngine: Sendable {
     func load() async throws
-    func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord])
+    func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord])
     func unload() async
 }
 
@@ -44,7 +44,6 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     }
 
     public func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
-        // `language` ignorowany: wskazówka FluidAudio jest tylko skryptowa, język pilnuje strażnik runnera.
         guard shape == .audioTranscriptions else {
             throw ProviderError.badResponse("On-device transcription supports only the audio transcriptions shape.")
         }
@@ -58,7 +57,7 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
         if samples.count < Self.minimumSamples { return TranscriptionResult(text: "", words: []) }
         try await ensureLoaded()
         try Task.checkCancellation()
-        let r = try await engine.transcribe(samples: samples)
+        let r = try await engine.transcribe(samples: samples, language: language)
         return TranscriptionResult(text: r.text, words: r.words)
     }
 

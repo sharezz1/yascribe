@@ -214,12 +214,12 @@ final class Recorder: @unchecked Sendable {
         _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(language: .english),
                                           client: client(ListeningASR())).run()
     }
-    // przegląd S11 #1: inne progi przesłuchu → inne granice okien
+    // N2: zapisane progi przesłuchu wygrywają z bieżącymi ustawieniami.
     let strict = { var c = CrosstalkFilter(); c.correlationThreshold = 0.5; return c }()
-    await #expect(throws: RunError.inputMismatch) {
-        _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
-                                          client: client(ListeningASR()), crosstalk: strict).run()
-    }
+    let resumed = ListeningASR()
+    _ = try await TranscriptionRunner(session: dir, runID: "r1", snapshot: try snapshot(),
+                                      client: client(resumed), crosstalk: strict).run()
+    #expect(resumed.requests == 0)
 }
 
 @Test func snapshotCarriesTheWholePresetAndRefusesChatShape() throws {

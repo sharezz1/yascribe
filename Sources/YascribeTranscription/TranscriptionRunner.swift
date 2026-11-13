@@ -18,6 +18,8 @@ public struct RunInput: Codable, Equatable, Sendable {
     /// Absent in legacy runs: retain their original waveform/cache behavior.
     public var offlineAEC: OfflineAEC.Configuration? = nil
     public var offlineAECFingerprint: String? = nil
+    /// Brak pola w starych przebiegach oznacza historyczne pakowanie bez limitu rozpiętości.
+    public var maxSourceSpan: Double? = nil
 }
 
 public struct TranscriptionProgress: Equatable, Sendable {
@@ -82,6 +84,8 @@ public struct TranscriptionRunner: Sendable {
     /// OpenAI-compatible albo ElevenLabs — wybór po `Provider.api` u wołającego.
     public let client: any TranscriptionClient
     public let maxChunkSeconds: Double
+    public let maxSourceSpan: Double?
+    public let repetitionFilterEnabled: Bool
     public let gate: EnergyGate
     public let crosstalk: CrosstalkFilter
     public let offlineAEC: OfflineAEC.Configuration?
@@ -89,13 +93,16 @@ public struct TranscriptionRunner: Sendable {
     public let retryDelays: [Duration]
 
     public init(session: URL, runID: String, snapshot: RunSnapshot, client: any TranscriptionClient,
-                maxChunkSeconds: Double = 59, gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter(),
+                maxChunkSeconds: Double = 59, maxSourceSpan: Double? = nil, repetitionFilterEnabled: Bool = false,
+                gate: EnergyGate = EnergyGate(), crosstalk: CrosstalkFilter = CrosstalkFilter(),
                 offlineAEC: OfflineAEC.Configuration? = .init(), retryDelays: [Duration] = ASRRetry.delays) {
         self.session = SessionDirectory(url: session)
         self.runID = runID
         self.snapshot = snapshot
         self.client = client
         self.maxChunkSeconds = maxChunkSeconds
+        self.maxSourceSpan = maxSourceSpan
+        self.repetitionFilterEnabled = repetitionFilterEnabled
         self.gate = gate
         self.crosstalk = crosstalk
         self.offlineAEC = offlineAEC
@@ -120,15 +127,19 @@ public struct TranscriptionRunner: Sendable {
         let dir = RunDirectory(session: session.url, runID: runID)
         try FileManager.default.createDirectory(at: dir.url.appendingPathComponent("chunks"), withIntermediateDirectories: true)
         let saved = try JSONFile.load(RunInput?.self, from: dir.input, default: nil)
-        // An old run has no AEC config: upgrading must not change paid windows.
-        let aec: OfflineAEC.Configuration?
-        if let saved { aec = saved.offlineAEC == nil ? nil : offlineAEC }
-        else { aec = offlineAEC }
+        // Zapis jest źródłem konfiguracji także po zmianie domyślnych wartości aplikacji.
+        let aec = saved.map { $0.offlineAEC } ?? offlineAEC
+        let gate = saved.map { EnergyGate($0.gate) } ?? self.gate
+        let crosstalk = saved?.crosstalk ?? self.crosstalk
+        let maxChunkSeconds = saved?.maxChunkSeconds ?? self.maxChunkSeconds
+        let maxSourceSpan = saved.map { $0.maxSourceSpan } ?? self.maxSourceSpan
         let tracks = Self.tracks(in: summary)
         var input = RunInput(snapshot: snapshot, gate: gate.config, maxChunkSeconds: maxChunkSeconds, crosstalk: crosstalk,
                              trackFrames: Dictionary(summary.tracks.map { ($0.id, $0.frames ?? -1) }, uniquingKeysWith: { a, _ in a }))
+        input.maxSourceSpan = maxSourceSpan
         input.offlineAEC = aec
-        if aec != nil {
+        // Stare przebiegi bez odcisku zachowują swój kontrakt; nowe chronią też audio bez AEC.
+        if saved == nil || saved?.offlineAECFingerprint != nil {
             input.offlineAECFingerprint = try OfflineAEC.fingerprint(session: session, trackIDs: tracks.map(\.id))
         }
         if let saved {
@@ -160,7 +171,7 @@ public struct TranscriptionRunner: Sendable {
                 asrSamples = processed.samples
                 aecReport = processed.report
             }
-            let chunks = ChunkPacker(maxSeconds: maxChunkSeconds).pack(regions, samples: x)
+            let chunks = ChunkPacker(maxSeconds: maxChunkSeconds, maxSourceSpan: maxSourceSpan).pack(regions, samples: x)
             for c in chunks { plan.append((id, c, asrSamples)) }
         }
 
@@ -169,9 +180,20 @@ public struct TranscriptionRunner: Sendable {
         var requests = 0
         var secondsSent = 0.0
         progress(TranscriptionProgress(done: 0, total: plan.count))
+        var previousText: [String: String] = [:]
+        func flag(_ result: inout ChunkResult) {
+            if repetitionFilterEnabled, result.suspectedHallucination == nil,
+               RepetitionFilter.isHallucinated(result.result.text, previousText: previousText[result.track] ?? "") {
+                result.suspectedHallucination = true
+            }
+            previousText[result.track] = result.result.text
+        }
         for (n, item) in plan.enumerated() {
             let file = dir.chunk(item.track, item.chunk.index)
-            if let saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {
+            if var saved = try? JSONFile.load(ChunkResult?.self, from: file, default: nil), saved.chunk == item.chunk {
+                let original = saved
+                flag(&saved)
+                if saved != original { try JSONFile.save(saved, to: file) }
                 results.append(saved)
             } else {
                 do {
@@ -183,12 +205,14 @@ public struct TranscriptionRunner: Sendable {
                         return try await client.transcribe(wav: wav, model: snapshot.model, language: snapshot.language,
                                                            shape: snapshot.shape)
                     }
-                    let cr = ChunkResult(track: item.track, chunk: item.chunk, result: r)
+                    var cr = ChunkResult(track: item.track, chunk: item.chunk, result: r)
+                    flag(&cr)
                     try JSONFile.save(cr, to: file)
                     results.append(cr)
                 } catch is CancellationError {
                     throw CancellationError()
                 } catch {
+                    previousText[item.track] = nil
                     failures.append(ChunkFailure(
                         track: item.track, index: item.chunk.index,
                         start: clock.sessionSeconds(track: item.track, trackSeconds: item.chunk.sourceStartSeconds),

@@ -34,7 +34,7 @@ private func emptyStore() -> ModelStore {
 
 private struct NoEngine: LocalASREngine {
     func load() async throws {}
-    func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) { ("", []) }
+    func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord]) { ("", []) }
     func unload() async {}
 }
 
