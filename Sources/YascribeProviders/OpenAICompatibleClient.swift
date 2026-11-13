@@ -32,10 +32,13 @@ public struct TranscriptionResult: Codable, Equatable, Sendable {
     public var text: String
     /// `nil`, gdy kształt nie daje znaczników słów (czat).
     public var words: [TranscribedWord]?
+    /// true = `words` to segmenty (kilka sekund, mogą przechodzić przez sklejenie fragmentów okna), nie słowa.
+    public var segmentTiming: Bool?
 
-    public init(text: String, words: [TranscribedWord]?) {
+    public init(text: String, words: [TranscribedWord]?, segmentTiming: Bool? = nil) {
         self.text = text
         self.words = words
+        self.segmentTiming = segmentTiming
     }
 }
 
@@ -78,14 +81,14 @@ public struct OpenAICompatibleClient: TranscriptionClient {
     }
 
     /// `POST audio/transcriptions` w kształcie OpenAI: multipart z plikiem i znacznikami słów (czysta funkcja).
-    func multipartTranscription(wav: Data, model: String, language: LanguageCode?,
+    func multipartTranscription(wav: Data, model: String, language: LanguageCode?, wordTimestamps: Bool = true,
                                 boundary: String = "Yascribe-\(UUID().uuidString)") throws -> URLRequest {
         var r = try request("audio/transcriptions")
         r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         var fields = [("model", model), ("response_format", "verbose_json"), ("timestamp_granularities[]", "word")]
         if let language { fields.append(("language", language.rawValue)) }
         // Rozszerzenie oMLX: bez niego Whisper oddaje same segmenty. Tylko lokalnie — API OpenAI nie zna pola.
-        if provider.isLocal { fields.append(("word_timestamps", "true")) }
+        if provider.isLocal && wordTimestamps { fields.append(("word_timestamps", "true")) }
         var body = Data()
         func add(_ s: String) { body.append(Data(s.utf8)) }
         for (name, value) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n") }
@@ -149,11 +152,16 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                     // z `input_audio` odrzucają jako brak pól. Multipart też odrzucony kształtem → błąd JSON (dostawca JSON-owy
                     // nie dostaje mylącej diagnozy); 429/5xx/timeout z multipart idą dalej, do ponowień i sondy.
                     do { obj = try await json(multipartTranscription(wav: wav, model: model, language: language)) }
-                    catch ProviderError.http(let s, _) where s == 400 || s == 415 || s == 422 { throw ProviderError.http(status, message) }
+                    catch ProviderError.http(let s, _) where provider.isLocal && (s == 400 || s == 422) {
+                        // Inny lokalny serwer może nie znać rozszerzenia oMLX `word_timestamps`: jedno ponowienie bez niego.
+                        do { obj = try await json(multipartTranscription(wav: wav, model: model, language: language, wordTimestamps: false)) }
+                        catch ProviderError.http(let s, _) where s == 400 || s == 415 || s == 422 { throw ProviderError.http(status, message) }
+                    } catch ProviderError.http(let s, _) where s == 400 || s == 415 || s == 422 { throw ProviderError.http(status, message) }
                 }
             }
             guard let text = obj["text"] as? String else { throw ProviderError.badResponse("no text") }
-            return TranscriptionResult(text: text, words: Self.words(obj))
+            let timing = Self.timedUnits(obj)
+            return TranscriptionResult(text: text, words: timing.units, segmentTiming: timing.segments ? true : nil)
         case .chatAudio:
             let instruction = language.map { "Transcribe this audio verbatim. The language is \($0.rawValue). Output only the transcript." }
                 ?? "Transcribe this audio verbatim. Output only the transcript."
@@ -239,7 +247,9 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         return content
     }
 
-    static func words(_ obj: [String: Any]) -> [TranscribedWord]? {
+    static func words(_ obj: [String: Any]) -> [TranscribedWord]? { timedUnits(obj).units }
+
+    static func timedUnits(_ obj: [String: Any]) -> (units: [TranscribedWord]?, segments: Bool) {
         func parse(_ arr: [[String: Any]]) -> [TranscribedWord] {
             arr.compactMap { w in
                 guard let word = w["word"] as? String, let s = (w["start"] as? NSNumber)?.doubleValue,
@@ -247,14 +257,15 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                 return TranscribedWord(word: word, start: s, end: e)
             }
         }
-        if let top = obj["words"] as? [[String: Any]] { return parse(top) }
-        guard let segs = obj["segments"] as? [[String: Any]] else { return nil }
+        if let top = obj["words"] as? [[String: Any]], case let ws = parse(top), !ws.isEmpty { return (ws, false) }
+        guard let segs = obj["segments"] as? [[String: Any]] else { return (nil, false) }
         let all = segs.flatMap { ($0["words"] as? [[String: Any]]).map(parse) ?? [] }
-        if !all.isEmpty { return all }
+        if !all.isEmpty { return (all, false) }
         // Bez czasów słów (Voxtral, Whisper bez `word_timestamps`) segment z czasami jest jedną jednostką: Merger dzieli
         // okno na wypowiedzi po przerwach między segmentami, zamiast wrzucać całe okno do jednego wiersza.
-        let units = parse(segs.map { ["word": $0["text"] ?? "", "start": $0["start"] ?? "", "end": $0["end"] ?? ""] })
-            .filter { !$0.word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        return units.isEmpty ? nil : units
+        // Segment z tekstem bez czasów → cały tekst okna z czasem przybliżonym, żeby nic nie zginęło.
+        let spoken = segs.filter { !(($0["text"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let units = parse(spoken.map { ["word": $0["text"] ?? "", "start": $0["start"] ?? "", "end": $0["end"] ?? ""] })
+        return units.isEmpty || units.count != spoken.count ? (nil, false) : (units, true)
     }
 }

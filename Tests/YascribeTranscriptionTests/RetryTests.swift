@@ -107,6 +107,19 @@ private func attempt(status: Int, failures: Int, log: Log) async throws -> Strin
     #expect(asr.maxInFlight == 1)
 }
 
+// Segment przechodzący przez sklejenie fragmentów okna kończy się we fragmencie, w którym leży jego koniec.
+@Test(arguments: [true, false]) func segmentAcrossSpliceKeepsItsEnd(segmentTiming: Bool) {
+    let chunk = Chunk(index: 0, segments: [ChunkSegment(sourceStart: 80_000, sourceEnd: 118_400, chunkStart: 0),
+                                           ChunkSegment(sourceStart: 240_000, sourceEnd: 278_400, chunkStart: 43_200)], length: 81_600)
+    let result = TranscriptionResult(text: "dzień dobry", words: [TranscribedWord(word: "dzień dobry", start: 0, end: 5.1)],
+                                     segmentTiming: segmentTiming ? true : nil)
+    let t = Merger.merge([ChunkResult(track: "system", chunk: chunk, result: result)], speakers: ["system": .them],
+                         clock: SessionClock(summary: SessionSummary(startedHostTime: 0, timebase: ns, tracks: [])), language: .polish)
+    #expect(abs(t.utterances[0].start - 5.0) < 1e-6)
+    // Słowo zostaje przycięte do swojego fragmentu (7,4 s); segment sięga do 17,4 s.
+    #expect(abs(t.utterances[0].end - (segmentTiming ? 17.4 : 7.4)) < 1e-3)
+}
+
 @Test(arguments: [nil, [TranscribedWord]()]) func windowWithoutWordTimesBecomesOneApproximateUtterance(words: [TranscribedWord]?) {
     // Voxtral bez `word`: tylko tekst. Wypowiedź obejmuje fragmenty okna, `sourceSpan` nie gra roli.
     let chunk = Chunk(index: 0, segments: [ChunkSegment(sourceStart: 80_000, sourceEnd: 118_400, chunkStart: 0),

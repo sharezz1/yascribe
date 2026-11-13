@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import os
 @testable import YascribeProviders
 
 @Test func listsModelsWithModalities() async throws {
@@ -375,23 +376,32 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     #expect(http.calls[1].body["language"] as? String == "pl")
     #expect(r.text == "raz dwa")
     #expect(r.words == [TranscribedWord(word: "raz dwa", start: 0.0, end: 1.0)])
+    #expect(r.segmentTiming == true)
 }
 
-// Bez czasów słów segmenty z czasami są jednostkami podziału na wypowiedzi; segment bez czasów albo pusty odpada.
+// Bez czasów słów segmenty z czasami są jednostkami podziału na wypowiedzi; pusty segment odpada.
 @Test func segmentsWithoutWordsBecomeTimedUnits() {
-    let obj: [String: Any] = ["text": "a b", "segments": [
+    let obj: [String: Any] = ["text": "a b", "words": [], "segments": [
         ["start": 0.8, "end": 2.2, "text": " Cóż, w takim razie..."],
         ["start": 3.5, "end": 5.7, "text": " Nie wiem."],
-        ["text": " bez czasów"],
         ["start": 6.0, "end": 6.1, "text": "  "],
     ]]
-    #expect(OpenAICompatibleClient.words(obj) == [TranscribedWord(word: " Cóż, w takim razie...", start: 0.8, end: 2.2),
-                                                  TranscribedWord(word: " Nie wiem.", start: 3.5, end: 5.7)])
-    #expect(OpenAICompatibleClient.words(["text": "x", "segments": [["text": "x"]]]) == nil)
+    let t = OpenAICompatibleClient.timedUnits(obj)
+    #expect(t.units == [TranscribedWord(word: " Cóż, w takim razie...", start: 0.8, end: 2.2),
+                        TranscribedWord(word: " Nie wiem.", start: 3.5, end: 5.7)])
+    #expect(t.segments)
     // Słowa w segmentach mają pierwszeństwo przed samymi segmentami.
     let withWords: [String: Any] = ["segments": [["start": 0.0, "end": 1.0, "text": "raz dwa",
                                                   "words": [["word": "raz", "start": 0.1, "end": 0.4]]]]]
-    #expect(OpenAICompatibleClient.words(withWords) == [TranscribedWord(word: "raz", start: 0.1, end: 0.4)])
+    #expect(OpenAICompatibleClient.timedUnits(withWords).units == [TranscribedWord(word: "raz", start: 0.1, end: 0.4)])
+    #expect(!OpenAICompatibleClient.timedUnits(withWords).segments)
+}
+
+// Choć jeden segment z tekstem bez czasów → nil: Merger bierze cały tekst okna, nic nie ginie.
+@Test func partlyTimedSegmentsFallBackToWholeWindowText() {
+    let obj: [String: Any] = ["text": "Dzień dobry. Wyślę umowę.", "segments": [
+        ["start": 0.0, "end": 1.0, "text": "Dzień dobry."], ["start": 2.0, "text": "Wyślę umowę."]]]
+    #expect(OpenAICompatibleClient.words(obj) == nil)
 }
 
 @Test func wordTimestampFallbackHappensOnlyOnce() async {
@@ -476,4 +486,20 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     let text = String(decoding: try #require(c.multipartTranscription(wav: Data([1]), model: "m", language: nil).httpBody), as: UTF8.self)
     #expect(!text.contains("word_timestamps"))
     #expect(text.contains("name=\"timestamp_granularities[]\""))
+}
+
+// Lokalny serwer bez rozszerzenia oMLX odrzuca `word_timestamps`: jedno ponowienie multipart bez pola.
+@Test func localMultipartRetriesOnceWithoutWordTimestamps() async throws {
+    let multipart = OSAllocatedUnfairLock(initialState: 0)
+    let http = StubHTTP { _, body in
+        guard body.isEmpty else { return fail(422, "body -> file: Field required") }
+        let n = multipart.withLock { $0 += 1; return $0 }
+        return n == 1 ? fail(400, "unknown field word_timestamps") : ok(["text": "raz dwa"])
+    }
+    let c = OpenAICompatibleClient(provider: Provider(name: "local", baseURL: URL(string: "http://localhost:9000/v1")!), key: nil, http: http)
+    let r = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    #expect(r.text == "raz dwa")
+    #expect(http.calls.count == 4)
+    #expect(String(decoding: http.calls[2].raw, as: UTF8.self).contains("word_timestamps"))
+    #expect(!String(decoding: http.calls[3].raw, as: UTF8.self).contains("word_timestamps"))
 }

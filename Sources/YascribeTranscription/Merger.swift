@@ -40,7 +40,12 @@ public enum Merger {
             for r in results.filter({ $0.track == track }).sorted(by: { $0.chunk.index < $1.chunk.index }) {
                 if let ws = r.result.words, !ws.isEmpty {
                     for w in ws {
-                        let span = r.chunk.sourceSpan(chunkStart: w.start, chunkEnd: w.end, rate: Resampler.asrRate)
+                        var span = r.chunk.sourceSpan(chunkStart: w.start, chunkEnd: w.end, rate: Resampler.asrRate)
+                        if r.result.segmentTiming == true {
+                            // Segment może przejść przez sklejenie fragmentów: koniec mapujemy we fragmencie, w którym leży.
+                            let tail = max(w.start, w.end - 1 / Resampler.asrRate)
+                            span.end = r.chunk.sourceSpan(chunkStart: tail, chunkEnd: w.end, rate: Resampler.asrRate).end
+                        }
                         let s = clock.sessionSeconds(track: track, trackSeconds: span.start)
                         let e = clock.sessionSeconds(track: track, trackSeconds: span.end)
                         words.append(Word(text: w.word.trimmingCharacters(in: .whitespaces), start: s, end: max(s, e)))
