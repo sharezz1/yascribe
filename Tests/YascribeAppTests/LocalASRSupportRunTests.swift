@@ -42,3 +42,18 @@ private let inUse = "Can't remove the on-device model while it is downloading or
     #expect(s.downloadError != inUse)
     #expect(s.phase == .idle)
 }
+
+/// Każdy wariant ma własny magazyn i stan karty: przebieg Ultra nie może trzymać (ani blokować usunięcia) v3.
+@Test @MainActor func localASRPicksTheSupportOfTheAssignedModel() {
+    let data = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")
+    let previous = getenv("YASCRIBE_DATA_DIR").map { String(cString: $0) }
+    setenv("YASCRIBE_DATA_DIR", data.path, 1)
+    let model = AppModel()
+    if let previous { setenv("YASCRIBE_DATA_DIR", previous, 1) } else { unsetenv("YASCRIBE_DATA_DIR") }
+    defer { try? FileManager.default.removeItem(at: data) }
+    #expect(model.localASR("")?.store.variant == .parakeetV3)
+    #expect(model.localASR("parakeet-tdt-0.6b-v3")?.store.variant == .parakeetV3)
+    #expect(model.localASR("parakeet-ultra")?.store.variant == .parakeetUltra)
+    #expect(model.localASR("whisper-1") == nil)
+    #expect(model.localASR("parakeet-ultra") !== model.localASR(""))
+}

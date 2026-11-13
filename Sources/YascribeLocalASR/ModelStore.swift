@@ -17,7 +17,7 @@ public struct ModelStoreError: Error, LocalizedError, Equatable, Sendable {
     public var errorDescription: String? { message }
 }
 
-/// Magazyn modelu Parakeet v3: stan względem manifestu, odcisk, pobranie i usunięcie. FluidAudio tylko tutaj (domyślny
+/// Magazyn jednego wariantu lokalnego modelu (domyślnie Parakeet v3): stan względem manifestu, odcisk, pobranie i usunięcie. FluidAudio tylko tutaj (domyślny
 /// `download`) — `FluidAudioEngine` (T4) ładuje wyłącznie `AsrModels.loadLocal(from: modelDirectory)`.
 public struct ModelStore: Sendable {
     /// Wstrzykiwane pobranie: (katalog MODELU, force, postęp). `nil` w postępie = nieokreślony.
@@ -28,15 +28,18 @@ public struct ModelStore: Sendable {
     /// Wstrzykiwane `AsrModels.modelsExist` (lokalne sprawdzenie obecności plików, bez sieci) dla katalogu modelu.
     public typealias ModelsExist = @Sendable (URL) -> Bool
 
+    public let variant: LocalASRVariant
     private let downloader: Download
     private let modelsExist: ModelsExist
-    private let manifest = ModelManifest.parakeetV3
+    private var manifest: ModelManifest { variant.manifest }
 
-    public init(directory: URL = ModelStore.defaultDirectory, download: @escaping Download = ModelStore.fluidAudioDownload,
-                modelsExist: @escaping ModelsExist = ModelStore.fluidAudioModelsExist) {
+    /// `nil` w `download`/`modelsExist` = prawdziwe FluidAudio dla `variant`.
+    public init(directory: URL = ModelStore.defaultDirectory, variant: LocalASRVariant = .parakeetV3, download: Download? = nil,
+                modelsExist: ModelsExist? = nil) {
         self.directory = directory
-        self.downloader = download
-        self.modelsExist = modelsExist
+        self.variant = variant
+        self.downloader = download ?? ModelStore.fluidAudioDownload(variant)
+        self.modelsExist = modelsExist ?? ModelStore.fluidAudioModelsExist(variant)
     }
 
     public static var defaultDirectory: URL { resolveDirectory(env: ProcessInfo.processInfo.environment) }
@@ -81,7 +84,7 @@ public struct ModelStore: Sendable {
     /// SHA-256 z pinu, listy (nazwa, rozmiar) manifestu i TREŚCI wszystkich małych plików (wszystko poza `weight.bin`, ok. 1,3 MB:
     /// grafy `model.mil`, metadane, słowniki, `config.json`) — przeeksportowany lub dostrojony model o tych samych rozmiarach wag
     /// zmienia odcisk. Same wagi nie są hashowane (480 MB); `nil`, gdy status ≠ `ready`. Pliki nadmiarowe nie wchodzą.
-    public func fingerprint() -> String? { fingerprint(pin: ModelManifest.pin) }
+    public func fingerprint() -> String? { fingerprint(pin: variant.pin) }
 
     func fingerprint(pin: String) -> String? {
         guard status() == .ready else { return nil }
@@ -129,14 +132,16 @@ public struct ModelStore: Sendable {
         try FileManager.default.removeItem(at: modelDirectory)
     }
 
-    /// Lokalne sprawdzenie FluidAudio (obecność plików wariantu v3/int8); bez sieci.
-    public static let fluidAudioModelsExist: ModelsExist = { AsrModels.modelsExist(at: $0, version: .v3, encoderPrecision: .int8) }
+    /// Lokalne sprawdzenie FluidAudio (obecność plików wariantu); bez sieci.
+    public static func fluidAudioModelsExist(_ variant: LocalASRVariant) -> ModelsExist {
+        { AsrModels.modelsExist(at: $0, version: variant.asrVersion, encoderPrecision: .int8) }
+    }
 
-    /// `AsrModels.download(to:)` z pinem (v3, int8). Ładowanie modelu tylko przez `FluidAudioEngine` (`loadLocal`, bez sieci).
-    public static let fluidAudioDownload: Download = { modelDirectory, force, progress in
+    /// `AsrModels.download(to:)` z pinem wariantu. Ładowanie modelu tylko przez `FluidAudioEngine` (`loadLocal`, bez sieci).
+    public static func fluidAudioDownload(_ variant: LocalASRVariant) -> Download { { modelDirectory, force, progress in
         let mapper = LockedMapper()
         _ = try await AsrModels.download(
-            to: modelDirectory, force: force, version: .v3, encoderPrecision: .int8,
+            to: modelDirectory, force: force, version: variant.asrVersion, encoderPrecision: .int8,
             progressHandler: { event in
                 let phase: DownloadProgressMapper.Phase
                 switch event.phase {
@@ -146,6 +151,16 @@ public struct ModelStore: Sendable {
                 }
                 progress(mapper.map(phase))
             })
+    } }
+}
+
+extension LocalASRVariant {
+    /// Precyzja `.int8` dotyczy tylko v3; Ultra ma jeden enkoder i FluidAudio ją pomija.
+    var asrVersion: AsrModelVersion {
+        switch self {
+        case .parakeetV3: .v3
+        case .parakeetUltra: .ultra
+        }
     }
 }
 

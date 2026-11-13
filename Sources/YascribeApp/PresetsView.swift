@@ -266,8 +266,8 @@ struct RoleSection<Extra: View>: View {
                             selection: Binding(get: { assignment?.model ?? "" }, set: { assignment?.model = $0 }))
             }
             if let p = providers.first(where: { $0.id == a.providerID }), p.isLocal {
-                if role == .asr, p.api == .fluidAudio {
-                    OnThisMacRoleRow(support: model.localASR)
+                if role == .asr, p.api == .fluidAudio, let support = model.localASR(a.model) {
+                    OnThisMacRoleRow(support: support)
                 } else {
                     LocalRoleNote(warnsAboutCorrection: role == .correction)
                 }

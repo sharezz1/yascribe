@@ -2,7 +2,7 @@ import FluidAudio
 import Foundation
 import YascribeProviders
 
-/// Silnik Parakeet v3 (FluidAudio 0.17.7, API wg S0 §8). Ładuje WYŁĄCZNIE przez `loadLocal` — pozostałe warianty ładowania
+/// Silnik Parakeet (wariant z `store`; FluidAudio 0.17.7, API wg S0 §8). Ładuje WYŁĄCZNIE przez `loadLocal` — pozostałe warianty ładowania
 /// idą przez centrum pobierań FluidAudio i potrafią dociągać pliki z HF bez zgody użytkownika (decyzja 7a; pilnuje tego `LocalASRNetworkGuardTests`).
 /// Brak pliku = lokalny `modelNotFound`.
 public actor FluidAudioEngine: LocalASREngine {
@@ -16,7 +16,7 @@ public actor FluidAudioEngine: LocalASREngine {
     /// `unload()` w środku (bez okna reentrancji). `AsrModels` nie wychodzi poza to wyrażenie — inaczej `cleanup()` nie zwolni pamięci.
     public func load() async throws {
         if manager != nil { return }
-        manager = AsrManager(config: .default, models: try AsrModels.loadLocal(from: store.modelDirectory, version: .v3, encoderPrecision: .int8))
+        manager = AsrManager(config: .default, models: try AsrModels.loadLocal(from: store.modelDirectory, version: store.variant.asrVersion, encoderPrecision: .int8))
     }
 
     public func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) {

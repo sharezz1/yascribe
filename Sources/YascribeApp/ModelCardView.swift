@@ -27,7 +27,7 @@ struct ModelCardContent: View {
                 HStack(spacing: 12) {
                     ProviderLogo(preset: .onThisMac)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(ModelCardState.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
+                        Text(card.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
                         Text(card.meta).font(.system(size: 11)).foregroundStyle(.mnText2)
                     }
                     Spacer(minLength: 8)
@@ -82,18 +82,18 @@ struct ModelCardSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("Yascribe model")
             ModelCardContent(card: support.card, location: location, error: ui.removeError ?? support.downloadError) { action in
                 if action.needsConfirmation { ui.confirming = action } else { run(action) }
             }
         }
-        .confirmationDialog("Remove \(ModelCardState.name)?", isPresented: confirming(.remove)) {
+        .padding(.bottom, 10)
+        .confirmationDialog("Remove \(support.card.name)?", isPresented: confirming(.remove)) {
             Button("Remove", role: .destructive) { run(.remove) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Remove \(ModelCardState.name) from the shared FluidAudio folder? Other apps that use FluidAudio may use this copy too.")
+            Text("Remove \(support.card.name) from the shared FluidAudio folder? Other apps that use FluidAudio may use this copy too.")
         }
-        .confirmationDialog("Download \(ModelCardState.name) again?", isPresented: confirming(.downloadAgain)) {
+        .confirmationDialog("Download \(support.card.name) again?", isPresented: confirming(.downloadAgain)) {
             Button("Delete and Download", role: .destructive) { run(.downloadAgain) }
             Button("Cancel", role: .cancel) {}
         } message: {

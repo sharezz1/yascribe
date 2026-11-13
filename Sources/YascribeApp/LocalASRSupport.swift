@@ -26,7 +26,7 @@ final class LocalASRSupport: ObservableObject {
     func refresh() { status = store.status() }
 
     /// Teksty i akcja karty modelu (czysta logika w `ModelCardState`).
-    var card: ModelCardState { ModelCardState(status: status, activity: phase) }
+    var card: ModelCardState { ModelCardState(status: status, activity: phase, variant: store.variant) }
 
     /// Pobranie po kliknięciu. `force` (naprawa uszkodzonego) liczy sam `ModelStore.download` — wołający nie dostaje argumentu.
     func download() async {

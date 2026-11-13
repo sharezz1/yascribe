@@ -141,8 +141,13 @@ final class AppModel {
     let notes = NotesModel()
     /// Indeks archiwum i „Ask anything" (TASK-21/24); podłączany w `init`.
     let archive = ArchiveModel()
-    /// Lokalny ASR (F20): magazyn modelu i faza pobierania/przygotowania; UI w T7.
-    let localASR = LocalASRSupport()
+    /// Lokalny ASR (F20): magazyn i faza pobierania/przygotowania — po jednym na wariant (kolejność = karty w Settings).
+    let localASRModels = LocalASRVariant.allCases.map { LocalASRSupport(store: ModelStore(variant: $0)) }
+
+    /// `nil` = nieznany model lokalny; pusty = v3 (jak `LocalASRVariant(model:)`).
+    func localASR(_ model: String) -> LocalASRSupport? {
+        LocalASRVariant(model: model).flatMap { v in localASRModels.first { $0.store.variant == v } }
+    }
     /// Dyktowanie: powstaje w `load()` (historia), skrót startuje `YascribeApp.init` obok `monitor`.
     @ObservationIgnored lazy var dictation = DictationController(model: self)
 
@@ -485,13 +490,16 @@ final class AppModel {
     }
 
     /// Klient transkrypcji wybrany po `Provider.api`; nil = powód w `lastError`.
-    func transcriptionClient(for providerID: UUID) -> (any TranscriptionClient)? {
+    func transcriptionClient(for providerID: UUID, model: String) -> (any TranscriptionClient)? {
         switch providerWithKey(providerID) {
         case .success(let (p, key)):
             // `.fluidAudio` nigdy nie przechodzi przez `Provider.transcriptionClient` (tam siedzi zaślepka). Odmowa = błąd i koniec:
             // żadnego klienta, więc nic nie pójdzie do API.
             guard p.api == .fluidAudio else { return p.transcriptionClient(key: key) }
-            let support = localASR
+            guard let support = localASR(model) else {
+                lastError = "Unknown on-device model: \(model)."
+                return nil
+            }
             switch LocalASRFactory.client(provider: p, store: support.store, onPhase: { phase in Task { @MainActor in support.apply(phase) } }) {
             case .success(let c): return c
             case .failure(let refusal):
@@ -514,8 +522,11 @@ final class AppModel {
         switch providerWithKey(id) {
         case .failure(let problem): providerChecks[id] = .failed(problem.message)
         case .success(let (p, _)) where p.api == .fluidAudio: // bez sieci: model jest w magazynie i zgadza się z manifestem
-            localASR.refresh()
-            providerChecks[id] = RunGate.check(status: localASR.store.status()).map { .failed($0.message) } ?? .verified(models: 1)
+            // Gotowy, gdy choć jeden wariant przechodzi bramkę; bez żadnego — powód z v3 (domyślnego).
+            localASRModels.forEach { $0.refresh() }
+            let ready = localASRModels.filter { RunGate.check(status: $0.status) == nil }.count
+            providerChecks[id] = ready > 0 ? .verified(models: ready)
+                : RunGate.check(status: localASRModels[0].status).map { .failed($0.message) } ?? .verified(models: 1)
         case .success(let (p, key)):
             providerChecks[id] = await p.verify(key: key)
             // Lokalny serwer: pokaż efektywny kontekst (llama.cpp `/props`, Ollama `/api/ps`), żeby użytkownik mógł go wpisać w polu.
@@ -617,13 +628,13 @@ final class AppModel {
     }
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
-        guard let c = transcriptionClient(for: providerID) else { return }
-        let local = c is any ReleasableClient, support = localASR
-        if local { support.beginRun() }
+        guard let c = transcriptionClient(for: providerID, model: model) else { return }
+        let support = c is any ReleasableClient ? localASR(model) : nil
+        support?.beginRun()
         defer { // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
             Task {
                 await (c as? ReleasableClient)?.release()
-                if local { support.endRun() }
+                support?.endRun()
             }
         }
         let r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
@@ -991,11 +1002,13 @@ final class AppModel {
             lastError = "The preset's speech-to-text provider is missing."
             return false
         }
-        guard let c = transcriptionClient(for: asr.providerID) else { return false } // powód już w lastError
+        guard let c = transcriptionClient(for: asr.providerID, model: asr.model) else { return false } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
+            // Dostawca API: model spoza listy lokalnej, a odcisk i tak jest `nil` — magazyn v3 tylko wypełnia argument.
+            let store = (localASR(asr.model) ?? localASRModels[0]).store
             let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
-                                           modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: localASR.store))
+                                           modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: store))
             return run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
                        snapshot: snapshot, client: c)
         } catch RunSnapshotError.chatShapeNotForMeetings {
@@ -1028,10 +1041,11 @@ final class AppModel {
             lastError = "Nothing to resume for this recording."
             return
         }
-        guard let c = transcriptionClient(for: input.snapshot.providerID) else { return } // powód już w lastError
+        guard let c = transcriptionClient(for: input.snapshot.providerID, model: input.snapshot.model) else { return } // powód już w lastError
         // Zapisana migawka trafia do runnera bez zmian, więc zmianę modelu we wspólnym magazynie łapie tylko ta bramka (przed `run`).
         if let p = provider(input.snapshot.providerID),
-           let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p, currentFingerprint: localASR.store.fingerprint()) {
+           let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p,
+                                             currentFingerprint: localASR(input.snapshot.model)?.store.fingerprint()) {
             lastError = refusal.message
             return
         }
@@ -1045,8 +1059,8 @@ final class AppModel {
             lastError = refusal
             return false
         }
-        let local = c is any ReleasableClient
-        if local { localASR.beginRun() }
+        let support = c is any ReleasableClient ? localASR(snapshot.model) : nil
+        support?.beginRun()
         Task {
             var finished: Transcript?
             do {
@@ -1062,7 +1076,7 @@ final class AppModel {
             }
             // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
             await (c as? ReleasableClient)?.release()
-            if local { self.localASR.endRun() }
+            support?.endRun()
             self.transcribing.remove(id)
             self.reloadSessions()
             // Łańcuch korekta → autotytuł tylko dla przebiegu, który został bieżącym i się kwalifikuje (R23); wyjątek: pierwsza
