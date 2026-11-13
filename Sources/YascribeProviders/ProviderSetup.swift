@@ -80,9 +80,10 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Jedyny model lokalnego ASR. Stała w `YascribeProviders`, żeby `AppModel.loadModels` nie importował `YascribeLocalASR`.
+/// Identyfikatory modeli lokalnego ASR. Stała w `YascribeProviders`, żeby `AppModel.loadModels` nie importował `YascribeLocalASR`.
 public enum LocalASRModels {
     public static let parakeetV3 = "parakeet-tdt-0.6b-v3"
+    public static let cohereTranscribe6bit = "cohere-transcribe-03-2026-6bit"
 
     /// Modele dla roli — stała lista, bez sieci (jak `ElevenLabsClient.models`). Poza ASR pusto.
     public static func models(for role: Role) -> [ModelInfo] {
