@@ -16,11 +16,13 @@ extension CohereTranscribeAsrManager: CohereRuntime {}
 public actor CohereEngine: LocalASREngine {
     private let store: ModelStore
     private let runtime: any CohereRuntime
+    private var suppliedOwner: ModelStoreLock?
     private var owner: ModelStoreLock?
     private var loading: Task<ModelStoreLock, Error>?
     private var generation = 0
 
-    public init(store: ModelStore) {
+    public init(store: ModelStore, owner: ModelStoreLock? = nil) {
+        self.suppliedOwner = owner
         self.store = store
         self.runtime = CohereTranscribeAsrManager()
     }
@@ -36,12 +38,12 @@ public actor CohereEngine: LocalASREngine {
         let task: Task<ModelStoreLock, Error>
         if let loading { task = loading }
         else {
-            let store = store, runtime = runtime
+            let store = store, runtime = runtime, suppliedOwner = suppliedOwner
             task = Task {
                 guard store.model == .cohereTranscribe6bit else {
                     throw ModelStoreError(message: "Cohere requires its own model store.")
                 }
-                let lock = try store.acquireLock()
+                let lock = try suppliedOwner ?? store.acquireLock()
                 // Od statusu i odcisku do unload() nikt nie może naprawić ani usunąć źródeł.
                 guard let fingerprint = store.fingerprint() else {
                     throw ModelStoreError(message: "The Cohere model is missing or failed its check.")
@@ -82,6 +84,7 @@ public actor CohereEngine: LocalASREngine {
         let pendingOwner = await pending?.result
         await runtime.unload()
         owner = nil
+        suppliedOwner = nil
         loading = nil
         withExtendedLifetime(pendingOwner) {}
     }

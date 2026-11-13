@@ -25,6 +25,21 @@ public enum LocalASRModel: Sendable, CaseIterable {
     public enum EngineKind: Sendable { case parakeet, cohere }
     public var engineKind: EngineKind { self == .parakeetV3 ? .parakeet : .cohere }
 
+    public init(id: String) throws {
+        guard let model = Self.allCases.first(where: { $0.id == id }) else {
+            throw RunGateRefusal(message: "Unknown on-device speech model: \(id).", canDownload: false)
+        }
+        self = model
+    }
+
+    public var maxChunkSeconds: Double { self == .cohereTranscribe6bit ? 12 : 59 }
+    public var maxSourceSpan: Double? { self == .cohereTranscribe6bit ? 30 : nil }
+    public var repetitionFilterEnabled: Bool { self == .cohereTranscribe6bit }
+    /// README języki przypiętej rewizji 6-bit; tokenizer zawiera też nieobsługiwane języki.
+    public var supportedLanguages: Set<String>? {
+        self == .cohereTranscribe6bit ? ["en", "ar", "de", "el", "es", "fr", "it", "ja", "ko", "nl", "pl", "pt", "vi", "zh"] : nil
+    }
+
     public static let cohereRepository = "BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit"
     public static let cohereRevision = "79320e92e2e220ed2ed2a9acb41f3caff06acb85"
 }

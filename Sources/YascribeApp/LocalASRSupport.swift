@@ -1,5 +1,6 @@
 import Foundation
 import YascribeLocalASR
+import YascribeProviders
 
 /// Stan lokalnego ASR dla UI (karta modelu, T7): magazyn, jego status oraz faza pobierania/przygotowania.
 /// Logika bramek jest w `YascribeLocalASR` (`RunGate`) i tam testowana — tu tylko stan do pokazania.
@@ -10,6 +11,8 @@ final class LocalASRSupport: ObservableObject {
     typealias Phase = ModelActivity
 
     let store: ModelStore
+    let cohereStore: ModelStore
+    let reservations = LocalASRReservations()
     @Published private(set) var phase: Phase = .idle
     @Published private(set) var status: ModelStatus
     /// Powód ostatniego nieudanego pobrania; czyszczony przy starcie następnego.
@@ -18,9 +21,21 @@ final class LocalASRSupport: ObservableObject {
     /// Przebiegi trzymające model (`beginRun()`…`endRun()`); póki nie zero, `remove()` odmawia.
     private var runs = ModelRunCount()
 
-    init(store: ModelStore = ModelStore()) {
+    init(store: ModelStore = ModelStore(), cohereStore: ModelStore = ModelStore(model: .cohereTranscribe6bit)) {
+        self.cohereStore = cohereStore
         self.store = store
         status = store.status()
+    }
+
+    func store(for model: LocalASRModel) -> ModelStore { model == .parakeetV3 ? store : cohereStore }
+
+    func client(provider: Provider, model: String, language: LanguageCode?, engine: (any LocalASREngine)? = nil) throws -> any TranscriptionClient {
+        let selected = try LocalASRModel(id: model)
+        if let refusal = RunGate.checkLanguage(model: selected, language: language) { throw refusal }
+        return try LocalASRFactory.client(provider: provider, model: model, store: store(for: selected), engine: engine,
+                                          reservations: reservations, onPhase: { [weak self] phase in
+            Task { @MainActor in self?.apply(phase) }
+        }).get()
     }
 
     func refresh() { status = store.status() }
@@ -51,7 +66,7 @@ final class LocalASRSupport: ObservableObject {
     /// Usunięcie modelu po kliknięciu. Wyklucza się z pobieraniem (`phase` ≠ `.idle`) i z przebiegiem, który trzyma klienta
     /// (`runs`: od `beginRun()` do `endRun()` każdego przebiegu).
     func remove() {
-        guard phase == .idle, runs.isIdle else {
+        guard phase == .idle, runs.isIdle, reservations.isIdle else {
             downloadError = "Can't remove the on-device model while it is downloading or in use."
             return
         }
@@ -76,6 +91,14 @@ final class LocalASRSupport: ObservableObject {
             phase = .idle
             downloadError = "Couldn't load the on-device model: \(reason)"
         }
+    }
+
+    func probe(client: any TranscriptionClient, model: String, role: Role, language: LanguageCode?) async -> ProbeResult {
+        beginRun()
+        let result = await ProbeRunner(client: client).probe(model: model, role: role, language: language)
+        await (client as? ReleasableClient)?.release()
+        endRun()
+        return result
     }
 
     /// Przed przebiegiem lokalnego klienta (spotkanie, dyktowanie, sonda); para z `endRun()` w tym samym zakresie.

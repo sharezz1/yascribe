@@ -27,6 +27,8 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     public nonisolated let provider: Provider
     private let engine: any LocalASREngine
     private let store: ModelStore
+    private var owner: ModelStoreLock?
+    private var reservation: LocalASRReservation?
     private let onPhase: @Sendable (LocalASRPhase) -> Void
     private var loaded = false
     private var loading: Task<Void, Error>?
@@ -36,10 +38,13 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     private var generation = 0
 
     public init(provider: Provider, engine: any LocalASREngine, store: ModelStore,
+                owner: ModelStoreLock? = nil, reservation: LocalASRReservation? = nil,
                 onPhase: @escaping @Sendable (LocalASRPhase) -> Void = { _ in }) {
         self.provider = provider
         self.engine = engine
         self.store = store
+        self.owner = owner
+        self.reservation = reservation
         self.onPhase = onPhase
     }
 
@@ -72,6 +77,8 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
         pending?.cancel() // `loadLocal` jest nieprzerywalne — to tylko prośba, ładowanie i tak się dokończy
         _ = await pending?.result
         await engine.unload()
+        owner = nil
+        reservation = nil
         onPhase(.idle)
     }
 

@@ -3,7 +3,9 @@ import YascribeProviders
 import YascribeTranscription
 
 /// Odmowa startu lokalnego przebiegu. Nie ma ścieżki „zamiast tego do API" — wołający pokazuje `message` i na tym koniec.
-public struct RunGateRefusal: Error, Equatable, Sendable {
+public struct RunGateRefusal: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
+    public var errorDescription: String? { message }
+    public var description: String { message }
     public var message: String
     /// `true` = przycisk „Download" naprawia sprawę (brak modelu albo uszkodzony).
     public var canDownload: Bool
@@ -26,6 +28,22 @@ public enum RunGate {
         }
     }
 
+    public static func checkLanguage(model: LocalASRModel, language: LanguageCode?) -> RunGateRefusal? {
+        guard let supported = model.supportedLanguages else { return nil }
+        guard let language else {
+            return RunGateRefusal(message: "Cohere requires an explicit language. Auto is not supported.", canDownload: false)
+        }
+        guard supported.contains(language.rawValue) else {
+            return RunGateRefusal(message: "Cohere does not support language \(language.rawValue).", canDownload: false)
+        }
+        return nil
+    }
+
+    public static func checkDisk(need: [ModelDiskNeed]) -> RunGateRefusal? {
+        guard let insufficient = need.first(where: { !$0.fits }) else { return nil }
+        return RunGateRefusal(message: "Not enough disk space: need \(insufficient.bytes) bytes, available \(insufficient.freeBytes) bytes on volume \(insufficient.volume).", canDownload: false)
+    }
+
     /// `AppModel.resume` podaje do runnera ZAPISANĄ migawkę, więc `RunError.inputMismatch` nie złapie zmiany modelu — ta bramka tak.
     /// Dotyczy tylko `.fluidAudio` z zapisanym odciskiem; przebiegi API ignorują odcisk.
     public static func checkResume(snapshot: RunSnapshot, provider: Provider, currentFingerprint: String?) -> RunGateRefusal? {
@@ -40,11 +58,31 @@ public enum RunGate {
 }
 
 public enum LocalASRFactory {
-    /// Klient lokalnego ASR albo odmowa. Przy odmowie nie powstaje żaden klient — nie ma czym wysłać do API.
-    /// `engine == nil` = prawdziwy `FluidAudioEngine`; testy podają atrapę.
-    public static func client(provider: Provider, store: ModelStore, engine: (any LocalASREngine)? = nil,
+    /// Blokada i rezerwacja są utrzymywane od kontroli źródeł do release(), także przed leniwym load().
+    public static func client(provider: Provider, model: String, store: ModelStore? = nil,
+                              engine: (any LocalASREngine)? = nil, reservations: LocalASRReservations? = nil,
                               onPhase: @escaping @Sendable (LocalASRPhase) -> Void = { _ in }) -> Result<any TranscriptionClient, RunGateRefusal> {
-        if let refusal = RunGate.check(status: store.status()) { return .failure(refusal) }
-        return .success(LocalASRClient(provider: provider, engine: engine ?? FluidAudioEngine(store: store), store: store, onPhase: onPhase))
+        do {
+            let selected = try LocalASRModel(id: model)
+            let store = store ?? ModelStore(model: selected)
+            guard store.model == selected else {
+                throw RunGateRefusal(message: "The on-device model store does not match \(model).", canDownload: false)
+            }
+            let reservation = try reservations?.acquire(model: selected)
+            let owner = try store.acquireLock()
+            if let refusal = RunGate.check(status: store.status()) { throw refusal }
+            if selected == .cohereTranscribe6bit, let refusal = RunGate.checkDisk(need: try store.diskNeed(operation: .load)) { throw refusal }
+            let selectedEngine: any LocalASREngine = engine ?? makeEngine(model: selected, store: store, owner: owner)
+            return .success(LocalASRClient(provider: provider, engine: selectedEngine, store: store,
+                                           owner: owner, reservation: reservation, onPhase: onPhase))
+        } catch let refusal as RunGateRefusal { return .failure(refusal) }
+        catch { return .failure(RunGateRefusal(message: error.localizedDescription, canDownload: false)) }
+    }
+
+    static func makeEngine(model: LocalASRModel, store: ModelStore, owner: ModelStoreLock? = nil) -> any LocalASREngine {
+        switch model.engineKind {
+        case .parakeet: FluidAudioEngine(store: store)
+        case .cohere: CohereEngine(store: store, owner: owner)
+        }
     }
 }

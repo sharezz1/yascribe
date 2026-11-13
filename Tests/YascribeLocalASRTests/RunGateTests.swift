@@ -42,7 +42,7 @@ private struct NoEngine: LocalASREngine {
     // Review Focus #1: brak modelu = odmowa z przyciskiem pobrania; żaden klient nie powstaje (więc nic nie może pójść do API).
     #expect(RunGate.check(status: .missing)
             == RunGateRefusal(message: "The on-device speech model isn't downloaded yet. Download it in Settings.", canDownload: true))
-    switch LocalASRFactory.client(provider: local, store: emptyStore(), engine: NoEngine()) {
+    switch LocalASRFactory.client(provider: local, model: LocalASRModels.parakeetV3, store: emptyStore(), engine: NoEngine()) {
     case .success: Issue.record("a client was created without a model")
     case .failure(let refusal): #expect(refusal.canDownload)
     }
@@ -50,7 +50,7 @@ private struct NoEngine: LocalASREngine {
 
 @Test func readyAllowsRun() throws {
     #expect(RunGate.check(status: .ready) == nil)
-    switch LocalASRFactory.client(provider: local, store: try readyStore(), engine: NoEngine()) {
+    switch LocalASRFactory.client(provider: local, model: LocalASRModels.parakeetV3, store: try readyStore(), engine: NoEngine()) {
     case .success(let c): #expect(c is LocalASRClient)
     case .failure(let refusal): Issue.record("refused: \(refusal.message)")
     }

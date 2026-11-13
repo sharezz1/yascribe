@@ -485,19 +485,14 @@ final class AppModel {
     }
 
     /// Klient transkrypcji wybrany po `Provider.api`; nil = powód w `lastError`.
-    func transcriptionClient(for providerID: UUID) -> (any TranscriptionClient)? {
+    func transcriptionClient(for providerID: UUID, model: String, language: LanguageCode?) -> (any TranscriptionClient)? {
         switch providerWithKey(providerID) {
         case .success(let (p, key)):
             // `.fluidAudio` nigdy nie przechodzi przez `Provider.transcriptionClient` (tam siedzi zaślepka). Odmowa = błąd i koniec:
             // żadnego klienta, więc nic nie pójdzie do API.
             guard p.api == .fluidAudio else { return p.transcriptionClient(key: key) }
-            let support = localASR
-            switch LocalASRFactory.client(provider: p, store: support.store, onPhase: { phase in Task { @MainActor in support.apply(phase) } }) {
-            case .success(let c): return c
-            case .failure(let refusal):
-                lastError = refusal.message
-                return nil
-            }
+            do { return try localASR.client(provider: p, model: model, language: language) }
+            catch { lastError = error.localizedDescription; return nil }
         case .failure(let problem):
             lastError = problem.message
             return nil
@@ -617,16 +612,13 @@ final class AppModel {
     }
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
-        guard let c = transcriptionClient(for: providerID) else { return }
-        let local = c is any ReleasableClient, support = localASR
-        if local { support.beginRun() }
-        defer { // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
-            Task {
-                await (c as? ReleasableClient)?.release()
-                if local { support.endRun() }
-            }
+        guard let c = transcriptionClient(for: providerID, model: model, language: language) else { return }
+        let r: ProbeResult
+        if c is any ReleasableClient {
+            r = await localASR.probe(client: c, model: model, role: role, language: language)
+        } else {
+            r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
         }
-        let r = await ProbeRunner(client: c).probe(model: model, role: role, language: language)
         probeCache.record(r)
         save()
     }
@@ -991,13 +983,11 @@ final class AppModel {
             lastError = "The preset's speech-to-text provider is missing."
             return false
         }
-        guard let c = transcriptionClient(for: asr.providerID) else { return false } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
-            let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
-                                           modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: localASR.store))
+            let configuration = try ASRRunConfiguration.build(preset: preset, provider: provider, probe: probe)
             return run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
-                       snapshot: snapshot, client: c)
+                       configuration: configuration)
         } catch RunSnapshotError.chatShapeNotForMeetings {
             lastError = "This model returns no word timings, so it can't be used for meetings."
         } catch {
@@ -1028,21 +1018,39 @@ final class AppModel {
             lastError = "Nothing to resume for this recording."
             return
         }
-        guard let c = transcriptionClient(for: input.snapshot.providerID) else { return } // powód już w lastError
-        // Zapisana migawka trafia do runnera bez zmian, więc zmianę modelu we wspólnym magazynie łapie tylko ta bramka (przed `run`).
-        if let p = provider(input.snapshot.providerID),
-           let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p, currentFingerprint: localASR.store.fingerprint()) {
-            lastError = refusal.message
-            return
-        }
-        run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
+        do {
+            let configuration = try ASRRunConfiguration.build(snapshot: input.snapshot, savedInput: input)
+            run(sessionURL: item.url, runID: runID, configuration: configuration, savedInput: input)
+        } catch { lastError = error.localizedDescription }
     }
 
     @discardableResult
-    private func run(sessionURL: URL, runID: String, snapshot: RunSnapshot, client c: any TranscriptionClient) -> Bool {
+    private func run(sessionURL: URL, runID: String, configuration: ASRRunConfiguration, savedInput: RunInput? = nil) -> Bool {
         let id = sessionURL.lastPathComponent
         if let refusal = TranscriptionStartGate.begin(sessionURL: sessionURL, notes: notes, moving: recordingsMove != nil) {
             lastError = refusal
+            return false
+        }
+        var snapshot = configuration.snapshot
+        guard let c = transcriptionClient(for: snapshot.providerID, model: snapshot.model, language: snapshot.language) else {
+            transcribing.remove(id)
+            return false
+        }
+        let effective: ASRRunConfiguration
+        do {
+            if let model = configuration.store?.model {
+                let store = localASR.store(for: model)
+                if savedInput != nil {
+                    if let refusal = RunGate.checkResume(snapshot: snapshot, provider: c.provider, currentFingerprint: store.fingerprint()) { throw refusal }
+                } else {
+                    snapshot.modelFingerprint = RunGate.fingerprintForSnapshot(provider: c.provider, store: store)
+                }
+            }
+            effective = try ASRRunConfiguration.build(snapshot: snapshot, savedInput: savedInput)
+        } catch {
+            Task { await (c as? ReleasableClient)?.release() }
+            transcribing.remove(id)
+            lastError = error.localizedDescription
             return false
         }
         let local = c is any ReleasableClient
@@ -1050,7 +1058,7 @@ final class AppModel {
         Task {
             var finished: Transcript?
             do {
-                finished = try await TranscriptionRunner(session: sessionURL, runID: runID, snapshot: snapshot, client: c).run { p in
+                finished = try await effective.run(session: sessionURL, runID: runID, client: c) { p in
                     Task { @MainActor in
                         // Pierwszy postęp: `input.json` już leży, więc baner nowej próby zna jej model.
                         if p.done == 0 { self.reloadSessions() }
@@ -1060,8 +1068,6 @@ final class AppModel {
             } catch {
                 self.lastError = "Transcription failed: \(error)"
             }
-            // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
-            await (c as? ReleasableClient)?.release()
             if local { self.localASR.endRun() }
             self.transcribing.remove(id)
             self.reloadSessions()
