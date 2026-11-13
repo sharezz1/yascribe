@@ -408,8 +408,29 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
         #expect(text.contains(field), "missing \(field)")
     }
     #expect(last.raw.range(of: ProbeClips.polish.wav) != nil)
+    let boundary = try #require(last.headers["Content-Type"]?.components(separatedBy: "boundary=").last)
+    #expect(text.hasPrefix("--\(boundary)\r\n"))
+    #expect(String(decoding: last.raw.suffix(boundary.count + 8), as: UTF8.self) == "\r\n--\(boundary)--\r\n")
     #expect(r.text == "raz dwa")
     #expect(r.words?.count == 1)
+}
+
+// Odrzucenie JSON kodem 415 od razu (bez prób bez znaczników słów skończonych sukcesem) też prowadzi do multipart.
+@Test func unsupportedMediaTypeLeadsToMultipart() async throws {
+    let http = StubHTTP { _, body in body.isEmpty ? ok(["text": "raz"]) : fail(415, "Unsupported Media Type") }
+    let r = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+        .transcribe(wav: ProbeClips.polish.wav, model: "m", language: nil, shape: .audioTranscriptions)
+    #expect(r.text == "raz")
+    #expect(!String(decoding: http.calls[2].raw, as: UTF8.self).contains("name=\"language\""))
+}
+
+// Przeciążenie albo awaria przy multipart to nie „zły kształt”: błąd idzie dalej (ASRRetry ponawia 429/5xx).
+@Test func multipartServerErrorIsNotMaskedByTheJSONRejection() async {
+    let http = StubHTTP { _, body in body.isEmpty ? fail(503, "busy") : fail(422, "file: Field required") }
+    await #expect(throws: ProviderError.http(503, "busy")) {
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+            .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
 }
 
 @Test(arguments: [401, 429, 500]) func otherTranscriptionErrorsAreNotRetriedByTheClient(status: Int) async {

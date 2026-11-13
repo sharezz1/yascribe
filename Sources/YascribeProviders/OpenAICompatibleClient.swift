@@ -136,7 +136,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             let obj: [String: Any]
             do {
                 obj = try await json(try request("audio/transcriptions", body: body))
-            } catch ProviderError.http(let status, _) where status == 400 || status == 422 {
+            } catch ProviderError.http(let status, _) where status == 400 || status == 415 || status == 422 {
                 // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
                 // bez pola. Zostają same `segments` (bez czasów słów) — `words` = nil, Merger bierze tekst okna.
                 body["timestamp_granularities"] = nil
@@ -144,9 +144,10 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                     obj = try await json(try request("audio/transcriptions", body: body))
                 } catch ProviderError.http(let status, let message) where status == 400 || status == 415 || status == 422 {
                     // Oryginalne API OpenAI i serwery lokalne (oMLX, mlx-audio) przyjmują tylko multipart/form-data, a JSON
-                    // z `input_audio` odrzucają jako brak pól. Gdy i multipart nie przejdzie, zostaje błąd JSON (nie mylimy diagnozy).
+                    // z `input_audio` odrzucają jako brak pól. Multipart też odrzucony kształtem → błąd JSON (dostawca JSON-owy
+                    // nie dostaje mylącej diagnozy); 429/5xx/timeout z multipart idą dalej, do ponowień i sondy.
                     do { obj = try await json(multipartTranscription(wav: wav, model: model, language: language)) }
-                    catch { throw ProviderError.http(status, message) }
+                    catch ProviderError.http(let s, _) where s == 400 || s == 415 || s == 422 { throw ProviderError.http(status, message) }
                 }
             }
             guard let text = obj["text"] as? String else { throw ProviderError.badResponse("no text") }
