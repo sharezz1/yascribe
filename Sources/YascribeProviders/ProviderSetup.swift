@@ -80,13 +80,25 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Jedyny model lokalnego ASR. Stała w `YascribeProviders`, żeby `AppModel.loadModels` nie importował `YascribeLocalASR`.
+/// Identyfikatory modeli lokalnego ASR. Stała w `YascribeProviders`, żeby `AppModel.loadModels` nie importował `YascribeLocalASR`.
 public enum LocalASRModels {
     public static let parakeetV3 = "parakeet-tdt-0.6b-v3"
+    public static let cohereTranscribe6bit = "cohere-transcribe-03-2026-6bit"
+
+    /// Nazwa wyświetlana Cohere: wariant eksperymentalny (noc 2026-11-12/13). Parakeet bez nazwy — wyświetla się jego id.
+    public static let cohereTranscribe6bitName = "Cohere Transcribe 6-bit (Experimental)"
 
     /// Modele dla roli — stała lista, bez sieci (jak `ElevenLabsClient.models`). Poza ASR pusto.
+    /// Dyktowanie z niej nie korzysta: ma własną listę z samym Parakeetem (`DictationSettingsSection`, `asrForDictation`).
     public static func models(for role: Role) -> [ModelInfo] {
-        role == .asr ? [ModelInfo(id: parakeetV3, inputModalities: ["audio"], outputModalities: ["transcription"])] : []
+        role == .asr ? [ModelInfo(id: parakeetV3, inputModalities: ["audio"], outputModalities: ["transcription"]),
+                        ModelInfo(id: cohereTranscribe6bit, inputModalities: ["audio"], outputModalities: ["transcription"],
+                                  name: cohereTranscribe6bitName)] : []
+    }
+
+    /// Nazwa do wyświetlenia modelu lokalnego; `nil` = brak własnej nazwy (pokazuje się id).
+    public static func displayName(_ id: String) -> String? {
+        models(for: .asr).first { $0.id == id }?.name
     }
 }
 

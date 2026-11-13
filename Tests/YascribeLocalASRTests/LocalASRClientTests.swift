@@ -10,6 +10,7 @@ private actor FakeEngine: LocalASREngine {
     private(set) var loads = 0
     private(set) var unloads = 0
     private(set) var transcribed: [Int] = []
+    private(set) var languages: [LanguageCode?] = []
     private(set) var isLoaded = false
     private(set) var unloadedWhileLoading = false
     private var loadInFlight = false
@@ -34,7 +35,7 @@ private actor FakeEngine: LocalASREngine {
         if let failure { throw failure }
         isLoaded = true
     }
-    func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) { transcribed.append(samples.count); return result }
+    func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord]) { transcribed.append(samples.count); languages.append(language); return result }
     func unload() async {
         unloads += 1
         if loadInFlight { unloadedWhileLoading = true }
@@ -61,7 +62,7 @@ private final class Phases: @unchecked Sendable {
 /// Pełny model z manifestu (pliki rzadkie o dokładnych rozmiarach) w `mn-<UUID>`, żeby `status() == .ready`.
 private func readyStore() throws -> ModelStore {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true)
-    let store = ModelStore(directory: root, download: { _, _, _ in })
+    let store = isolatedModelStore(directory: root, download: { _, _, _ in })
     for (file, size) in ModelManifest.parakeetV3.files {
         let url = store.modelDirectory.appendingPathComponent(file)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -74,7 +75,7 @@ private func readyStore() throws -> ModelStore {
 }
 
 private func emptyStore() -> ModelStore {
-    ModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true),
+    isolatedModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true),
                download: { _, _, _ in })
 }
 
@@ -113,24 +114,30 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     #expect(phases.all == [.preparing, .ready])
 }
 
-@Test func releaseUnloadsAndNextRequestLoadsAgain() async throws {
+@Test func releaseUnloadsAndReleasedClientRefusesWithoutLoading() async throws {
     let engine = FakeEngine()
     let phases = Phases()
     let c = client(engine, store: try readyStore(), phases: phases)
     _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
     await c.release()
     #expect(await engine.unloads == 1)
-    _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
-    #expect(await engine.loads == 2)
-    #expect(phases.all == [.preparing, .ready, .idle, .preparing, .ready])
+    // Bez rezerwacji i blokady ponowne ładowanie ominęłoby obie bramki (R3 R04).
+    do {
+        _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+        Issue.record("released client must refuse")
+    } catch let ProviderError.badResponse(reason) { #expect(reason.contains("already finished")) }
+    #expect(await engine.loads == 1)
+    #expect(phases.all == [.preparing, .ready, .idle])
 }
 
-@Test func ignoresTheLanguageParameter() async throws {
-    let c = client(FakeEngine(), store: try readyStore())
+@Test func passesTheLanguageParameterToTheEngine() async throws {
+    let engine = FakeEngine()
+    let c = client(engine, store: try readyStore())
     let pl = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: .polish, shape: .audioTranscriptions)
     let en = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: .english, shape: .audioTranscriptions)
     let none = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
     #expect(pl == en && en == none)
+    #expect(await engine.languages == [.polish, .english, nil])
 }
 
 @Test func chatShapeIsRejected() async throws {
@@ -180,12 +187,8 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     #expect(await engine.unloads == 1)
     do { _ = try await request.value } catch is CancellationError {} // żądanie z tej generacji kończy się anulowaniem (albo zdążyło przed release)
     #expect(phases.all.last == .idle)
-    // klient działa dalej: następne żądanie ładuje od nowa (brama silnika jest już zużyta, więc otwieramy ją drugi raz)
-    let next = Task { try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
-    await waitUntilSuspended(engine, atLoad: 2)
-    await engine.openGate()
-    _ = try await next.value
-    #expect(await engine.loads == 2)
+    await #expect(throws: ProviderError.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+    #expect(await engine.loads == 1)
 }
 
 @Test func failedLoadIsRememberedAndNotRetriedUntilRelease() async throws {
@@ -199,8 +202,8 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     #expect(phases.all == [.preparing, .failed("boom")])
     await c.release()
     #expect(phases.all.last == .idle)
-    await #expect(throws: LoadBoom.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
-    #expect(await engine.loads == 2, "release() clears the remembered failure")
+    await #expect(throws: ProviderError.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+    #expect(await engine.loads == 1, "released client never loads again")
 }
 
 @Test func concurrentRequestsShareOneFailedLoad() async throws {

@@ -227,10 +227,9 @@ private func aecEnergy(_ x: ArraySlice<Float>) -> Double {
     }
     #expect(refused.requests == 0)
     try original.write(to: audio)
-    await #expect(throws: RunError.inputMismatch) {
-        _ = try await TranscriptionRunner(session: dir, runID: "enabled", snapshot: snap, client: client(refused),
-                                          maxChunkSeconds: 4, crosstalk: crosstalk, offlineAEC: nil).run()
-    }
+    _ = try await TranscriptionRunner(session: dir, runID: "enabled", snapshot: snap, client: client(refused),
+                                      maxChunkSeconds: 4, crosstalk: crosstalk, offlineAEC: nil).run()
+    #expect(refused.requests == 0) // zapisane AEC obowiązuje mimo bieżącego nil
     let journal = dir.appendingPathComponent("journal.jsonl")
     var data = try Data(contentsOf: journal)
     data.append(try JSONEncoder().encode(JournalEvent.deviceChanged("system", deviceUID: "new-output", hostTime: 20_000_000_000)))

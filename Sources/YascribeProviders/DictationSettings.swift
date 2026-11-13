@@ -57,6 +57,12 @@ public struct DictationSettings: Codable, Equatable, Sendable {
 
     /// Model ASR do użycia: pusta nazwa (dostawca wybrany, model jeszcze nie) = brak modelu, żadne żądanie nie idzie z `model: ""`.
     public var usableASR: RoleAssignment? { asr.flatMap { Self.usable($0) } }
+    /// Przypięcie lokalnego dyktowania także dla ustawień zapisanych z innym modelem.
+    public func asrForDictation(provider: Provider) -> RoleAssignment? {
+        guard let asr, asr.providerID == provider.id else { return nil }
+        return provider.api == .fluidAudio ? RoleAssignment(providerID: provider.id, model: LocalASRModels.parakeetV3) : usableASR
+    }
+
     /// Model korekty, gdy korekta jest włączona i model wybrany; inaczej `nil` (korekta pominięta).
     public var usableCorrection: RoleAssignment? { correctionEnabled ? correction?.model.flatMap { Self.usable($0) } : nil }
 

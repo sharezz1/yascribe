@@ -5,7 +5,7 @@ import YascribeLocalASR
 
 /// Magazyn w katalogu tymczasowym, który nie istnieje: status `.missing`, nic nie jest pobierane ani kasowane u użytkownika.
 @MainActor private func support() -> LocalASRSupport {
-    LocalASRSupport(store: ModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")))
+    LocalASRSupport(store: isolatedModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")))
 }
 
 private let inUse = "Can't remove the on-device model while it is downloading or in use."

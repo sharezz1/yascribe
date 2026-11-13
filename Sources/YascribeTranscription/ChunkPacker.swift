@@ -61,14 +61,18 @@ public struct Chunk: Codable, Equatable, Sendable {
 /// przed limitem, nie w połowie słowa.
 public struct ChunkPacker: Sendable {
     public var maxSeconds: Double
+    public var maxSourceSpan: Double?
     public var gapSeconds: Double = 0.3
     public var splitSearchSeconds: Double = 5
     public var rate: Double = Resampler.asrRate
 
-    public init(maxSeconds: Double) { self.maxSeconds = maxSeconds }
+    public init(maxSeconds: Double, maxSourceSpan: Double? = nil) {
+        self.maxSeconds = maxSeconds
+        self.maxSourceSpan = maxSourceSpan
+    }
 
     public func pack(_ regions: [Range<Int>], samples x: [Float]) -> [Chunk] {
-        let maxLen = Int(maxSeconds * rate)
+        let maxLen = max(1, Int(min(maxSeconds, maxSourceSpan ?? maxSeconds) * rate))
         let gap = Int(gapSeconds * rate)
         var pieces: [Range<Int>] = []
         for r in regions { pieces += split(r, maxLen: maxLen, x: x) }
@@ -78,7 +82,10 @@ public struct ChunkPacker: Sendable {
         var used = 0
         for p in pieces {
             let need = (current.isEmpty ? 0 : gap) + p.count
-            if !current.isEmpty && used + need > maxLen {
+            let exceedsSpan = maxSourceSpan.map { span in
+                p.upperBound - (current.first?.sourceStart ?? p.lowerBound) > Int(span * rate)
+            } ?? false
+            if !current.isEmpty && (used + need > maxLen || exceedsSpan) {
                 chunks.append(Chunk(index: chunks.count, segments: current, length: used))
                 current = []
                 used = 0

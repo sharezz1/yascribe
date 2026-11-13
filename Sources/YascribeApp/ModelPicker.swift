@@ -43,7 +43,7 @@ struct ModelPicker: View {
                 if showProvider, let name = model.providers.providers.first(where: { $0.id == providerID })?.roleLabel {
                     Text("\(name)  ·").foregroundStyle(.mnText2).fixedSize()
                 }
-                Text(selection.isEmpty ? "Choose model" : selection).lineLimit(1).truncationMode(.middle)
+                Text(selection.isEmpty ? "Choose model" : label(selection)).lineLimit(1).truncationMode(.middle)
                     .foregroundStyle(selection.isEmpty ? .mnText2 : .mnText)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.mnText2)
@@ -74,7 +74,7 @@ struct ModelPicker: View {
                 Button { pick(m.id) } label: {
                     HStack {
                         // Jedna linia, skracanie w środku (długie id typu `nvidia/nemotron-…-0.6b` zawijały się), pełne id w podpowiedzi.
-                        Text(m.id).lineLimit(1).truncationMode(.middle).help(m.id)
+                        Text(label(m.id)).lineLimit(1).truncationMode(.middle).help(m.id)
                         Spacer()
                         if m.id == selection { Image(systemName: "checkmark") }
                     }
@@ -88,6 +88,9 @@ struct ModelPicker: View {
         .padding(12)
         .frame(width: 360, height: 320)
     }
+
+    /// Modele lokalne z własną nazwą („… (Experimental)”); pozostałe, także OpenRouter, nadal po id.
+    private func label(_ id: String) -> String { LocalASRModels.displayName(id) ?? id }
 
     private func pick(_ id: String) {
         selection = id

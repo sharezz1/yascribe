@@ -15,7 +15,7 @@ private func snapshot(_ provider: Provider, fingerprint: String?) throws -> RunS
 /// Pełny model z manifestu (pliki rzadkie o dokładnych rozmiarach) w `mn-<UUID>`, żeby `status() == .ready`.
 private func readyStore() throws -> ModelStore {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true)
-    let store = ModelStore(directory: root, download: { _, _, _ in })
+    let store = isolatedModelStore(directory: root, download: { _, _, _ in })
     for (file, size) in ModelManifest.parakeetV3.files {
         let url = store.modelDirectory.appendingPathComponent(file)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -28,13 +28,13 @@ private func readyStore() throws -> ModelStore {
 }
 
 private func emptyStore() -> ModelStore {
-    ModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true),
+    isolatedModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true),
                download: { _, _, _ in })
 }
 
 private struct NoEngine: LocalASREngine {
     func load() async throws {}
-    func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) { ("", []) }
+    func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord]) { ("", []) }
     func unload() async {}
 }
 
@@ -42,7 +42,7 @@ private struct NoEngine: LocalASREngine {
     // Review Focus #1: brak modelu = odmowa z przyciskiem pobrania; żaden klient nie powstaje (więc nic nie może pójść do API).
     #expect(RunGate.check(status: .missing)
             == RunGateRefusal(message: "The on-device speech model isn't downloaded yet. Download it in Settings.", canDownload: true))
-    switch LocalASRFactory.client(provider: local, store: emptyStore(), engine: NoEngine()) {
+    switch LocalASRFactory.client(provider: local, model: LocalASRModels.parakeetV3, store: emptyStore(), engine: NoEngine()) {
     case .success: Issue.record("a client was created without a model")
     case .failure(let refusal): #expect(refusal.canDownload)
     }
@@ -50,7 +50,7 @@ private struct NoEngine: LocalASREngine {
 
 @Test func readyAllowsRun() throws {
     #expect(RunGate.check(status: .ready) == nil)
-    switch LocalASRFactory.client(provider: local, store: try readyStore(), engine: NoEngine()) {
+    switch LocalASRFactory.client(provider: local, model: LocalASRModels.parakeetV3, store: try readyStore(), engine: NoEngine()) {
     case .success(let c): #expect(c is LocalASRClient)
     case .failure(let refusal): Issue.record("refused: \(refusal.message)")
     }

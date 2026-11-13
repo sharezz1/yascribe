@@ -1,10 +1,10 @@
 import Foundation
 import YascribeProviders
 
-/// Szew do atrapy; prawdziwy silnik to `FluidAudioEngine` (jedyny plik z `import FluidAudio` poza `ModelStore`).
+/// Szew silnika lokalnego ASR: `FluidAudioEngine` dla Parakeeta i `CohereEngine` dla Cohere.
 public protocol LocalASREngine: Sendable {
     func load() async throws
-    func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord])
+    func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord])
     func unload() async
 }
 
@@ -27,6 +27,8 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     public nonisolated let provider: Provider
     private let engine: any LocalASREngine
     private let store: ModelStore
+    private var owner: ModelStoreLock?
+    private var reservation: LocalASRReservation?
     private let onPhase: @Sendable (LocalASRPhase) -> Void
     private var loaded = false
     private var loading: Task<Void, Error>?
@@ -34,20 +36,25 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     private var loadFailure: Error?
     /// Rośnie przy `release()`; ładowanie rozpoczęte w starej generacji nie ma prawa nic ustawić w nowej.
     private var generation = 0
+    /// Po `release()` klient nie ma rezerwacji ani blokady: ponowne ładowanie ominęłoby obie, więc odmawiamy.
+    private var released = false
 
     public init(provider: Provider, engine: any LocalASREngine, store: ModelStore,
+                owner: ModelStoreLock? = nil, reservation: LocalASRReservation? = nil,
                 onPhase: @escaping @Sendable (LocalASRPhase) -> Void = { _ in }) {
         self.provider = provider
         self.engine = engine
         self.store = store
+        self.owner = owner
+        self.reservation = reservation
         self.onPhase = onPhase
     }
 
     public func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
-        // `language` ignorowany: wskazówka FluidAudio jest tylko skryptowa, język pilnuje strażnik runnera.
         guard shape == .audioTranscriptions else {
             throw ProviderError.badResponse("On-device transcription supports only the audio transcriptions shape.")
         }
+        guard !released else { throw ProviderError.badResponse("This on-device transcription was already finished. Start it again.") }
         switch store.status() {
         case .ready: break
         case .missing: throw ProviderError.badResponse("The on-device speech model isn't downloaded.")
@@ -58,13 +65,14 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
         if samples.count < Self.minimumSamples { return TranscriptionResult(text: "", words: []) }
         try await ensureLoaded()
         try Task.checkCancellation()
-        let r = try await engine.transcribe(samples: samples)
+        let r = try await engine.transcribe(samples: samples, language: language)
         return TranscriptionResult(text: r.text, words: r.words)
     }
 
     /// Wołać, gdy żaden przebieg nie trwa (tak robi `AppModel`). Czeka na ładowanie w toku i dopiero potem zwalnia silnik, żeby
     /// model nie został w pamięci; żądania, które czekały na to ładowanie, kończą się `CancellationError`.
     public func release() async {
+        released = true
         generation += 1
         let pending = loading
         loading = nil
@@ -73,6 +81,8 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
         pending?.cancel() // `loadLocal` jest nieprzerywalne — to tylko prośba, ładowanie i tak się dokończy
         _ = await pending?.result
         await engine.unload()
+        owner = nil
+        reservation = nil
         onPhase(.idle)
     }
 

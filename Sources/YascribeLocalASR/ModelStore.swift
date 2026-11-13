@@ -1,6 +1,7 @@
 import CryptoKit
 import FluidAudio
 import Foundation
+import YascribeProviders
 
 /// Stan modelu w magazynie (spec 2.0a §4.2). „Pobieranie w toku" nie należy tu — trzyma je `LocalASRSupport` (T6).
 public enum ModelStatus: Equatable, Sendable {
@@ -17,51 +18,59 @@ public struct ModelStoreError: Error, LocalizedError, Equatable, Sendable {
     public var errorDescription: String? { message }
 }
 
-/// Magazyn modelu Parakeet v3: stan względem manifestu, odcisk, pobranie i usunięcie. FluidAudio tylko tutaj (domyślny
+/// Magazyn lokalnego modelu ASR: stan względem manifestu, odcisk, pobranie i usunięcie. FluidAudio tylko tutaj (domyślny
 /// `download`) — `FluidAudioEngine` (T4) ładuje wyłącznie `AsrModels.loadLocal(from: modelDirectory)`.
 public struct ModelStore: Sendable {
     /// Wstrzykiwane pobranie: (katalog MODELU, force, postęp). `nil` w postępie = nieokreślony.
     public typealias Download = @Sendable (URL, Bool, @escaping @Sendable (Double?) -> Void) async throws -> Void
 
-    /// KORZEŃ magazynu (domyślnie wspólny z FluidAudio); model leży w `modelDirectory`.
+    /// Korzeń magazynu: historyczny dla Parakeeta, własny Yascribe dla Cohere; model leży w `modelDirectory`.
     public let directory: URL
     /// Wstrzykiwane `AsrModels.modelsExist` (lokalne sprawdzenie obecności plików, bez sieci) dla katalogu modelu.
     public typealias ModelsExist = @Sendable (URL) -> Bool
 
     private let downloader: Download
     private let modelsExist: ModelsExist
-    private let manifest = ModelManifest.parakeetV3
+    public let model: LocalASRModel
+    private var manifest: ModelManifest { model.manifest }
+    public typealias FileDownload = @Sendable (URL, URL, @escaping @Sendable (Int64) -> Void) async throws -> Void
+    public typealias DiskSpace = @Sendable (URL) throws -> ModelDiskLocation
+    private let diskSpace: DiskSpace
 
-    public init(directory: URL = ModelStore.defaultDirectory, download: @escaping Download = ModelStore.fluidAudioDownload,
-                modelsExist: @escaping ModelsExist = ModelStore.fluidAudioModelsExist) {
-        self.directory = directory
-        self.downloader = download
+    public init(model: LocalASRModel = .parakeetV3, directory: URL? = nil, download: Download? = nil,
+                modelsExist: @escaping ModelsExist = ModelStore.fluidAudioModelsExist,
+                fileDownload: @escaping FileDownload = ModelStore.networkFileDownload,
+                diskSpace: @escaping DiskSpace = ModelDiskBudget.inspect) {
+        self.model = model
+        self.directory = directory ?? Self.resolveDirectory(model: model, env: ProcessInfo.processInfo.environment)
+        self.downloader = download ?? (model == .parakeetV3 ? Self.fluidAudioDownload : Self.cohereDownload(fileDownload: fileDownload))
         self.modelsExist = modelsExist
+        self.diskSpace = diskSpace
     }
 
     public static var defaultDirectory: URL { resolveDirectory(env: ProcessInfo.processInfo.environment) }
 
     /// Korzeń magazynu; `YASCRIBE_MODEL_STORE` działa tylko w buildzie DEBUG (odbiór na kopii, bez dotykania wspólnego magazynu).
-    public static func resolveDirectory(env: [String: String]) -> URL {
+    public static func resolveDirectory(model: LocalASRModel = .parakeetV3, env: [String: String]) -> URL {
         #if DEBUG
         if let override = env["YASCRIBE_MODEL_STORE"], !override.isEmpty {
             return URL(fileURLWithPath: override, isDirectory: true)
         }
         #endif
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("FluidAudio", isDirectory: true)
+            .appendingPathComponent(model == .parakeetV3 ? "FluidAudio" : "Yascribe", isDirectory: true)
             .appendingPathComponent("Models", isDirectory: true)
     }
 
-    /// Ten sam adres idzie do `AsrModels.download(to:)` i `AsrModels.loadLocal(from:)`.
-    public var modelDirectory: URL { directory.appendingPathComponent(manifest.model, isDirectory: true) }
+    /// Katalog wybranego modelu; dla Parakeeta zgodny z `AsrModels.download(to:)` i `loadLocal(from:)`.
+    public var modelDirectory: URL { directory.appendingPathComponent(model.subdirectory, isDirectory: true) }
 
     public func status() -> ModelStatus {
         let fm = FileManager.default
         guard let names = try? fm.contentsOfDirectory(atPath: modelDirectory.path) else { return .missing }
         let manifestComponents = Set(manifest.files.keys.compactMap { $0.split(separator: "/").first.map(String.init) }
-            .filter { $0.hasSuffix(".mlmodelc") })
-        let present = Set(names.filter { $0.hasSuffix(".mlmodelc") })
+            .filter { $0.hasSuffix(model == .parakeetV3 ? ".mlmodelc" : ".mlpackage") })
+        let present = Set(names.filter { $0.hasSuffix(model == .parakeetV3 ? ".mlmodelc" : ".mlpackage") })
         let absent = manifestComponents.subtracting(present).sorted()
         let extra = present.subtracting(manifestComponents).sorted()
         if present.isEmpty { return .missing }
@@ -78,10 +87,10 @@ public struct ModelStore: Sendable {
         return .ready
     }
 
-    /// SHA-256 z pinu, listy (nazwa, rozmiar) manifestu i TREŚCI wszystkich małych plików (wszystko poza `weight.bin`, ok. 1,3 MB:
-    /// grafy `model.mil`, metadane, słowniki, `config.json`) — przeeksportowany lub dostrojony model o tych samych rozmiarach wag
-    /// zmienia odcisk. Same wagi nie są hashowane (480 MB); `nil`, gdy status ≠ `ready`. Pliki nadmiarowe nie wchodzą.
-    public func fingerprint() -> String? { fingerprint(pin: ModelManifest.pin) }
+    /// SHA-256 z pinu, listy (nazwa, rozmiar) i treści plików poza wagami. Grafy, metadane i słowniki
+    /// zmieniają odcisk także przy zachowanym rozmiarze. Wagi nie są hashowane; `nil`, gdy status ≠ `ready`.
+    /// Algorytm Parakeeta pozostaje zgodny z historycznymi przebiegami; pliki nadmiarowe nie wchodzą.
+    public func fingerprint() -> String? { fingerprint(pin: model.pin) }
 
     func fingerprint(pin: String) -> String? {
         guard status() == .ready else { return nil }
@@ -101,10 +110,19 @@ public struct ModelStore: Sendable {
     /// FluidAudio (sama obecność plików) mówi „jest", a nasz status jest `invalid` (np. brak `config.json`). Brakujące pliki
     /// pobierane są bez `force`, czyli z wznowieniem przerwanego pobrania.
     public func download(progress: @escaping @Sendable (Double?) -> Void) async throws {
+        // Gotowy model to no-op bez blokady (jak przed N1), także przy żywym kliencie Parakeeta.
+        if status() == .ready { return }
+        // Zapis obu modeli wyłącznie pod LOCK_EX we własnym korzeniu: żaden klient (LOCK_SH Parakeeta) nie czyta w trakcie.
+        let owner = try acquireLock()
+        defer { withExtendedLifetime(owner) {} }
         let before = status()
         if before == .ready { return }
         var force = false
-        if case .invalid = before { force = hasWrongSizeFile() || modelsExist(modelDirectory) }
+        if model == .parakeetV3, case .invalid = before { force = hasWrongSizeFile() || modelsExist(modelDirectory) }
+        let budget = try model == .cohereTranscribe6bit ? diskNeed(operation: .download) : []
+        if let insufficient = budget.first(where: { !$0.fits }) {
+            throw ModelStoreError(message: insufficient.message)
+        }
         try await downloader(modelDirectory, force, progress)
         switch status() {
         case .ready: return
@@ -126,7 +144,122 @@ public struct ModelStore: Sendable {
     /// Kasuje wyłącznie folder modelu — nie jego sąsiadów we wspólnym magazynie.
     public func remove() throws {
         guard FileManager.default.fileExists(atPath: modelDirectory.path) else { return }
+        let owner = try acquireLock()
+        defer { withExtendedLifetime(owner) {} }
         try FileManager.default.removeItem(at: modelDirectory)
+    }
+
+    /// Token od sprawdzenia źródeł aż do zwolnienia modelu. Domyślnie LOCK_EX; `shared` tylko dla ładowania Parakeeta.
+    public func acquireLock(shared: Bool = false) throws -> ModelStoreLock {
+        try acquireLock(shared: shared, foreignRoot: Self.defaultForeignRoot)
+    }
+
+    func acquireLock(shared: Bool, foreignRoot: URL) throws -> ModelStoreLock {
+        // `.locks` w magazynie może być dowiązaniem: sprawdzamy, dokąd naprawdę trafi zapis (plik — O_NOFOLLOW w ModelStoreLock).
+        let url = lockURL, folder = url.deletingLastPathComponent()
+        let refusal = ModelStoreError(message: "The model lock folder is a link or points into another app's model store.")
+        // `.locks` nigdy nie tworzymy jako dowiązania; wiszącego nie da się sprawdzić, więc każde dowiązanie to odmowa.
+        let type = (try? FileManager.default.attributesOfItem(atPath: folder.path))?[.type] as? FileAttributeType
+        guard type != .typeSymbolicLink, !Self.isForeign(folder, foreignRoot: foreignRoot) else { throw refusal }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        guard !Self.isForeign(folder, foreignRoot: foreignRoot) else { throw refusal }
+        return try ModelStoreLock(url: url, shared: shared)
+    }
+
+    /// Blokada w samym magazynie: aplikacja z env i CLI z `--model-store` trafiają w ten sam i-węzeł niezależnie od pisowni
+    /// ścieżki (dowiązanie, /tmp vs /private/tmp). Wyjątek: we wspólnym magazynie FluidAudio nic nie zapisujemy, więc jego
+    /// blokady leżą w stałym korzeniu produkcyjnym Yascribe, bez env. Porównanie kanoniczne, bez wielkości liter, po prefiksie
+    /// rodzica — w razie wątpliwości magazyn traktujemy jako cudzy.
+    static let defaultForeignRoot = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("FluidAudio", isDirectory: true)
+
+    static func lockRoot(directory: URL, foreignRoot: URL = defaultForeignRoot) -> URL {
+        isForeign(directory, foreignRoot: foreignRoot) ? YascribePaths.fromEnvironment([:]).root : directory
+    }
+
+    static func isForeign(_ url: URL, foreignRoot: URL = defaultForeignRoot) -> Bool {
+        let canonical = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path.lowercased() }
+        let path = canonical(url), foreign = canonical(foreignRoot)
+        return path == foreign || path.hasPrefix(foreign + "/")
+    }
+
+    var lockURL: URL {
+        Self.lockRoot(directory: directory)
+            .appendingPathComponent(".locks", isDirectory: true).appendingPathComponent("\(model.id).lock")
+    }
+    public var compiledDirectory: URL { modelDirectory.appendingPathComponent("compiled", isDirectory: true) }
+
+    public func compiledModelsReady(configuration: CohereTranscribeComputeConfiguration = .yascribe) -> Bool {
+        guard model == .cohereTranscribe6bit, let fingerprint = fingerprint(),
+              let manifest = try? CohereTranscribeAsrModels.loadManifest(from: modelDirectory) else { return false }
+        let key = CohereModelCompilation.key(fingerprint: fingerprint, configuration: configuration)
+        return manifest.packages.allSatisfy {
+            CohereModelCompilation.isComplete(at: CohereModelCompilation.directory(package: $0, root: compiledDirectory, key: key))
+        }
+    }
+
+    /// N2 używa tego samego budżetu przed każdym ładowaniem, pod utrzymywanym tokenem blokady.
+    public func diskNeed(operation: ModelDiskBudget.Operation,
+                         configuration: CohereTranscribeComputeConfiguration = .yascribe) throws -> [ModelDiskNeed] {
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName)
+            .appendingPathComponent("com.apple.e5rt.e5bundlecache")
+        let missing = manifest.files.compactMap { name, size -> Int64? in
+            let attrs = try? FileManager.default.attributesOfItem(atPath: modelDirectory.appendingPathComponent(name).path)
+            return (attrs?[.size] as? NSNumber)?.int64Value == size ? nil : size
+        }
+        return try ModelDiskBudget.need(modelBytes: manifest.totalBytes, operation: operation,
+            missingBytes: missing.reduce(0, +), largestMissingFile: missing.max() ?? 0,
+            compiledReady: operation == .load && compiledModelsReady(configuration: configuration),
+            store: diskSpace(modelDirectory), temporary: diskSpace(FileManager.default.temporaryDirectory), e5rt: diskSpace(caches))
+    }
+
+    /// Jedyna ścieżka sieciowa własnego pobieracza. Odbiorca widzi wyłącznie plik .part, nigdy niekompletny plik docelowy.
+    public static let networkFileDownload: FileDownload = { source, part, progress in
+        let delegate = ModelDownloadProgress(progress: progress)
+        let (temporary, response) = try await URLSession.shared.download(from: source, delegate: delegate)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw ModelStoreError(message: "The model server returned an unsuccessful response.")
+        }
+        try FileManager.default.moveItem(at: temporary, to: part)
+    }
+
+    static func cohereDownload(fileDownload: @escaping FileDownload) -> Download {
+        { directory, _, progress in
+            let fm = FileManager.default
+            let manifest = ModelManifest.cohereTranscribe6bit
+            var completed: Int64 = 0
+            for (name, size) in manifest.files.sorted(by: { $0.key < $1.key }) {
+                try Task.checkCancellation()
+                let destination = directory.appendingPathComponent(name)
+                let attributes = try? fm.attributesOfItem(atPath: destination.path)
+                if (attributes?[.size] as? NSNumber)?.int64Value != size {
+                    try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    let part = destination.appendingPathExtension("part")
+                    try? fm.removeItem(at: part)
+                    do {
+                        let source = URL(string: "https://huggingface.co/\(LocalASRModel.cohereRepository)/resolve/\(LocalASRModel.cohereRevision)/\(name)")!
+                        let priorBytes = completed
+                        try await fileDownload(source, part) { bytes in
+                            progress(Double(priorBytes + min(size, max(0, bytes))) / Double(manifest.totalBytes))
+                        }
+                        try Task.checkCancellation()
+                        let downloaded = try fm.attributesOfItem(atPath: part.path)
+                        guard (downloaded[.size] as? NSNumber)?.int64Value == size else {
+                            throw ModelStoreError(message: "Downloaded \(name) has an unexpected size; expected \(size) bytes.")
+                        }
+                        if fm.fileExists(atPath: destination.path) { try fm.removeItem(at: destination) }
+                        try fm.moveItem(at: part, to: destination)
+                    } catch {
+                        try? fm.removeItem(at: part)
+                        throw error
+                    }
+                }
+                completed += size
+                progress(Double(completed) / Double(manifest.totalBytes))
+            }
+        }
     }
 
     /// Lokalne sprawdzenie FluidAudio (obecność plików wariantu v3/int8); bez sieci.
@@ -156,5 +289,16 @@ private final class LockedMapper: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return mapper.map(phase)
+    }
+}
+
+/// Delegat zadania dostaje liczbę bajtów również w trakcie pojedynczego dużego pliku.
+final class ModelDownloadProgress: NSObject, URLSessionDownloadDelegate {
+    let progress: @Sendable (Int64) -> Void
+    init(progress: @escaping @Sendable (Int64) -> Void) { self.progress = progress }
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        progress(totalBytesWritten)
     }
 }

@@ -269,7 +269,9 @@ struct TranscriptTab: View {
                 ForEach(Array(Self.lines(t, item: item).enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
-                    case .utterance(let u): UtteranceRow(utterance: u, isAuto: isAuto) { onJump(u) }
+                    case .utterance(let u):
+                        UtteranceRow(utterance: u, isAuto: isAuto,
+                                     onKeep: busy || moving || correcting ? nil : { model.keepSuspectedText(u, in: item) }) { onJump(u) }
                     case .mute(let m): MuteRow(note: m)
                     }
                 }

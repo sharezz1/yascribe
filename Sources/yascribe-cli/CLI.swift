@@ -251,48 +251,28 @@ struct CLI {
         if let s = value(args, "--shape"), s != ASRShape.audioTranscriptions.rawValue {
             FileHandle.standardError.write(Data("--shape \(s): w transcribe dozwolone tylko audioTranscriptions\n".utf8)); exit(64)
         }
-        let localStore = value(args, "--model-store").map { ModelStore(directory: URL(fileURLWithPath: $0, isDirectory: true)) } ?? ModelStore()
+        let base = try positional(args, 1), model = try positional(args, 2)
+        let apiClient = base == Provider.fluidAudioBaseURL.absoluteString ? nil : try client(base)
+        let provider = apiClient?.provider ?? Provider(name: "cli", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+        let runID = runOption ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        guard RunDirectory.isValid(runID: runID) else { throw RunError.badRunID(runID) }
+        let saved = try JSONFile.load(RunInput?.self, from: RunDirectory(session: dir, runID: runID).input, default: nil)
+        let storeDirectory = value(args, "--model-store").map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let configuration = try ASRRunConfiguration.build(provider: provider, model: model, language: language,
+                                                         savedInput: saved, storeDirectory: storeDirectory)
         let c: any TranscriptionClient
-        if try positional(args, 1) == Provider.fluidAudioBaseURL.absoluteString {
-            // Lokalny ASR (F20 S1): ten sam runner co aplikacja. Odmowa = komunikat i kod 1, bez fallbacku do API.
-            // Magazyn: --model-store (korzeń); YASCRIBE_MODEL_STORE działa tylko w DEBUG, a S1 mierzy build release.
-            switch LocalASRFactory.client(provider: Provider(name: "cli", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio), store: localStore) {
-            case .success(let local): c = local
-            case .failure(let refusal):
-                FileHandle.standardError.write(Data("\(refusal.message)\n".utf8)); exit(1)
-            }
+        if let store = configuration.store {
+            c = try LocalASRFactory.client(provider: provider, model: configuration.snapshot.model, store: store).get()
         } else {
-            c = try client(try positional(args, 1))
+            c = apiClient!
         }
-        let preset = Preset(name: "cli", language: language,
-                            asr: RoleAssignment(providerID: c.provider.id, model: try positional(args, 2)),
-                            languageAuto: language == nil ? true : nil)
-        let shape = ASRShape.audioTranscriptions
-        let probe = ProbeResult(providerID: c.provider.id, model: try positional(args, 2), role: .asr, works: true,
-                                shape: shape, languageHandling: .unknown)
-        let runID = runOption ?? ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-") // E3: runID bez ':'
+        let effective = try await configuration.prepared(client: c, savedInput: saved, stores: configuration.store.map { [$0] } ?? [])
         print("runID: \(runID)")
-        var snapshot = try RunSnapshot(preset: preset, provider: c.provider, probe: probe,
-                                       modelFingerprint: RunGate.fingerprintForSnapshot(provider: c.provider, store: localStore))
-        // Wznowienie (check S11 #2): CLI tworzy preset i dostawcę z nowymi UUID przy każdym uruchomieniu,
-        // więc przy tych samych parametrach bierzemy migawkę z pierwszego przebiegu. Inny model, język,
-        // adres albo kształt → runner rzuci inputMismatch, tak jak powinien.
-        if RunDirectory.isValid(runID: runID),
-           let saved = try JSONFile.load(RunInput?.self, from: RunDirectory(session: dir, runID: runID).input, default: nil),
-           (saved.snapshot.model, saved.snapshot.language, saved.snapshot.providerBaseURL, saved.snapshot.shape)
-               == (snapshot.model, snapshot.language, snapshot.providerBaseURL, snapshot.shape) {
-            snapshot = saved.snapshot
-            if let refusal = RunGate.checkResume(snapshot: snapshot, provider: c.provider, currentFingerprint: localStore.fingerprint()) {
-                FileHandle.standardError.write(Data("\(refusal.message)\n".utf8)); exit(1)
-            }
-        }
-        let t = try await TranscriptionRunner(session: dir, runID: runID, snapshot: snapshot, client: c).run { p in
-            // Licznik okien od razu: pierwsze okno trwa ~25 s, a samo „0%" wygląda na zawieszenie (S13).
+        let t = try await effective.run(session: dir, runID: runID, client: c) { p in
             print(String(format: "\r%3.0f%% (okna %d/%d)", p.fraction * 100, p.done, p.total), terminator: "")
             fflush(stdout)
         }
         print()
-        await (c as? ReleasableClient)?.release()
         for u in t.utterances {
             let flag = u.languageMismatch.map { " [JĘZYK: \($0)]" } ?? ""
             print(String(format: "[%7.1f] %@: ", u.start, u.speaker == .me ? "Me" : "Them") + u.text + flag)

@@ -29,7 +29,7 @@ private func writeAll(into model: URL, skipping skipped: Set<String> = []) throw
 
 private func store(_ root: URL, download: @escaping ModelStore.Download = { _, _, _ in },
                    modelsExist: @escaping ModelStore.ModelsExist = { _ in false }) -> ModelStore {
-    ModelStore(directory: root, download: download, modelsExist: modelsExist)
+    isolatedModelStore(directory: root, download: download, modelsExist: modelsExist)
 }
 
 private func installedStore(skipping skipped: Set<String> = []) throws -> ModelStore {
@@ -89,6 +89,7 @@ private final class Calls: @unchecked Sendable {
         let s = try installedStore()
         let first = try #require(s.fingerprint())
         #expect(s.fingerprint() == first)
+        #expect(first == "0eed1f86fb24e72985cf2a5ad5eb46cc07c9000be014714408a249215ea827c1")
         try write("config.json", size: 475, in: s.modelDirectory, content: Data(repeating: 0x62, count: 475))
         let second = try #require(s.fingerprint())
         #expect(second != first)

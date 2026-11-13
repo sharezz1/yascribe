@@ -162,7 +162,8 @@ struct PresetForm: View {
                 }
                 if state.draft?.isFullyLocal(providers: model.providers.providers) == true { FullyLocalBadge() }
             }
-            RoleSection(title: "Speech to text", role: .asr, assignment: draft.asr, language: draft.wrappedValue.language) {
+            RoleSection(title: "Speech to text", role: .asr, assignment: draft.asr, language: draft.wrappedValue.language,
+                        autoLanguage: draft.wrappedValue.isAutoLanguage) {
                 // 🔴 Bez wartości domyślnej (P7). „Auto" to opcja awaryjna na końcu listy, z ostrzeżeniem.
                 FormRow(label: "Language") {
                     VStack(alignment: .leading, spacing: 6) {
@@ -216,6 +217,8 @@ struct RoleSection<Extra: View>: View {
     let role: Role
     @Binding var assignment: RoleAssignment?
     let language: LanguageCode?
+    /// Preset z „Auto”: Cohere pokaże ostrzeżenie bramki języka w wierszu „On this Mac”.
+    var autoLanguage = false
     var promptTitle: String?
     var promptHint: String?
     @ViewBuilder var extra: Extra
@@ -267,7 +270,7 @@ struct RoleSection<Extra: View>: View {
             }
             if let p = providers.first(where: { $0.id == a.providerID }), p.isLocal {
                 if role == .asr, p.api == .fluidAudio {
-                    OnThisMacRoleRow(support: model.localASR)
+                    OnThisMacRoleRow(support: model.localASR, modelID: a.model, language: language, autoLanguage: autoLanguage)
                 } else {
                     LocalRoleNote(warnsAboutCorrection: role == .correction)
                 }

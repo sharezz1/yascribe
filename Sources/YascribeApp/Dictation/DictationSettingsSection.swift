@@ -88,7 +88,13 @@ struct DictationSettingsSection: View {
         }
         if let a = s.asr {
             FormRow(label: "Model") {
-                ModelPicker(providerID: a.providerID, role: .asr, selection: Binding(get: { s.asr?.model ?? "" }, set: setASRModel))
+                if model.provider(a.providerID)?.api == .fluidAudio {
+                    Picker("Model", selection: Binding(get: { LocalASRModels.parakeetV3 }, set: setASRModel)) {
+                        Text(LocalASRModels.parakeetV3).tag(LocalASRModels.parakeetV3)
+                    }.labelsHidden()
+                } else {
+                    ModelPicker(providerID: a.providerID, role: .asr, selection: Binding(get: { s.asr?.model ?? "" }, set: setASRModel))
+                }
             }
             if let p = model.provider(a.providerID) {
                 if p.api == .fluidAudio {

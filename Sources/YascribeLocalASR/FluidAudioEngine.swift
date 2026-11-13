@@ -19,9 +19,10 @@ public actor FluidAudioEngine: LocalASREngine {
         manager = AsrManager(config: .default, models: try AsrModels.loadLocal(from: store.modelDirectory, version: .v3, encoderPrecision: .int8))
     }
 
-    public func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) {
+    public func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord]) {
         guard let manager else { throw ProviderError.badResponse("The on-device model isn't loaded.") }
         var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
+        // FluidAudio rozpoznaje tylko skrypt; jawny język egzekwuje strażnik runnera.
         let r = try await manager.transcribe(samples, decoderState: &state, language: nil)
         let words = buildWordTimings(from: r.tokenTimings ?? []).map { TranscribedWord(word: $0.word, start: $0.startTime, end: $0.endTime) }
         return (r.text, words)
