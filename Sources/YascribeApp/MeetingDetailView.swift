@@ -265,6 +265,8 @@ struct PlayRecordingButton: View {
 struct UtteranceRow: View {
     let utterance: Utterance
     let isAuto: Bool
+    /// „Keep this text” przy wypowiedzi oznaczonej jako zmyślona; `nil` = przycisk nieaktywny (trwa transkrypcja albo korekta).
+    var onKeep: (() -> Void)? = nil
     let onJump: () -> Void
 
     var body: some View {
@@ -292,6 +294,16 @@ struct UtteranceRow: View {
                 }
                 if utterance.echoOfThem == true {
                     StateLabel(.neutral, "Echo of the other side — excluded from notes")
+                }
+                if utterance.suspectedHallucination == true {
+                    // R06: powód flagi i jej skutek; przywrócenie jest trwałe (okna, transkrypt i wersja poprawiona).
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        WarnLabel("Possibly made-up text (repetition) — excluded from notes")
+                        Button("Keep this text") { onKeep?() }
+                            .buttonStyle(.pillSmall)
+                            .disabled(onKeep == nil)
+                            .help("Marks this text as real speech and includes it in notes again")
+                    }
                 }
                 if utterance.approximateTiming {
                     StateLabel(.neutral, "Approximate timing")

@@ -1,7 +1,7 @@
 import Foundation
 import YascribeProviders
 
-/// Rejestr nie udostępnia modelu w UI. Listę LocalASRModels.models(for:) rozszerzy etap N3/N4.
+/// Rejestr modeli lokalnego ASR. Rolę ASR udostępnia `LocalASRModels.models(for:)` (od N4 oba modele; dyktowanie tylko Parakeet).
 public enum LocalASRModel: Sendable, CaseIterable {
     case parakeetV3
     case cohereTranscribe6bit

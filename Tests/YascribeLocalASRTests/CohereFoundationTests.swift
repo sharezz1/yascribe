@@ -38,10 +38,14 @@ private actor Requests {
 }
 
 @Suite struct CohereStoreTests {
-    @Test func registryIsPinnedAndNotExposed() {
+    @Test func registryIsPinnedAndExposedAsExperimental() {
         #expect(LocalASRModel.cohereTranscribe6bit.manifest.files.count == 19)
         #expect(LocalASRModel.cohereTranscribe6bit.pin == "hf:BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit@79320e92e2e220ed2ed2a9acb41f3caff06acb85")
-        #expect(LocalASRModels.models(for: .asr).map(\.id) == [LocalASRModels.parakeetV3])
+        // N4: oba modele dla roli ASR; Cohere z oznaczeniem „Experimental”, Parakeet bez nazwy (pokazuje się id jak dotąd).
+        #expect(LocalASRModels.models(for: .asr).map(\.id) == [LocalASRModels.parakeetV3, LocalASRModels.cohereTranscribe6bit])
+        #expect(LocalASRModels.displayName(LocalASRModels.cohereTranscribe6bit) == "Cohere Transcribe 6-bit (Experimental)")
+        #expect(LocalASRModels.displayName(LocalASRModels.parakeetV3) == nil)
+        #expect(ModelCatalog.visible(LocalASRModels.models(for: .asr), role: .asr, query: "").count == 2)
         #expect(!LocalASRModel.cohereTranscribe6bit.manifest.files.keys.contains { $0.hasPrefix(".compiled/") })
         #expect(!LocalASRModel.cohereTranscribe6bit.manifest.files.keys.contains { $0.contains("cross_kv") })
     }

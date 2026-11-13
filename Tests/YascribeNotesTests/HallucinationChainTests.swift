@@ -66,12 +66,28 @@ private actor WindowClient: TranscriptionClient {
         let repaired = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: cached, repetitionFilterEnabled: false).run()
         #expect(await cached.calls == 1)
         #expect(repaired == flagged)
-        // N4 zapisze false w wyniku okna i wersjach transkryptu; kolejne scalenie nie przywraca flagi.
-        var restored = try JSONDecoder().decode(ChunkResult.self, from: Data(contentsOf: run.chunk("system", 2)))
-        restored.suspectedHallucination = false
-        try JSONFile.save(restored, to: run.chunk("system", 2))
+        // N4 „Keep this text”: okno, transcript.json i corrected.json; przeżywa restart i ponowne scalenie.
+        var correctedText = repaired
+        for i in correctedText.utterances.indices where !correctedText.utterances[i].excludedFromNotes { correctedText.utterances[i].text += " (poprawione)" }
+        try JSONFile.save(CorrectedTranscript(transcript: correctedText, model: "m", batches: 1, failedBatches: 0, rejectedLines: 0), to: run.corrected)
+        // Wiersz w UI: tekst po Replacement może być inny, klucz to mówca i czasy.
+        var shown = try #require(repaired.utterances.first { $0.speaker == .them && $0.suspectedHallucination == true })
+        shown.text = "inny tekst po Replacement"
+        try run.keepSuspectedEverywhere(shown, session: dir)
+        // Restart: ponowny odczyt z dysku.
+        let reread = try JSONDecoder().decode(Transcript.self, from: Data(contentsOf: run.transcript))
+        let kept = reread.utterances.filter { $0.suspectedHallucination == false }
+        #expect(kept.count == 1 && kept[0].speaker == .them && kept[0].start == shown.start && !kept[0].excludedFromNotes)
+        #expect(reread.utterances.filter { $0.suspectedHallucination == true }.count == 3) // pozostałe okna nietknięte
+        #expect(NotePromptBuilder.transcriptLines(reread).count == 3)
+        let correctedReread = try #require(CorrectedTranscript.load(session: dir, runID: id))
+        #expect(correctedReread.transcript.utterances.filter { $0.suspectedHallucination == false }.map(\.start) == [shown.start])
+        #expect(NotePromptBuilder.transcriptLines(correctedReread.transcript).count == 3)
+        // Ponowne scalenie (wznowienie / „Retry Failed Parts”) bez ASR daje dokładnie zapisany transkrypt.
         let next = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: cached, repetitionFilterEnabled: false).run()
         #expect(await cached.calls == 1)
+        #expect(next == reread)
         #expect(next.utterances.contains { $0.text == "Dla mnie to nie jest łatwe." && $0.suspectedHallucination == false && !$0.excludedFromNotes })
+        #expect(NotePromptBuilder.transcriptLines(next).count == 3)
     }
 }

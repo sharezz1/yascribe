@@ -27,7 +27,7 @@ struct ModelCardContent: View {
                 HStack(spacing: 12) {
                     ProviderLogo(preset: .onThisMac)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(ModelCardState.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
+                        Text(card.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
                         Text(card.meta).font(.system(size: 11)).foregroundStyle(.mnText2)
                     }
                     Spacer(minLength: 8)
@@ -41,10 +41,13 @@ struct ModelCardContent: View {
                 if let note = card.note {
                     Text(note).font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                 }
+                if let license = card.license {
+                    Text(license).font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
+                }
                 if let error {
                     Text(error).font(.callout).foregroundStyle(.mnRec).fixedSize(horizontal: false, vertical: true)
                 }
-                Text("Shared FluidAudio folder: \(location)")
+                Text("\(card.folderLabel): \(location)")
                     .font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
@@ -72,32 +75,46 @@ struct ModelCardContent: View {
     }
 }
 
-/// Karta w Settings → Providers: czyta `LocalASRSupport`, pobiera i usuwa po kliknięciu (usunięcie i naprawa po potwierdzeniu).
+/// Karty w Settings nad Providers: Parakeet i (od N4) Cohere „Experimental”.
 struct ModelCardSection: View {
-    @Environment(AppModel.self) private var model
     @ObservedObject var support: LocalASRSupport
-    @StateObject private var ui = ModelCardUI()
-
-    private var location: String { (support.store.modelDirectory.path as NSString).abbreviatingWithTildeInPath }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("Yascribe model")
-            ModelCardContent(card: support.card, location: location, error: ui.removeError ?? support.downloadError) { action in
-                if action.needsConfirmation { ui.confirming = action } else { run(action) }
+            SectionHeader("Yascribe models")
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(LocalASRModel.allCases, id: \.self) { m in ModelCard(support: support, localModel: m) }
             }
         }
-        .confirmationDialog("Remove \(ModelCardState.name)?", isPresented: confirming(.remove)) {
+    }
+}
+
+/// Karta jednego modelu: czyta `LocalASRSupport`, pobiera i usuwa po kliknięciu (usunięcie i naprawa po potwierdzeniu
+/// z nazwą i rozmiarem TEGO modelu, R12).
+struct ModelCard: View {
+    @Environment(AppModel.self) private var model
+    @ObservedObject var support: LocalASRSupport
+    let localModel: LocalASRModel
+    @StateObject private var ui = ModelCardUI()
+
+    private var card: ModelCardState { support.card(for: localModel) }
+    private var location: String { (support.store(for: localModel).modelDirectory.path as NSString).abbreviatingWithTildeInPath }
+
+    var body: some View {
+        ModelCardContent(card: card, location: location, error: ui.removeError ?? support.downloadErrors[localModel]) { action in
+            if action.needsConfirmation { ui.confirming = action } else { run(action) }
+        }
+        .confirmationDialog("Remove \(card.name)?", isPresented: confirming(.remove)) {
             Button("Remove", role: .destructive) { run(.remove) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Remove \(ModelCardState.name) from the shared FluidAudio folder? Other apps that use FluidAudio may use this copy too.")
+            Text(card.removeMessage)
         }
-        .confirmationDialog("Download \(ModelCardState.name) again?", isPresented: confirming(.downloadAgain)) {
+        .confirmationDialog("Download \(card.name) again?", isPresented: confirming(.downloadAgain)) {
             Button("Delete and Download", role: .destructive) { run(.downloadAgain) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The damaged copy in the shared FluidAudio folder is deleted first, then \(support.card.size) is downloaded.")
+            Text(card.repairMessage)
         }
     }
 
@@ -110,9 +127,9 @@ struct ModelCardSection: View {
         ui.confirming = nil
         switch action {
         case .download, .downloadAgain:
-            Task { await support.download(); model.reverifyOnDeviceProviders() }
+            Task { await support.download(localModel); model.reverifyOnDeviceProviders() }
         case .remove:
-            do { try support.store.remove() } catch { ui.removeError = "Couldn't remove the model: \(error.localizedDescription)" }
+            do { try support.store(for: localModel).remove() } catch { ui.removeError = "Couldn't remove the model: \(error.localizedDescription)" }
             support.refresh()
             model.reverifyOnDeviceProviders()
         }
@@ -136,6 +153,7 @@ struct OnThisMacRoleContent: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             OnThisMacTag()
             if let warning = card.roleWarning { WarnLabel(warning) }
+            if let warning = card.languageWarning { WarnLabel(warning) }
             if case .progress(let f) = card.tone { StateLabel(f == nil ? .progress(nil) : .neutral, card.title) }
             Spacer(minLength: 0)
             if card.roleWarning != nil {
@@ -150,13 +168,19 @@ struct OnThisMacRoleContent: View {
     }
 }
 
+/// `modelID` = model wybrany w roli (preset); dyktowanie zostaje przy domyślnym Parakeecie.
 struct OnThisMacRoleRow: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var support: LocalASRSupport
+    var modelID = LocalASRModels.parakeetV3
+    var language: LanguageCode? = nil
+    var autoLanguage = false
 
     var body: some View {
-        OnThisMacRoleContent(card: support.card,
-                             onDownload: { Task { await support.download(); model.reverifyOnDeviceProviders() } },
+        let card = support.roleCard(modelID: modelID, language: language, autoLanguage: autoLanguage)
+        let selected = (try? LocalASRModel(id: modelID)) ?? .parakeetV3
+        OnThisMacRoleContent(card: card,
+                             onDownload: { Task { await support.download(selected); model.reverifyOnDeviceProviders() } },
                              onOpenSettings: { model.section = .settings })
     }
 }

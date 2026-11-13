@@ -604,7 +604,7 @@ final class AppModel {
     }
 
     /// Nazwa modelu do wyświetlenia (bez dostawcy).
-    func modelDisplayName(_ id: String) -> String { modelNames.display(id) }
+    func modelDisplayName(_ id: String) -> String { LocalASRModels.displayName(id) ?? modelNames.display(id) }
 
     /// Przycisk „Refresh Models" w Settings: transkrypcja, embeddingi i lista tekstowa.
     func refreshModels(_ id: UUID) async {
@@ -1002,6 +1002,18 @@ final class AppModel {
     @discardableResult
     func transcribe(sessionURL: URL, preset: Preset, asr: RoleAssignment, language: LanguageCode?) -> Bool {
         transcribe(sessionURL: sessionURL, preset: preset.withASR(asr, language: language))
+    }
+
+    /// „Keep this text” (N4): trwałe przywrócenie wypowiedzi oznaczonej przez filtr powtórzeń w bieżącym przebiegu.
+    /// Nie w trakcie transkrypcji ani korekty: ich końcowy zapis nadpisałby przywrócenie.
+    func keepSuspectedText(_ u: Utterance, in item: SessionItem) {
+        guard let runID = item.runID, !isTranscribing(item), !notes.isCorrecting(item.id) else { return }
+        do {
+            try RunDirectory(session: item.url, runID: runID).keepSuspectedEverywhere(u, session: item.url)
+        } catch {
+            lastError = "Couldn't keep this text: \(error.localizedDescription)"
+        }
+        reloadSessions()
     }
 
     /// ChatGPT #17: wznowienie w aplikacji, także po restarcie — ten sam runID i ta sama

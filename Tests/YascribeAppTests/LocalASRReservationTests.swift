@@ -138,9 +138,10 @@ extension LocalASRReservationTests {
         do { try support.store.remove(); Issue.record("removal must wait for live Parakeet clients") }
         catch let error as ModelStoreError { #expect(error.message.contains("busy in another transcription")) }
         #expect(support.store.status() == .ready)
-        // Aplikacja nie udostępnia Cohere przed N4 (R02).
-        do { _ = try support.client(provider: provider, model: LocalASRModels.cohereTranscribe6bit, language: .polish); Issue.record("hidden Cohere must be refused") }
-        catch let refusal as RunGateRefusal { #expect(refusal.message.contains("isn't available in this version")) }
+        // N4: Cohere udostępniony, więc aplikacja przepuszcza go do fabryki, a ta odmawia z puli rezerwacji.
+        do { _ = try support.client(provider: provider, model: LocalASRModels.cohereTranscribe6bit, language: .polish); Issue.record("Cohere must wait for live Parakeet clients") }
+        catch let refusal as RunGateRefusal { #expect(refusal.message.contains("in use by another transcription")) }
+        #expect(support.reservations.isIdle == false)
         // Pliki blokad są osobne dla modeli, więc Cohere odmawia pula rezerwacji (wyłączność RAM), nie flock.
         let cohere = LocalASRFactory.client(provider: provider, model: LocalASRModels.cohereTranscribe6bit, store: support.cohereStore,
                                             reservations: support.reservations)
@@ -152,5 +153,24 @@ extension LocalASRReservationTests {
         #expect(support.reservations.isIdle)
         try support.store.remove()
         #expect(support.store.status() == .missing)
+    }
+}
+
+extension LocalASRReservationTests {
+    /// N4: wiersz „On this Mac” w edytorze presetu pokazuje magazyn WYBRANEGO modelu (Parakeet gotowy, Cohere nie).
+    @Test func presetRowShowsTheSelectedModelsStore() throws {
+        let (support, root) = try pipelineFixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        #expect(support.status(for: .parakeetV3) == .ready && support.status(for: .cohereTranscribe6bit) == .missing)
+        let parakeet = support.roleCard(modelID: LocalASRModels.parakeetV3, language: .polish, autoLanguage: false)
+        #expect(parakeet.roleWarning == nil && parakeet.name == "Parakeet TDT v3")
+        let cohere = support.roleCard(modelID: LocalASRModels.cohereTranscribe6bit, language: .polish, autoLanguage: false)
+        #expect(cohere.roleWarning == "Model not downloaded" && cohere.primary == .download && cohere.languageWarning == nil)
+        #expect(cohere.name == "Cohere Transcribe 6-bit (Experimental)" && cohere.size == support.card(for: .cohereTranscribe6bit).size)
+        #expect(support.roleCard(modelID: LocalASRModels.cohereTranscribe6bit, language: nil, autoLanguage: true).languageWarning?.contains("Auto") == true)
+        #expect(support.roleCard(modelID: LocalASRModels.parakeetV3, language: nil, autoLanguage: true).languageWarning == nil)
+        // Pobranie albo „Preparing…” jednego modelu nie zmienia karty drugiego.
+        support.apply(.preparing, model: .cohereTranscribe6bit)
+        #expect(support.phase(for: .cohereTranscribe6bit) == .preparing && support.phase == .idle && support.card().tone == .ready)
     }
 }

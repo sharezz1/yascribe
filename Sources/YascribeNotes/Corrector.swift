@@ -43,6 +43,15 @@ public struct CorrectedTranscript: Codable, Equatable, Sendable {
 
 public extension RunDirectory {
     var corrected: URL { url.appendingPathComponent("corrected.json") }
+
+    /// „Keep this text” (N4): okna, `transcript.json` i wersja poprawiona. Korekta zachowuje liczbę, kolejność i czasy wypowiedzi,
+    /// a oznaczonych nie poprawia, więc klucz mówca + czasy trafia w tę samą wypowiedź.
+    func keepSuspectedEverywhere(_ u: Utterance, session: URL) throws {
+        try keepSuspected(u, session: session)
+        if var c = try JSONFile.load(CorrectedTranscript?.self, from: corrected, default: nil), c.transcript.keepSuspected(u) {
+            try JSONFile.save(c, to: corrected)
+        }
+    }
 }
 
 public enum CorrectionRules {
