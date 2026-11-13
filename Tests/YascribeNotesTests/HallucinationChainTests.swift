@@ -11,7 +11,8 @@ private actor WindowClient: TranscriptionClient {
     var calls = 0
     func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) -> TranscriptionResult {
         calls += 1
-        return .init(text: calls % 3 == 0 ? "Tak, tak, tak, tak." : "Dla mnie to nie jest łatwe.", words: [])
+        // Ostatnie okno `system` = pierwsze okno `mic_raw`: wyciek kontekstu między torami oznaczyłby mic_raw-0.
+        return .init(text: "Dla mnie to nie jest łatwe.", words: [])
     }
 }
 
@@ -35,13 +36,14 @@ private actor WindowClient: TranscriptionClient {
         let id = "2026-11-13T00-00-00Z-aaaa"
         let run = RunDirectory(session: dir, runID: id)
         let first = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: stub,
-                                                maxChunkSeconds: 12, maxSourceSpan: 3, crosstalk: crosstalk, offlineAEC: nil).run()
+                                                maxChunkSeconds: 12, maxSourceSpan: 3, repetitionFilterEnabled: true, crosstalk: crosstalk, offlineAEC: nil).run()
         #expect(await stub.calls == 6)
-        #expect(first.utterances.allSatisfy { $0.suspectedHallucination == nil }) // historycznie filtr wyłączony
+        #expect(first.utterances.filter { $0.suspectedHallucination == true }.count == 4)
         let cached = WindowClient()
         let flagged = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: cached,
-                                                   repetitionFilterEnabled: true).run()
+                                                   repetitionFilterEnabled: false).run()
         #expect(await cached.calls == 0)
+        #expect(flagged == first)
         #expect(flagged.failedChunks.isEmpty && flagged.utterances.count == 6)
         #expect(flagged.utterances.filter { $0.suspectedHallucination == true }.count == 4)
         for track in ["system", "mic_raw"] {
@@ -53,23 +55,23 @@ private actor WindowClient: TranscriptionClient {
         let fromDisk = try JSONDecoder().decode(Transcript.self, from: Data(contentsOf: run.transcript))
         #expect(fromDisk == flagged)
         #expect(NotePromptBuilder.transcriptLines(fromDisk).count == 2)
-        #expect(!NotePromptBuilder.transcriptLines(fromDisk).joined().contains("Tak, tak"))
+        #expect(NotePromptBuilder.transcriptLines(fromDisk).joined().contains("Dla mnie"))
         let prompt = try #require(NotePromptBuilder.build(template: .standard, transcript: fromDisk, myNotes: "", context: "", notesLanguage: .polish))
-        #expect(!prompt.user.contains("Tak, tak"))
+        #expect(prompt.user.contains("Dla mnie"))
         #expect(AudioRetention.transcriptionFinished(dir))
         let meta = try #require(try JSONFile.load(RunMetadata?.self, from: run.metadata, default: nil))
         #expect(meta.requestCount == 0 && meta.failedChunkCount == 0 && meta.chunkCount == 6)
         // Brakujące okno musi porównać świeży wynik z poprzednikiem odczytanym z cache.
         try FileManager.default.removeItem(at: run.chunk("system", 1))
-        let repaired = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: cached, repetitionFilterEnabled: true).run()
+        let repaired = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: cached, repetitionFilterEnabled: false).run()
         #expect(await cached.calls == 1)
         #expect(repaired == flagged)
         // N4 zapisze false w wyniku okna i wersjach transkryptu; kolejne scalenie nie przywraca flagi.
         var restored = try JSONDecoder().decode(ChunkResult.self, from: Data(contentsOf: run.chunk("system", 2)))
         restored.suspectedHallucination = false
         try JSONFile.save(restored, to: run.chunk("system", 2))
-        let next = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: cached, repetitionFilterEnabled: true).run()
+        let next = try await TranscriptionRunner(session: dir, runID: id, snapshot: snapshot, client: cached, repetitionFilterEnabled: false).run()
         #expect(await cached.calls == 1)
-        #expect(next.utterances.contains { $0.text == "Tak, tak, tak, tak." && $0.suspectedHallucination == false && !$0.excludedFromNotes })
+        #expect(next.utterances.contains { $0.text == "Dla mnie to nie jest łatwe." && $0.suspectedHallucination == false && !$0.excludedFromNotes })
     }
 }

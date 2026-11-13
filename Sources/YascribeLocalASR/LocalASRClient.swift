@@ -1,7 +1,7 @@
 import Foundation
 import YascribeProviders
 
-/// Szew do atrapy; prawdziwy silnik to `FluidAudioEngine` (jedyny plik z `import FluidAudio` poza `ModelStore`).
+/// Szew silnika lokalnego ASR: `FluidAudioEngine` dla Parakeeta i `CohereEngine` dla Cohere.
 public protocol LocalASREngine: Sendable {
     func load() async throws
     func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord])
@@ -36,6 +36,8 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     private var loadFailure: Error?
     /// Rośnie przy `release()`; ładowanie rozpoczęte w starej generacji nie ma prawa nic ustawić w nowej.
     private var generation = 0
+    /// Po `release()` klient nie ma rezerwacji ani blokady: ponowne ładowanie ominęłoby obie, więc odmawiamy.
+    private var released = false
 
     public init(provider: Provider, engine: any LocalASREngine, store: ModelStore,
                 owner: ModelStoreLock? = nil, reservation: LocalASRReservation? = nil,
@@ -52,6 +54,7 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
         guard shape == .audioTranscriptions else {
             throw ProviderError.badResponse("On-device transcription supports only the audio transcriptions shape.")
         }
+        guard !released else { throw ProviderError.badResponse("This on-device transcription was already finished. Start it again.") }
         switch store.status() {
         case .ready: break
         case .missing: throw ProviderError.badResponse("The on-device speech model isn't downloaded.")
@@ -69,6 +72,7 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     /// Wołać, gdy żaden przebieg nie trwa (tak robi `AppModel`). Czeka na ładowanie w toku i dopiero potem zwalnia silnik, żeby
     /// model nie został w pamięci; żądania, które czekały na to ładowanie, kończą się `CancellationError`.
     public func release() async {
+        released = true
         generation += 1
         let pending = loading
         loading = nil

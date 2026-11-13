@@ -23,7 +23,7 @@ własny magazyn kompilacji, klucz z odcisku i atomowa publikacja.
 
 [BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit](https://huggingface.co/BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit/tree/79320e92e2e220ed2ed2a9acb41f3caff06acb85),
 rewizja `79320e92e2e220ed2ed2a9acb41f3caff06acb85`, GPL-3.0.
-Konwersja: Barathwaj Anandan; model bazowy: CohereLabs/cohere-transcribe-03-2026.
+Konwersja: Barathwaj Anandan; model bazowy: Apache-2.0, [CohereLabs/cohere-transcribe-03-2026](https://huggingface.co/CohereLabs/cohere-transcribe-03-2026/blob/main/LICENSE).
 API HF potwierdziło `license: gpl-3.0` w tej rewizji; sprawdzono pełny
 [LICENSE](https://huggingface.co/BarathwajAnandan/cohere-transcribe-03-2026-CoreML-6bit/blob/79320e92e2e220ed2ed2a9acb41f3caff06acb85/LICENSE)
 (GNU GPL wersja 3) i metadane README. Rewizja nie zawiera osobnego `NOTICE`.

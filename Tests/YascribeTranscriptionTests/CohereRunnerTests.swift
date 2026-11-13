@@ -39,9 +39,9 @@ import YascribeSessionFormat
         json.removeValue(forKey: "maxSourceSpan"); json.removeValue(forKey: "offlineAECFingerprint")
         try JSONSerialization.data(withJSONObject: json).write(to: run.input)
         let saved = try JSONDecoder().decode(RunInput.self, from: Data(contentsOf: run.input))
-        #expect(saved.maxChunkSeconds == 59 && saved.maxSourceSpan == nil)
+        #expect(saved.maxChunkSeconds == 59 && saved.maxSourceSpan == nil && saved.repetitionFilter == nil)
         let again = ListeningASR()
-        let result = try await TranscriptionRunner(session: dir, runID: "old", snapshot: snap, client: client(again), maxChunkSeconds: 12, maxSourceSpan: 30).run()
+        let result = try await TranscriptionRunner(session: dir, runID: "old", snapshot: snap, client: client(again), maxChunkSeconds: 12, maxSourceSpan: 30, repetitionFilterEnabled: true).run()
         #expect(again.requests == 0)
         #expect(result == first)
     }

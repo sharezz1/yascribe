@@ -5,7 +5,7 @@ import YascribeTranscription
 /// Szew testowy potoku Core ML; modele i bufory pozostają własnością aktora managera.
 protocol CohereRuntime: Sendable {
     func loadModels(from directory: URL, compiledDirectory: URL, fingerprint: String,
-                    computeConfiguration: CohereTranscribeComputeConfiguration) async throws
+                    computeConfiguration: CohereTranscribeComputeConfiguration, lock: ModelStoreLock) async throws
     func transcribe(audioSamples: [Float], decoderMode: CohereTranscribeDecoderMode, maxNewTokens: Int?,
                     language: String, promptIDs: [Int]?) async throws -> CohereTranscriptionResult
     func unload() async
@@ -20,6 +20,7 @@ public actor CohereEngine: LocalASREngine {
     private var owner: ModelStoreLock?
     private var loading: Task<ModelStoreLock, Error>?
     private var generation = 0
+    private var unloading: Task<Void, Never>?
 
     public init(store: ModelStore, owner: ModelStoreLock? = nil) {
         self.suppliedOwner = owner
@@ -33,6 +34,7 @@ public actor CohereEngine: LocalASREngine {
     }
 
     public func load() async throws {
+        if let unloading { await unloading.value }
         if owner != nil { return }
         let currentGeneration = generation
         let task: Task<ModelStoreLock, Error>
@@ -48,14 +50,16 @@ public actor CohereEngine: LocalASREngine {
                 guard let fingerprint = store.fingerprint() else {
                     throw ModelStoreError(message: "The Cohere model is missing or failed its check.")
                 }
+                let key = CohereModelCompilation.key(fingerprint: fingerprint, configuration: .yascribe)
+                try CohereModelCompilation.clean(root: store.compiledDirectory, key: key, lock: lock)
                 let budget = try store.diskNeed(operation: .load)
                 if let insufficient = budget.first(where: { !$0.fits }) {
-                    throw ModelStoreError(message: "Not enough disk space: need \(insufficient.bytes) bytes, available \(insufficient.freeBytes) bytes on volume \(insufficient.volume).")
+                    throw ModelStoreError(message: insufficient.message)
                 }
                 do {
                     try Task.checkCancellation()
                     try await runtime.loadModels(from: store.modelDirectory, compiledDirectory: store.compiledDirectory,
-                                                 fingerprint: fingerprint, computeConfiguration: .yascribe)
+                                                 fingerprint: fingerprint, computeConfiguration: .yascribe, lock: lock)
                     try Task.checkCancellation()
                     return lock
                 } catch {
@@ -78,15 +82,21 @@ public actor CohereEngine: LocalASREngine {
     }
 
     public func unload() async {
+        if let unloading { await unloading.value; return }
         generation += 1
-        let pending = loading
-        pending?.cancel()
-        let pendingOwner = await pending?.result
-        await runtime.unload()
-        owner = nil
-        suppliedOwner = nil
+        let pending = loading, owner = owner, supplied = suppliedOwner, runtime = runtime
         loading = nil
-        withExtendedLifetime(pendingOwner) {}
+        self.owner = nil
+        suppliedOwner = nil
+        pending?.cancel()
+        let task = Task {
+            let pendingOwner = await pending?.result
+            await runtime.unload()
+            withExtendedLifetime((owner, supplied, pendingOwner)) {}
+        }
+        unloading = task
+        await task.value
+        unloading = nil
     }
 
     public func transcribe(samples: [Float], language: LanguageCode?) async throws -> (text: String, words: [TranscribedWord]) {
@@ -120,8 +130,10 @@ public actor CohereEngine: LocalASREngine {
         !result.chunkEOS.isEmpty && result.chunkEOS.allSatisfy { $0 }
     }
 
+    // Celowo stała bramka po AEC, niezależna od konfiguracji pakowania zapisanej w przebiegu.
+    private static let postAECGate = EnergyGate()
     static func hasSpeech(_ samples: [Float]) -> Bool {
-        !EnergyGate().speechRegions(samples, rate: Resampler.asrRate).isEmpty
+        !postAECGate.speechRegions(samples, rate: Resampler.asrRate).isEmpty
     }
 
     /// Najcichsza ramka 100 ms w ostatnich 3 s pierwszej połowy. Bez utraty i powielenia próbek.

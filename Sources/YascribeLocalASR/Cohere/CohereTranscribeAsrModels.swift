@@ -104,6 +104,11 @@ public struct CohereTranscribeAsrManifest: Codable, Sendable {
     public let crossKVProjector: CohereTranscribeCrossKVMeta?
     public let decoderCached: CohereTranscribeCachedDecoderMeta?
 
+    var packages: [String] {
+        [frontend.package, encoder.package, decoder.package] +
+            [crossKVProjector?.package, decoderCached?.package].compactMap { $0 }
+    }
+
     public var isFp16: Bool { self.precision == "float16" }
 
     private enum CodingKeys: String, CodingKey {

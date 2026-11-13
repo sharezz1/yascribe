@@ -13,8 +13,8 @@ private func runSnapshot(_ model: String, language: LanguageCode? = .polish) thr
 }
 
 private func fixtureStore(_ model: LocalASRModel = .cohereTranscribe6bit, free: Int64 = 100_000_000_000) throws -> ModelStore {
-    let store = ModelStore(model: model, directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)"),
-                           diskSpace: { _ in ModelDiskLocation(volume: "fixture", freeBytes: free) })
+    let store = isolatedModelStore(model: model, directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)"),
+                           diskSpace: { ModelDiskLocation(volume: "fixture", freeBytes: free, path: $0.path) })
     for (name, size) in model.manifest.files {
         let url = store.modelDirectory.appendingPathComponent(name)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -22,6 +22,7 @@ private func fixtureStore(_ model: LocalASRModel = .cohereTranscribe6bit, free: 
         let f = try FileHandle(forWritingTo: url)
         try f.truncate(atOffset: UInt64(size)); try f.close()
     }
+    try writeCohereManifestFixture(store)
     return store
 }
 
@@ -36,7 +37,7 @@ private actor FailingEngine: LocalASREngine {
     @Test func unknownModelRefusedByConfigurationAndFactory() throws {
         #expect(throws: RunGateRefusal.self) { try ASRRunConfiguration.build(snapshot: runSnapshot("unknown-local")) }
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")
-        let store = ModelStore(directory: root)
+        let store = isolatedModelStore(directory: root)
         defer { try? FileManager.default.removeItem(at: root) }
         #expect(throws: RunGateRefusal.self) { try LocalASRFactory.client(provider: localProvider, model: "unknown-local", store: store).get() }
     }
@@ -104,7 +105,7 @@ private actor FailingEngine: LocalASREngine {
         switch result {
         case .success: Issue.record("disk gate allowed a client")
         case .failure(let refusal):
-            #expect(refusal.message.contains("need") && refusal.message.contains("available 1 bytes"))
+            #expect(refusal.message.contains("Not enough disk space at \(store.directory.path)") && refusal.message.contains("available 0.00 GB"))
             #expect(!refusal.canDownload)
         }
         #expect(pool.isIdle)
@@ -127,7 +128,7 @@ private actor FailingEngine: LocalASREngine {
     @Test func missingModelRefusalReleasesReservation() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)"), pool = LocalASRReservations()
         defer { try? FileManager.default.removeItem(at: root) }
-        let store = ModelStore(model: .cohereTranscribe6bit, directory: root)
+        let store = isolatedModelStore(model: .cohereTranscribe6bit, directory: root)
         #expect(throws: RunGateRefusal.self) { try LocalASRFactory.client(provider: localProvider, model: store.model.id, store: store, reservations: pool).get() }
         #expect(pool.isIdle)
     }
@@ -155,6 +156,8 @@ private actor FailingEngine: LocalASREngine {
             let c = try LocalASRFactory.client(provider: localProvider, model: store.model.id, store: store, engine: engine, reservations: pool).get()
             #expect(!pool.isIdle)
             #expect(throws: ModelStoreError.self) { try store.acquireLock() }
+            // Cohere kompiluje do compiled/, więc trzyma LOCK_EX: nawet czytelnik (LOCK_SH) odmawia.
+            #expect(throws: ModelStoreError.self) { try store.acquireLock(shared: true) }
             await (c as? ReleasableClient)?.release()
             #expect(pool.isIdle)
             let owner = try store.acquireLock(); withExtendedLifetime(owner) {}
@@ -189,7 +192,7 @@ private actor FailingEngine: LocalASREngine {
             #expect(config.store?.model == model && config.snapshot.language == .english)
             #expect(runner.maxChunkSeconds == saved.maxChunkSeconds && runner.maxSourceSpan == saved.maxSourceSpan)
             #expect(runner.gate.config == gate && runner.crosstalk == cross && runner.offlineAEC == nil)
-            #expect(runner.repetitionFilterEnabled == (model == .cohereTranscribe6bit))
+            #expect(runner.repetitionFilterEnabled == false)
             // Zapisane wartości mają pierwszeństwo także po zmianie domyślnych z rejestru.
             saved.maxChunkSeconds = 7; saved.maxSourceSpan = 19; saved.offlineAEC = .init()
             let custom = try ASRRunConfiguration.build(snapshot: snap, savedInput: saved)
@@ -197,6 +200,32 @@ private actor FailingEngine: LocalASREngine {
             saved.maxSourceSpan = nil
             #expect(try ASRRunConfiguration.build(snapshot: snap, savedInput: saved).maxSourceSpan == nil)
         }
+    }
+
+    /// F2 R03: wspólny krok aplikacji i CLI bierze magazyn modelu z migawki, nie pierwszy z listy.
+    @Test func preparedUsesSnapshotModelStoreAndReleasesOnResumeRefusal() async throws {
+        let parakeet = try fixtureStore(.parakeetV3), cohere = try fixtureStore(), pool = LocalASRReservations()
+        defer { for store in [parakeet, cohere] { try? FileManager.default.removeItem(at: store.directory) } }
+        let stores = [parakeet, cohere]
+        let fresh = try ASRRunConfiguration.build(snapshot: runSnapshot(cohere.model.id), storeDirectory: cohere.directory)
+        let first = try LocalASRFactory.client(provider: localProvider, model: cohere.model.id, store: cohere, engine: FailingEngine(), reservations: pool).get()
+        let started = try await fresh.prepared(client: first, savedInput: nil, stores: stores)
+        let cohereFingerprint = try #require(cohere.fingerprint())
+        let parakeetFingerprint = try #require(parakeet.fingerprint())
+        #expect(started.snapshot.modelFingerprint == cohereFingerprint && cohereFingerprint != parakeetFingerprint)
+        await (first as? ReleasableClient)?.release()
+        // Ten sam rozmiar, inna treść pliku Cohere; Parakeet bez zmian.
+        let file = try FileHandle(forWritingTo: cohere.modelDirectory.appendingPathComponent("LICENSE"))
+        try file.write(contentsOf: Data("X".utf8)); try file.close()
+        #expect(cohere.fingerprint() != cohereFingerprint && parakeet.fingerprint() == parakeetFingerprint)
+        let saved = RunInput(snapshot: started.snapshot, gate: .init(), maxChunkSeconds: 12, crosstalk: .init(), trackFrames: [:])
+        let resume = try ASRRunConfiguration.build(snapshot: saved.snapshot, savedInput: saved, storeDirectory: cohere.directory)
+        let second = try LocalASRFactory.client(provider: localProvider, model: cohere.model.id, store: cohere, engine: FailingEngine(), reservations: pool).get()
+        #expect(!pool.isIdle)
+        do { _ = try await resume.prepared(client: second, savedInput: saved, stores: stores); Issue.record("changed Cohere store must refuse resume") }
+        catch let refusal as RunGateRefusal { #expect(refusal.message.contains("changed since this run")) }
+        #expect(pool.isIdle)
+        let owner = try cohere.acquireLock(); withExtendedLifetime(owner) {}
     }
 
     @Test func savedSnapshotCannotBeReplacedByCurrentPreset() throws {

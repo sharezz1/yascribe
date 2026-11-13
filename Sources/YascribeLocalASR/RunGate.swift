@@ -41,7 +41,7 @@ public enum RunGate {
 
     public static func checkDisk(need: [ModelDiskNeed]) -> RunGateRefusal? {
         guard let insufficient = need.first(where: { !$0.fits }) else { return nil }
-        return RunGateRefusal(message: "Not enough disk space: need \(insufficient.bytes) bytes, available \(insufficient.freeBytes) bytes on volume \(insufficient.volume).", canDownload: false)
+        return RunGateRefusal(message: insufficient.message, canDownload: false)
     }
 
     /// `AppModel.resume` podaje do runnera ZAPISANĄ migawkę, więc `RunError.inputMismatch` nie złapie zmiany modelu — ta bramka tak.
@@ -69,7 +69,8 @@ public enum LocalASRFactory {
                 throw RunGateRefusal(message: "The on-device model store does not match \(model).", canDownload: false)
             }
             let reservation = try reservations?.acquire(model: selected)
-            let owner = try store.acquireLock()
+            // Parakeet tylko czyta: wielu klientów naraz (sesje, dyktowanie, sonda, CLI). Cohere kompiluje do compiled/, więc LOCK_EX.
+            let owner = try store.acquireLock(shared: selected == .parakeetV3)
             if let refusal = RunGate.check(status: store.status()) { throw refusal }
             if selected == .cohereTranscribe6bit, let refusal = RunGate.checkDisk(need: try store.diskNeed(operation: .load)) { throw refusal }
             let selectedEngine: any LocalASREngine = engine ?? makeEngine(model: selected, store: store, owner: owner)

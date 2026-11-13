@@ -29,7 +29,7 @@ private func writeAll(into model: URL, skipping skipped: Set<String> = []) throw
 
 private func store(_ root: URL, download: @escaping ModelStore.Download = { _, _, _ in },
                    modelsExist: @escaping ModelStore.ModelsExist = { _ in false }) -> ModelStore {
-    ModelStore(directory: root, download: download, modelsExist: modelsExist)
+    isolatedModelStore(directory: root, download: download, modelsExist: modelsExist)
 }
 
 private func installedStore(skipping skipped: Set<String> = []) throws -> ModelStore {

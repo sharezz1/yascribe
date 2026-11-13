@@ -1031,31 +1031,24 @@ final class AppModel {
             lastError = refusal
             return false
         }
-        var snapshot = configuration.snapshot
+        let snapshot = configuration.snapshot
         guard let c = transcriptionClient(for: snapshot.providerID, model: snapshot.model, language: snapshot.language) else {
             transcribing.remove(id)
             return false
         }
-        let effective: ASRRunConfiguration
-        do {
-            if let model = configuration.store?.model {
-                let store = localASR.store(for: model)
-                if savedInput != nil {
-                    if let refusal = RunGate.checkResume(snapshot: snapshot, provider: c.provider, currentFingerprint: store.fingerprint()) { throw refusal }
-                } else {
-                    snapshot.modelFingerprint = RunGate.fingerprintForSnapshot(provider: c.provider, store: store)
-                }
-            }
-            effective = try ASRRunConfiguration.build(snapshot: snapshot, savedInput: savedInput)
-        } catch {
-            Task { await (c as? ReleasableClient)?.release() }
-            transcribing.remove(id)
-            lastError = error.localizedDescription
-            return false
-        }
         let local = c is any ReleasableClient
         if local { localASR.beginRun() }
+        let stores = [localASR.store, localASR.cohereStore]
         Task {
+            // Odmowa wznowienia zwalnia klienta przed `transcribing.remove`: natychmiastowe ponowienie nie trafi na „busy”.
+            let effective: ASRRunConfiguration
+            do { effective = try await configuration.prepared(client: c, savedInput: savedInput, stores: stores) } catch {
+                if local { self.localASR.endRun() }
+                self.transcribing.remove(id)
+                self.lastError = error.localizedDescription
+                return
+            }
+            let snapshot = effective.snapshot
             var finished: Transcript?
             do {
                 finished = try await effective.run(session: sessionURL, runID: runID, client: c) { p in

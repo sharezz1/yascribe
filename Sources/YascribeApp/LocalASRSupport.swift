@@ -31,6 +31,10 @@ final class LocalASRSupport: ObservableObject {
 
     func client(provider: Provider, model: String, language: LanguageCode?, engine: (any LocalASREngine)? = nil) throws -> any TranscriptionClient {
         let selected = try LocalASRModel(id: model)
+        // Aplikacja uruchamia tylko modele udostępnione roli ASR (Cohere do N4 ukryty); CLI i testy wołają fabrykę wprost.
+        guard LocalASRModels.models(for: .asr).contains(where: { $0.id == model }) else {
+            throw RunGateRefusal(message: "The on-device model \(model) isn't available in this version of Yascribe.", canDownload: false)
+        }
         if let refusal = RunGate.checkLanguage(model: selected, language: language) { throw refusal }
         return try LocalASRFactory.client(provider: provider, model: model, store: store(for: selected), engine: engine,
                                           reservations: reservations, onPhase: { [weak self] phase in

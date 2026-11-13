@@ -260,27 +260,13 @@ struct CLI {
         let storeDirectory = value(args, "--model-store").map { URL(fileURLWithPath: $0, isDirectory: true) }
         let configuration = try ASRRunConfiguration.build(provider: provider, model: model, language: language,
                                                          savedInput: saved, storeDirectory: storeDirectory)
-        var snapshot = configuration.snapshot
         let c: any TranscriptionClient
         if let store = configuration.store {
-            c = try LocalASRFactory.client(provider: provider, model: snapshot.model, store: store).get()
+            c = try LocalASRFactory.client(provider: provider, model: configuration.snapshot.model, store: store).get()
         } else {
             c = apiClient!
         }
-        let effective: ASRRunConfiguration
-        do {
-            if let store = configuration.store {
-                if saved != nil {
-                    if let refusal = RunGate.checkResume(snapshot: snapshot, provider: provider, currentFingerprint: store.fingerprint()) { throw refusal }
-                } else {
-                    snapshot.modelFingerprint = RunGate.fingerprintForSnapshot(provider: provider, store: store)
-                }
-            }
-            effective = try ASRRunConfiguration.build(snapshot: snapshot, savedInput: saved, storeDirectory: storeDirectory)
-        } catch {
-            await (c as? ReleasableClient)?.release()
-            throw error
-        }
+        let effective = try await configuration.prepared(client: c, savedInput: saved, stores: configuration.store.map { [$0] } ?? [])
         print("runID: \(runID)")
         let t = try await effective.run(session: dir, runID: runID, client: c) { p in
             print(String(format: "\r%3.0f%% (okna %d/%d)", p.fraction * 100, p.done, p.total), terminator: "")

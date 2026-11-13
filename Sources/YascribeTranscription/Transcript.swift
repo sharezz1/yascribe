@@ -28,7 +28,8 @@ public struct Utterance: Codable, Equatable, Sendable {
     /// Echo z głośników: ta sama wypowiedź jest też w ścieżce „Them" (`EchoFilter`). Opcjonalne — stare pliki go nie mają.
     public var echoOfThem: Bool?
 
-    /// Opcjonalne dla zgodności ze starymi transkryptami; false może oznaczać przywrócenie przez użytkownika.
+    /// Opcjonalne dla zgodności ze starymi transkryptami. nil = nieocenione albo czyste (wznowienie ocenia ponownie),
+    /// false = przywrócone przez użytkownika.
     public var suspectedHallucination: Bool? = nil
 
     /// Oznaczona wypowiedź nie trafia do notatki jako fakt.

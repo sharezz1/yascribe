@@ -15,7 +15,7 @@ private func snapshot(_ provider: Provider, fingerprint: String?) throws -> RunS
 /// Pełny model z manifestu (pliki rzadkie o dokładnych rozmiarach) w `mn-<UUID>`, żeby `status() == .ready`.
 private func readyStore() throws -> ModelStore {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true)
-    let store = ModelStore(directory: root, download: { _, _, _ in })
+    let store = isolatedModelStore(directory: root, download: { _, _, _ in })
     for (file, size) in ModelManifest.parakeetV3.files {
         let url = store.modelDirectory.appendingPathComponent(file)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -28,7 +28,7 @@ private func readyStore() throws -> ModelStore {
 }
 
 private func emptyStore() -> ModelStore {
-    ModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true),
+    isolatedModelStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true),
                download: { _, _, _ in })
 }
 

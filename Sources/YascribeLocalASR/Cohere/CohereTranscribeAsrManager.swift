@@ -31,12 +31,25 @@ public actor CohereTranscribeAsrManager {
 
     public init() {}
 
+    private var decodingManifest: CohereTranscribeAsrManifest?
+    private var tokenStep: (@Sendable (Int32, Int32) throws -> Int32)?
+    /// Ten sam dekoder tokenów co Core ML, z przewidywaniem kolejnego tokenu bez MLModel.
+    init(manifest: CohereTranscribeAsrManifest, tokenStep: @escaping @Sendable (Int32, Int32) throws -> Int32) {
+        decodingManifest = manifest
+        self.tokenStep = tokenStep
+    }
+
     public func loadModels(
         from directory: URL,
         compiledDirectory: URL,
         fingerprint: String,
-        computeConfiguration: CohereTranscribeComputeConfiguration = .yascribe
+        computeConfiguration: CohereTranscribeComputeConfiguration = .yascribe,
+        lock: ModelStoreLock
     ) throws {
+        // shortcut: synchroniczny Core ML zajmuje wątek puli aktora; osobny executor przy pracy nad responsywnością.
+        defer { withExtendedLifetime(lock) {} }
+        try CohereModelCompilation.clean(root: compiledDirectory,
+            key: CohereModelCompilation.key(fingerprint: fingerprint, configuration: computeConfiguration), lock: lock)
         self.models = try CohereTranscribeAsrModels.load(
             from: directory, compiledDirectory: compiledDirectory,
             fingerprint: fingerprint, computeConfiguration: computeConfiguration
@@ -52,20 +65,20 @@ public actor CohereTranscribeAsrManager {
         language: String,
         promptIDs: [Int]? = nil
     ) throws -> CohereTranscriptionResult {
-        guard let models else {
+        guard let manifest = models?.manifest ?? decodingManifest else {
             throw CohereTranscribeAsrError.generationFailed("Models not loaded")
         }
         guard audioSamples.isEmpty == false else { return .init(text: "", chunkEOS: []) }
-        let selectedPrompt = try models.manifest.promptIDs(for: language, template: promptIDs)
+        let selectedPrompt = try manifest.promptIDs(for: language, template: promptIDs)
 
         let chunks = CohereAudioChunkPlanner.makeChunks(
             audioSamples: audioSamples,
-            sampleRate: models.manifest.sampleRate,
-            maxAudioSamples: models.manifest.maxAudioSamples,
-            boundarySearchSeconds: self.boundarySearchSeconds(for: models.manifest)
+            sampleRate: manifest.sampleRate,
+            maxAudioSamples: manifest.maxAudioSamples,
+            boundarySearchSeconds: self.boundarySearchSeconds(for: manifest)
         )
         let startedAt = Date()
-        let audioSeconds = Double(audioSamples.count) / Double(models.manifest.sampleRate)
+        let audioSeconds = Double(audioSamples.count) / Double(manifest.sampleRate)
         self.logger.info(
             "Cohere transcribe start [samples=\(audioSamples.count), audioSeconds=\(audioSeconds, format: .fixed(precision: 2)), decoderMode=\(decoderMode.rawValue, privacy: .public), chunks=\(chunks.count), chunking=energy-boundary]"
         )
@@ -74,10 +87,16 @@ public actor CohereTranscribeAsrManager {
         var chunkEOS: [Bool] = []
         for chunk in chunks {
             try Task.checkCancellation()
-            let inputs = try buildChunkInputs(chunk: chunk, audioSamples: audioSamples, manifest: models.manifest)
-            let decoded = try runPipeline(frontInputs: inputs, models: models, decoderMode: decoderMode,
+            let decoded: CohereDecodedTokens
+            if let tokenStep {
+                decoded = try Self.decodeCachedTokens(manifest: manifest, prompt: selectedPrompt,
+                    maxTokens: maxNewTokens ?? manifest.defaultMaxNewTokens, nextToken: tokenStep)
+            } else if let models {
+                let inputs = try buildChunkInputs(chunk: chunk, audioSamples: audioSamples, manifest: manifest)
+                decoded = try runPipeline(frontInputs: inputs, models: models, decoderMode: decoderMode,
                                           maxNewTokens: maxNewTokens, promptIDs: selectedPrompt)
-            chunkTexts.append(decodeTokens(decoded.tokens, manifest: models.manifest))
+            } else { throw CohereTranscribeAsrError.generationFailed("Models not loaded") }
+            chunkTexts.append(decodeTokens(decoded.tokens, manifest: manifest))
             chunkEOS.append(decoded.reachedEOS)
         }
 
@@ -399,35 +418,34 @@ public actor CohereTranscribeAsrManager {
             return logitsBuffer
         }
 
-        var generated = generationPromptIDs.map(Int32.init)
-        var lastLogits: MLMultiArray?
-        for (index, tokenID) in generationPromptIDs.enumerated() {
-            lastLogits = try runStep(tokenID: Int32(tokenID), stepIndex: Int32(index))
+        return try Self.decodeCachedTokens(manifest: manifest, prompt: generationPromptIDs, maxTokens: maxTokens) { token, index in
+            self.argmax1D(try runStep(tokenID: token, stepIndex: index))
         }
+    }
 
-        var currentIndex = generationPromptIDs.count
-        if let lastLogits {
-            let next = self.argmax1D(lastLogits)
+    static func decodeCachedTokens(manifest: CohereTranscribeAsrManifest, prompt: [Int], maxTokens: Int,
+                                   nextToken: (Int32, Int32) throws -> Int32) throws -> CohereDecodedTokens {
+        guard maxTokens > 0 else { throw CohereTranscribeAsrError.generationFailed("Token limit must be positive") }
+        var generated = prompt.map(Int32.init)
+        var next: Int32?
+        for (index, token) in generated.enumerated() {
+            next = try nextToken(token, Int32(index))
+        }
+        var currentIndex = prompt.count
+        if let next {
             generated.append(next)
             if Int(next) == manifest.eosTokenID {
-                return .init(tokens: generated, generatedFrom: generationPromptIDs.count, eosTokenID: manifest.eosTokenID)
+                return .init(tokens: generated, generatedFrom: prompt.count, eosTokenID: manifest.eosTokenID)
             }
         }
-
         for _ in 1..<maxTokens {
-            if currentIndex >= manifest.decoderMaxLen {
-                break
-            }
-            let logits = try runStep(tokenID: generated.last ?? 0, stepIndex: Int32(currentIndex))
-            let next = self.argmax1D(logits)
-            generated.append(next)
+            if currentIndex >= manifest.decoderMaxLen { break }
+            let token = try nextToken(generated.last ?? 0, Int32(currentIndex))
+            generated.append(token)
             currentIndex += 1
-            if Int(next) == manifest.eosTokenID {
-                break
-            }
+            if Int(token) == manifest.eosTokenID { break }
         }
-
-        return .init(tokens: generated, generatedFrom: generationPromptIDs.count, eosTokenID: manifest.eosTokenID)
+        return .init(tokens: generated, generatedFrom: prompt.count, eosTokenID: manifest.eosTokenID)
     }
 
     private func makeCachedDecoderFeatureProvider(

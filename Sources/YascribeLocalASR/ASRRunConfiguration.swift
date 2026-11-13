@@ -39,10 +39,33 @@ public struct ASRRunConfiguration: Sendable {
         return Self(snapshot: snapshot, store: model.map { ModelStore(model: $0, directory: storeDirectory) },
                     maxChunkSeconds: savedInput?.maxChunkSeconds ?? model?.maxChunkSeconds ?? 59,
                     maxSourceSpan: savedInput.map { $0.maxSourceSpan } ?? model?.maxSourceSpan,
-                    repetitionFilterEnabled: model?.repetitionFilterEnabled ?? false,
+                    repetitionFilterEnabled: savedInput.map { $0.repetitionFilter == true } ?? (model?.repetitionFilterEnabled ?? false),
                     gate: savedInput.map { EnergyGate($0.gate) } ?? EnergyGate(),
                     crosstalk: savedInput?.crosstalk ?? CrosstalkFilter(),
                     offlineAEC: savedInput.map { $0.offlineAEC } ?? .init())
+    }
+
+    /// Wspólny krok aplikacji i CLI po utworzeniu klienta: magazyn wybrany po modelu migawki spośród `stores`, bramka
+    /// wznowienia albo odcisk nowego przebiegu. Odmowa zwalnia klienta (rezerwację i blokadę), zanim wróci do wołającego.
+    public func prepared(client: any TranscriptionClient, savedInput: RunInput?, stores: [ModelStore]) async throws -> Self {
+        do {
+            var snapshot = snapshot
+            if let model = store?.model {
+                guard let selected = stores.first(where: { $0.model == model }) else {
+                    throw RunGateRefusal(message: "The on-device model store does not match \(model.id).", canDownload: false)
+                }
+                if savedInput != nil {
+                    if let refusal = RunGate.checkResume(snapshot: snapshot, provider: client.provider,
+                                                         currentFingerprint: selected.fingerprint()) { throw refusal }
+                } else {
+                    snapshot.modelFingerprint = RunGate.fingerprintForSnapshot(provider: client.provider, store: selected)
+                }
+            }
+            return try Self.build(snapshot: snapshot, savedInput: savedInput, storeDirectory: store?.directory)
+        } catch {
+            await (client as? ReleasableClient)?.release()
+            throw error
+        }
     }
 
     /// Wspólny zakres własności dla aplikacji i CLI: także błąd wejścia i anulowanie zwalniają RAM/blokadę.

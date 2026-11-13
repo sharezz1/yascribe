@@ -11,7 +11,7 @@ import YascribeSessionFormat
     @Test func applicationKeepsOneReservationPoolAcrossBothStores() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }
-        let support = LocalASRSupport(store: ModelStore(directory: root), cohereStore: ModelStore(model: .cohereTranscribe6bit, directory: root))
+        let support = LocalASRSupport(store: isolatedModelStore(directory: root), cohereStore: isolatedModelStore(model: .cohereTranscribe6bit, directory: root))
         #expect(support.store(for: .parakeetV3).model == .parakeetV3)
         #expect(support.store(for: .cohereTranscribe6bit).model == .cohereTranscribe6bit)
         let dictation = try support.reservations.acquire(model: .parakeetV3)
@@ -53,7 +53,7 @@ private actor PipelineEngine: LocalASREngine {
 
 @MainActor private func pipelineFixture() throws -> (LocalASRSupport, URL) {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")
-    let store = ModelStore(directory: root)
+    let store = isolatedModelStore(directory: root)
     for (name, size) in store.model.manifest.files {
         let url = store.modelDirectory.appendingPathComponent(name)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -61,7 +61,8 @@ private actor PipelineEngine: LocalASREngine {
         let f = try FileHandle(forWritingTo: url)
         try f.truncate(atOffset: UInt64(size)); try f.close()
     }
-    return (LocalASRSupport(store: store), root)
+    // Także magazyn Cohere izolowany: odmowa nie może dotknąć blokad w prawdziwym korzeniu Yascribe.
+    return (LocalASRSupport(store: store, cohereStore: isolatedModelStore(model: .cohereTranscribe6bit, directory: root)), root)
 }
 
 extension LocalASRReservationTests {
@@ -119,5 +120,37 @@ extension LocalASRReservationTests {
             #expect(support.reservations.isIdle)
             let owner = try support.store.acquireLock(); withExtendedLifetime(owner) {}
         }
+    }
+}
+
+extension LocalASRReservationTests {
+    /// F2 R01/R02: dwaj klienci Parakeeta naraz (LOCK_SH), zapis odmawia (LOCK_EX), Cohere odmawia z puli rezerwacji.
+    @Test func twoParakeetClientsRunTogetherWhileRemovalAndCohereAreRefused() async throws {
+        let (support, root) = try pipelineFixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let provider = Provider(name: "Local", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
+        let wav = WAVEncoder.wav([Int16](repeating: 1000, count: 16000), rate: 16000)
+        let meeting = try support.client(provider: provider, model: LocalASRModels.parakeetV3, language: .polish, engine: PipelineEngine(.success))
+        let dictation = try support.client(provider: provider, model: LocalASRModels.parakeetV3, language: .polish, engine: PipelineEngine(.success))
+        async let first = meeting.transcribe(wav: wav, model: LocalASRModels.parakeetV3, language: .polish, shape: .audioTranscriptions)
+        async let second = dictation.transcribe(wav: wav, model: LocalASRModels.parakeetV3, language: .polish, shape: .audioTranscriptions)
+        #expect(try await [first.text, second.text] == ["gotowe", "gotowe"])
+        do { try support.store.remove(); Issue.record("removal must wait for live Parakeet clients") }
+        catch let error as ModelStoreError { #expect(error.message.contains("busy in another transcription")) }
+        #expect(support.store.status() == .ready)
+        // Aplikacja nie udostępnia Cohere przed N4 (R02).
+        do { _ = try support.client(provider: provider, model: LocalASRModels.cohereTranscribe6bit, language: .polish); Issue.record("hidden Cohere must be refused") }
+        catch let refusal as RunGateRefusal { #expect(refusal.message.contains("isn't available in this version")) }
+        // Pliki blokad są osobne dla modeli, więc Cohere odmawia pula rezerwacji (wyłączność RAM), nie flock.
+        let cohere = LocalASRFactory.client(provider: provider, model: LocalASRModels.cohereTranscribe6bit, store: support.cohereStore,
+                                            reservations: support.reservations)
+        switch cohere {
+        case .success: Issue.record("Cohere must be refused while a Parakeet client lives")
+        case .failure(let refusal): #expect(refusal.message.contains("in use by another transcription"))
+        }
+        for client in [meeting, dictation] { await (client as? ReleasableClient)?.release() }
+        #expect(support.reservations.isIdle)
+        try support.store.remove()
+        #expect(support.store.status() == .missing)
     }
 }

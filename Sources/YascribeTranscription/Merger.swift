@@ -7,7 +7,8 @@ public struct ChunkResult: Codable, Equatable, Sendable {
     public var track: String
     public var chunk: Chunk
     public var result: TranscriptionResult
-    /// nil = nieocenione, true = podejrzane, false = jawnie przywrócone (punkt zaczepienia N4).
+    /// nil = nieocenione albo czyste (wznowienie ocenia ponownie z naprawionym kontekstem), true = podejrzane,
+    /// false = jawnie przywrócone przez użytkownika (punkt zaczepienia N4).
     public var suspectedHallucination: Bool? = nil
 }
 

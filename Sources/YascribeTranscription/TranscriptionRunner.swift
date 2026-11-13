@@ -20,6 +20,8 @@ public struct RunInput: Codable, Equatable, Sendable {
     public var offlineAECFingerprint: String? = nil
     /// Brak pola w starych przebiegach oznacza historyczne pakowanie bez limitu rozpiętości.
     public var maxSourceSpan: Double? = nil
+    /// E6: brak pola oznacza wyłączony filtr, także przy wznowieniu.
+    public var repetitionFilter: Bool? = nil
 }
 
 public struct TranscriptionProgress: Equatable, Sendable {
@@ -133,10 +135,12 @@ public struct TranscriptionRunner: Sendable {
         let crosstalk = saved?.crosstalk ?? self.crosstalk
         let maxChunkSeconds = saved?.maxChunkSeconds ?? self.maxChunkSeconds
         let maxSourceSpan = saved.map { $0.maxSourceSpan } ?? self.maxSourceSpan
+        let repetitionFilter = saved.map { $0.repetitionFilter } ?? (repetitionFilterEnabled ? true : nil)
         let tracks = Self.tracks(in: summary)
         var input = RunInput(snapshot: snapshot, gate: gate.config, maxChunkSeconds: maxChunkSeconds, crosstalk: crosstalk,
                              trackFrames: Dictionary(summary.tracks.map { ($0.id, $0.frames ?? -1) }, uniquingKeysWith: { a, _ in a }))
         input.maxSourceSpan = maxSourceSpan
+        input.repetitionFilter = repetitionFilter
         input.offlineAEC = aec
         // Stare przebiegi bez odcisku zachowują swój kontrakt; nowe chronią też audio bez AEC.
         if saved == nil || saved?.offlineAECFingerprint != nil {
@@ -182,7 +186,7 @@ public struct TranscriptionRunner: Sendable {
         progress(TranscriptionProgress(done: 0, total: plan.count))
         var previousText: [String: String] = [:]
         func flag(_ result: inout ChunkResult) {
-            if repetitionFilterEnabled, result.suspectedHallucination == nil,
+            if repetitionFilter == true, result.suspectedHallucination == nil,
                RepetitionFilter.isHallucinated(result.result.text, previousText: previousText[result.track] ?? "") {
                 result.suspectedHallucination = true
             }

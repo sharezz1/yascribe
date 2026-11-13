@@ -27,7 +27,7 @@ public enum LocalASRModel: Sendable, CaseIterable {
 
     public init(id: String) throws {
         guard let model = Self.allCases.first(where: { $0.id == id }) else {
-            throw RunGateRefusal(message: "Unknown on-device speech model: \(id).", canDownload: false)
+            throw RunGateRefusal(message: "Unknown on-device speech model: \(id). Choose a supported model with Transcribe again…", canDownload: false)
         }
         self = model
     }
@@ -53,9 +53,6 @@ extension ModelManifest {
         "benchmarks/librispeech_wer_200samples.json": 440,
         "benchmarks/librispeech_wer_full_2620samples.json": 204,
         "benchmarks/quantization_variants_speed_accuracy.json": 5337,
-        "cohere_cross_kv_projector.mlpackage/Data/com.apple.CoreML/model.mlmodel": 25327,
-        "cohere_cross_kv_projector.mlpackage/Data/com.apple.CoreML/weights/weight.bin": 12620864,
-        "cohere_cross_kv_projector.mlpackage/Manifest.json": 617,
         "cohere_decoder_cached.mlpackage/Data/com.apple.CoreML/model.mlmodel": 194369,
         "cohere_decoder_cached.mlpackage/Data/com.apple.CoreML/weights/weight.bin": 114415488,
         "cohere_decoder_cached.mlpackage/Manifest.json": 617,

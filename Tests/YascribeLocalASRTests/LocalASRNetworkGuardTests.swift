@@ -40,7 +40,7 @@ private func matches(_ pattern: String, in text: String) -> [String] {
             }
         }
         for word in ["downloadAndLoad", "isModelValid", "ModelHub.", "DownloadUtils", "AssetDownloader", "HFClient", "ModelRegistry"] {
-            #expect(!text.contains(word) || (word == "ModelHub." && name == "ModelStore.swift"), "\(name) uses \(word)")
+            #expect(!text.contains(word), "\(name) uses \(word)")
         }
     }
 }
@@ -74,7 +74,7 @@ private func matches(_ pattern: String, in text: String) -> [String] {
 @Test func engineWithMissingModelFailsLocallyWithoutTouchingTheNetwork() async throws {
     // Pusty magazyn: `loadLocal` rzuca lokalny `modelNotFound` (żaden wariant z siecią nie jest wołany, więc nic nie jest pobierane).
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)", isDirectory: true)
-    let engine = FluidAudioEngine(store: ModelStore(directory: root, download: { _, _, _ in }))
+    let engine = FluidAudioEngine(store: isolatedModelStore(directory: root, download: { _, _, _ in }))
     // Pas bezpieczeństwa: przy regresji (ładowanie przez centrum pobierań) FluidAudio rzuci `networkDisabled` zamiast pobrać 483 MB.
     let wasOffline = ModelHub.offlineMode
     ModelHub.offlineMode = true
@@ -94,7 +94,7 @@ private func matches(_ pattern: String, in text: String) -> [String] {
 @Test func realEngineOnModelCopy() async throws {
     let env = ProcessInfo.processInfo.environment
     guard let root = env["YASCRIBE_MODEL_STORE"] ?? env["YASCRIBE_LOCAL_ASR_STORE"], !root.isEmpty else { return }
-    let store = ModelStore(directory: URL(fileURLWithPath: root, isDirectory: true), download: { _, _, _ in })
+    let store = isolatedModelStore(directory: URL(fileURLWithPath: root, isDirectory: true), download: { _, _, _ in })
     guard store.status() == .ready else {
         Issue.record("the model store at \(root) is not ready: \(store.status())")
         return

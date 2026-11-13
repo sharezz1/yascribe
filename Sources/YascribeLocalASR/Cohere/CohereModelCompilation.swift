@@ -11,8 +11,6 @@ import Foundation
 /// Ten pomocnik nie tworzy blokad: nie może czekać ani zastępować tokenu właściciela.
 enum CohereModelCompilation {
     static let formatVersion = 1
-    static let packages = ["cohere_frontend.mlpackage", "cohere_encoder.mlpackage",
-                           "cohere_decoder_fullseq_masked.mlpackage", "cohere_decoder_cached.mlpackage"]
     private static let inventoryName = ".yascribe-files.json"
 
     static func key(fingerprint: String, configuration: CohereTranscribeComputeConfiguration,
@@ -38,6 +36,16 @@ enum CohereModelCompilation {
                   attrs[.type] as? FileAttributeType == .typeRegular else { return false }
             return (attrs[.size] as? NSNumber)?.int64Value == size
         }
+    }
+
+    /// Wyłącznie pod tokenem właściciela; przed oceną miejsca i rozpoczęciem kompilacji.
+    static func clean(root: URL, key: String, lock: ModelStoreLock) throws {
+        guard FileManager.default.fileExists(atPath: root.path) else { return }
+        for item in try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            where item.lastPathComponent != key {
+            try FileManager.default.removeItem(at: item)
+        }
+        withExtendedLifetime(lock) {}
     }
 
     static func compile(package: URL, root: URL, key: String,

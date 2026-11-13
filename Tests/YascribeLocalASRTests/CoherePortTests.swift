@@ -9,7 +9,7 @@ private func portRoot() throws -> URL {
     return root
 }
 
-private func manifestFixture() -> [String: Any] {
+func manifestFixture() -> [String: Any] {
     var vocabulary = Array(repeating: "unused", count: 160)
     vocabulary[3] = "<|endoftext|>"
     vocabulary[62] = "<|en|>"
@@ -77,20 +77,22 @@ private func fakeCompiled(at directory: URL) throws -> URL {
         #expect(try loadFixture(moved, at: root).promptIDs(for: "pl") == [150, 150, 5, 8])
     }
 
-    @Test func compilationKeyUsesFingerprintUnitsAndFormatWithSameDate() throws {
+    @Test func compilationKeyUsesStoreFingerprintUnitsAndFormat() throws {
         let root = try portRoot()
         defer { try? FileManager.default.removeItem(at: root) }
-        let file = root.appendingPathComponent("source")
-        try Data([1]).write(to: file)
-        let timestamp = Date(timeIntervalSince1970: 1000)
-        try FileManager.default.setAttributes([.modificationDate: timestamp], ofItemAtPath: file.path)
-        let key = CohereModelCompilation.key(fingerprint: "first", configuration: .yascribe)
-        try Data([2]).write(to: file)
-        try FileManager.default.setAttributes([.modificationDate: timestamp], ofItemAtPath: file.path)
-        #expect(CohereModelCompilation.key(fingerprint: "second", configuration: .yascribe) != key)
-        #expect(CohereModelCompilation.key(fingerprint: "first", configuration: .init(uniform: .cpuOnly)) != key)
-        #expect(CohereModelCompilation.key(fingerprint: "first", configuration: .yascribe, version: 2) != key)
-        #expect(CohereModelCompilation.key(fingerprint: "first", configuration: .yascribe) == key)
+        let store = isolatedModelStore(model: .cohereTranscribe6bit, directory: root)
+        for (name, size) in store.model.manifest.files {
+            let url = store.modelDirectory.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+            let file = try FileHandle(forWritingTo: url)
+            try file.truncate(atOffset: UInt64(size)); try file.close()
+        }
+        let fingerprint = try #require(store.fingerprint())
+        let key = CohereModelCompilation.key(fingerprint: fingerprint, configuration: .yascribe)
+        #expect(CohereModelCompilation.key(fingerprint: fingerprint, configuration: .init(uniform: .cpuOnly)) != key)
+        #expect(CohereModelCompilation.key(fingerprint: fingerprint, configuration: .yascribe, version: 2) != key)
+        #expect(CohereModelCompilation.key(fingerprint: try #require(store.fingerprint()), configuration: .yascribe) == key)
     }
 
     @Test func compilationPublishesOnlyCompleteArtifactAndCleansTemporary() throws {
@@ -158,7 +160,7 @@ private func fakeCompiled(at directory: URL) throws -> URL {
     @Test func storeRequiresEveryCompiledComponentForCurrentFingerprint() throws {
         let root = try portRoot()
         defer { try? FileManager.default.removeItem(at: root) }
-        let store = ModelStore(model: .cohereTranscribe6bit, directory: root)
+        let store = isolatedModelStore(model: .cohereTranscribe6bit, directory: root)
         for (name, size) in store.model.manifest.files {
             let file = store.modelDirectory.appendingPathComponent(name)
             try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -167,9 +169,12 @@ private func fakeCompiled(at directory: URL) throws -> URL {
             try handle.truncate(atOffset: UInt64(size))
             try handle.close()
         }
+        try writeCohereManifestFixture(store)
         let key = CohereModelCompilation.key(fingerprint: try #require(store.fingerprint()), configuration: .yascribe)
         #expect(!store.compiledModelsReady())
-        for package in CohereModelCompilation.packages {
+        let packages = try CohereTranscribeAsrModels.loadManifest(from: store.modelDirectory).packages
+        for (index, package) in packages.enumerated() {
+            #expect(!store.compiledModelsReady(), "Only \(index)/4 components are complete")
             _ = try CohereModelCompilation.compile(package: store.modelDirectory.appendingPathComponent(package), root: store.compiledDirectory, key: key, compiler: { _ in
                 try fakeCompiled(at: root.appendingPathComponent("temp"))
             })
@@ -178,10 +183,73 @@ private func fakeCompiled(at directory: URL) throws -> URL {
         let manifest = store.modelDirectory.appendingPathComponent("coreml_manifest.json")
         let date = try #require(FileManager.default.attributesOfItem(atPath: manifest.path)[.modificationDate] as? Date)
         let handle = try FileHandle(forWritingTo: manifest)
-        try handle.write(contentsOf: Data([1]))
+        try handle.seek(toOffset: 297407)
+        try handle.write(contentsOf: Data([10]))
         try handle.close()
         try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: manifest.path)
         #expect(store.status() == .ready)
         #expect(!store.compiledModelsReady())
+    }
+}
+
+extension CoherePortTests {
+    @Test func transcribePropagatesEOSAndCachedEarlyReturn() async throws {
+        let manifest = try JSONDecoder().decode(CohereTranscribeAsrManifest.self, from: JSONSerialization.data(withJSONObject: manifestFixture()))
+        for eosAt: Int32 in [3, 4, 100] {
+            let steps = TokenSteps(eosAt: eosAt)
+            let manager = CohereTranscribeAsrManager(manifest: manifest, tokenStep: { try steps.next($0, $1) })
+            let result = try await manager.transcribe(audioSamples: [0.1], maxNewTokens: 3, language: "pl")
+            #expect(result.chunkEOS == [eosAt < 100])
+            #expect(result.truncationCount == (eosAt < 100 ? 0 : 1))
+            #expect(steps.count == (eosAt == 3 ? 4 : eosAt == 4 ? 5 : 6))
+        }
+    }
+
+    @Test func compilationCleanupKeepsOnlyCurrentKeyUnderLock() throws {
+        let root = try portRoot(); defer { try? FileManager.default.removeItem(at: root) }
+        let store = isolatedModelStore(model: .cohereTranscribe6bit, directory: root)
+        for name in ["old-key", ".staging-orphan", "current"] {
+            _ = try fakeCompiled(at: store.compiledDirectory.appendingPathComponent(name))
+        }
+        let owner = try store.acquireLock()
+        try CohereModelCompilation.clean(root: store.compiledDirectory, key: "current", lock: owner)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.compiledDirectory.path) == ["current"])
+        #expect(try Data(contentsOf: store.compiledDirectory.appendingPathComponent("current/model.mil")) == Data([3, 4]))
+    }
+
+    @Test func compiledReadinessIncludesOptionalManifestPackage() throws {
+        let root = try portRoot(); defer { try? FileManager.default.removeItem(at: root) }
+        let store = isolatedModelStore(model: .cohereTranscribe6bit, directory: root)
+        for (name, size) in store.model.manifest.files {
+            let file = store.modelDirectory.appendingPathComponent(name)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: file.path, contents: nil)
+            let handle = try FileHandle(forWritingTo: file)
+            try handle.truncate(atOffset: UInt64(size)); try handle.close()
+        }
+        try writeCohereManifestFixture(store, crossKV: true)
+        let packages = try CohereTranscribeAsrModels.loadManifest(from: store.modelDirectory).packages
+        #expect(packages.count == 5)
+        let key = CohereModelCompilation.key(fingerprint: try #require(store.fingerprint()), configuration: .yascribe)
+        for package in packages {
+            #expect(!store.compiledModelsReady())
+            _ = try CohereModelCompilation.compile(package: store.modelDirectory.appendingPathComponent(package), root: store.compiledDirectory, key: key, compiler: { _ in try fakeCompiled(at: root.appendingPathComponent("temp")) })
+        }
+        #expect(store.compiledModelsReady())
+    }
+}
+
+private final class TokenSteps: @unchecked Sendable {
+    private let lock = NSLock()
+    private var calls = 0
+    let eosAt: Int32
+    init(eosAt: Int32) { self.eosAt = eosAt }
+    var count: Int { lock.withLock { calls } }
+    func next(_ token: Int32, _ index: Int32) throws -> Int32 {
+        try lock.withLock {
+            calls += 1
+            if index > eosAt { throw ModelStoreError(message: "Decode continued after EOS") }
+            return index == eosAt ? 3 : 17
+        }
     }
 }

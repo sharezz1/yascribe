@@ -1,6 +1,7 @@
 import CryptoKit
 import FluidAudio
 import Foundation
+import YascribeProviders
 
 /// Stan modelu w magazynie (spec 2.0a §4.2). „Pobieranie w toku" nie należy tu — trzyma je `LocalASRSupport` (T6).
 public enum ModelStatus: Equatable, Sendable {
@@ -32,9 +33,10 @@ public struct ModelStore: Sendable {
     private let modelsExist: ModelsExist
     public let model: LocalASRModel
     private var manifest: ModelManifest { model.manifest }
-    public typealias FileDownload = @Sendable (URL, URL) async throws -> Void
+    public typealias FileDownload = @Sendable (URL, URL, @escaping @Sendable (Int64) -> Void) async throws -> Void
     public typealias DiskSpace = @Sendable (URL) throws -> ModelDiskLocation
     private let diskSpace: DiskSpace
+    var lockRootForTesting: URL?
 
     public init(model: LocalASRModel = .parakeetV3, directory: URL? = nil, download: Download? = nil,
                 modelsExist: @escaping ModelsExist = ModelStore.fluidAudioModelsExist,
@@ -109,15 +111,18 @@ public struct ModelStore: Sendable {
     /// FluidAudio (sama obecność plików) mówi „jest", a nasz status jest `invalid` (np. brak `config.json`). Brakujące pliki
     /// pobierane są bez `force`, czyli z wznowieniem przerwanego pobrania.
     public func download(progress: @escaping @Sendable (Double?) -> Void) async throws {
+        // Gotowy model to no-op bez blokady (jak przed N1), także przy żywym kliencie Parakeeta.
+        if status() == .ready { return }
+        // Zapis obu modeli wyłącznie pod LOCK_EX we własnym korzeniu: żaden klient (LOCK_SH Parakeeta) nie czyta w trakcie.
         let owner = try acquireLock()
         defer { withExtendedLifetime(owner) {} }
         let before = status()
         if before == .ready { return }
         var force = false
-        if case .invalid = before { force = hasWrongSizeFile() || (model == .parakeetV3 && modelsExist(modelDirectory)) }
-        let budget = try diskNeed(operation: .download)
+        if model == .parakeetV3, case .invalid = before { force = hasWrongSizeFile() || modelsExist(modelDirectory) }
+        let budget = try model == .cohereTranscribe6bit ? diskNeed(operation: .download) : []
         if let insufficient = budget.first(where: { !$0.fits }) {
-            throw ModelStoreError(message: "Not enough disk space: need \(insufficient.bytes) bytes, available \(insufficient.freeBytes) bytes on volume \(insufficient.volume).")
+            throw ModelStoreError(message: insufficient.message)
         }
         try await downloader(modelDirectory, force, progress)
         switch status() {
@@ -139,24 +144,41 @@ public struct ModelStore: Sendable {
 
     /// Kasuje wyłącznie folder modelu — nie jego sąsiadów we wspólnym magazynie.
     public func remove() throws {
+        guard FileManager.default.fileExists(atPath: modelDirectory.path) else { return }
         let owner = try acquireLock()
         defer { withExtendedLifetime(owner) {} }
-        guard FileManager.default.fileExists(atPath: modelDirectory.path) else { return }
         try FileManager.default.removeItem(at: modelDirectory)
     }
 
-    /// Token dla przyszłego silnika: utrzymać od sprawdzenia odcisku aż do zwolnienia obiektów Core ML.
-    public func acquireLock() throws -> ModelStoreLock {
-        try ModelStoreLock(url: lockURL)
+    /// Token od sprawdzenia źródeł aż do zwolnienia modelu. Domyślnie LOCK_EX; `shared` tylko dla ładowania Parakeeta.
+    public func acquireLock(shared: Bool = false) throws -> ModelStoreLock {
+        try ModelStoreLock(url: lockURL, shared: shared)
     }
 
-    var lockURL: URL { directory.appendingPathComponent(".locks", isDirectory: true).appendingPathComponent("\(model.id).lock") }
+    /// Blokady zawsze pod własnym korzeniem Yascribe, nigdy we wspólnym magazynie FluidAudio. W DEBUG kopia magazynu
+    /// albo `.devdata` (`YASCRIBE_DATA_DIR` z run.sh; cwd aplikacji z `open` to `/`).
+    static func lockRoot(env: [String: String]) -> URL {
+        #if DEBUG
+        if let override = env["YASCRIBE_MODEL_STORE"], !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+        }
+        return YascribePaths.fromEnvironment(env).root
+        #else
+        return YascribePaths.fromEnvironment([:]).root
+        #endif
+    }
+
+    var lockURL: URL {
+        (lockRootForTesting ?? Self.lockRoot(env: ProcessInfo.processInfo.environment))
+            .appendingPathComponent(".locks", isDirectory: true).appendingPathComponent("\(model.id).lock")
+    }
     public var compiledDirectory: URL { modelDirectory.appendingPathComponent("compiled", isDirectory: true) }
 
     public func compiledModelsReady(configuration: CohereTranscribeComputeConfiguration = .yascribe) -> Bool {
-        guard model == .cohereTranscribe6bit, let fingerprint = fingerprint() else { return false }
+        guard model == .cohereTranscribe6bit, let fingerprint = fingerprint(),
+              let manifest = try? CohereTranscribeAsrModels.loadManifest(from: modelDirectory) else { return false }
         let key = CohereModelCompilation.key(fingerprint: fingerprint, configuration: configuration)
-        return CohereModelCompilation.packages.allSatisfy {
+        return manifest.packages.allSatisfy {
             CohereModelCompilation.isComplete(at: CohereModelCompilation.directory(package: $0, root: compiledDirectory, key: key))
         }
     }
@@ -167,14 +189,20 @@ public struct ModelStore: Sendable {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName)
             .appendingPathComponent("com.apple.e5rt.e5bundlecache")
+        let missing = manifest.files.compactMap { name, size -> Int64? in
+            let attrs = try? FileManager.default.attributesOfItem(atPath: modelDirectory.appendingPathComponent(name).path)
+            return (attrs?[.size] as? NSNumber)?.int64Value == size ? nil : size
+        }
         return try ModelDiskBudget.need(modelBytes: manifest.totalBytes, operation: operation,
+            missingBytes: missing.reduce(0, +), largestMissingFile: missing.max() ?? 0,
             compiledReady: operation == .load && compiledModelsReady(configuration: configuration),
             store: diskSpace(modelDirectory), temporary: diskSpace(FileManager.default.temporaryDirectory), e5rt: diskSpace(caches))
     }
 
     /// Jedyna ścieżka sieciowa własnego pobieracza. Odbiorca widzi wyłącznie plik .part, nigdy niekompletny plik docelowy.
-    public static let networkFileDownload: FileDownload = { source, part in
-        let (temporary, response) = try await URLSession.shared.download(from: source)
+    public static let networkFileDownload: FileDownload = { source, part, progress in
+        let delegate = ModelDownloadProgress(progress: progress)
+        let (temporary, response) = try await URLSession.shared.download(from: source, delegate: delegate)
         defer { try? FileManager.default.removeItem(at: temporary) }
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             throw ModelStoreError(message: "The model server returned an unsuccessful response.")
@@ -183,9 +211,8 @@ public struct ModelStore: Sendable {
     }
 
     static func cohereDownload(fileDownload: @escaping FileDownload) -> Download {
-        { directory, force, progress in
+        { directory, _, progress in
             let fm = FileManager.default
-            if force, fm.fileExists(atPath: directory.path) { try fm.removeItem(at: directory) }
             let manifest = ModelManifest.cohereTranscribe6bit
             var completed: Int64 = 0
             for (name, size) in manifest.files.sorted(by: { $0.key < $1.key }) {
@@ -198,7 +225,10 @@ public struct ModelStore: Sendable {
                     try? fm.removeItem(at: part)
                     do {
                         let source = URL(string: "https://huggingface.co/\(LocalASRModel.cohereRepository)/resolve/\(LocalASRModel.cohereRevision)/\(name)")!
-                        try await fileDownload(source, part)
+                        let priorBytes = completed
+                        try await fileDownload(source, part) { bytes in
+                            progress(Double(priorBytes + min(size, max(0, bytes))) / Double(manifest.totalBytes))
+                        }
                         try Task.checkCancellation()
                         let downloaded = try fm.attributesOfItem(atPath: part.path)
                         guard (downloaded[.size] as? NSNumber)?.int64Value == size else {
@@ -244,5 +274,16 @@ private final class LockedMapper: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return mapper.map(phase)
+    }
+}
+
+/// Delegat zadania dostaje liczbę bajtów również w trakcie pojedynczego dużego pliku.
+final class ModelDownloadProgress: NSObject, URLSessionDownloadDelegate {
+    let progress: @Sendable (Int64) -> Void
+    init(progress: @escaping @Sendable (Int64) -> Void) { self.progress = progress }
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        progress(totalBytesWritten)
     }
 }
