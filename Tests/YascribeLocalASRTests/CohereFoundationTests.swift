@@ -310,21 +310,77 @@ extension ModelLockTests {
         let next = try store.acquireLock(); withExtendedLifetime(next) {}
     }
 
-    @Test func productionLocksUseOwnRootAndMissingRemovalCreatesNothing() throws {
-        #if DEBUG
-        #expect(ModelStore.lockRoot(env: ["YASCRIBE_DATA_DIR": "/tmp/x/.devdata"]).path == "/tmp/x/.devdata")
-        #expect(ModelStore.lockRoot(env: ["YASCRIBE_MODEL_STORE": "/tmp/own-root", "YASCRIBE_DATA_DIR": "/tmp/x/.devdata"]).path == "/tmp/own-root")
-        #endif
-        #expect(ModelStore.lockRoot(env: [:]).path.hasSuffix("/Application Support/Yascribe"))
+    @Test func locksLiveInStoreAndMissingRemovalCreatesNothing() throws {
         let root = try temporaryRoot(); defer { try? FileManager.default.removeItem(at: root) }
         for model in LocalASRModel.allCases {
             let store = ModelStore(model: model, directory: root)
-            #expect(store.lockURL.deletingLastPathComponent().deletingLastPathComponent().path == ModelStore.lockRoot(env: ProcessInfo.processInfo.environment).path)
-            #expect(store.lockURL.lastPathComponent == model.id + ".lock")
-            let isolated = isolatedModelStore(model: model, directory: root)
-            try isolated.remove()
+            #expect(store.lockURL.path == root.appendingPathComponent(".locks/\(model.id).lock").path)
+            try store.remove()
             #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent(".locks").path))
         }
+    }
+
+    @Test func sharedFluidAudioStoreLocksInProductionYascribeRoot() throws {
+        let root = try temporaryRoot(); defer { try? FileManager.default.removeItem(at: root) }
+        let foreign = root.appendingPathComponent("FluidAudio", isDirectory: true)
+        try FileManager.default.createDirectory(at: foreign.appendingPathComponent("Models"), withIntermediateDirectories: true)
+        let link = root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: foreign)
+        let production = YascribePaths.fromEnvironment([:]).root.path
+        // Bez tworzenia czegokolwiek: same ścieżki, także pisownia przez dowiązanie i inną wielkość liter.
+        for spelling in [foreign.appendingPathComponent("Models"), link.appendingPathComponent("Models"),
+                         root.appendingPathComponent("fluidaudio/Models"), foreign] {
+            #expect(ModelStore.lockRoot(directory: spelling, foreignRoot: foreign).path == production)
+        }
+        let sibling = root.appendingPathComponent("FluidAudioX/Models")
+        #expect(ModelStore.lockRoot(directory: sibling, foreignRoot: foreign) == sibling)
+        let realDefault = ModelStore.resolveDirectory(model: .parakeetV3, env: [:])
+        #expect(ModelStore.lockRoot(directory: realDefault).path == production)
+    }
+
+    /// R5: `.locks` w magazynie jako dowiązanie do cudzego magazynu → odmowa, zanim cokolwiek powstanie pod celem.
+    @Test func lockFolderLinkedIntoForeignStoreRefuses() throws {
+        let root = try temporaryRoot(); defer { try? FileManager.default.removeItem(at: root) }
+        let foreign = root.appendingPathComponent("FluidAudio", isDirectory: true), store = root.appendingPathComponent("store")
+        try FileManager.default.createDirectory(at: foreign, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: store, withIntermediateDirectories: true)
+        // Cel dowiązania jeszcze nie istnieje: nie wolno go utworzyć.
+        try FileManager.default.createSymbolicLink(at: store.appendingPathComponent(".locks"),
+                                                   withDestinationURL: foreign.appendingPathComponent("Models"))
+        let model = ModelStore(model: .cohereTranscribe6bit, directory: store)
+        do { _ = try model.acquireLock(shared: false, foreignRoot: foreign); Issue.record("lock into the foreign store must be refused") }
+        catch let error as ModelStoreError { #expect(error.message.contains("another app's model store")) }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: foreign.path).isEmpty)
+        // Istniejący cel w cudzym magazynie: druga bramka (po kanonicznej ścieżce) też odmawia.
+        try FileManager.default.createDirectory(at: foreign.appendingPathComponent("Models"), withIntermediateDirectories: true)
+        do { _ = try model.acquireLock(shared: false, foreignRoot: foreign); Issue.record("lock into the foreign store must be refused") }
+        catch let error as ModelStoreError { #expect(error.message.contains("another app's model store")) }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: foreign.appendingPathComponent("Models").path).isEmpty)
+    }
+
+    /// R01: CLI z `--model-store <dowiązanie>` i aplikacja z prawdziwą ścieżką tego samego magazynu wykluczają się.
+    @Test func otherProcessLockingStoreThroughAnotherSpellingRefuses() throws {
+        let root = try temporaryRoot(); defer { try? FileManager.default.removeItem(at: root) }
+        let real = root.appendingPathComponent("store", isDirectory: true), link = root.appendingPathComponent("link")
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+        // Ścieżkę dziecka liczy test, nie ModelStore: blokada ma leżeć w magazynie niezależnie od env tego procesu.
+        let locks = link.appendingPathComponent(".locks", isDirectory: true)
+        try FileManager.default.createDirectory(at: locks, withIntermediateDirectories: true)
+        let childLock = locks.appendingPathComponent("\(LocalASRModel.cohereTranscribe6bit.id).lock")
+        FileManager.default.createFile(atPath: childLock.path, contents: nil)
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        child.arguments = ["-u", "-c", "import fcntl,sys,signal; f=open(sys.argv[1],'r+'); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB); print('locked',flush=True); signal.pause()", childLock.path]
+        let pipe = Pipe()
+        child.standardOutput = pipe
+        try child.run()
+        defer { if child.isRunning { kill(child.processIdentifier, SIGKILL); child.waitUntilExit() } }
+        #expect(String(decoding: pipe.fileHandleForReading.availableData, as: UTF8.self) == "locked\n")
+        // Pisownia B: kanoniczna ścieżka jądra (np. /private/var/...), inna niż dowiązanie dziecka.
+        let store = ModelStore(model: .cohereTranscribe6bit, directory: URL(fileURLWithPath: String(cString: try #require(realpath(real.path, nil)))))
+        do { _ = try store.acquireLock(); Issue.record("another spelling of the same store must refuse") }
+        catch let error as ModelStoreError { #expect(error.message == "Another Yascribe process is using this model.") }
     }
 }
 

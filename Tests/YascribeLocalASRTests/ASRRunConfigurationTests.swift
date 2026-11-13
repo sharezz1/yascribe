@@ -12,9 +12,10 @@ private func runSnapshot(_ model: String, language: LanguageCode? = .polish) thr
                     provider: localProvider, probe: nil)
 }
 
-private func fixtureStore(_ model: LocalASRModel = .cohereTranscribe6bit, free: Int64 = 100_000_000_000) throws -> ModelStore {
+private func fixtureStore(_ model: LocalASRModel = .cohereTranscribe6bit, free: Int64 = 100_000_000_000,
+                          diskSpace: ModelStore.DiskSpace? = nil) throws -> ModelStore {
     let store = isolatedModelStore(model: model, directory: FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)"),
-                           diskSpace: { ModelDiskLocation(volume: "fixture", freeBytes: free, path: $0.path) })
+                           diskSpace: diskSpace ?? { ModelDiskLocation(volume: "fixture", freeBytes: free, path: $0.path) })
     for (name, size) in model.manifest.files {
         let url = store.modelDirectory.appendingPathComponent(name)
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -24,6 +25,13 @@ private func fixtureStore(_ model: LocalASRModel = .cohereTranscribe6bit, free: 
     }
     try writeCohereManifestFixture(store)
     return store
+}
+
+private final class OrphanPaths: @unchecked Sendable {
+    private let lock = NSLock()
+    private var urls: [URL] = []
+    func set(_ new: [URL]) { lock.withLock { urls = new } }
+    var anyExists: Bool { lock.withLock { urls.contains { FileManager.default.fileExists(atPath: $0.path) } } }
 }
 
 private actor FailingEngine: LocalASREngine {
@@ -110,6 +118,25 @@ private actor FailingEngine: LocalASREngine {
         }
         #expect(pool.isIdle)
         let owner = try store.acquireLock(); withExtendedLifetime(owner) {}
+    }
+
+    /// R02: bramka dysku w fabryce liczy miejsce dopiero po sprzątnięciu osieroconej kompilacji.
+    @Test func factoryCleansAbandonedCompilationBeforeDiskGate() async throws {
+        let orphans = OrphanPaths()
+        let store = try fixtureStore(diskSpace: { url in
+            ModelDiskLocation(volume: "fixture", freeBytes: orphans.anyExists ? 1 : 100_000_000_000, path: url.path)
+        })
+        defer { try? FileManager.default.removeItem(at: store.directory) }
+        let key = CohereModelCompilation.key(fingerprint: try #require(store.fingerprint()), configuration: .yascribe)
+        let paths = ["obsolete", ".staging-orphan"].map { store.compiledDirectory.appendingPathComponent($0) }
+        for url in paths + [store.compiledDirectory.appendingPathComponent(key)] {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        orphans.set(paths)
+        // FailingEngine nie sprząta: sukces zależy wyłącznie od fabryki.
+        let c = try LocalASRFactory.client(provider: localProvider, model: store.model.id, store: store, engine: FailingEngine()).get()
+        #expect(try FileManager.default.contentsOfDirectory(atPath: store.compiledDirectory.path) == [key])
+        await (c as? ReleasableClient)?.release()
     }
 
     @Test func busyFileLockRefusesAndReleasesReservation() throws {

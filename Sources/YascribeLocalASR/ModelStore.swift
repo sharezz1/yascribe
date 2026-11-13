@@ -36,7 +36,6 @@ public struct ModelStore: Sendable {
     public typealias FileDownload = @Sendable (URL, URL, @escaping @Sendable (Int64) -> Void) async throws -> Void
     public typealias DiskSpace = @Sendable (URL) throws -> ModelDiskLocation
     private let diskSpace: DiskSpace
-    var lockRootForTesting: URL?
 
     public init(model: LocalASRModel = .parakeetV3, directory: URL? = nil, download: Download? = nil,
                 modelsExist: @escaping ModelsExist = ModelStore.fluidAudioModelsExist,
@@ -152,24 +151,40 @@ public struct ModelStore: Sendable {
 
     /// Token od sprawdzenia źródeł aż do zwolnienia modelu. Domyślnie LOCK_EX; `shared` tylko dla ładowania Parakeeta.
     public func acquireLock(shared: Bool = false) throws -> ModelStoreLock {
-        try ModelStoreLock(url: lockURL, shared: shared)
+        try acquireLock(shared: shared, foreignRoot: Self.defaultForeignRoot)
     }
 
-    /// Blokady zawsze pod własnym korzeniem Yascribe, nigdy we wspólnym magazynie FluidAudio. W DEBUG kopia magazynu
-    /// albo `.devdata` (`YASCRIBE_DATA_DIR` z run.sh; cwd aplikacji z `open` to `/`).
-    static func lockRoot(env: [String: String]) -> URL {
-        #if DEBUG
-        if let override = env["YASCRIBE_MODEL_STORE"], !override.isEmpty {
-            return URL(fileURLWithPath: override, isDirectory: true)
-        }
-        return YascribePaths.fromEnvironment(env).root
-        #else
-        return YascribePaths.fromEnvironment([:]).root
-        #endif
+    func acquireLock(shared: Bool, foreignRoot: URL) throws -> ModelStoreLock {
+        // `.locks` w magazynie może być dowiązaniem: sprawdzamy, dokąd naprawdę trafi zapis (plik — O_NOFOLLOW w ModelStoreLock).
+        let url = lockURL, folder = url.deletingLastPathComponent()
+        let refusal = ModelStoreError(message: "The model lock folder is a link or points into another app's model store.")
+        // `.locks` nigdy nie tworzymy jako dowiązania; wiszącego nie da się sprawdzić, więc każde dowiązanie to odmowa.
+        let type = (try? FileManager.default.attributesOfItem(atPath: folder.path))?[.type] as? FileAttributeType
+        guard type != .typeSymbolicLink, !Self.isForeign(folder, foreignRoot: foreignRoot) else { throw refusal }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        guard !Self.isForeign(folder, foreignRoot: foreignRoot) else { throw refusal }
+        return try ModelStoreLock(url: url, shared: shared)
+    }
+
+    /// Blokada w samym magazynie: aplikacja z env i CLI z `--model-store` trafiają w ten sam i-węzeł niezależnie od pisowni
+    /// ścieżki (dowiązanie, /tmp vs /private/tmp). Wyjątek: we wspólnym magazynie FluidAudio nic nie zapisujemy, więc jego
+    /// blokady leżą w stałym korzeniu produkcyjnym Yascribe, bez env. Porównanie kanoniczne, bez wielkości liter, po prefiksie
+    /// rodzica — w razie wątpliwości magazyn traktujemy jako cudzy.
+    static let defaultForeignRoot = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("FluidAudio", isDirectory: true)
+
+    static func lockRoot(directory: URL, foreignRoot: URL = defaultForeignRoot) -> URL {
+        isForeign(directory, foreignRoot: foreignRoot) ? YascribePaths.fromEnvironment([:]).root : directory
+    }
+
+    static func isForeign(_ url: URL, foreignRoot: URL = defaultForeignRoot) -> Bool {
+        let canonical = { (url: URL) in url.resolvingSymlinksInPath().standardizedFileURL.path.lowercased() }
+        let path = canonical(url), foreign = canonical(foreignRoot)
+        return path == foreign || path.hasPrefix(foreign + "/")
     }
 
     var lockURL: URL {
-        (lockRootForTesting ?? Self.lockRoot(env: ProcessInfo.processInfo.environment))
+        Self.lockRoot(directory: directory)
             .appendingPathComponent(".locks", isDirectory: true).appendingPathComponent("\(model.id).lock")
     }
     public var compiledDirectory: URL { modelDirectory.appendingPathComponent("compiled", isDirectory: true) }

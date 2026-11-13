@@ -73,6 +73,16 @@ private actor WindowClient: TranscriptionClient {
         // Wiersz w UI: tekst po Replacement może być inny, klucz to mówca i czasy.
         var shown = try #require(repaired.utterances.first { $0.speaker == .them && $0.suspectedHallucination == true })
         shown.text = "inny tekst po Replacement"
+        // R03: nieczytelne chunks/ (plik zamiast katalogu) to błąd, nie „brak okien” — transcript i corrected bez zmian.
+        let chunks = run.url.appendingPathComponent("chunks"), aside = run.url.appendingPathComponent("chunks-aside")
+        try FileManager.default.moveItem(at: chunks, to: aside)
+        try Data().write(to: chunks)
+        let transcriptBytes = try Data(contentsOf: run.transcript), correctedBytes = try Data(contentsOf: run.corrected)
+        #expect(throws: (any Error).self) { try run.keepSuspectedEverywhere(shown, session: dir) }
+        #expect(try Data(contentsOf: run.transcript) == transcriptBytes)
+        #expect(try Data(contentsOf: run.corrected) == correctedBytes)
+        try FileManager.default.removeItem(at: chunks)
+        try FileManager.default.moveItem(at: aside, to: chunks)
         try run.keepSuspectedEverywhere(shown, session: dir)
         // Restart: ponowny odczyt z dysku.
         let reread = try JSONDecoder().decode(Transcript.self, from: Data(contentsOf: run.transcript))

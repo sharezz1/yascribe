@@ -72,7 +72,15 @@ public enum LocalASRFactory {
             // Parakeet tylko czyta: wielu klientów naraz (sesje, dyktowanie, sonda, CLI). Cohere kompiluje do compiled/, więc LOCK_EX.
             let owner = try store.acquireLock(shared: selected == .parakeetV3)
             if let refusal = RunGate.check(status: store.status()) { throw refusal }
-            if selected == .cohereTranscribe6bit, let refusal = RunGate.checkDisk(need: try store.diskNeed(operation: .load)) { throw refusal }
+            if selected == .cohereTranscribe6bit {
+                // Osierocony staging albo stary klucz zajmuje miejsce, którego wymaga bramka: sprzątamy pod blokadą przed oceną.
+                guard let fingerprint = store.fingerprint() else {
+                    throw RunGateRefusal(message: "The Cohere model is missing or failed its check.", canDownload: true)
+                }
+                try CohereModelCompilation.clean(root: store.compiledDirectory,
+                    key: CohereModelCompilation.key(fingerprint: fingerprint, configuration: .yascribe), lock: owner)
+                if let refusal = RunGate.checkDisk(need: try store.diskNeed(operation: .load)) { throw refusal }
+            }
             let selectedEngine: any LocalASREngine = engine ?? makeEngine(model: selected, store: store, owner: owner)
             return .success(LocalASRClient(provider: provider, engine: selectedEngine, store: store,
                                            owner: owner, reservation: reservation, onPhase: onPhase))

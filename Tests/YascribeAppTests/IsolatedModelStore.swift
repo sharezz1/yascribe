@@ -1,14 +1,12 @@
 import Foundation
 @testable import YascribeLocalASR
 
-// Każdy test ma osobny magazyn i inode blokady; produkcyjna ścieżka pozostaje stała.
+// Każdy test ma osobny magazyn, więc i osobny inode blokady (`<magazyn>/.locks`, jak w produkcji).
 func isolatedModelStore(model: LocalASRModel = .parakeetV3, directory: URL? = nil,
                         download: ModelStore.Download? = nil,
                         modelsExist: @escaping ModelStore.ModelsExist = ModelStore.fluidAudioModelsExist,
                         fileDownload: @escaping ModelStore.FileDownload = ModelStore.networkFileDownload,
                         diskSpace: @escaping ModelStore.DiskSpace = ModelDiskBudget.inspect) -> ModelStore {
-    var store = ModelStore(model: model, directory: directory, download: download, modelsExist: modelsExist,
-                           fileDownload: fileDownload, diskSpace: diskSpace)
-    store.lockRootForTesting = directory
-    return store
+    ModelStore(model: model, directory: directory, download: download, modelsExist: modelsExist,
+               fileDownload: fileDownload, diskSpace: diskSpace)
 }

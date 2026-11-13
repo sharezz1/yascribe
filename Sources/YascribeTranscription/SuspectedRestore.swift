@@ -28,7 +28,10 @@ public extension RunDirectory {
         let summary = try SessionDirectory(url: session).summarize()
         let clock = SessionClock(summary: summary)
         let tracks = Set(TranscriptionRunner.tracks(in: summary).filter { $0.speaker == u.speaker }.map(\.id))
-        let files = (try? FileManager.default.contentsOfDirectory(at: url.appendingPathComponent("chunks"), includingPropertiesForKeys: nil)) ?? []
+        // Tylko brak katalogu to „brak okien”: inny błąd odczytu zgłosiłby sukces, a ponowne scalenie przywróciłoby flagę.
+        let files: [URL]
+        do { files = try FileManager.default.contentsOfDirectory(at: url.appendingPathComponent("chunks"), includingPropertiesForKeys: nil) }
+        catch CocoaError.fileReadNoSuchFile { files = [] }
         var restored = 0
         for file in files where file.pathExtension == "json" {
             guard var r = try JSONFile.load(ChunkResult?.self, from: file, default: nil),
