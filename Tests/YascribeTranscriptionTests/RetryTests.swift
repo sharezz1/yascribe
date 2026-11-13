@@ -120,7 +120,3 @@ private func attempt(status: Int, failures: Int, log: Log) async throws -> Strin
     #expect(abs(t.utterances[0].start - 5.0) < 1e-6 && abs(t.utterances[0].end - 17.4) < 1e-6)
 }
 
-@Test func openAIWordsFromSegmentsWithoutWordsIsNil() {
-    let obj: [String: Any] = ["text": "a b", "segments": [["start": 0.0, "end": 1.0, "text": "a b"]]]
-    #expect(OpenAICompatibleClient.words(obj) == nil)
-}

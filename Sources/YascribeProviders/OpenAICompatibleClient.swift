@@ -84,6 +84,8 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         var fields = [("model", model), ("response_format", "verbose_json"), ("timestamp_granularities[]", "word")]
         if let language { fields.append(("language", language.rawValue)) }
+        // Rozszerzenie oMLX: bez niego Whisper oddaje same segmenty. Tylko lokalnie — API OpenAI nie zna pola.
+        if provider.isLocal { fields.append(("word_timestamps", "true")) }
         var body = Data()
         func add(_ s: String) { body.append(Data(s.utf8)) }
         for (name, value) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n") }
@@ -138,7 +140,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                 obj = try await json(try request("audio/transcriptions", body: body))
             } catch ProviderError.http(let status, _) where status == 400 || status == 415 || status == 422 {
                 // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
-                // bez pola. Zostają same `segments` (bez czasów słów) — `words` = nil, Merger bierze tekst okna.
+                // bez pola. Zostają same `segments` (bez czasów słów) — `words(obj)` bierze je jako jednostki.
                 body["timestamp_granularities"] = nil
                 do {
                     obj = try await json(try request("audio/transcriptions", body: body))
@@ -246,10 +248,13 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             }
         }
         if let top = obj["words"] as? [[String: Any]] { return parse(top) }
-        if let segs = obj["segments"] as? [[String: Any]] {
-            let all = segs.flatMap { ($0["words"] as? [[String: Any]]).map(parse) ?? [] }
-            return all.isEmpty ? nil : all
-        }
-        return nil
+        guard let segs = obj["segments"] as? [[String: Any]] else { return nil }
+        let all = segs.flatMap { ($0["words"] as? [[String: Any]]).map(parse) ?? [] }
+        if !all.isEmpty { return all }
+        // Bez czasów słów (Voxtral, Whisper bez `word_timestamps`) segment z czasami jest jedną jednostką: Merger dzieli
+        // okno na wypowiedzi po przerwach między segmentami, zamiast wrzucać całe okno do jednego wiersza.
+        let units = parse(segs.map { ["word": $0["text"] ?? "", "start": $0["start"] ?? "", "end": $0["end"] ?? ""] })
+            .filter { !$0.word.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return units.isEmpty ? nil : units
     }
 }

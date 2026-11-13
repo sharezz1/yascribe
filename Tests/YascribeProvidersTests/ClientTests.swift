@@ -374,7 +374,24 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     #expect(http.calls[1].body["response_format"] as? String == "verbose_json")
     #expect(http.calls[1].body["language"] as? String == "pl")
     #expect(r.text == "raz dwa")
-    #expect(r.words == nil)
+    #expect(r.words == [TranscribedWord(word: "raz dwa", start: 0.0, end: 1.0)])
+}
+
+// Bez czasów słów segmenty z czasami są jednostkami podziału na wypowiedzi; segment bez czasów albo pusty odpada.
+@Test func segmentsWithoutWordsBecomeTimedUnits() {
+    let obj: [String: Any] = ["text": "a b", "segments": [
+        ["start": 0.8, "end": 2.2, "text": " Cóż, w takim razie..."],
+        ["start": 3.5, "end": 5.7, "text": " Nie wiem."],
+        ["text": " bez czasów"],
+        ["start": 6.0, "end": 6.1, "text": "  "],
+    ]]
+    #expect(OpenAICompatibleClient.words(obj) == [TranscribedWord(word: " Cóż, w takim razie...", start: 0.8, end: 2.2),
+                                                  TranscribedWord(word: " Nie wiem.", start: 3.5, end: 5.7)])
+    #expect(OpenAICompatibleClient.words(["text": "x", "segments": [["text": "x"]]]) == nil)
+    // Słowa w segmentach mają pierwszeństwo przed samymi segmentami.
+    let withWords: [String: Any] = ["segments": [["start": 0.0, "end": 1.0, "text": "raz dwa",
+                                                  "words": [["word": "raz", "start": 0.1, "end": 0.4]]]]]
+    #expect(OpenAICompatibleClient.words(withWords) == [TranscribedWord(word: "raz", start: 0.1, end: 0.4)])
 }
 
 @Test func wordTimestampFallbackHappensOnlyOnce() async {
@@ -404,6 +421,7 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     let text = String(decoding: last.raw, as: UTF8.self)
     for field in ["name=\"model\"\r\n\r\nwhisper-large-v3-turbo\r\n", "name=\"language\"\r\n\r\npl\r\n",
                   "name=\"response_format\"\r\n\r\nverbose_json\r\n", "name=\"timestamp_granularities[]\"\r\n\r\nword\r\n",
+                  "name=\"word_timestamps\"\r\n\r\ntrue\r\n",
                   "name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n"] {
         #expect(text.contains(field), "missing \(field)")
     }
@@ -449,4 +467,13 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
         _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .chatAudio)
     }
     #expect(http.calls.count == 1)
+}
+
+// `word_timestamps` to rozszerzenie oMLX: zdalny dostawca (API OpenAI) go nie dostaje.
+@Test func remoteMultipartOmitsLocalWordTimestampsExtension() throws {
+    let c = OpenAICompatibleClient(provider: Provider(name: "OpenAI", baseURL: URL(string: "https://api.openai.com/v1")!), key: "k",
+                                   http: StubHTTP { _, _ in ok([:]) })
+    let text = String(decoding: try #require(c.multipartTranscription(wav: Data([1]), model: "m", language: nil).httpBody), as: UTF8.self)
+    #expect(!text.contains("word_timestamps"))
+    #expect(text.contains("name=\"timestamp_granularities[]\""))
 }
