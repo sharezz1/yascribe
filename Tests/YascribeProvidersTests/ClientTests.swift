@@ -378,12 +378,38 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
 }
 
 @Test func wordTimestampFallbackHappensOnlyOnce() async {
-    let http = StubHTTP { _, _ in fail(400, "Provider returned 400") }
+    let http = StubHTTP { _, body in body.isEmpty ? fail(400, "multipart rejected") : fail(400, "Provider returned 400") }
     let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
     await #expect(throws: ProviderError.http(400, "Provider returned 400")) {
         _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
     }
-    #expect(http.calls.count == 2)
+    // JSON dwa razy, potem jeden multipart; błąd z JSON, nie z multipart.
+    #expect(http.calls.count == 3)
+    #expect(http.calls[2].headers["Content-Type"]?.hasPrefix("multipart/form-data; boundary=") == true)
+}
+
+// oMLX / API OpenAI: tylko multipart/form-data. JSON z `input_audio` → 422 „file: Field required”.
+@Test func jsonRejectedTwiceFallsBackToMultipartWithFileAndFields() async throws {
+    let http = StubHTTP { _, body in
+        body.isEmpty ? ok(["text": "raz dwa", "words": [["word": "raz", "start": 0.1, "end": 0.4]]])
+            : fail(422, "body -> file: Field required; body -> model: Field required")
+    }
+    let c = OpenAICompatibleClient(provider: Provider(name: "oMLX", baseURL: URL(string: "http://localhost:8000/v1")!), key: "k", http: http)
+    let r = try await c.transcribe(wav: ProbeClips.polish.wav, model: "whisper-large-v3-turbo", language: .polish,
+                                   shape: .audioTranscriptions)
+    #expect(http.calls.count == 3)
+    let last = http.calls[2]
+    #expect(last.path == "/v1/audio/transcriptions")
+    #expect(last.headers["Authorization"] == "Bearer k")
+    let text = String(decoding: last.raw, as: UTF8.self)
+    for field in ["name=\"model\"\r\n\r\nwhisper-large-v3-turbo\r\n", "name=\"language\"\r\n\r\npl\r\n",
+                  "name=\"response_format\"\r\n\r\nverbose_json\r\n", "name=\"timestamp_granularities[]\"\r\n\r\nword\r\n",
+                  "name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n"] {
+        #expect(text.contains(field), "missing \(field)")
+    }
+    #expect(last.raw.range(of: ProbeClips.polish.wav) != nil)
+    #expect(r.text == "raz dwa")
+    #expect(r.words?.count == 1)
 }
 
 @Test(arguments: [401, 429, 500]) func otherTranscriptionErrorsAreNotRetriedByTheClient(status: Int) async {

@@ -77,6 +77,23 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         return r
     }
 
+    /// `POST audio/transcriptions` w kształcie OpenAI: multipart z plikiem i znacznikami słów (czysta funkcja).
+    func multipartTranscription(wav: Data, model: String, language: LanguageCode?,
+                                boundary: String = "Yascribe-\(UUID().uuidString)") throws -> URLRequest {
+        var r = try request("audio/transcriptions")
+        r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var fields = [("model", model), ("response_format", "verbose_json"), ("timestamp_granularities[]", "word")]
+        if let language { fields.append(("language", language.rawValue)) }
+        var body = Data()
+        func add(_ s: String) { body.append(Data(s.utf8)) }
+        for (name, value) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n") }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n")
+        body.append(wav)
+        add("\r\n--\(boundary)--\r\n")
+        r.httpBody = body
+        return r
+    }
+
     func json(_ req: URLRequest) async throws -> [String: Any] {
         let (data, resp) = try await http.send(req)
         guard let obj = try JSONSerialization.jsonObject(with: try checkedBody(data, resp, key: key)) as? [String: Any] else {
@@ -123,7 +140,14 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                 // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
                 // bez pola. Zostają same `segments` (bez czasów słów) — `words` = nil, Merger bierze tekst okna.
                 body["timestamp_granularities"] = nil
-                obj = try await json(try request("audio/transcriptions", body: body))
+                do {
+                    obj = try await json(try request("audio/transcriptions", body: body))
+                } catch ProviderError.http(let status, let message) where status == 400 || status == 415 || status == 422 {
+                    // Oryginalne API OpenAI i serwery lokalne (oMLX, mlx-audio) przyjmują tylko multipart/form-data, a JSON
+                    // z `input_audio` odrzucają jako brak pól. Gdy i multipart nie przejdzie, zostaje błąd JSON (nie mylimy diagnozy).
+                    do { obj = try await json(multipartTranscription(wav: wav, model: model, language: language)) }
+                    catch { throw ProviderError.http(status, message) }
+                }
             }
             guard let text = obj["text"] as? String else { throw ProviderError.badResponse("no text") }
             return TranscriptionResult(text: text, words: Self.words(obj))
