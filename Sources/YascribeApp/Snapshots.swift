@@ -523,7 +523,7 @@ enum Snapshots {
                 // komputera (tylko odczyt), więc ta para nie jest deterministyczna; wymyślone stany są w migawkach powyżej.
                 let onDevice = Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
                 model.providers.providers.append(onDevice)
-                model.providerChecks[onDevice.id] = RunGate.check(status: model.localASRModels[0].status).map { .failed($0.message) } ?? .verified(models: 1)
+                model.providerChecks[onDevice.id] = RunGate.check(status: model.localASR("")!.status).map { .failed($0.message) } ?? .verified(models: 1)
                 try render("settings-on-this-mac", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
                 let localEditor = PresetEditorState(draft: Preset(name: "Polish, on this Mac", language: .polish,
                                                                   asr: RoleAssignment(providerID: onDevice.id, model: LocalASRModels.parakeetV3)), original: nil)

@@ -24,6 +24,7 @@ struct CLI {
       note <przebieg> <baseURL> <model> --language pl --out plik.json [--source raw|corrected] [--thinking on|off] [--context 16384] [--vocabulary vocabulary.txt]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
                                                                   <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza), <model> = parakeet-tdt-0.6b-v3 | parakeet-ultra
+                                                                  pusty <model> = v3; nieznany model lokalny = błąd użycia (kod 64)
       download-model <model> --model-store <korzeń>                 pobiera lokalny model do podanego magazynu (np. parakeet-ultra)
       dictionary-check <katalog sesji> --replacements <plik.tsv> [--vocabulary <plik.txt>]
                                                                   liczy Termy i Aliasy w transkrypcie (surowym i poprawionym) przed i po Replacement (faza 2.1, odbiór §8.1)

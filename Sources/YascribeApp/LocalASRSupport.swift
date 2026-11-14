@@ -30,7 +30,10 @@ final class LocalASRSupport: ObservableObject {
 
     /// Pobranie po kliknięciu. `force` (naprawa uszkodzonego) liczy sam `ModelStore.download` — wołający nie dostaje argumentu.
     func download() async {
-        guard phase == .idle else { return }
+        guard phase == .idle, runs.isIdle else {
+            downloadError = "Can't download the on-device model while it is downloading or in use."
+            return
+        }
         downloadError = nil
         phase = .downloading(nil)
         highest = 0

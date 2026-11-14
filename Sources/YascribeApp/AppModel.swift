@@ -142,16 +142,22 @@ final class AppModel {
     /// Indeks archiwum i „Ask anything" (TASK-21/24); podłączany w `init`.
     let archive = ArchiveModel()
     /// Lokalny ASR (F20): magazyn i faza pobierania/przygotowania — po jednym na wariant (kolejność = karty w Settings).
-    let localASRModels = LocalASRVariant.allCases.map { LocalASRSupport(store: ModelStore(variant: $0)) }
+    let localASRModels: [LocalASRSupport]
 
     /// `nil` = nieznany model lokalny; pusty = v3 (jak `LocalASRVariant(model:)`).
     func localASR(_ model: String) -> LocalASRSupport? {
         LocalASRVariant(model: model).flatMap { v in localASRModels.first { $0.store.variant == v } }
     }
+
+    /// Do uruchomień (spotkanie, wznowienie, sonda, dyktowanie): nieznany model = v3, bo tak szły przebiegi sprzed wariantów —
+    /// ich migawki niosą odcisk v3 i muszą się dać wznowić. Ścisłe `localASR(_:)` zostaje dla UI (ostrzeżenie).
+    func localASRForRun(_ model: String) -> LocalASRSupport { localASR(model) ?? localASR("")! }
+
     /// Dyktowanie: powstaje w `load()` (historia), skrót startuje `YascribeApp.init` obok `monitor`.
     @ObservationIgnored lazy var dictation = DictationController(model: self)
 
-    init() {
+    init(localASRModels: [LocalASRSupport]? = nil) {
+        self.localASRModels = localASRModels ?? LocalASRVariant.allCases.map { LocalASRSupport(store: ModelStore(variant: $0)) }
         recording.model = self
         monitor.model = self
         updateGate = RestartGate(activity: self)
@@ -496,12 +502,10 @@ final class AppModel {
             // `.fluidAudio` nigdy nie przechodzi przez `Provider.transcriptionClient` (tam siedzi zaślepka). Odmowa = błąd i koniec:
             // żadnego klienta, więc nic nie pójdzie do API.
             guard p.api == .fluidAudio else { return p.transcriptionClient(key: key) }
-            guard let support = localASR(model) else {
-                lastError = "Unknown on-device model: \(model)."
-                return nil
-            }
+            let support = localASRForRun(model)
             switch LocalASRFactory.client(provider: p, store: support.store, onPhase: { phase in Task { @MainActor in support.apply(phase) } }) {
-            case .success(let c): return c
+            case .success(let c):
+                return LocalASRVariant(model: model) == nil ? LegacyLocalASRClient(inner: c, legacyModel: model) : c
             case .failure(let refusal):
                 lastError = refusal.message
                 return nil
@@ -522,11 +526,15 @@ final class AppModel {
         switch providerWithKey(id) {
         case .failure(let problem): providerChecks[id] = .failed(problem.message)
         case .success(let (p, _)) where p.api == .fluidAudio: // bez sieci: model jest w magazynie i zgadza się z manifestem
-            // Gotowy, gdy choć jeden wariant przechodzi bramkę; bez żadnego — powód z v3 (domyślnego).
             localASRModels.forEach { $0.refresh() }
-            let ready = localASRModels.filter { RunGate.check(status: $0.status) == nil }.count
-            providerChecks[id] = ready > 0 ? .verified(models: ready)
-                : RunGate.check(status: localASRModels[0].status).map { .failed($0.message) } ?? .verified(models: 1)
+            let ready = localASRModels.filter { RunGate.check(status: $0.status) == nil }
+            if ready.count == LocalASRVariant.allCases.count {
+                providerChecks[id] = .verified(models: ready.count)
+            } else if !ready.isEmpty {
+                providerChecks[id] = .limited(ready.map { $0.store.variant.displayName }.joined(separator: ", ") + " only")
+            } else {
+                providerChecks[id] = RunGate.check(status: localASR("")!.status).map { .failed($0.message) } ?? .verified(models: 1)
+            }
         case .success(let (p, key)):
             providerChecks[id] = await p.verify(key: key)
             // Lokalny serwer: pokaż efektywny kontekst (llama.cpp `/props`, Ollama `/api/ps`), żeby użytkownik mógł go wpisać w polu.
@@ -629,7 +637,7 @@ final class AppModel {
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
         guard let c = transcriptionClient(for: providerID, model: model) else { return }
-        let support = c is any ReleasableClient ? localASR(model) : nil
+        let support = c is any ReleasableClient ? localASRForRun(model) : nil
         support?.beginRun()
         defer { // sonda lokalnego ASR ładuje model — nie zostawiamy go w pamięci
             Task {
@@ -998,15 +1006,19 @@ final class AppModel {
     /// `true` = przebieg przyjęty i wystartował; odmowa zostawia powód w `lastError`.
     @discardableResult
     func transcribe(sessionURL: URL, preset: Preset) -> Bool {
-        guard let asr = preset.asr, let provider = provider(asr.providerID) else {
+        guard var asr = preset.asr, let provider = provider(asr.providerID) else {
             lastError = "The preset's speech-to-text provider is missing."
             return false
         }
+        // Migawka ma nieść model, który naprawdę ruszy (nieznany = v3), a nie wpisany identyfikator.
+        if provider.api == .fluidAudio { asr.model = localASRForRun(asr.model).store.variant.rawValue }
+        var preset = preset
+        preset.asr = asr
         guard let c = transcriptionClient(for: asr.providerID, model: asr.model) else { return false } // powód już w lastError
         let probe = probeCache.result(provider: asr.providerID, model: asr.model, role: .asr, language: preset.language)
         do {
-            // Dostawca API: model spoza listy lokalnej, a odcisk i tak jest `nil` — magazyn v3 tylko wypełnia argument.
-            let store = (localASR(asr.model) ?? localASRModels[0]).store
+            // Dostawca API: odcisk i tak jest `nil` — magazyn tylko wypełnia argument.
+            let store = (localASR(asr.model) ?? localASR("")!).store
             let snapshot = try RunSnapshot(preset: preset, provider: provider, probe: probe,
                                            modelFingerprint: RunGate.fingerprintForSnapshot(provider: provider, store: store))
             return run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
@@ -1041,14 +1053,19 @@ final class AppModel {
             lastError = "Nothing to resume for this recording."
             return
         }
-        guard let c = transcriptionClient(for: input.snapshot.providerID, model: input.snapshot.model) else { return } // powód już w lastError
-        // Zapisana migawka trafia do runnera bez zmian, więc zmianę modelu we wspólnym magazynie łapie tylko ta bramka (przed `run`).
-        if let p = provider(input.snapshot.providerID),
-           let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p,
-                                             currentFingerprint: localASR(input.snapshot.model)?.store.fingerprint()) {
-            lastError = refusal.message
-            return
+        if let p = provider(input.snapshot.providerID), p.api == .fluidAudio {
+            let fingerprint = localASRForRun(input.snapshot.model).store.fingerprint()
+            if LocalASRVariant(model: input.snapshot.model) == nil,
+               (fingerprint == nil || input.snapshot.modelFingerprint != fingerprint) {
+                lastError = "Unknown on-device model: \(input.snapshot.model). Its saved fingerprint doesn't match Parakeet TDT v3."
+                return
+            }
+            if let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p, currentFingerprint: fingerprint) {
+                lastError = refusal.message
+                return
+            }
         }
+        guard let c = transcriptionClient(for: input.snapshot.providerID, model: input.snapshot.model) else { return }
         run(sessionURL: item.url, runID: runID, snapshot: input.snapshot, client: c)
     }
 
@@ -1059,7 +1076,7 @@ final class AppModel {
             lastError = refusal
             return false
         }
-        let support = c is any ReleasableClient ? localASR(snapshot.model) : nil
+        let support = c is any ReleasableClient ? localASRForRun(snapshot.model) : nil
         support?.beginRun()
         Task {
             var finished: Transcript?
@@ -1126,4 +1143,17 @@ enum TranscriptionStartGate {
         let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""
         return "This meeting's audio was deleted\(days), so it can't be transcribed again."
     }
+}
+
+/// Stare migawki zachowują identyczne wejście runnera; tylko żądanie klienta dostaje jawne ID v3.
+private struct LegacyLocalASRClient: TranscriptionClient, ReleasableClient {
+    let inner: any TranscriptionClient
+    let legacyModel: String
+    var provider: Provider { inner.provider }
+
+    func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
+        try await inner.transcribe(wav: wav, model: model == legacyModel ? LocalASRModels.parakeetV3 : model, language: language, shape: shape)
+    }
+
+    func release() async { await (inner as? any ReleasableClient)?.release() }
 }

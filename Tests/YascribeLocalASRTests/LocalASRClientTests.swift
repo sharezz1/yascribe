@@ -99,17 +99,17 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     #expect(await engine.loads == 0)
     // trzy równoległe żądania + jedno po nich: jedno ładowanie
     try await withThrowingTaskGroup(of: Void.self) { g in
-        for _ in 0..<3 { g.addTask { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) } }
+        for _ in 0..<3 { g.addTask { _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) } }
         try await g.waitForAll()
     }
-    _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+    _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     #expect(await engine.loads == 1)
 }
 
 @Test func reportsPreparingAroundTheFirstLoadOnly() async throws {
     let phases = Phases()
     let c = client(FakeEngine(), store: try readyStore(), phases: phases)
-    for _ in 0..<2 { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+    for _ in 0..<2 { _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) }
     #expect(phases.all == [.preparing, .ready])
 }
 
@@ -117,26 +117,26 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     let engine = FakeEngine()
     let phases = Phases()
     let c = client(engine, store: try readyStore(), phases: phases)
-    _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+    _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     await c.release()
     #expect(await engine.unloads == 1)
-    _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+    _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     #expect(await engine.loads == 2)
     #expect(phases.all == [.preparing, .ready, .idle, .preparing, .ready])
 }
 
 @Test func ignoresTheLanguageParameter() async throws {
     let c = client(FakeEngine(), store: try readyStore())
-    let pl = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: .polish, shape: .audioTranscriptions)
-    let en = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: .english, shape: .audioTranscriptions)
-    let none = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+    let pl = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: .polish, shape: .audioTranscriptions)
+    let en = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: .english, shape: .audioTranscriptions)
+    let none = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     #expect(pl == en && en == none)
 }
 
 @Test func chatShapeIsRejected() async throws {
     let engine = FakeEngine()
     let c = client(engine, store: try readyStore())
-    await #expect(throws: ProviderError.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .chatAudio) }
+    await #expect(throws: ProviderError.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .chatAudio) }
     #expect(await engine.loads == 0)
 }
 
@@ -144,7 +144,7 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     let engine = FakeEngine()
     let c = client(engine, store: emptyStore())
     do {
-        _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+        _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
         Issue.record("expected a refusal")
     } catch let ProviderError.badResponse(reason) {
         #expect(reason.contains("isn't downloaded"))
@@ -156,12 +156,12 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
 @Test func windowShorterThan300msIsEmptyNotAnError() async throws {
     let engine = FakeEngine()
     let c = client(engine, store: try readyStore())
-    let r = try await c.transcribe(wav: wav(seconds: 0.29), model: "m", language: nil, shape: .audioTranscriptions)
+    let r = try await c.transcribe(wav: wav(seconds: 0.29), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     #expect(r == TranscriptionResult(text: "", words: []))
     #expect(await engine.loads == 0)
     #expect(await engine.transcribed.isEmpty)
     // dokładnie 300 ms idzie już do silnika
-    _ = try await c.transcribe(wav: wav(seconds: 0.3), model: "m", language: nil, shape: .audioTranscriptions)
+    _ = try await c.transcribe(wav: wav(seconds: 0.3), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     #expect(await engine.transcribed == [4_800])
 }
 
@@ -169,7 +169,7 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     let engine = FakeEngine(gated: true)
     let phases = Phases()
     let c = client(engine, store: try readyStore(), phases: phases)
-    let request = Task { try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+    let request = Task { try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) }
     await waitUntilSuspended(engine)
     let release = Task { await c.release() }
     try await Task.sleep(nanoseconds: 50_000_000) // release zdąży ruszyć i (przed poprawką) zwolnić silnik w trakcie ładowania
@@ -181,7 +181,7 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     do { _ = try await request.value } catch is CancellationError {} // żądanie z tej generacji kończy się anulowaniem (albo zdążyło przed release)
     #expect(phases.all.last == .idle)
     // klient działa dalej: następne żądanie ładuje od nowa (brama silnika jest już zużyta, więc otwieramy ją drugi raz)
-    let next = Task { try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+    let next = Task { try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) }
     await waitUntilSuspended(engine, atLoad: 2)
     await engine.openGate()
     _ = try await next.value
@@ -193,13 +193,13 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     let phases = Phases()
     let c = client(engine, store: try readyStore(), phases: phases)
     for _ in 0..<3 {
-        await #expect(throws: LoadBoom.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+        await #expect(throws: LoadBoom.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) }
     }
     #expect(await engine.loads == 1, "later windows must rethrow the first failure instead of loading again")
     #expect(phases.all == [.preparing, .failed("boom")])
     await c.release()
     #expect(phases.all.last == .idle)
-    await #expect(throws: LoadBoom.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+    await #expect(throws: LoadBoom.self) { _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) }
     #expect(await engine.loads == 2, "release() clears the remembered failure")
 }
 
@@ -207,7 +207,7 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
     let engine = FakeEngine(failure: LoadBoom())
     let phases = Phases()
     let c = client(engine, store: try readyStore(), phases: phases)
-    let tasks = (0..<3).map { _ in Task { try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) } }
+    let tasks = (0..<3).map { _ in Task { try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) } }
     for t in tasks { await #expect(throws: LoadBoom.self) { _ = try await t.value } }
     #expect(await engine.loads == 1)
     #expect(phases.all == [.preparing, .failed("boom")])
@@ -216,24 +216,24 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
 @Test func cancelledRequestDoesNotTranscribeAfterTheLoad() async throws {
     let engine = FakeEngine(gated: true)
     let c = client(engine, store: try readyStore())
-    let request = Task { try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions) }
+    let request = Task { try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions) }
     await waitUntilSuspended(engine)
     request.cancel()
     await engine.openGate()
     await #expect(throws: CancellationError.self) { _ = try await request.value }
     #expect(await engine.transcribed.isEmpty)
     // załadowany model zostaje: następne żądanie nie ładuje drugi raz
-    _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+    _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     #expect(await engine.loads == 1)
 }
 
 @Test func cancelledRequestOnAnAlreadyLoadedModelDoesNotTranscribe() async throws {
     let engine = FakeEngine()
     let c = client(engine, store: try readyStore())
-    _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+    _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     let request = Task {
         while !Task.isCancelled { await Task.yield() }
-        return try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+        return try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
     }
     request.cancel()
     await #expect(throws: CancellationError.self) { _ = try await request.value }
@@ -242,7 +242,7 @@ private func client(_ engine: FakeEngine, store: ModelStore, phases: Phases = Ph
 
 private func refusal(_ c: LocalASRClient) async -> String? {
     do {
-        _ = try await c.transcribe(wav: wav(seconds: 1), model: "m", language: nil, shape: .audioTranscriptions)
+        _ = try await c.transcribe(wav: wav(seconds: 1), model: LocalASRModels.parakeetV3, language: nil, shape: .audioTranscriptions)
         return nil
     } catch let ProviderError.badResponse(reason) {
         return reason
@@ -275,4 +275,26 @@ private func refusal(_ c: LocalASRClient) async -> String? {
     let reason = await refusal(client(engine, store: store))
     #expect(reason?.contains("different variant") == true)
     #expect(await engine.loads == 0)
+}
+
+@Test func rejectsMismatchedOrUnknownModelBeforeLoading() async throws {
+    let store = try readyStore()
+    defer { try? FileManager.default.removeItem(at: store.directory) }
+    let engine = FakeEngine()
+    let phases = Phases()
+    let c = client(engine, store: store, phases: phases)
+    for model in [LocalASRModels.parakeetUltra, "unknown"] {
+        do {
+            _ = try await c.transcribe(wav: wav(seconds: 1), model: model, language: nil, shape: .audioTranscriptions)
+            Issue.record("expected a model mismatch")
+        } catch let ProviderError.badResponse(reason) {
+            #expect(reason.contains("doesn't match"))
+        }
+    }
+    #expect(await engine.loads == 0)
+    #expect(await engine.transcribed.isEmpty)
+    #expect(phases.all.isEmpty)
+    // Dotychczasowy pusty identyfikator nadal oznacza v3.
+    _ = try await c.transcribe(wav: wav(seconds: 1), model: "", language: nil, shape: .audioTranscriptions)
+    #expect(await engine.loads == 1)
 }

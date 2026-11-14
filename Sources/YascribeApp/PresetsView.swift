@@ -250,7 +250,7 @@ struct RoleSection<Extra: View>: View {
             FormRow(label: "Provider") {
                 FieldMenu(label: "Provider", value: providers.first { $0.id == assignment?.providerID }?.roleLabel ?? "None", width: 180) {
                     Picker("Provider", selection: Binding(get: { assignment?.providerID }, set: { id in
-                        assignment = id.map { RoleAssignment(providerID: $0, model: assignment?.model ?? "", prompt: assignment?.prompt) }
+                        assignment = id.map { RoleAssignment(providerID: $0, model: LocalASRModels.modelWhenSelecting(model.provider($0), previous: assignment?.model ?? ""), prompt: assignment?.prompt) }
                     })) {
                         Text("None").tag(UUID?.none)
                         ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
@@ -266,8 +266,12 @@ struct RoleSection<Extra: View>: View {
                             selection: Binding(get: { assignment?.model ?? "" }, set: { assignment?.model = $0 }))
             }
             if let p = providers.first(where: { $0.id == a.providerID }), p.isLocal {
-                if role == .asr, p.api == .fluidAudio, let support = model.localASR(a.model) {
-                    OnThisMacRoleRow(support: support)
+                if role == .asr, p.api == .fluidAudio {
+                    if let support = model.localASR(a.model) {
+                        OnThisMacRoleRow(support: support)
+                    } else {
+                        UnknownOnDeviceModelRow { assignment?.model = LocalASRModels.parakeetV3 }
+                    }
                 } else {
                     LocalRoleNote(warnsAboutCorrection: role == .correction)
                 }

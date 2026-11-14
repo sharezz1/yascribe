@@ -274,3 +274,9 @@ private final class Calls: @unchecked Sendable {
         #expect(LocalASRVariant.parakeetV3.asrVersion == .v3 && LocalASRVariant.parakeetUltra.asrVersion == .ultra)
     }
 }
+
+@Test func engineVersionComesFromItsStore() {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")
+    #expect(FluidAudioEngine.modelVersion(for: ModelStore(directory: root, variant: .parakeetV3)) == .v3)
+    #expect(FluidAudioEngine.modelVersion(for: ModelStore(directory: root, variant: .parakeetUltra)) == .ultra)
+}

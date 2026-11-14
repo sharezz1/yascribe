@@ -9,8 +9,6 @@ import SwiftUI
 final class ModelCardUI: ObservableObject {
     /// Akcja czekająca na potwierdzenie („Remove…", „Download again").
     @Published var confirming: ModelCardState.Action?
-    /// Błąd usunięcia (błąd pobrania trzyma `LocalASRSupport.downloadError`).
-    @Published var removeError: String?
 }
 
 /// Sama prezentacja: stan podany z zewnątrz, więc migawki pokazują wymyślone stany, a nie magazyn tego komputera.
@@ -82,7 +80,7 @@ struct ModelCardSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ModelCardContent(card: support.card, location: location, error: ui.removeError ?? support.downloadError) { action in
+            ModelCardContent(card: support.card, location: location, error: support.downloadError) { action in
                 if action.needsConfirmation { ui.confirming = action } else { run(action) }
             }
         }
@@ -106,14 +104,12 @@ struct ModelCardSection: View {
     }
 
     private func run(_ action: ModelCardState.Action) {
-        ui.removeError = nil
         ui.confirming = nil
         switch action {
         case .download, .downloadAgain:
             Task { await support.download(); model.reverifyOnDeviceProviders() }
         case .remove:
-            do { try support.store.remove() } catch { ui.removeError = "Couldn't remove the model: \(error.localizedDescription)" }
-            support.refresh()
+            support.remove()
             model.reverifyOnDeviceProviders()
         }
     }
@@ -158,5 +154,18 @@ struct OnThisMacRoleRow: View {
         OnThisMacRoleContent(card: support.card,
                              onDownload: { Task { await support.download(); model.reverifyOnDeviceProviders() } },
                              onOpenSettings: { model.section = .settings })
+    }
+}
+
+struct UnknownOnDeviceModelRow: View {
+    var selectV3: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            WarnLabel("Unknown on-device model — uses Parakeet TDT v3")
+            Spacer(minLength: 0)
+            Button("Choose Parakeet TDT v3", action: selectV3).buttonStyle(.pillSmall)
+        }
+        .padding(.leading, 158).padding(.trailing, 16).padding(.bottom, 10)
     }
 }
