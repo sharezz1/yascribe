@@ -39,6 +39,17 @@ public enum ContextError {
         return false
     }
 
+    /// Błąd agenta CLI (TASK-86): opis dla użytkownika z `ProviderCheck.describe`, nie surowy enum.
+    public static func isAgentError(_ error: Error) -> Bool { (error as? ProviderError)?.isAgentError == true }
+
+    /// Naruszenie, po którym korekta agentem nie ma sensu (spec §4.5): użył narzędzia albo nie jest zalogowany.
+    public static func isTerminalAgentError(_ error: Error) -> Bool {
+        switch error as? ProviderError {
+        case .agentUsedTool?, .agentNotSignedIn?: true
+        default: false
+        }
+    }
+
     /// Odpowiedź pusta po oczyszczeniu z rozumowania (`OpenAICompatibleClient.chat`).
     public static func isEmptyReply(_ error: Error) -> Bool { (error as? ProviderError) == .badResponse("empty reply") }
 
@@ -56,6 +67,8 @@ public enum ContextError {
     public static func describe(model: String, _ error: Error, provider: Provider? = nil, transport: Double? = nil,
                                 isLocal: Bool = false, maxTokens: Int? = nil) -> String {
         if let provider, let hint = localHint(provider: provider, error, transport: transport) { return hint }
+        if let e = error as? ProviderError, e.isAgentError { return ProviderCheck.describe(e) }
+        if provider?.api.isAgentCLI == true, let d = error as? DeadlineExceeded { return "\(model) didn't answer within \(Int(d.seconds)) s." }
         let local = isLocal || provider?.isLocal == true
         if isCutOff(error) {
             if let maxTokens {
