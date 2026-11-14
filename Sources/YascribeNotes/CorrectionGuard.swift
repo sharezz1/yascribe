@@ -6,6 +6,8 @@ import Foundation
 /// - nowe słowa z artefaktem (`_` w środku, zdublowana litera z ogonkiem `podepnąą`, trzy takie same litery z rzędu);
 /// - wstawkę dwóch lub więcej nowych słów bez odpowiednika w oryginale (halucynacja typu „jest try to.").
 /// - nowe słowo z błędem pisowni, gdy wszystkie zastąpione słowa były poprawne (`oddziałów` → `odziałów`); tylko z `isMisspelled`.
+/// Poza cofaniem przywracamy końcówkę, gdy model zamienił odmienione słowo na Term w formie podstawowej
+/// (`na Genesisa` → `na Genesys` daje `na Genesysa`); liczy się to jak cofnięcie.
 /// Wielkość liter i interpunkcja na brzegach słów nie są zmianą (porównujemy klucze), więc zwykłe poprawki zostają.
 /// shortcut: nie rozpoznajemy podstawienia Termu za niepodobne słowo (`Ogowanie` → `GoOne`): podobieństwo znaków nie odróżnia go od
 /// dobrej poprawki `Gołana` → `GoOne`; przeniesione do pomiaru, gdy będzie miara fonetyczna.
@@ -29,7 +31,9 @@ public enum CorrectionGuard {
             case .same(_, let j): out.append(c[j])
             case .changed(let oi, let ci):
                 let before = Array(o[oi]), after = Array(c[ci])
-                if suspicious(original: before, corrected: after, isMisspelled: isMisspelled, terms: terms) { out += before; reverted += 1 } else { out += after }
+                if suspicious(original: before, corrected: after, isMisspelled: isMisspelled, terms: terms) { out += before; reverted += 1 }
+                else if before.count == after.count, let fixed = restoredEndings(original: before, corrected: after, terms: terms) { out += fixed; reverted += 1 }
+                else { out += after }
             }
         }
         return reverted == 0 ? Result(text: corrected, reverted: 0) : Result(text: out.joined(separator: " "), reverted: reverted)
@@ -94,6 +98,26 @@ public enum CorrectionGuard {
             let stem = t.count >= 5 ? String(t.dropLast(2)) : String(t.dropLast(1))
             return t == w || (stem.count >= 3 && w.hasPrefix(stem))
         }
+    }
+
+    /// Końcówki przypadków i przymiotników od nazw, najdłuższe najpierw (`Genesysowe` nie może stać się `Genesyse`).
+    static let caseEndings = ["owego", "owych", "owym", "owej", "owe", "owa", "owy", "ach", "ami", "owi", "em", "om", "ie", "ów",
+                              "a", "u", "y", "i", "ę", "ą", "e"].sorted { $0.count > $1.count }
+
+    /// Słowo poprawione na Term w formie podstawowej dostaje końcówkę z oryginału (słowa parami, ten sam blok).
+    /// Pomijamy: oryginał krótszy niż Term (`Genesa` to nie odmiana), Term kończący się tą końcówką (`Elekta` → `Lekta`).
+    /// shortcut: Termy na samogłoskę (`Lekta` → `Lekty`) wymieniają ostatnią literę, tego nie odtwarzamy; dopisać, gdy wystąpi w pomiarze.
+    static func restoredEndings(original: [String], corrected: [String], terms: [String]) -> [String]? {
+        var out = corrected, changed = false
+        for (k, (o, c)) in zip(original, corrected).enumerated() {
+            let ok = key(o), ck = key(c)
+            guard terms.contains(where: { $0.lowercased() == ck }), ok.count >= ck.count,
+                  let ending = caseEndings.first(where: { ok.hasSuffix($0) && ok.count > $0.count }), !ck.hasSuffix(ending),
+                  let r = c.range(of: ck, options: .caseInsensitive) else { continue }
+            out[k] = c.replacingCharacters(in: r, with: c[r] + ending)
+            changed = true
+        }
+        return changed ? out : nil
     }
 
     /// Znak `_`, znak zastępczy, trzy takie same litery z rzędu albo dwie takie same litery z ogonkiem (`ąą`, `łł`).
