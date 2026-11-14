@@ -32,10 +32,13 @@ public struct TranscriptionResult: Codable, Equatable, Sendable {
     public var text: String
     /// `nil`, gdy kształt nie daje znaczników słów (czat).
     public var words: [TranscribedWord]?
+    /// true = `words` zawiera segmenty (kilka sekund, mogą przechodzić przez sklejenie fragmentów okna), więc czasy są przybliżone.
+    public var segmentTiming: Bool?
 
-    public init(text: String, words: [TranscribedWord]?) {
+    public init(text: String, words: [TranscribedWord]?, segmentTiming: Bool? = nil) {
         self.text = text
         self.words = words
+        self.segmentTiming = segmentTiming
     }
 }
 
@@ -74,6 +77,25 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             r.setValue("application/json", forHTTPHeaderField: "Content-Type")
             r.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
+        return r
+    }
+
+    /// `POST audio/transcriptions` w kształcie OpenAI: multipart z plikiem i znacznikami słów (czysta funkcja).
+    func multipartTranscription(wav: Data, model: String, language: LanguageCode?, wordTimestamps: Bool = true,
+                                boundary: String = "Yascribe-\(UUID().uuidString)") throws -> URLRequest {
+        var r = try request("audio/transcriptions")
+        r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var fields = [("model", model), ("response_format", "verbose_json"), ("timestamp_granularities[]", "word")]
+        if let language { fields.append(("language", language.rawValue)) }
+        // Rozszerzenie oMLX: bez niego Whisper oddaje same segmenty. Tylko lokalnie — API OpenAI nie zna pola.
+        if provider.isLocal && wordTimestamps { fields.append(("word_timestamps", "true")) }
+        var body = Data()
+        func add(_ s: String) { body.append(Data(s.utf8)) }
+        for (name, value) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n") }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\nContent-Type: audio/wav\r\n\r\n")
+        body.append(wav)
+        add("\r\n--\(boundary)--\r\n")
+        r.httpBody = body
         return r
     }
 
@@ -116,17 +138,31 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             var body: [String: Any] = ["model": model, "input_audio": audio, "response_format": "verbose_json",
                                        "timestamp_granularities": ["word"]]
             if let language { body["language"] = language.rawValue }
+            let shapeRejection: Set<Int> = [400, 415, 422]
             let obj: [String: Any]
             do {
                 obj = try await json(try request("audio/transcriptions", body: body))
-            } catch ProviderError.http(let status, _) where status == 400 || status == 422 {
-                // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
-                // bez pola. Zostają same `segments` (bez czasów słów) — `words` = nil, Merger bierze tekst okna.
-                body["timestamp_granularities"] = nil
-                obj = try await json(try request("audio/transcriptions", body: body))
+            } catch ProviderError.http(let status, let message) where shapeRejection.contains(status) {
+                if status == 415 && (provider.isLocal || Self.mentionsAudioField(message)) {
+                    // 415 = serwer nie przyjmuje JSON w ogóle: drugi JSON też dostałby 415, od razu multipart.
+                    obj = try await multipartAfterJSONRejection(wav: wav, model: model, language: language, message: message)
+                } else {
+                    // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
+                    // bez pola. Zostają same `segments` (bez czasów słów) — `timedUnits(obj)` bierze je jako jednostki.
+                    body["timestamp_granularities"] = nil
+                    do {
+                        obj = try await json(try request("audio/transcriptions", body: body))
+                    } catch ProviderError.http(let retryStatus, let retryMessage) where shapeRejection.contains(retryStatus)
+                                && (provider.isLocal || Self.mentionsAudioField(message) || Self.mentionsAudioField(retryMessage)) {
+                        // Oryginalne API OpenAI i serwery lokalne (oMLX, mlx-audio) przyjmują tylko multipart/form-data, a JSON
+                        // z `input_audio` odrzucają jako brak pól. Dostawca JSON-owy (OpenRouter) z innym 400 multipartu nie dostaje.
+                        obj = try await multipartAfterJSONRejection(wav: wav, model: model, language: language, message: retryMessage)
+                    }
+                }
             }
             guard let text = obj["text"] as? String else { throw ProviderError.badResponse("no text") }
-            return TranscriptionResult(text: text, words: Self.words(obj))
+            let timing = Self.timedUnits(obj)
+            return TranscriptionResult(text: text, words: timing.units, segmentTiming: timing.segments ? true : nil)
         case .chatAudio:
             let instruction = language.map { "Transcribe this audio verbatim. The language is \($0.rawValue). Output only the transcript." }
                 ?? "Transcribe this audio verbatim. Output only the transcript."
@@ -137,6 +173,30 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             let obj = try await json(try request("chat/completions", body: body))
             return TranscriptionResult(text: try Self.chatContent(obj), words: nil)
         }
+    }
+
+    /// Komunikat odrzucenia JSON wskazuje na kształt żądania (brak pliku / nieznane `input_audio`), nie na treść.
+    static func mentionsAudioField(_ message: String) -> Bool {
+        let m = message.lowercased()
+        // Brak pola `file` albo nieznane pole `input_audio`; „Invalid audio file” / „invalid base64” to treść, nie kształt.
+        let missingFile = m.contains("file") && ["required", "missing"].contains(where: m.contains)
+        let unknownAudio = m.contains("input_audio") && ["unknown", "unexpected", "extra", "not permitted", "unrecognized"].contains(where: m.contains)
+        return missingFile || unknownAudio
+    }
+
+    /// Multipart po odrzuceniu JSON. Odrzucony też kształtem (400/415/422) → błąd ze statusem multipart i oboma komunikatami
+    /// (sonda języka patrzy na status; komunikat multipart to zwykle prawdziwa przyczyna). 401/404/429/5xx/timeout z multipart
+    /// idą dalej bez zmian, do ponowień i sondy.
+    func multipartAfterJSONRejection(wav: Data, model: String, language: LanguageCode?, message: String) async throws -> [String: Any] {
+        func combined(_ s: Int, _ m: String) -> ProviderError { .http(s, "\(message) | multipart \(s): \(m)") }
+        do { return try await json(multipartTranscription(wav: wav, model: model, language: language)) }
+        catch ProviderError.http(let s, let m) where provider.isLocal && (s == 400 || s == 422) {
+            // Inny lokalny serwer może nie znać rozszerzenia oMLX `word_timestamps`: jedno ponowienie bez niego.
+            do { return try await json(multipartTranscription(wav: wav, model: model, language: language, wordTimestamps: false)) }
+            catch ProviderError.http(let s2, let m2) where s2 == 400 || s2 == 415 || s2 == 422 {
+                throw combined(s2, m2 == m ? m2 : "\(m2) (with word_timestamps: \(m))")
+            }
+        } catch ProviderError.http(let s, let m) where s == 400 || s == 415 || s == 422 { throw combined(s, m) }
     }
 
     /// Obrona przed cichym obcięciem wejścia przez lokalny serwer (Ollama + bonsai-2: prompt dłuższy niż kontekst → HTTP 200,
@@ -212,7 +272,9 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         return content
     }
 
-    static func words(_ obj: [String: Any]) -> [TranscribedWord]? {
+    static func words(_ obj: [String: Any]) -> [TranscribedWord]? { timedUnits(obj).units }
+
+    static func timedUnits(_ obj: [String: Any]) -> (units: [TranscribedWord]?, segments: Bool) {
         func parse(_ arr: [[String: Any]]) -> [TranscribedWord] {
             arr.compactMap { w in
                 guard let word = w["word"] as? String, let s = (w["start"] as? NSNumber)?.doubleValue,
@@ -220,11 +282,27 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                 return TranscribedWord(word: word, start: s, end: e)
             }
         }
-        if let top = obj["words"] as? [[String: Any]] { return parse(top) }
-        if let segs = obj["segments"] as? [[String: Any]] {
-            let all = segs.flatMap { ($0["words"] as? [[String: Any]]).map(parse) ?? [] }
-            return all.isEmpty ? nil : all
+        if let top = obj["words"] as? [[String: Any]], case let ws = parse(top), !ws.isEmpty { return (ws, false) }
+        guard let segs = obj["segments"] as? [[String: Any]] else { return (nil, false) }
+        // Bez czasów słów (Voxtral, Whisper bez `word_timestamps`) segment z czasami jest jedną jednostką: Merger dzieli
+        // okno na wypowiedzi po przerwach między segmentami, zamiast wrzucać całe okno do jednego wiersza.
+        // Segment z tekstem bez czasów → cały tekst okna z czasem przybliżonym, żeby nic nie zginęło.
+        func spoken(_ seg: [String: Any]) -> Bool {
+            !((seg["text"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        return nil
+        let perSegment = segs.map { ($0["words"] as? [[String: Any]]).map(parse) ?? [] }
+        if zip(segs, perSegment).allSatisfy({ !$1.isEmpty || !spoken($0) }) {
+            let all = perSegment.flatMap { $0 }
+            return all.isEmpty ? (nil, false) : (all, false)
+        }
+        // Mieszana odpowiedź (część segmentów bez słów): całe okno na poziomie segmentów, żeby rodzaj czasu był jeden
+        // dla wyniku — słowa nie dostają mapowania końca segmentu (U1), a nic nie znika.
+        var units: [TranscribedWord] = []
+        for seg in segs where spoken(seg) {
+            guard let unit = parse([["word": seg["text"] ?? "", "start": seg["start"] ?? "", "end": seg["end"] ?? ""]]).first
+            else { return (nil, false) }
+            units.append(unit)
+        }
+        return units.isEmpty ? (nil, false) : (units, true)
     }
 }
