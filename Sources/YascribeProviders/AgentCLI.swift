@@ -72,7 +72,7 @@ public enum AgentCLI {
 
     static func name(_ kind: ProviderKind) -> String { kind == .claudeCLI ? "Claude Code" : "Codex" }
 
-    static func signInHint(_ kind: ProviderKind) -> String {
+    public static func signInHint(_ kind: ProviderKind) -> String {
         kind == .claudeCLI ? "Claude Code isn't signed in. Run `claude` in Terminal and sign in."
                            : "Codex isn't signed in. Run `codex login` in Terminal."
     }

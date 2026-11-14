@@ -47,11 +47,11 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     /// Agenci CLI (TASK-86, Experimental): logowanie w samym CLI, Yascribe nie trzyma klucza. `baseURL` = domyślna ścieżka binarki.
     public static let codexCLI = ProviderPreset(id: "codex-cli", name: "Codex", baseURL: AgentCLI.defaultBinary(.codexCLI),
                                                 needsKey: false, note: nil,
-                                                role: "Codex on this Mac · correction and summary · sends the transcript to OpenAI",
+                                                role: "On this Mac · sends the transcript to OpenAI",
                                                 kind: .codexCLI, keyPage: nil)
     public static let claudeCLI = ProviderPreset(id: "claude-cli", name: "Claude Code",
                                                  baseURL: AgentCLI.defaultBinary(.claudeCLI), needsKey: false, note: nil,
-                                                 role: "Claude Code on this Mac · correction and summary · sends the transcript to Anthropic",
+                                                 role: "On this Mac · sends the transcript to Anthropic",
                                                  kind: .claudeCLI, keyPage: nil)
     public static let custom = ProviderPreset(id: "custom", name: "Custom endpoint", baseURL: "", needsKey: true,
                                               note: "Any OpenAI-compatible server.",
