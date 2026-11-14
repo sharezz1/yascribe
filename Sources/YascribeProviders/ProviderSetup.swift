@@ -158,6 +158,9 @@ public enum ProviderCheck: Equatable, Sendable {
             case .missingKey: return "No API key."
             case .replyCutOff: return "The reply was cut off before the end."
             case .inputTruncated: return "The server cut off the start of the input: the Context window setting is higher than what it really uses."
+            case .agentNotSignedIn(let how): return how
+            case .agentUsedTool(let tool): return "The agent tried to use a tool (\(tool)), so its answer was discarded."
+            case .agentFailed(let why): return why
             }
         }
         if let u = error as? URLError {

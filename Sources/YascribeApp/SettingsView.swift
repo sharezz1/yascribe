@@ -463,7 +463,7 @@ private struct ProviderRowView: View {
         case .addCustom: ProviderPreset.custom.role
         }
     }
-    private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try model.secrets.get(p.id) }) } }
+    private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try p.storedKey(in: model.secrets) }) } }
     private var failure: String? {
         // „On this Mac": stan modelu opisuje karta poniżej, więc bez czerwonej linii i bez Retry (nic do ponowienia przez sieć).
         guard let p = provider, p.api != .fluidAudio, !model.providerVerifying.contains(p.id),

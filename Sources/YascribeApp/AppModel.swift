@@ -466,7 +466,7 @@ final class AppModel {
     private func providerWithKey(_ providerID: UUID) -> Result<(Provider, String?), ClientProblem> {
         guard let p = provider(providerID) else { return .failure(ClientProblem(message: "This provider no longer exists.")) }
         let key: String?
-        do { key = try secrets.get(p.id) } catch {
+        do { key = try p.storedKey(in: secrets) } catch {
             return .failure(ClientProblem(message: "Couldn't read the API key for \(p.name) from Keychain: \(error)"))
         }
         guard key != nil || !p.requiresKey else {
@@ -479,7 +479,7 @@ final class AppModel {
     /// pokazuje powód przy dostawcy). ElevenLabs tu nie pasuje: robi tylko transkrypcję (`transcriptionClient`).
     func makeClient(for providerID: UUID) -> Result<OpenAICompatibleClient, ClientProblem> {
         providerWithKey(providerID).flatMap { p, key in
-            p.api == .openAICompatible ? .success(OpenAICompatibleClient(provider: p, key: key))
+            p.api == .openAICompatible || p.api.isAgentCLI ? .success(OpenAICompatibleClient(provider: p, key: key))
                 : .failure(ClientProblem(message: "\(p.name) does only speech-to-text."))
         }
     }
@@ -567,7 +567,7 @@ final class AppModel {
     }
 
     func removeProvider(_ id: UUID) {
-        try? secrets.delete(id)
+        if let p = provider(id) { try? p.forgetKey(in: secrets) }
         providers.providers.removeAll { $0.id == id }
         save()
     }
@@ -617,6 +617,14 @@ final class AppModel {
     }
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
+        // Agent CLI: sonda czatu przez `makeClient` (R4); ASR i embeddingi odrzuca `ProbeRunner` jako nie-tekstowe.
+        if self.provider(providerID)?.api.isAgentCLI == true {
+            switch makeClient(for: providerID) {
+            case .success(let c): probeCache.record(await ProbeRunner(client: c).probe(model: model, role: role, language: language)); save()
+            case .failure(let problem): lastError = problem.message
+            }
+            return
+        }
         guard let c = transcriptionClient(for: providerID) else { return }
         let local = c is any ReleasableClient, support = localASR
         if local { support.beginRun() }

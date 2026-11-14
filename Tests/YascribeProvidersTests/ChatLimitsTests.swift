@@ -42,3 +42,11 @@ private let allCalls: [ChatCall] = [.note, .correctionBatch, .title, .mapPart]
     let l = ChatLimits.for(local, call: .title)
     #expect(l.soft == 120 && l.transport == 150 && l.maxTokens == 64)
 }
+
+@Test func agentCLILimitsMatchTheSpecTable() {
+    let agent = Provider(name: "Codex", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI)
+    #expect(ChatLimits.for(agent, call: .correctionBatch) == ChatLimits(soft: 240, transport: 240))
+    #expect(ChatLimits.for(agent, call: .note) == ChatLimits(soft: 600, transport: 600))
+    #expect(ChatLimits.for(agent, call: .title) == ChatLimits(soft: 120, transport: 120))
+    #expect(ChatLimits.for(agent, call: .mapPart) == ChatLimits(soft: 300, transport: 300))
+}
