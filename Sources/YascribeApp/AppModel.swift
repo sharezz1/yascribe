@@ -566,6 +566,13 @@ final class AppModel {
         await Provider(name: name, baseURL: baseURL, kind: kind).verify(key: key.isEmpty ? nil : key)
     }
 
+    /// Nowa ścieżka programu agenta CLI (R10): ten sam UUID, zapis i ponowny Check.
+    func setBaseURL(_ id: UUID, _ url: URL) {
+        guard providers.setBaseURL(id, url) else { return }
+        save()
+        Task { await verifyProvider(id) }
+    }
+
     func removeProvider(_ id: UUID) {
         if let p = provider(id) { try? p.forgetKey(in: secrets) }
         providers.providers.removeAll { $0.id == id }

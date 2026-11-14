@@ -171,3 +171,44 @@ private extension ProviderCheck {
     let loaded = try JSONDecoder().decode([Provider].self, from: Data(old.utf8))
     #expect(loaded.first.flatMap(ProviderPreset.matching) == .omlx)
 }
+
+// MARK: agenci CLI (TASK-86 T5)
+
+@Test func agentRowsAppearOnlyWithTheToggleOrWhenSaved() {
+    let saved = Provider(name: "Codex", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI)
+    #expect(ProviderPreset.matching(saved) == .codexCLI) // po rodzaju: wiersz bez „Edit key…" i bez zapisu do pęku
+    #expect(!ProviderPreset.codexCLI.needsKey && !ProviderPreset.codexCLI.keyOptional)
+    #expect(!ProviderListRow.rows(for: []).contains { $0.id == "preset-codex-cli" })
+    #expect(ProviderListRow.rows(for: [], agents: true).map(\.id).filter { $0.contains("-cli") } == ["preset-codex-cli", "preset-claude-cli"])
+    let rows = ProviderListRow.rows(for: [saved])
+    #expect(rows.contains(.preset(.codexCLI, saved)) && !rows.contains { $0.id == "preset-claude-cli" })
+    #expect(!rows.contains(.custom(saved)))
+}
+
+@Test func editingAnAgentPathKeepsTheProviderID() {
+    let saved = Provider(name: "Codex", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI)
+    var file = ProvidersFile(providers: [saved])
+    let changed = file.setBaseURL(saved.id, URL(fileURLWithPath: "/usr/local/bin/codex"))
+    #expect(changed)
+    #expect(file.providers.map(\.id) == [saved.id] && file.providers[0].baseURL.path == "/usr/local/bin/codex")
+    let missing = file.setBaseURL(UUID(), URL(fileURLWithPath: "/x"))
+    #expect(!missing)
+}
+
+@Test func everyAgentPickerSaysWhereTheTranscriptGoes() {
+    let codex = Provider(name: "My Codex", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI)
+    let claude = Provider(name: "Claude Code", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/claude"), kind: .claudeCLI)
+    let cloud = Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!)
+    #expect(AgentPrivacy.caption(codex) == "The transcript goes to OpenAI through Codex, with your sign-in in that app.")
+    #expect(AgentPrivacy.caption(claude) == "The transcript goes to Anthropic through Claude Code, with your sign-in in that app.")
+    #expect(AgentPrivacy.caption(cloud) == nil && AgentPrivacy.caption(nil) == nil)
+    #expect(AgentPrivacy.askCandidates([cloud, codex, claude]).map(\.id) == [cloud.id])
+}
+
+@Test func agentToggleIsOptionalAndOffByDefault() throws {
+    let old = try JSONDecoder().decode(GlobalSettings.self, from: Data("{}".utf8))
+    #expect(old.experimentalAgentCLIs == nil && !old.agentCLIsEnabled)
+    var on = old
+    on.experimentalAgentCLIs = true
+    #expect(try JSONDecoder().decode(GlobalSettings.self, from: JSONEncoder().encode(on)).agentCLIsEnabled)
+}

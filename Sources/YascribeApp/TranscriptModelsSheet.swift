@@ -178,6 +178,7 @@ struct TranscriptModelsSheet: View {
                     ModelPicker(providerID: pid, role: .correction, selection: $draft.correctModel, showProvider: false).frame(maxWidth: .infinity)
                     if provider(pid)?.isLocal == true { OnThisMacTag() }
                 }
+                if let note = AgentPrivacy.caption(provider(pid)) { SheetNote(note) }
             }
             if hasCorrectionOverride || stale {
                 SheetRow(label: "") {

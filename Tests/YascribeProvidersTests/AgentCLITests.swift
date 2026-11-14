@@ -284,3 +284,13 @@ private struct ExplodingStore: SecretStore {
     #expect(throws: ExplodingStore.Touched.self) { try openRouter.storedKey(in: ExplodingStore()) }
     #expect(throws: ExplodingStore.Touched.self) { try openRouter.forgetKey(in: ExplodingStore()) }
 }
+
+@Test func agentClientRefusesEveryHTTPCall() async throws {
+    let http = StubHTTP { _, _ in fail(500) }
+    let c = OpenAICompatibleClient(provider: Provider(name: "Codex", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI),
+                                   key: nil, http: http)
+    let refusal = ProviderError.agentFailed("Codex does only correction and summary.")
+    await #expect(throws: refusal) { _ = try await c.transcribe(wav: Data(), model: "m", language: nil, shape: .audioTranscriptions) }
+    await #expect(throws: refusal) { _ = try await c.embed(model: "m", text: "x") }
+    #expect(http.calls.isEmpty)
+}

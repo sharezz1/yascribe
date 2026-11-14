@@ -44,6 +44,15 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                                  baseURL: Provider.fluidAudioBaseURL.absoluteString, needsKey: false, note: nil,
                                                  role: "Speech-to-text on this Mac · no network",
                                                  kind: .fluidAudio, keyPage: nil)
+    /// Agenci CLI (TASK-86, Experimental): logowanie w samym CLI, Yascribe nie trzyma klucza. `baseURL` = domyślna ścieżka binarki.
+    public static let codexCLI = ProviderPreset(id: "codex-cli", name: "Codex", baseURL: AgentCLI.defaultBinary(.codexCLI),
+                                                needsKey: false, note: nil,
+                                                role: "Codex on this Mac · correction and summary · sends the transcript to OpenAI",
+                                                kind: .codexCLI, keyPage: nil)
+    public static let claudeCLI = ProviderPreset(id: "claude-cli", name: "Claude Code",
+                                                 baseURL: AgentCLI.defaultBinary(.claudeCLI), needsKey: false, note: nil,
+                                                 role: "Claude Code on this Mac · correction and summary · sends the transcript to Anthropic",
+                                                 kind: .claudeCLI, keyPage: nil)
     public static let custom = ProviderPreset(id: "custom", name: "Custom endpoint", baseURL: "", needsKey: true,
                                               note: "Any OpenAI-compatible server.",
                                               role: "Any OpenAI-compatible API · address and key",
@@ -52,6 +61,8 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     /// Gotowi (z wpisanym adresem), w kolejności listy. `onThisMac` (model Yascribe) to nie dostawca: ma własną kartę
     /// „Yascribe model" w Settings, więc na liście Providers go nie ma (F20 P3).
     public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx]
+    /// Agenci CLI: na liście tylko z przełącznikiem Experimental albo gdy są już zapisani.
+    public static let agents: [ProviderPreset] = [codexCLI, claudeCLI]
 
     /// Adres bez schematu: host[:port] + ścieżka bez końcowego „/” („openrouter.ai/api/v1"). Służy też do porównań.
     public static func displayAddress(_ url: URL) -> String {
@@ -71,6 +82,8 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     public static func matching(_ provider: Provider) -> ProviderPreset? {
         if provider.api == .elevenLabs { return elevenLabs }
         if provider.api == .fluidAudio { return onThisMac } // po rodzaju, nie po adresie: `local://` nie ma hosta
+        if provider.api == .codexCLI { return codexCLI } // `file://` binarki nie ma hosta; bez tego wiersz pokazałby „Edit key…"
+        if provider.api == .claudeCLI { return claudeCLI }
         return [openRouter, ollama, llamaCpp, omlx].first { URL(string: $0.baseURL).map(addressKey) == addressKey(provider.baseURL) }
     }
 
@@ -107,9 +120,11 @@ public enum ProviderListRow: Identifiable, Equatable, Sendable {
     /// Lista wszystkich obsługiwanych dostawców jeden pod drugim, także nieskonfigurowanych: OpenRouter, ElevenLabs, Ollama, llama.cpp, oMLX,
     /// potem zapisani własni (także drugi OpenRouter — dostawca to instancja), na końcu „Custom endpoint".
     /// Rekord modelu Yascribe (`.fluidAudio`) nie jest wierszem: ani presetem, ani „własnym" (F20 P3).
-    public static func rows(for providers: [Provider]) -> [ProviderListRow] {
+    /// `agents` = przełącznik Experimental; zapisany agent CLI zostaje na liście także bez niego (nic nie znika po cichu).
+    public static func rows(for providers: [Provider], agents: Bool = false) -> [ProviderListRow] {
         var used = Set<UUID>()
-        var rows: [ProviderListRow] = ProviderPreset.ready.map { preset in
+        let shownAgents = ProviderPreset.agents.filter { a in agents || providers.contains { ProviderPreset.matching($0) == a } }
+        var rows: [ProviderListRow] = (ProviderPreset.ready + shownAgents).map { preset in
             let match = providers.first { !used.contains($0.id) && ProviderPreset.matching($0) == preset }
             if let match { used.insert(match.id) }
             return .preset(preset, match)

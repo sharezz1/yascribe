@@ -64,6 +64,8 @@ public struct OpenAICompatibleClient: TranscriptionClient {
 
     func request(_ path: String, method: String = "POST", query: [URLQueryItem] = [], body: [String: Any]? = nil,
                  timeout: Double = 120) throws -> URLRequest {
+        // Agent CLI nigdy nie idzie przez HTTP (transkrypcja, embeddingi): jawna odmowa zamiast żądania pod `file://`.
+        guard !provider.api.isAgentCLI else { throw ProviderError.agentFailed("\(provider.name) does only correction and summary.") }
         var comps = URLComponents(url: provider.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { comps.queryItems = query }
         var r = URLRequest(url: comps.url!)

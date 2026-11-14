@@ -203,10 +203,10 @@ public enum AgentCLI {
     /// Ścieżka z pola arkusza → `file://` binarki (istnieje i jest wykonywalna) albo powód.
     public static func binaryURL(from text: String) -> Result<URL, ProviderError> {
         let path = (text.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
-        guard path.hasPrefix("/") else { return .failure(.badResponse("Enter the full path, e.g. /opt/homebrew/bin/codex.")) }
+        guard path.hasPrefix("/") else { return .failure(.agentFailed("Enter the full path, e.g. /opt/homebrew/bin/codex.")) }
         var dir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &dir), !dir.boolValue,
-              FileManager.default.isExecutableFile(atPath: path) else { return .failure(.badResponse("No program at \(path).")) }
+              FileManager.default.isExecutableFile(atPath: path) else { return .failure(.agentFailed("No program at \(path).")) }
         return .success(URL(fileURLWithPath: path))
     }
 
