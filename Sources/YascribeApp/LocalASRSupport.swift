@@ -26,11 +26,14 @@ final class LocalASRSupport: ObservableObject {
     func refresh() { status = store.status() }
 
     /// Teksty i akcja karty modelu (czysta logika w `ModelCardState`).
-    var card: ModelCardState { ModelCardState(status: status, activity: phase) }
+    var card: ModelCardState { ModelCardState(status: status, activity: phase, variant: store.variant) }
 
     /// Pobranie po kliknięciu. `force` (naprawa uszkodzonego) liczy sam `ModelStore.download` — wołający nie dostaje argumentu.
     func download() async {
-        guard phase == .idle else { return }
+        guard phase == .idle, runs.isIdle else {
+            downloadError = "Can't download the on-device model while it is downloading or in use."
+            return
+        }
         downloadError = nil
         phase = .downloading(nil)
         highest = 0

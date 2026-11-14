@@ -143,7 +143,8 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     PageTitle("Settings").padding(.bottom, 4)
                     // Model Yascribe (Parakeet) nie jest dostawcą: własna karta na górze, nad listą Providers (F20 P3).
-                    ModelCardSection(support: model.localASR)
+                    SectionHeader("Yascribe models")
+                    ForEach(model.localASRModels, id: \.store.variant) { ModelCardSection(support: $0) }
                     SectionHeader("Providers")
                     Card {
                         let rows = ProviderListRow.rows(for: model.providers.providers)

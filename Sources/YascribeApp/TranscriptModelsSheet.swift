@@ -94,7 +94,7 @@ struct TranscriptModelsSheet: View {
                     Picker("Provider", selection: Binding(get: { draft.asrProviderID }, set: { id in
                         guard id != draft.asrProviderID else { return }
                         draft.asrProviderID = id
-                        draft.asrModel = "" // model innego dostawcy nie pasuje
+                        draft.asrModel = LocalASRModels.modelWhenSelecting(provider(id)) // model innego dostawcy nie pasuje
                     })) {
                         ForEach(providers) { p in Text(p.roleLabel).tag(Optional(p.id)) }
                     }
@@ -105,6 +105,13 @@ struct TranscriptModelsSheet: View {
                 SheetRow(label: "Model") {
                     ModelPicker(providerID: pid, role: .asr, selection: $draft.asrModel, showProvider: false).frame(maxWidth: .infinity)
                     if provider(pid)?.isLocal == true { OnThisMacTag() }
+                }
+                if provider(pid)?.api == .fluidAudio, model.localASR(draft.asrModel) == nil {
+                    SheetRow(label: "") {
+                        WarnLabel("Unknown on-device model — uses Parakeet TDT v3")
+                        Spacer(minLength: 0)
+                        Button("Choose Parakeet TDT v3") { draft.asrModel = LocalASRModels.parakeetV3 }.buttonStyle(.pillSmall)
+                    }
                 }
             }
             SheetRow(label: "Language") {

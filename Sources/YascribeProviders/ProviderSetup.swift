@@ -80,13 +80,19 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Jedyny model lokalnego ASR. Stała w `YascribeProviders`, żeby `AppModel.loadModels` nie importował `YascribeLocalASR`.
+/// Modele lokalnego ASR. Stałe w `YascribeProviders`, żeby `AppModel.loadModels` nie importował `YascribeLocalASR`
+/// (identyczność z `LocalASRVariant` pilnuje test).
 public enum LocalASRModels {
     public static let parakeetV3 = "parakeet-tdt-0.6b-v3"
+    public static let parakeetUltra = "parakeet-ultra"
+
+    public static func modelWhenSelecting(_ provider: Provider?, previous: String = "") -> String {
+        provider?.api == .fluidAudio ? parakeetV3 : previous
+    }
 
     /// Modele dla roli — stała lista, bez sieci (jak `ElevenLabsClient.models`). Poza ASR pusto.
     public static func models(for role: Role) -> [ModelInfo] {
-        role == .asr ? [ModelInfo(id: parakeetV3, inputModalities: ["audio"], outputModalities: ["transcription"])] : []
+        role == .asr ? [parakeetV3, parakeetUltra].map { ModelInfo(id: $0, inputModalities: ["audio"], outputModalities: ["transcription"]) } : []
     }
 }
 

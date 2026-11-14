@@ -9,8 +9,6 @@ import SwiftUI
 final class ModelCardUI: ObservableObject {
     /// Akcja czekająca na potwierdzenie („Remove…", „Download again").
     @Published var confirming: ModelCardState.Action?
-    /// Błąd usunięcia (błąd pobrania trzyma `LocalASRSupport.downloadError`).
-    @Published var removeError: String?
 }
 
 /// Sama prezentacja: stan podany z zewnątrz, więc migawki pokazują wymyślone stany, a nie magazyn tego komputera.
@@ -27,7 +25,7 @@ struct ModelCardContent: View {
                 HStack(spacing: 12) {
                     ProviderLogo(preset: .onThisMac)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(ModelCardState.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
+                        Text(card.name).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
                         Text(card.meta).font(.system(size: 11)).foregroundStyle(.mnText2)
                     }
                     Spacer(minLength: 8)
@@ -82,18 +80,18 @@ struct ModelCardSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader("Yascribe model")
-            ModelCardContent(card: support.card, location: location, error: ui.removeError ?? support.downloadError) { action in
+            ModelCardContent(card: support.card, location: location, error: support.downloadError) { action in
                 if action.needsConfirmation { ui.confirming = action } else { run(action) }
             }
         }
-        .confirmationDialog("Remove \(ModelCardState.name)?", isPresented: confirming(.remove)) {
+        .padding(.bottom, 10)
+        .confirmationDialog("Remove \(support.card.name)?", isPresented: confirming(.remove)) {
             Button("Remove", role: .destructive) { run(.remove) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Remove \(ModelCardState.name) from the shared FluidAudio folder? Other apps that use FluidAudio may use this copy too.")
+            Text("Remove \(support.card.name) from the shared FluidAudio folder? Other apps that use FluidAudio may use this copy too.")
         }
-        .confirmationDialog("Download \(ModelCardState.name) again?", isPresented: confirming(.downloadAgain)) {
+        .confirmationDialog("Download \(support.card.name) again?", isPresented: confirming(.downloadAgain)) {
             Button("Delete and Download", role: .destructive) { run(.downloadAgain) }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -106,14 +104,12 @@ struct ModelCardSection: View {
     }
 
     private func run(_ action: ModelCardState.Action) {
-        ui.removeError = nil
         ui.confirming = nil
         switch action {
         case .download, .downloadAgain:
             Task { await support.download(); model.reverifyOnDeviceProviders() }
         case .remove:
-            do { try support.store.remove() } catch { ui.removeError = "Couldn't remove the model: \(error.localizedDescription)" }
-            support.refresh()
+            support.remove()
             model.reverifyOnDeviceProviders()
         }
     }
@@ -158,5 +154,18 @@ struct OnThisMacRoleRow: View {
         OnThisMacRoleContent(card: support.card,
                              onDownload: { Task { await support.download(); model.reverifyOnDeviceProviders() } },
                              onOpenSettings: { model.section = .settings })
+    }
+}
+
+struct UnknownOnDeviceModelRow: View {
+    var selectV3: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            WarnLabel("Unknown on-device model — uses Parakeet TDT v3")
+            Spacer(minLength: 0)
+            Button("Choose Parakeet TDT v3", action: selectV3).buttonStyle(.pillSmall)
+        }
+        .padding(.leading, 158).padding(.trailing, 16).padding(.bottom, 10)
     }
 }

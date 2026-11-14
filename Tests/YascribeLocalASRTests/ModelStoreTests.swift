@@ -1,6 +1,8 @@
 import FluidAudio
 import Foundation
+import Synchronization
 import Testing
+import YascribeProviders
 @testable import YascribeLocalASR
 
 /// Katalog `mn-<UUID>`; pliki modelu są rzadkie (sparse) — rozmiary jak w manifeście bez 483 MB na dysku.
@@ -230,5 +232,64 @@ private final class Calls: @unchecked Sendable {
         #else
         #expect(overridden == normal)
         #endif
+    }
+}
+
+/// Parakeet Ultra: folder zgodny z FluidAudio (inaczej `download` kładzie słownik obok), osobny manifest i pin.
+@Suite struct UltraVariantTests {
+    private func ultraStore(_ root: URL) -> ModelStore {
+        ModelStore(directory: root, variant: .parakeetUltra, download: { _, _, _ in }, modelsExist: { _ in false })
+    }
+
+    @Test func folderMatchesFluidAudioCache() {
+        let ours = ultraStore(ModelStore.resolveDirectory(env: [:])).modelDirectory
+        #expect(ours.standardizedFileURL.path == AsrModels.defaultCacheDirectory(for: .ultra).standardizedFileURL.path)
+    }
+
+    @Test func completeUltraIsReadyAndFluidAudioAgrees() throws {
+        let s = ultraStore(try makeRoot())
+        for (file, size) in ModelManifest.parakeetUltra.files {
+            try write(file, size: size, in: s.modelDirectory, content: file.hasSuffix(".json") ? Data(repeating: 0x61, count: Int(size)) : nil)
+        }
+        #expect(s.status() == .ready)
+        #expect(ModelStore.fluidAudioModelsExist(.parakeetUltra)(s.modelDirectory))
+        #expect(s.fingerprint() == s.fingerprint(pin: "fluidaudio-0.17.7/ultra"))
+        #expect(s.fingerprint() != s.fingerprint(pin: ModelManifest.pin))
+    }
+
+    @Test func v3FilesDoNotMakeUltraReady() throws {
+        let root = try makeRoot()
+        try writeAll(into: root.appendingPathComponent(LocalASRVariant.parakeetV3.rawValue))
+        #expect(ultraStore(root).status() == .missing)
+        #expect(store(root).status() == .ready)
+    }
+
+    @Test func modelIDMapsToVariant() {
+        #expect(LocalASRVariant(model: "") == .parakeetV3)
+        #expect(LocalASRVariant(model: LocalASRModels.parakeetV3) == .parakeetV3)
+        #expect(LocalASRVariant(model: LocalASRModels.parakeetUltra) == .parakeetUltra)
+        #expect(LocalASRVariant(model: "parakeet-ultra-typo") == nil)
+        #expect(LocalASRModels.models(for: .asr).map(\.id) == LocalASRVariant.allCases.map(\.rawValue))
+        #expect(LocalASRVariant.allCases.allSatisfy { $0.manifest.model == $0.rawValue })
+        // Silnik i pobieranie biorą wersję FluidAudio z wariantu magazynu.
+        #expect(LocalASRVariant.parakeetV3.asrVersion == .v3 && LocalASRVariant.parakeetUltra.asrVersion == .ultra)
+    }
+}
+
+private struct LoaderStop: Error {}
+
+@Test func engineLoadsTheVersionAndFolderOfItsStore() async {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")
+    for (variant, version) in [(LocalASRVariant.parakeetV3, AsrModelVersion.v3), (.parakeetUltra, .ultra)] {
+        let store = ModelStore(directory: root, variant: variant)
+        let seen = Mutex<(URL, AsrModelVersion)?>(nil)
+        let engine = FluidAudioEngine(store: store) { url, v in
+            seen.withLock { $0 = (url, v) }
+            throw LoaderStop()
+        }
+        await #expect(throws: LoaderStop.self) { try await engine.load() }
+        let call = seen.withLock { $0 }
+        #expect(call?.0 == store.modelDirectory)
+        #expect(call?.1 == version)
     }
 }

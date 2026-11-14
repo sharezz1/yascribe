@@ -23,7 +23,9 @@ struct CLI {
       probe <baseURL> <model> <asr|correction|summary|embedding> [--language pl]
       note <przebieg> <baseURL> <model> --language pl --out plik.json [--source raw|corrected] [--thinking on|off] [--context 16384] [--vocabulary vocabulary.txt]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
-                                                                  <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza)
+                                                                  <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza), <model> = parakeet-tdt-0.6b-v3 | parakeet-ultra
+                                                                  pusty albo nieznany <model> lokalny = błąd użycia (kod 64)
+      download-model <model> --model-store <korzeń>                 pobiera lokalny model do podanego magazynu (np. parakeet-ultra)
       dictionary-check <katalog sesji> --replacements <plik.tsv> [--vocabulary <plik.txt>]
                                                                   liczy Termy i Aliasy w transkrypcie (surowym i poprawionym) przed i po Replacement (faza 2.1, odbiór §8.1)
       correct <katalog przebiegu> <baseURL> <model> --language pl --out <plik.json> [--vocabulary <vocabulary.txt>]
@@ -55,6 +57,7 @@ struct CLI {
             case "models": try await models(args)
             case "probe": try await probe(args)
             case "transcribe": try await transcribe(args)
+            case "download-model": try await downloadModel(args)
             case "dictionary-check": try dictionaryCheck(args)
             case "correct": try await correct(args)
             case "session-from-file": try await sessionFromFile(args)
@@ -237,6 +240,18 @@ struct CLI {
               r.embeddingDimension.map { "wymiar \($0)" } ?? "", r.failure ?? "")
     }
 
+    /// Pobranie tylko do jawnie podanego magazynu — CLI nie dotyka wspólnego folderu FluidAudio przypadkiem.
+    static func downloadModel(_ args: [String]) async throws {
+        guard let variant = LocalASRVariant(rawValue: try positional(args, 0)), let root = value(args, "--model-store") else {
+            FileHandle.standardError.write(Data("użycie: download-model <\(LocalASRVariant.allCases.map(\.rawValue).joined(separator: "|"))> --model-store <korzeń>\n".utf8)); exit(64)
+        }
+        let store = ModelStore(directory: URL(fileURLWithPath: root, isDirectory: true), variant: variant)
+        try await store.download { p in
+            if let p { print(String(format: "\r%3.0f%%", p * 100), terminator: ""); fflush(stdout) }
+        }
+        print("\n\(store.modelDirectory.path): \(store.status())")
+    }
+
     static func transcribe(_ args: [String]) async throws {
         // Wszystkie błędy użycia przed budową klienta — kolejność komunikatów nie zależy od tego, który argument jest zły.
         let dir = URL(fileURLWithPath: try positional(args, 0))
@@ -251,9 +266,17 @@ struct CLI {
         if let s = value(args, "--shape"), s != ASRShape.audioTranscriptions.rawValue {
             FileHandle.standardError.write(Data("--shape \(s): w transcribe dozwolone tylko audioTranscriptions\n".utf8)); exit(64)
         }
-        let localStore = value(args, "--model-store").map { ModelStore(directory: URL(fileURLWithPath: $0, isDirectory: true)) } ?? ModelStore()
+        let isLocal = try positional(args, 1) == Provider.fluidAudioBaseURL.absoluteString
+        let modelID = try positional(args, 2)
+        let variant = LocalASRVariant(model: modelID)
+        // Pusty model preset i tak odrzuci (`Preset.validate`) — mówimy to od razu, jak przy nieznanym.
+        if isLocal, variant == nil || modelID.isEmpty {
+            FileHandle.standardError.write(Data("nieznany model lokalny: \(try positional(args, 2))\n".utf8)); exit(64)
+        }
+        let localStore = ModelStore(directory: value(args, "--model-store").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? ModelStore.defaultDirectory,
+                                    variant: variant ?? .parakeetV3)
         let c: any TranscriptionClient
-        if try positional(args, 1) == Provider.fluidAudioBaseURL.absoluteString {
+        if isLocal {
             // Lokalny ASR (F20 S1): ten sam runner co aplikacja. Odmowa = komunikat i kod 1, bez fallbacku do API.
             // Magazyn: --model-store (korzeń); YASCRIBE_MODEL_STORE działa tylko w DEBUG, a S1 mierzy build release.
             switch LocalASRFactory.client(provider: Provider(name: "cli", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio), store: localStore) {
