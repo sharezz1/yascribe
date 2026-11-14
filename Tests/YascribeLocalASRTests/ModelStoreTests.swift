@@ -1,5 +1,6 @@
 import FluidAudio
 import Foundation
+import Synchronization
 import Testing
 import YascribeProviders
 @testable import YascribeLocalASR
@@ -275,8 +276,20 @@ private final class Calls: @unchecked Sendable {
     }
 }
 
-@Test func engineVersionComesFromItsStore() {
+private struct LoaderStop: Error {}
+
+@Test func engineLoadsTheVersionAndFolderOfItsStore() async {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("mn-\(UUID().uuidString)")
-    #expect(FluidAudioEngine.modelVersion(for: ModelStore(directory: root, variant: .parakeetV3)) == .v3)
-    #expect(FluidAudioEngine.modelVersion(for: ModelStore(directory: root, variant: .parakeetUltra)) == .ultra)
+    for (variant, version) in [(LocalASRVariant.parakeetV3, AsrModelVersion.v3), (.parakeetUltra, .ultra)] {
+        let store = ModelStore(directory: root, variant: variant)
+        let seen = Mutex<(URL, AsrModelVersion)?>(nil)
+        let engine = FluidAudioEngine(store: store) { url, v in
+            seen.withLock { $0 = (url, v) }
+            throw LoaderStop()
+        }
+        await #expect(throws: LoaderStop.self) { try await engine.load() }
+        let call = seen.withLock { $0 }
+        #expect(call?.0 == store.modelDirectory)
+        #expect(call?.1 == version)
+    }
 }

@@ -275,7 +275,7 @@ struct HotkeySettingsGate {
 
 /// Lokalny ASR trzyma model w pamięci do `release()` (jak po przebiegu spotkania): zwalniamy po każdej transkrypcji.
 /// `beginRun`/`endRun` w tym samym zakresie: póki trwa, model nie da się usunąć.
-private struct ReleasingTranscriber: TranscriptionClient {
+struct ReleasingTranscriber: TranscriptionClient {
     let inner: any TranscriptionClient
     let support: LocalASRSupport
     var provider: Provider { inner.provider }

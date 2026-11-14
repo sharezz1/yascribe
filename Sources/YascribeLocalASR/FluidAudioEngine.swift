@@ -8,17 +8,23 @@ import YascribeProviders
 public actor FluidAudioEngine: LocalASREngine {
     private let store: ModelStore
     private var manager: AsrManager?
+    /// Szew dla testu: sprawdza, z jaką wersją FluidAudio silnik naprawdę ładuje wariant magazynu.
+    typealias Loader = @Sendable (URL, AsrModelVersion) throws -> AsrModels
+    private let loadModels: Loader
 
-    public init(store: ModelStore) { self.store = store }
+    public init(store: ModelStore) { self.init(store: store, loadModels: { try AsrModels.loadLocal(from: $0, version: $1, encoderPrecision: .int8) }) }
 
-    static func modelVersion(for store: ModelStore) -> AsrModelVersion { store.variant.asrVersion }
+    init(store: ModelStore, loadModels: @escaping Loader) {
+        self.store = store
+        self.loadModels = loadModels
+    }
 
     /// Ładowanie (~19 s na zimno) idzie na aktorze silnika, nigdy na MainActor. `loadLocal` jest synchroniczne i NIE da się go
     /// anulować; między jego początkiem a zapisem `manager` nie ma żadnego `await`, więc aktor nie wpuści drugiego `load()` ani
     /// `unload()` w środku (bez okna reentrancji). `AsrModels` nie wychodzi poza to wyrażenie — inaczej `cleanup()` nie zwolni pamięci.
     public func load() async throws {
         if manager != nil { return }
-        manager = AsrManager(config: .default, models: try AsrModels.loadLocal(from: store.modelDirectory, version: Self.modelVersion(for: store), encoderPrecision: .int8))
+        manager = AsrManager(config: .default, models: try loadModels(store.modelDirectory, store.variant.asrVersion))
     }
 
     public func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) {

@@ -12,7 +12,7 @@ import YascribeSessionFormat
     let provider = Provider(name: "On this Mac", baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
     let model: AppModel
 
-    init(ready: Set<LocalASRVariant> = Set(LocalASRVariant.allCases)) throws {
+    init(ready: Set<LocalASRVariant> = Set(LocalASRVariant.allCases), engine: (any LocalASREngine)? = nil) throws {
         let root = self.root
         let supports = try LocalASRVariant.allCases.reversed().map { variant in
             let store = ModelStore(directory: root.appendingPathComponent("models"), variant: variant,
@@ -31,7 +31,9 @@ import YascribeSessionFormat
         }
         let previous = getenv("YASCRIBE_DATA_DIR").map { String(cString: $0) }
         setenv("YASCRIBE_DATA_DIR", root.appendingPathComponent("data").path, 1)
-        model = AppModel(localASRModels: supports)
+        var factory: (@Sendable (ModelStore) -> any LocalASREngine)?
+        if let engine { factory = { _ in engine } }
+        model = AppModel(localASRModels: supports, localASREngine: factory)
         if let previous { setenv("YASCRIBE_DATA_DIR", previous, 1) } else { unsetenv("YASCRIBE_DATA_DIR") }
         model.providers = ProvidersFile(providers: [provider])
     }
@@ -41,22 +43,24 @@ import YascribeSessionFormat
         Preset(name: "Local", language: .polish, asr: RoleAssignment(providerID: provider.id, model: id))
     }
 
-    func session() throws -> URL {
+    /// `loud` = prostokąt powyżej bramki energii, więc runner naprawdę wysyła okno do klienta.
+    func session(loud: Bool = false) throws -> URL {
         let url = model.paths.sessions.appendingPathComponent(AppModel.sessionName(Date()))
         let ns = Timebase(numer: 1, denom: 1)
-        let source = FileSource(trackID: "system", samples: [Int16](repeating: 0, count: 16_000),
+        let samples: [Int16] = loud ? (0..<32_000).map { ($0 / 40) % 2 == 0 ? 8_000 : -8_000 } : [Int16](repeating: 0, count: 16_000)
+        let source = FileSource(trackID: "system", samples: samples,
                                 sampleRate: 16_000, channels: 1, startHostTime: 1_000_000_000, timebase: ns)
         try SessionRecorder(directory: url, sources: [source], conditions: [], clock: ManualHostClock(), timebase: ns, zeroWatch: [:]).start()
         return url
     }
 
-    func finish(_ session: URL) async throws -> RunDirectory {
+    func finish(_ session: URL, expectNoError: Bool = true) async throws -> RunDirectory {
         let deadline = ContinuousClock.now + .seconds(10)
         while model.transcribing.contains(session.lastPathComponent), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(2))
         }
         #expect(!model.transcribing.contains(session.lastPathComponent))
-        #expect(model.lastError == nil)
+        if expectNoError { #expect(model.lastError == nil) }
         let id = try #require(RunDirectory.latestRunID(in: session))
         return RunDirectory(session: session, runID: id)
     }
@@ -199,4 +203,53 @@ import YascribeSessionFormat
     #expect(f.model.lastError?.contains("isn't downloaded") == true)
     f.model.settings.dictation = DictationSettings(asr: f.preset(LocalASRModels.parakeetUltra).asr, language: .polish)
     #expect(f.model.dictation.buildInput([]) == nil)
+}
+
+/// Atrapa silnika: pierwszy przebieg może się nie udać (luka do wznowienia), potem zwraca tekst ze słowami.
+private actor ScriptedEngine: LocalASREngine {
+    private var failing: Bool
+    init(failing: Bool) { self.failing = failing }
+    func setFailing(_ f: Bool) { failing = f }
+    func load() async throws {}
+    func transcribe(samples: [Float]) async throws -> (text: String, words: [TranscribedWord]) {
+        if failing { throw ProviderError.badResponse("scripted failure") }
+        return ("dzień dobry", [TranscribedWord(word: "dzień", start: 0, end: 0.4), TranscribedWord(word: "dobry", start: 0.5, end: 0.9)])
+    }
+    func unload() async {}
+}
+
+/// Stara migawka (obcy identyfikator, odcisk v3): wznowienie musi przejść zaległe okno przez klienta v3, nie odrzucić go bramką wariantu.
+@Test @MainActor func legacyResumeTranscribesThePendingWindow() async throws {
+    let engine = ScriptedEngine(failing: true)
+    let f = try LocalFixture(engine: engine)
+    defer { f.clean() }
+    let legacy = f.preset("legacy-asr-id")
+    let session = try f.session(loud: true)
+    #expect(f.model.transcribe(sessionURL: session, preset: legacy))
+    let dir = try await f.finish(session, expectNoError: false)
+    let gaps = try #require(try JSONFile.load(Transcript?.self, from: dir.transcript, default: nil))
+    #expect(!gaps.failedChunks.isEmpty)
+    var input = try #require(try JSONFile.load(RunInput?.self, from: dir.input, default: nil))
+    input.snapshot.model = legacy.asr!.model
+    input.snapshot.preset = legacy
+    try JSONFile.save(input, to: dir.input)
+    await engine.setFailing(false)
+    f.model.lastError = nil
+    f.model.resume(SessionItem(url: session, startedAt: Date()), runID: dir.url.lastPathComponent)
+    #expect(f.model.transcribing.contains(session.lastPathComponent))
+    _ = try await f.finish(session)
+    let done = try #require(try JSONFile.load(Transcript?.self, from: dir.transcript, default: nil))
+    #expect(done.failedChunks.isEmpty)
+    #expect(!done.utterances.isEmpty)
+}
+
+/// Dyktowanie Ultra trzyma (blokuje usunięcie) magazyn Ultra, nie v3.
+@Test @MainActor func ultraDictationHoldsTheUltraStore() throws {
+    let f = try LocalFixture()
+    defer { f.clean() }
+    f.model.settings.dictation = DictationSettings(asr: f.preset(LocalASRModels.parakeetUltra).asr, language: .polish)
+    let built = try #require(f.model.dictation.buildInput([Int16](repeating: 1_000, count: 16_000)))
+    let wrapper = try #require(built.input.transcriber as? ReleasingTranscriber)
+    #expect(wrapper.support === f.model.localASR(LocalASRModels.parakeetUltra))
+    #expect(built.input.asrModel == LocalASRModels.parakeetUltra)
 }

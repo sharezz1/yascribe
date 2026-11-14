@@ -24,7 +24,7 @@ struct CLI {
       note <przebieg> <baseURL> <model> --language pl --out plik.json [--source raw|corrected] [--thinking on|off] [--context 16384] [--vocabulary vocabulary.txt]
       transcribe <katalog> <baseURL> <model> --language pl [--shape audioTranscriptions] [--run ID] [--model-store <korzeń>]
                                                                   <baseURL> = local://fluidaudio: lokalny Parakeet (bez sieci i klucza), <model> = parakeet-tdt-0.6b-v3 | parakeet-ultra
-                                                                  pusty <model> = v3; nieznany model lokalny = błąd użycia (kod 64)
+                                                                  pusty albo nieznany <model> lokalny = błąd użycia (kod 64)
       download-model <model> --model-store <korzeń>                 pobiera lokalny model do podanego magazynu (np. parakeet-ultra)
       dictionary-check <katalog sesji> --replacements <plik.tsv> [--vocabulary <plik.txt>]
                                                                   liczy Termy i Aliasy w transkrypcie (surowym i poprawionym) przed i po Replacement (faza 2.1, odbiór §8.1)
@@ -267,8 +267,10 @@ struct CLI {
             FileHandle.standardError.write(Data("--shape \(s): w transcribe dozwolone tylko audioTranscriptions\n".utf8)); exit(64)
         }
         let isLocal = try positional(args, 1) == Provider.fluidAudioBaseURL.absoluteString
-        let variant = LocalASRVariant(model: try positional(args, 2))
-        if isLocal, variant == nil {
+        let modelID = try positional(args, 2)
+        let variant = LocalASRVariant(model: modelID)
+        // Pusty model preset i tak odrzuci (`Preset.validate`) — mówimy to od razu, jak przy nieznanym.
+        if isLocal, variant == nil || modelID.isEmpty {
             FileHandle.standardError.write(Data("nieznany model lokalny: \(try positional(args, 2))\n".utf8)); exit(64)
         }
         let localStore = ModelStore(directory: value(args, "--model-store").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? ModelStore.defaultDirectory,

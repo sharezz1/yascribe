@@ -156,7 +156,11 @@ final class AppModel {
     /// Dyktowanie: powstaje w `load()` (historia), skrót startuje `YascribeApp.init` obok `monitor`.
     @ObservationIgnored lazy var dictation = DictationController(model: self)
 
-    init(localASRModels: [LocalASRSupport]? = nil) {
+    /// `nil` = prawdziwy `FluidAudioEngine`; testy podają atrapę, żeby przejść przez okna bez modelu.
+    @ObservationIgnored private let localASREngine: (@Sendable (ModelStore) -> any LocalASREngine)?
+
+    init(localASRModels: [LocalASRSupport]? = nil, localASREngine: (@Sendable (ModelStore) -> any LocalASREngine)? = nil) {
+        self.localASREngine = localASREngine
         self.localASRModels = localASRModels ?? LocalASRVariant.allCases.map { LocalASRSupport(store: ModelStore(variant: $0)) }
         recording.model = self
         monitor.model = self
@@ -503,7 +507,7 @@ final class AppModel {
             // żadnego klienta, więc nic nie pójdzie do API.
             guard p.api == .fluidAudio else { return p.transcriptionClient(key: key) }
             let support = localASRForRun(model)
-            switch LocalASRFactory.client(provider: p, store: support.store, onPhase: { phase in Task { @MainActor in support.apply(phase) } }) {
+            switch LocalASRFactory.client(provider: p, store: support.store, engine: localASREngine?(support.store), onPhase: { phase in Task { @MainActor in support.apply(phase) } }) {
             case .success(let c):
                 return LocalASRVariant(model: model) == nil ? LegacyLocalASRClient(inner: c, legacyModel: model) : c
             case .failure(let refusal):
