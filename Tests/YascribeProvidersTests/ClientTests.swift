@@ -395,11 +395,12 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
                                                   "words": [["word": "raz", "start": 0.1, "end": 0.4]]]]]
     #expect(OpenAICompatibleClient.timedUnits(withWords).units == [TranscribedWord(word: "raz", start: 0.1, end: 0.4)])
     #expect(!OpenAICompatibleClient.timedUnits(withWords).segments)
-    // Mieszanie: segment bez słów zostaje jako jednostka, nie znika.
+    // Mieszanie: segment bez słów nie znika, a całe okno przechodzi na segmenty (jeden rodzaj czasu w wyniku, słowa
+    // nie dostają mapowania końca segmentu).
     let mixed: [String: Any] = ["segments": [
         ["start": 0.0, "end": 1.0, "text": "raz", "words": [["word": "raz", "start": 0.1, "end": 0.4]]],
         ["start": 2.0, "end": 3.0, "text": "dwa trzy"]]]
-    #expect(OpenAICompatibleClient.timedUnits(mixed).units == [TranscribedWord(word: "raz", start: 0.1, end: 0.4),
+    #expect(OpenAICompatibleClient.timedUnits(mixed).units == [TranscribedWord(word: "raz", start: 0.0, end: 1.0),
                                                                TranscribedWord(word: "dwa trzy", start: 2.0, end: 3.0)])
     #expect(OpenAICompatibleClient.timedUnits(mixed).segments)
 }
@@ -466,18 +467,28 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
         if body.isEmpty { return ok(["text": "raz"]) }
         return fail(400, (body["timestamp_granularities"] != nil) == first ? message : "{}")
     }
-    let r = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    let r = try await OpenAICompatibleClient(provider: openRouter, key: "test-fake-key", http: http)
         .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
     #expect(r.text == "raz")
     #expect(http.calls.count == 3)
     #expect(http.calls[2].headers["Content-Type"]?.hasPrefix("multipart/form-data; boundary=") == true)
 }
 
+// Błąd treści audio („Invalid audio file”, zły base64) od dostawcy zdalnego to nie kształt: bez multipart, błąd JSON zostaje.
+@Test(arguments: ["Invalid audio file", "Invalid input_audio.data: invalid base64"]) func contentErrorDoesNotTriggerMultipart(message: String) async {
+    let http = StubHTTP { _, _ in fail(400, message) }
+    await #expect(throws: ProviderError.http(400, message)) {
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "test-fake-key", http: http)
+            .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    #expect(http.calls.count == 2)
+}
+
 // 401/404 z multipart to inny problem niż kształt JSON: idzie dalej bez zmian.
 @Test(arguments: [401, 404]) func multipartAuthOrPathErrorPassesThrough(status: Int) async {
     let http = StubHTTP { _, body in body.isEmpty ? fail(status, "nope") : fail(400, "input_audio: unknown field") }
     await #expect(throws: ProviderError.http(status, "nope")) {
-        _ = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "test-fake-key", http: http)
             .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
     }
     #expect(http.calls.count == 3)

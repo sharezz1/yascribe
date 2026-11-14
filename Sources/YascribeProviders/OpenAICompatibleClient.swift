@@ -178,7 +178,10 @@ public struct OpenAICompatibleClient: TranscriptionClient {
     /// Komunikat odrzucenia JSON wskazuje na kształt żądania (brak pliku / nieznane `input_audio`), nie na treść.
     static func mentionsAudioField(_ message: String) -> Bool {
         let m = message.lowercased()
-        return m.contains("file") || m.contains("input_audio")
+        // Brak pola `file` albo nieznane pole `input_audio`; „Invalid audio file” / „invalid base64” to treść, nie kształt.
+        let missingFile = m.contains("file") && ["required", "missing"].contains(where: m.contains)
+        let unknownAudio = m.contains("input_audio") && ["unknown", "unexpected", "extra", "not permitted", "unrecognized"].contains(where: m.contains)
+        return missingFile || unknownAudio
     }
 
     /// Multipart po odrzuceniu JSON. Odrzucony też kształtem (400/415/422) → błąd ze statusem multipart i oboma komunikatami
@@ -282,19 +285,24 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         if let top = obj["words"] as? [[String: Any]], case let ws = parse(top), !ws.isEmpty { return (ws, false) }
         guard let segs = obj["segments"] as? [[String: Any]] else { return (nil, false) }
         // Bez czasów słów (Voxtral, Whisper bez `word_timestamps`) segment z czasami jest jedną jednostką: Merger dzieli
-        // okno na wypowiedzi po przerwach między segmentami, zamiast wrzucać całe okno do jednego wiersza. Segment ze
-        // słowami daje słowa, segment bez nich — siebie (nic nie znika przy mieszanej odpowiedzi).
+        // okno na wypowiedzi po przerwach między segmentami, zamiast wrzucać całe okno do jednego wiersza.
         // Segment z tekstem bez czasów → cały tekst okna z czasem przybliżonym, żeby nic nie zginęło.
-        var units: [TranscribedWord] = []
-        var fromSegments = false
-        for seg in segs {
-            let ws = (seg["words"] as? [[String: Any]]).map(parse) ?? []
-            if !ws.isEmpty { units += ws; continue }
-            guard let text = seg["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-            guard let unit = parse([["word": text, "start": seg["start"] ?? "", "end": seg["end"] ?? ""]]).first else { return (nil, false) }
-            units.append(unit)
-            fromSegments = true
+        func spoken(_ seg: [String: Any]) -> Bool {
+            !((seg["text"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        return units.isEmpty ? (nil, false) : (units, fromSegments)
+        let perSegment = segs.map { ($0["words"] as? [[String: Any]]).map(parse) ?? [] }
+        if zip(segs, perSegment).allSatisfy({ !$1.isEmpty || !spoken($0) }) {
+            let all = perSegment.flatMap { $0 }
+            return all.isEmpty ? (nil, false) : (all, false)
+        }
+        // Mieszana odpowiedź (część segmentów bez słów): całe okno na poziomie segmentów, żeby rodzaj czasu był jeden
+        // dla wyniku — słowa nie dostają mapowania końca segmentu (U1), a nic nie znika.
+        var units: [TranscribedWord] = []
+        for seg in segs where spoken(seg) {
+            guard let unit = parse([["word": seg["text"] ?? "", "start": seg["start"] ?? "", "end": seg["end"] ?? ""]]).first
+            else { return (nil, false) }
+            units.append(unit)
+        }
+        return units.isEmpty ? (nil, false) : (units, true)
     }
 }
