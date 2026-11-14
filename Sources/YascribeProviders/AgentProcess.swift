@@ -12,11 +12,16 @@ enum AgentProcess {
         var stoppedEarly = false
         /// Minął `limit` i grupa została zakończona.
         var timedOut = false
+        /// stdout przekroczył `maxStdout`: grupa zakończona, odpowiedź niepełna.
+        var overflowed = false
         var stderrText: String { String(String(decoding: stderr, as: UTF8.self).suffix(600)) }
     }
 
     /// Czas między SIGTERM a SIGKILL grupy.
     static let killGrace: Double = 2
+    /// Górny limit stdout (odpowiedź agenta) i zachowany ogon stderr — pamięć aplikacji nie rośnie bez końca.
+    static let maxStdout = 32 << 20
+    static let stderrTail = 64 << 10
 
     /// Uruchamia `executable` z `arguments` (bez powłoki), zapisuje `input` na stdin i czyta stdout/stderr równolegle do EOF.
     /// Anulowanie zadania: SIGTERM do grupy, po `killGrace` SIGKILL do grupy, potem `CancellationError`. Anulowanie przed startem
@@ -34,9 +39,13 @@ enum AgentProcess {
                 Task.detached { try? await Task.sleep(for: .seconds(seconds)); job.stop(.timedOut) }
             }
             defer { timer?.cancel() }
-            async let written: Void = background { writeAll(input, to: pipes.stdinWrite) }
-            async let out = background { readAll(pipes.stdoutRead) { line in if stopEarly(line) { job.stop(.early) } } }
-            async let err = background { readAll(pipes.stderrRead) { _ in } }
+            async let written: Void = background { writeAll(input, to: pipes.stdinWrite, abandon: job.shouldAbandon) }
+            async let out = background {
+                readAll(pipes.stdoutRead, cap: maxStdout, abandon: job.shouldAbandon, onOverflow: { job.stop(.overflow) }) { line in
+                    if stopEarly(line) { job.stop(.early) }
+                }
+            }
+            async let err = background { readAll(pipes.stderrRead, cap: stderrTail, keepTail: true, abandon: job.shouldAbandon) { _ in } }
             async let status = background { waitFor(pid) }
             let exit = await status
             job.parentExited()
@@ -44,7 +53,8 @@ enum AgentProcess {
             _ = await written
             job.finished()
             if job.reason == .cancelled { throw CancellationError() }
-            return Output(stdout: o, stderr: e, status: exit, stoppedEarly: job.reason == .early, timedOut: job.reason == .timedOut)
+            return Output(stdout: o, stderr: e, status: exit, stoppedEarly: job.reason == .early, timedOut: job.reason == .timedOut,
+                          overflowed: job.reason == .overflow)
         } onCancel: {
             job.stop(.cancelled)
         }
@@ -52,7 +62,7 @@ enum AgentProcess {
 
     // MARK: stan
 
-    enum StopReason { case cancelled, timedOut, early }
+    enum StopReason { case cancelled, timedOut, early, overflow }
 
     /// Stan start/stop/koniec pod zamkiem: handler anulowania jest synchroniczny i może przyjść przed startem, w trakcie i po.
     final class Job: @unchecked Sendable {
@@ -60,8 +70,19 @@ enum AgentProcess {
         private var pid: pid_t = 0
         private var stopReason: StopReason?
         private var done = false
+        /// Od tej chwili czytanie i zapis potoków się poddają: potomek spoza grupy (własny `setpgid`/`setsid`) może trzymać
+        /// nasze potoki bez końca, a `kill(-pgid)` go nie dosięgnie. Ustawia `parentExited` (rodzic ginie najpóźniej od SIGKILL).
+        private var abandonAt: ContinuousClock.Instant?
 
         var reason: StopReason? { lock.withLock { stopReason } }
+
+        var shouldAbandon: @Sendable () -> Bool {
+            { [self] in lock.withLock { abandonAt.map { ContinuousClock.now >= $0 } ?? false } }
+        }
+
+        private func scheduleAbandon() {
+            lock.withLock { if abandonAt == nil { abandonAt = .now + .seconds(AgentProcess.killGrace + 1) } }
+        }
 
         func started(_ p: pid_t) {
             let pending = lock.withLock { () -> Bool in pid = p; return stopReason != nil }
@@ -81,12 +102,18 @@ enum AgentProcess {
         /// Rodzic zakończył się sam: jeśli w grupie został ktoś, kto trzyma potoki, po `killGrace` dostaje SIGKILL.
         func parentExited() {
             let p = lock.withLock { pid }
+            scheduleAbandon()
             DispatchQueue.global().asyncAfter(deadline: .now() + AgentProcess.killGrace) { [self] in
                 if !lock.withLock({ done }) { kill(-p, SIGKILL) }
             }
         }
 
-        func finished() { lock.withLock { done = true } }
+        /// Koniec: rodzic odebrany, potoki zamknięte. Pozostali w grupie (potomek, który przekierował strumienie i ignoruje
+        /// SIGTERM) dostają SIGKILL od razu — zamknięte potoki nie znaczą, że grupa nie żyje.
+        func finished() {
+            let p = lock.withLock { () -> pid_t in done = true; return pid }
+            if p > 0 { kill(-p, SIGKILL) }
+        }
 
         private func signalGroup() {
             let p = lock.withLock { pid }
@@ -104,11 +131,22 @@ enum AgentProcess {
         let stdinRead: Int32, stdinWrite: Int32, stdoutRead: Int32, stdoutWrite: Int32, stderrRead: Int32, stderrWrite: Int32
 
         init() throws {
-            var a: [Int32] = [0, 0], b: [Int32] = [0, 0], c: [Int32] = [0, 0]
-            guard pipe(&a) == 0, pipe(&b) == 0, pipe(&c) == 0 else { throw ProviderError.agentFailed("Couldn't create pipes (errno \(errno)).") }
+            var fds: [[Int32]] = []
+            for _ in 0..<3 {
+                var p: [Int32] = [0, 0]
+                guard pipe(&p) == 0 else {
+                    let e = errno
+                    fds.joined().forEach { close($0) } // bez wycieku przy częściowym sukcesie
+                    throw ProviderError.agentFailed("Couldn't create pipes (errno \(e)).")
+                }
+                fds.append(p)
+            }
+            let (a, b, c) = (fds[0], fds[1], fds[2])
             (stdinRead, stdinWrite, stdoutRead, stdoutWrite, stderrRead, stderrWrite) = (a[0], a[1], b[0], b[1], c[0], c[1])
             // Zapis do zamkniętego stdin nie może zabić aplikacji sygnałem SIGPIPE.
             _ = fcntl(stdinWrite, F_SETNOSIGPIPE, 1)
+            // Nasze końce bez blokowania: zapis i odczyt czekają w `poll` i mogą się poddać (`shouldAbandon`).
+            for fd in [stdinWrite, stdoutRead, stderrRead] { _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) }
         }
 
         func closeChildEnds() { close(stdinRead); close(stdoutWrite); close(stderrWrite) }
@@ -158,32 +196,57 @@ enum AgentProcess {
         await withCheckedContinuation { c in Thread.detachNewThread { c.resume(returning: work()) } }
     }
 
-    private static func writeAll(_ data: Data, to fd: Int32) {
+    /// Czeka na gotowość deskryptora po 200 ms; `false` = porzucić (patrz `Job.shouldAbandon`).
+    private static func wait(_ fd: Int32, _ events: Int16, abandon: () -> Bool) -> Bool {
+        var p = pollfd(fd: fd, events: events, revents: 0)
+        while true {
+            let r = poll(&p, 1, 200)
+            if r > 0 { return true }
+            if r < 0, errno != EINTR { return true } // niech read/write zgłosi błąd
+            if abandon() { return false }
+        }
+    }
+
+    private static func writeAll(_ data: Data, to fd: Int32, abandon: () -> Bool) {
         data.withUnsafeBytes { buf in
             var off = 0
             while off < buf.count {
                 let n = write(fd, buf.baseAddress! + off, buf.count - off)
-                if n < 0 { if errno == EINTR { continue }; break } // EPIPE: proces nie czyta stdin — nic do zrobienia
+                if n < 0 {
+                    if errno == EINTR { continue }
+                    if errno == EAGAIN { if wait(fd, Int16(POLLOUT), abandon: abandon) { continue } else { break } }
+                    break // EPIPE: proces nie czyta stdin — nic do zrobienia
+                }
                 off += n
             }
         }
         close(fd)
     }
 
-    /// Czyta do EOF; `onLine` dostaje każdą pełną linię (strumień JSONL Codex).
-    private static func readAll(_ fd: Int32, onLine: (String) -> Void) -> Data {
+    /// Czyta do EOF (albo porzucenia); `onLine` dostaje każdą pełną linię (strumień JSONL Codex). Ponad `cap`: z `keepTail`
+    /// zostaje ostatnie `cap` bajtów, inaczej `onOverflow` i koniec czytania.
+    private static func readAll(_ fd: Int32, cap: Int, keepTail: Bool = false, abandon: () -> Bool,
+                                onOverflow: () -> Void = {}, onLine: (String) -> Void) -> Data {
         var all = Data(), pending = Data()
         var buf = [UInt8](repeating: 0, count: 65_536)
-        while true {
+        loop: while true {
             let n = read(fd, &buf, buf.count)
-            if n < 0 { if errno == EINTR { continue }; break }
+            if n < 0 {
+                if errno == EINTR { continue }
+                if errno == EAGAIN, wait(fd, Int16(POLLIN), abandon: abandon) { continue }
+                break
+            }
             if n == 0 { break }
             all.append(buf, count: n)
+            if all.count > cap {
+                if keepTail { all = Data(all.suffix(cap)) } else { onOverflow(); break loop }
+            }
             pending.append(buf, count: n)
             while let nl = pending.firstIndex(of: 0x0A) {
                 onLine(String(decoding: pending[pending.startIndex..<nl], as: UTF8.self))
                 pending.removeSubrange(pending.startIndex...nl)
             }
+            if pending.count > 1 << 20 { pending.removeAll() } // linia bez końca: nie jest linią statusu, której szukamy
         }
         close(fd)
         return all

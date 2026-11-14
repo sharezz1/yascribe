@@ -14,7 +14,7 @@ public enum AgentCLI {
                                           "skill_search"].flatMap { ["--disable", $0] } + ["-c", #"web_search="disabled""#]
 
     /// Odbiór procesu i limit czasu wywołania „Check" (status logowania, wersja).
-    static let statusTimeout: Double = 20
+    public static let statusTimeout: Double = 20
 
     // MARK: argumenty i środowisko
 
@@ -63,6 +63,7 @@ public enum AgentCLI {
                                              directory: workdir, input: Data(call.input.utf8), limit: limit, stopEarly: stop)
         if out.timedOut { throw ProviderError.agentFailed("\(name(kind)) didn't answer within \(Int(limit ?? 0)) s.") }
         if out.stoppedEarly { throw ProviderError.agentNotSignedIn(signInHint(kind)) }
+        if out.overflowed { throw ProviderError.agentFailed("\(name(kind)) sent more output than Yascribe accepts.") }
         let reply = kind == .claudeCLI ? try parseClaude(out.stdout, exitCode: out.status, stderr: out.stderrText)
                                        : try parseCodex(out.stdout, exitCode: out.status, stderr: out.stderrText)
         let clean = ThinkingStripper.clean(reply, orphanClosers: false)
@@ -102,7 +103,9 @@ public enum AgentCLI {
             }
             if type.hasPrefix("turn.") { lastTurn = type }
             if type == "turn.completed" { completed += 1 }
-            if type.hasPrefix("item."), let item = obj["item"] as? [String: Any] {
+            if type.hasPrefix("item.") {
+                guard let item = obj["item"] as? [String: Any] else { throw ProviderError.badResponse("Codex sent a malformed item.") }
+                guard completed == 0 else { throw ProviderError.agentFailed("Codex sent output after its turn ended.") }
                 let itemType = item["type"] as? String ?? "?"
                 guard itemType == "agent_message" else { throw ProviderError.agentUsedTool(itemType) }
                 if type == "item.completed", let text = item["text"] as? String { reply = text }
@@ -122,13 +125,16 @@ public enum AgentCLI {
             throw ProviderError.badResponse("Claude Code sent output that isn't JSON.")
         }
         let result = obj["result"] as? String ?? ""
+        // Odmowa narzędzia ma pierwszeństwo także w odpowiedzi z błędem: to naruszenie terminalne, nie zwykła porażka.
+        if let denials = obj["permission_denials"] as? [Any], !denials.isEmpty { throw ProviderError.agentUsedTool("permission denials") }
         if obj["is_error"] as? Bool != false {
             if result.localizedCaseInsensitiveContains("not logged in") { throw ProviderError.agentNotSignedIn(signInHint(.claudeCLI)) }
             throw ProviderError.agentFailed("Claude Code: \(result.prefix(300))")
         }
         guard exitCode == 0 else { throw ProviderError.agentFailed("Claude Code exited with code \(exitCode). \(stderr)") }
         guard obj["type"] as? String == "result" else { throw ProviderError.badResponse("Claude Code sent no result.") }
-        let denials = obj["permission_denials"] as? [Any] ?? []
+        // Brak tablicy odmów to brak dowodu, że narzędzi nie było: fail-closed.
+        guard let denials = obj["permission_denials"] as? [Any] else { throw ProviderError.badResponse("Claude Code sent no permission_denials.") }
         guard (obj["num_turns"] as? Int) == 1, denials.isEmpty else { throw ProviderError.agentUsedTool("turns: \(obj["num_turns"] ?? "?")") }
         switch obj["stop_reason"] as? String {
         case "end_turn": return result
@@ -143,8 +149,7 @@ public enum AgentCLI {
 
     /// Bramka D7: Codex spoza `verifiedCodex` nie dostaje transkryptu. Wynik w pamięci na ścieżkę i datę zmiany binarki.
     static func checkCodexVersion(_ binary: URL) async throws {
-        let mtime = (try? FileManager.default.attributesOfItem(atPath: binary.path)[.modificationDate] as? Date) ?? nil
-        let key = binary.path + "|" + (mtime.map { "\($0.timeIntervalSince1970)" } ?? "-")
+        let key = fileKey(binary)
         let version: String
         if let cached = versions.get(key) { version = cached } else {
             let out = try await AgentProcess.run(executable: binary, arguments: ["--version"], environment: environment(),
@@ -158,6 +163,15 @@ public enum AgentCLI {
         }
     }
 
+    /// Klucz cache wersji: plik, który naprawdę się uruchomi (cel dowiązań), z datą, rozmiarem i i-węzłem — aktualizacja
+    /// celu bez zmiany samego dowiązania (Homebrew, npm) unieważnia wynik.
+    static func fileKey(_ binary: URL) -> String {
+        let real = binary.resolvingSymlinksInPath().path
+        let a = (try? FileManager.default.attributesOfItem(atPath: real)) ?? [:]
+        let mtime = (a[.modificationDate] as? Date).map { "\($0.timeIntervalSince1970)" } ?? "-"
+        return [real, mtime, "\(a[.size] ?? "-")", "\(a[.systemFileNumber] ?? "-")"].joined(separator: "|")
+    }
+
     /// `codex-cli 0.167.2` → `0.167.2`.
     static func codexVersion(_ text: String) -> String? {
         text.split(whereSeparator: \.isWhitespace).last.map(String.init).flatMap { $0.first?.isNumber == true ? $0 : nil }
@@ -165,7 +179,7 @@ public enum AgentCLI {
 
     /// „Check": czy CLI jest zalogowane (metoda bez znaczenia: subskrypcja albo klucz w CLI). Treść statusu zawiera e-mail konta,
     /// więc do UI idzie wyłącznie nasz komunikat.
-    public static func verify(provider: Provider) async -> ProviderCheck {
+    public static func verify(provider: Provider, timeout: Double = statusTimeout) async -> ProviderCheck {
         let kind = provider.api
         guard FileManager.default.isExecutableFile(atPath: provider.baseURL.path) else {
             return .failed("\(name(kind)) not found at \(provider.baseURL.path).")
@@ -174,7 +188,7 @@ public enum AgentCLI {
             if kind == .codexCLI { try await checkCodexVersion(provider.baseURL) }
             let args = kind == .claudeCLI ? ["auth", "status"] : ["login", "status"]
             let out = try await AgentProcess.run(executable: provider.baseURL, arguments: args, environment: environment(),
-                                                 directory: FileManager.default.temporaryDirectory, input: Data(), limit: statusTimeout)
+                                                 directory: FileManager.default.temporaryDirectory, input: Data(), limit: timeout)
             guard !out.timedOut else { return .failed("\(name(kind)) didn't answer.") }
             return signedIn(kind: kind, status: out.status, stdout: out.stdout) ? .verified(models: models(for: kind).count)
                                                                               : .failed(signInHint(kind))

@@ -83,7 +83,8 @@ enum MeetingFilter: Equatable {
 @Observable
 final class AppModel {
     let paths = YascribePaths.fromEnvironment()
-    let secrets: any SecretStore = KeychainSecretStore()
+    /// `var` tylko dla testów (atrapa liczy dostępy; TASK-86 R5) — aplikacja zawsze używa pęku kluczy.
+    var secrets: any SecretStore = KeychainSecretStore()
 
     var section: Section = .meetings
     var scrollToDictationSettings = false

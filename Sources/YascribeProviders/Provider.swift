@@ -78,11 +78,6 @@ public enum AgentPrivacy {
         guard let provider, let vendor = provider.api.agentVendor else { return nil }
         return "The transcript goes to \(vendor) through \(provider.api == .codexCLI ? "Codex" : "Claude Code"), with your sign-in in that app."
     }
-
-    /// „Ask anything" bez agentów CLI: wysyła fragmenty wielu spotkań, a TASK-86 obejmuje tylko korektę i podsumowanie jednego.
-    public static func askCandidates(_ providers: [Provider]) -> [Provider] {
-        providers.filter { $0.supports(.summary) && !$0.api.isAgentCLI }
-    }
 }
 
 /// Korekta dyktowania bez agentów CLI (TASK-86, R3): start trwa sekundy, a dyktowanie czeka na wynik.

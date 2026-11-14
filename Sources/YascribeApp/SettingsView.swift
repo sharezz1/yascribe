@@ -322,7 +322,7 @@ struct SettingsView: View {
         candidates.first { $0.id == draft.embedding?.providerID } ?? (candidates.count == 1 ? candidates.first : nil)
     }
 
-    private var askCandidates: [Provider] { AgentPrivacy.askCandidates(model.providers.providers) }
+    private var askCandidates: [Provider] { model.providers.providers.filter { $0.supports(.summary) } }
 
     @ViewBuilder private var archiveSearch: some View {
         SectionHeader("Archive search")

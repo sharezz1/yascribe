@@ -202,7 +202,6 @@ private extension ProviderCheck {
     #expect(AgentPrivacy.caption(codex) == "The transcript goes to OpenAI through Codex, with your sign-in in that app.")
     #expect(AgentPrivacy.caption(claude) == "The transcript goes to Anthropic through Claude Code, with your sign-in in that app.")
     #expect(AgentPrivacy.caption(cloud) == nil && AgentPrivacy.caption(nil) == nil)
-    #expect(AgentPrivacy.askCandidates([cloud, codex, claude]).map(\.id) == [cloud.id])
 }
 
 @Test func agentToggleIsOptionalAndOffByDefault() throws {

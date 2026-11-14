@@ -99,3 +99,16 @@ private let assignment = RoleAssignment(providerID: UUID(), model: "gpt-6.1-terr
     let pid = try #require(Int32((try String(contentsOf: d.appendingPathComponent("pid"), encoding: .utf8)).trimmingCharacters(in: .whitespacesAndNewlines)))
     #expect(kill(pid, 0) != 0)
 }
+
+@Test func deadlineAroundAnAgentCallEndsItAndKillsTheAgent() async throws {
+    let d = try agentDir()
+    let client = try codex("echo $$ > $D/pid\nsleep 60", in: d)
+    let started = ContinuousClock.now
+    await #expect(throws: DeadlineExceeded.self) {
+        try await withDeadline(1) { try await client.chat(model: "m", system: "S", user: "U", timeout: 60, thinking: false) }
+    }
+    #expect(ContinuousClock.now - started < .seconds(4))
+    try await Task.sleep(for: .milliseconds(300))
+    let pid = try #require(Int32((try String(contentsOf: d.appendingPathComponent("pid"), encoding: .utf8)).trimmingCharacters(in: .whitespacesAndNewlines)))
+    #expect(kill(pid, 0) != 0)
+}

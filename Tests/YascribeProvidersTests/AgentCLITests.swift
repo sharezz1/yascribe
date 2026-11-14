@@ -75,6 +75,27 @@ private func line(_ s: String) -> Data { Data(s.utf8) }
     }
 }
 
+@Test func codexParserRejectsMalformedItemsAndOutputAfterTheTurn() {
+    let start = line(#"{"type":"turn.started"}"#) + line("\n")
+    let msg = line(#"{"type":"item.completed","item":{"id":"i","type":"agent_message","text":"[1] A"}}"#) + line("\n")
+    let done = line(#"{"type":"turn.completed"}"#) + line("\n")
+    let broken = line(#"{"type":"item.started","item":null}"#) + line("\n")
+    #expect(throws: ProviderError.badResponse("Codex sent a malformed item.")) { try AgentCLI.parseCodex(start + broken + msg + done, exitCode: 0) }
+    #expect(throws: ProviderError.agentFailed("Codex sent output after its turn ended.")) { try AgentCLI.parseCodex(start + msg + done + msg, exitCode: 0) }
+}
+
+@Test func versionCacheFollowsTheRealFileBehindASymlink() throws {
+    let d = try dir()
+    let a = d.appendingPathComponent("a"), b = d.appendingPathComponent("b"), link = d.appendingPathComponent("codex")
+    try "1".write(to: a, atomically: true, encoding: .utf8)
+    try "22".write(to: b, atomically: true, encoding: .utf8)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: a)
+    let before = AgentCLI.fileKey(link)
+    try FileManager.default.removeItem(at: a)
+    try FileManager.default.moveItem(at: b, to: a) // cel podmieniony, dowiązanie bez zmian
+    #expect(AgentCLI.fileKey(link) != before)
+}
+
 // MARK: parser Claude
 
 private func claudeJSON(isError: Bool = false, result: String = "[1] A", turns: Int = 1, stop: String = "end_turn",
@@ -85,8 +106,17 @@ private func claudeJSON(isError: Bool = false, result: String = "[1] A", turns: 
 @Test func claudeParserAcceptsOnlyAOneTurnEndTurnResult() throws {
     #expect(try AgentCLI.parseClaude(claudeJSON(), exitCode: 0) == "[1] A")
     #expect(throws: ProviderError.agentUsedTool("turns: 2")) { try AgentCLI.parseClaude(claudeJSON(turns: 2), exitCode: 0) }
-    #expect(throws: ProviderError.agentUsedTool("turns: 1")) {
+    #expect(throws: ProviderError.agentUsedTool("permission denials")) {
         try AgentCLI.parseClaude(claudeJSON(denials: #"[{"tool_name":"Bash"}]"#), exitCode: 0)
+    }
+    // Odmowa wygrywa z `is_error` (inaczej korekta szłaby dalej), a brak tablicy odmów to brak dowodu → odrzucenie.
+    #expect(throws: ProviderError.agentUsedTool("permission denials")) {
+        try AgentCLI.parseClaude(claudeJSON(isError: true, result: "boom", denials: #"[{"tool_name":"Bash"}]"#), exitCode: 1)
+    }
+    for denials in ["null", "{}"] {
+        #expect(throws: ProviderError.badResponse("Claude Code sent no permission_denials.")) {
+            try AgentCLI.parseClaude(claudeJSON(denials: denials), exitCode: 0)
+        }
     }
     #expect(throws: ProviderError.replyCutOff) { try AgentCLI.parseClaude(claudeJSON(stop: "max_tokens"), exitCode: 0) }
     #expect(throws: (any Error).self) { try AgentCLI.parseClaude(claudeJSON(), exitCode: 1) } // poprawny JSON, zły kod wyjścia
@@ -139,7 +169,7 @@ private func claudeJSON(isError: Bool = false, result: String = "[1] A", turns: 
         yes x | head -c 1048576 >&2
         printf '{"type":"result","is_error":false,"num_turns":1,"stop_reason":"end_turn","result":"'
         yes y | tr -d '\\n' | head -c 1048576
-        printf '"}'
+        printf '","permission_denials":[]}'
         """
     let p = try fake(.claudeCLI, body)
     #expect(try await chat(p, limit: 30).count == 1_048_576)
@@ -293,4 +323,39 @@ private struct ExplodingStore: SecretStore {
     await #expect(throws: refusal) { _ = try await c.transcribe(wav: Data(), model: "m", language: nil, shape: .audioTranscriptions) }
     await #expect(throws: refusal) { _ = try await c.embed(model: "m", text: "x") }
     #expect(http.calls.isEmpty)
+}
+
+// MARK: cykl życia po recenzji kodu
+
+@Test func cancelKillsAChildThatClosedOurPipesAndIgnoresTerm() async throws {
+    let d = try dir()
+    // Potomek odpina się od potoków i ignoruje SIGTERM: EOF na potokach nie może wyłączyć SIGKILL dla grupy.
+    let p = try fake(.codexCLI, "sh -c 'trap \"\" TERM; echo $$ > \(d.path)/child; exec >/dev/null 2>&1 </dev/null; sleep 60' &\nsleep 60", in: d)
+    let task = Task { try await chat(p) }
+    try await Task.sleep(for: .seconds(1))
+    task.cancel()
+    await #expect(throws: CancellationError.self) { try await task.value }
+    try await Task.sleep(for: .milliseconds(500))
+    #expect(!alive(try #require(pid(at: d.appendingPathComponent("child")))))
+}
+
+@Test func cancelReturnsEvenIfAChildLeftTheGroupHoldingStdout() async throws {
+    let d = try dir()
+    // Potomek we własnej grupie (setpgrp) ignoruje TERM i trzyma stdout: kill(-pgid) go nie dosięga, ale `run` musi wrócić.
+    let escape = "perl -e 'setpgrp(0,0); $SIG{TERM}=\"IGNORE\"; open(F, \">\", \"\(d.path)/child\"); print F $$; close F; sleep 60' &"
+    let p = try fake(.codexCLI, escape + "\nsleep 60", in: d)
+    let task = Task { try await chat(p) }
+    try await Task.sleep(for: .seconds(1))
+    let started = ContinuousClock.now
+    task.cancel()
+    await #expect(throws: CancellationError.self) { try await task.value }
+    #expect(ContinuousClock.now - started < .seconds(AgentProcess.killGrace + 3))
+    if let child = pid(at: d.appendingPathComponent("child")) { kill(child, SIGKILL) } // sprzątanie uciekiniera
+}
+
+@Test func verifyGivesUpOnAHangingStatus() async throws {
+    let p = try fake(.codexCLI, "sleep 60")
+    let started = ContinuousClock.now
+    #expect(await AgentCLI.verify(provider: p, timeout: 1) == .failed("Codex didn't answer."))
+    #expect(ContinuousClock.now - started < .seconds(4))
 }
