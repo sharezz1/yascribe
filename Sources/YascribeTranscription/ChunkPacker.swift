@@ -50,6 +50,14 @@ public struct Chunk: Codable, Equatable, Sendable {
         return (map(ps), map(pe))
     }
 
+    /// Koniec segmentu (czas okna, s) → czas ścieżki (s) we fragmencie, w którym leży. Segment ma kilka sekund i może
+    /// przejść przez sklejenie, więc nie przycinamy go do fragmentu początku. Koniec w sztucznej przerwie → koniec poprzedniego fragmentu, nie początek następnego.
+    public func sourceEnd(chunkEnd: Double, rate: Double) -> Double {
+        let pe = Int((chunkEnd * rate).rounded())
+        let seg = segments.last { $0.chunkStart <= pe } ?? segments[0]
+        return Double(seg.sourceStart + min(max(pe, seg.chunkStart), seg.chunkStart + seg.length) - seg.chunkStart) / rate
+    }
+
     public var sourceStartSeconds: Double { Double(segments.first?.sourceStart ?? 0) / Resampler.asrRate }
     public var sourceEndSeconds: Double { Double(segments.last?.sourceEnd ?? 0) / Resampler.asrRate }
 }

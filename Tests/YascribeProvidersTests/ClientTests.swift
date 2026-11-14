@@ -395,6 +395,13 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
                                                   "words": [["word": "raz", "start": 0.1, "end": 0.4]]]]]
     #expect(OpenAICompatibleClient.timedUnits(withWords).units == [TranscribedWord(word: "raz", start: 0.1, end: 0.4)])
     #expect(!OpenAICompatibleClient.timedUnits(withWords).segments)
+    // Mieszanie: segment bez słów zostaje jako jednostka, nie znika.
+    let mixed: [String: Any] = ["segments": [
+        ["start": 0.0, "end": 1.0, "text": "raz", "words": [["word": "raz", "start": 0.1, "end": 0.4]]],
+        ["start": 2.0, "end": 3.0, "text": "dwa trzy"]]]
+    #expect(OpenAICompatibleClient.timedUnits(mixed).units == [TranscribedWord(word: "raz", start: 0.1, end: 0.4),
+                                                               TranscribedWord(word: "dwa trzy", start: 2.0, end: 3.0)])
+    #expect(OpenAICompatibleClient.timedUnits(mixed).segments)
 }
 
 // Choć jeden segment z tekstem bez czasów → nil: Merger bierze cały tekst okna, nic nie ginie.
@@ -410,9 +417,70 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     await #expect(throws: ProviderError.http(400, "Provider returned 400")) {
         _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
     }
-    // JSON dwa razy, potem jeden multipart; błąd z JSON, nie z multipart.
+    // Dostawca zdalny, 400 bez wskazania kształtu: JSON dwa razy, bez multipart.
+    #expect(http.calls.count == 2)
+    #expect(http.calls.allSatisfy { $0.headers["Content-Type"] == "application/json" })
+}
+
+// Multipart odrzucony kształtem: status multipart, a w komunikacie oba powody — prawdziwa przyczyna
+// lokalnego serwera bywa tylko w odpowiedzi na multipart.
+@Test(arguments: [400, 415, 422]) func multipartShapeRejectionKeepsBothMessages(status: Int) async {
+    let http = StubHTTP { _, body in body.isEmpty ? fail(status, "audio decode failed") : fail(422, "body -> file: Field required") }
+    await #expect(throws: ProviderError.http(status, "body -> file: Field required | multipart \(status): audio decode failed")) {
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+            .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+}
+
+// Lokalny serwer odrzuca oba multiparty (z `word_timestamps` i bez): 4 żądania, błąd z JSON i z ostatniego multipart.
+@Test(arguments: [400, 415, 422]) func localMultipartRejectedTwiceStopsWithBothMessages(status: Int) async throws {
+    let attempts = OSAllocatedUnfairLock(initialState: 0)
+    let http = StubHTTP { _, body in
+        guard body.isEmpty else { return fail(422, "JSON unsupported") }
+        let n = attempts.withLock { $0 += 1; return $0 }
+        return n == 1 ? fail(400, "unknown word_timestamps") : fail(status, "bad wav")
+    }
+    let c = OpenAICompatibleClient(provider: Provider(name: "local", baseURL: URL(string: "http://localhost:9000/v1")!), key: nil, http: http)
+    await #expect(throws: ProviderError.http(status, "JSON unsupported | multipart \(status): bad wav (with word_timestamps: unknown word_timestamps)")) {
+        _ = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    try #require(http.calls.count == 4)
+    #expect(String(decoding: http.calls[2].raw, as: UTF8.self).contains("word_timestamps"))
+    #expect(!String(decoding: http.calls[3].raw, as: UTF8.self).contains("word_timestamps"))
+}
+
+// Zdalny dostawca bez wskazania kształtu nie dostaje multipart, nawet gdy odpowiedziałby 401, 404 lub 503.
+@Test(arguments: [401, 404, 503], [400, 415, 422]) func remoteJSONRejectionDoesNotTryMultipart(status: Int, jsonStatus: Int) async {
+    let http = StubHTTP { _, body in body.isEmpty ? fail(status, "nope") : fail(jsonStatus, "bad request") }
+    await #expect(throws: ProviderError.http(jsonStatus, "bad request")) {
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+            .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    #expect(http.calls.count == 2)
+    #expect(http.calls.allSatisfy { $0.headers["Content-Type"] == "application/json" })
+}
+
+// Wskazanie kształtu w dowolnym błędzie wystarcza, nawet gdy drugi komunikat jest pusty.
+@Test(arguments: ["body -> file: Field required", "INPUT_AUDIO: unknown field"], [true, false]) func eitherJSONRejectionCanIdentifyMultipart(message: String, first: Bool) async throws {
+    let http = StubHTTP { _, body in
+        if body.isEmpty { return ok(["text": "raz"]) }
+        return fail(400, (body["timestamp_granularities"] != nil) == first ? message : "{}")
+    }
+    let r = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+        .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    #expect(r.text == "raz")
     #expect(http.calls.count == 3)
     #expect(http.calls[2].headers["Content-Type"]?.hasPrefix("multipart/form-data; boundary=") == true)
+}
+
+// 401/404 z multipart to inny problem niż kształt JSON: idzie dalej bez zmian.
+@Test(arguments: [401, 404]) func multipartAuthOrPathErrorPassesThrough(status: Int) async {
+    let http = StubHTTP { _, body in body.isEmpty ? fail(status, "nope") : fail(400, "input_audio: unknown field") }
+    await #expect(throws: ProviderError.http(status, "nope")) {
+        _ = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+            .transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    }
+    #expect(http.calls.count == 3)
 }
 
 // oMLX / API OpenAI: tylko multipart/form-data. JSON z `input_audio` → 422 „file: Field required”.
@@ -443,13 +511,15 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     #expect(r.words?.count == 1)
 }
 
-// Odrzucenie JSON kodem 415 od razu (bez prób bez znaczników słów skończonych sukcesem) też prowadzi do multipart.
-@Test func unsupportedMediaTypeLeadsToMultipart() async throws {
-    let http = StubHTTP { _, body in body.isEmpty ? ok(["text": "raz"]) : fail(415, "Unsupported Media Type") }
-    let r = try await OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+// 415 = serwer nie przyjmuje JSON w ogóle: od razu multipart (jeden JSON, bez ponowienia bez znaczników słów).
+@Test(arguments: [true, false]) func unsupportedMediaTypeLeadsToMultipart(local: Bool) async throws {
+    let http = StubHTTP { _, body in body.isEmpty ? ok(["text": "raz"]) : fail(415, local ? "Unsupported Media Type" : "file required") }
+    let provider = local ? Provider(name: "local", baseURL: URL(string: "http://localhost:9000/v1")!) : openRouter
+    let r = try await OpenAICompatibleClient(provider: provider, key: nil, http: http)
         .transcribe(wav: ProbeClips.polish.wav, model: "m", language: nil, shape: .audioTranscriptions)
     #expect(r.text == "raz")
-    #expect(!String(decoding: http.calls[2].raw, as: UTF8.self).contains("name=\"language\""))
+    #expect(http.calls.count == 2)
+    #expect(!String(decoding: http.calls[1].raw, as: UTF8.self).contains("name=\"language\""))
 }
 
 // Przeciążenie albo awaria przy multipart to nie „zły kształt”: błąd idzie dalej (ASRRetry ponawia 429/5xx).

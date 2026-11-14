@@ -118,6 +118,34 @@ private func attempt(status: Int, failures: Int, log: Log) async throws -> Strin
     #expect(abs(t.utterances[0].start - 5.0) < 1e-6)
     // Słowo zostaje przycięte do swojego fragmentu (7,4 s); segment sięga do 17,4 s.
     #expect(abs(t.utterances[0].end - (segmentTiming ? 17.4 : 7.4)) < 1e-3)
+    // Segment to kilka sekund, nie słowo: czas przybliżony (etykieta w UI). Słowa — dokładny.
+    #expect(t.utterances[0].approximateTiming == segmentTiming)
+}
+
+// Koniec segmentu w sztucznej przerwie należy do poprzedniego fragmentu.
+@Test(arguments: [2.4, 2.5, 2.6, 2.7]) func segmentEndingInTheSpliceGapEndsWithItsFragment(end: Double) {
+    let chunk = Chunk(index: 0, segments: [ChunkSegment(sourceStart: 80_000, sourceEnd: 118_400, chunkStart: 0),
+                                           ChunkSegment(sourceStart: 240_000, sourceEnd: 278_400, chunkStart: 43_200)], length: 81_600)
+    let result = TranscriptionResult(text: "dzień dobry", words: [TranscribedWord(word: "dzień dobry", start: 0, end: end)],
+                                     segmentTiming: true)
+    let t = Merger.merge([ChunkResult(track: "system", chunk: chunk, result: result)], speakers: ["system": .them],
+                         clock: SessionClock(summary: SessionSummary(startedHostTime: 0, timebase: ns, tracks: [])), language: .polish)
+    #expect(abs(t.utterances[0].start - 5.0) < 1e-6)
+    #expect(abs(t.utterances[0].end - (end == 2.7 ? 15.0 : 7.4)) < 1e-3)
+}
+
+@Test(arguments: [true, false]) func approximateTimingFollowsEachUtteranceAcrossWindows(segmentFirst: Bool) {
+    let results = [
+        ChunkResult(track: "system", chunk: Chunk(index: 0, segments: [ChunkSegment(sourceStart: 0, sourceEnd: 32_000, chunkStart: 0)], length: 32_000),
+                    result: TranscriptionResult(text: "raz", words: [TranscribedWord(word: "raz", start: 0, end: 1)], segmentTiming: segmentFirst ? true : nil)),
+        ChunkResult(track: "system", chunk: Chunk(index: 1, segments: [ChunkSegment(sourceStart: 16_000, sourceEnd: 48_000, chunkStart: 0)], length: 32_000),
+                    result: TranscriptionResult(text: "dwa trzy", words: [TranscribedWord(word: "dwa trzy", start: 0, end: 1)], segmentTiming: segmentFirst ? nil : true)),
+        ChunkResult(track: "system", chunk: Chunk(index: 2, segments: [ChunkSegment(sourceStart: 80_000, sourceEnd: 112_000, chunkStart: 0)], length: 32_000),
+                    result: TranscriptionResult(text: "cztery", words: [TranscribedWord(word: "cztery", start: 0, end: 1)]))]
+    let t = Merger.merge(results, speakers: ["system": .them],
+                         clock: SessionClock(summary: SessionSummary(startedHostTime: 0, timebase: ns, tracks: [])), language: .polish)
+    #expect(t.utterances.map(\.text) == ["raz dwa trzy", "cztery"])
+    #expect(t.utterances.map(\.approximateTiming) == [true, false])
 }
 
 @Test(arguments: [nil, [TranscribedWord]()]) func windowWithoutWordTimesBecomesOneApproximateUtterance(words: [TranscribedWord]?) {

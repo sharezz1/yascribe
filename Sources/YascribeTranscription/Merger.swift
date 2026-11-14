@@ -36,19 +36,20 @@ public enum Merger {
         var utterances: [Utterance] = []
         for track in Set(results.map(\.track)).sorted() {
             let speaker = speakers[track] ?? .them
-            var words: [Word] = []
+            // `approx` = jednostka to segment (kilka sekund), nie słowo: wypowiedź dostaje etykietę „Approximate timing”.
+            var words: [(word: Word, approx: Bool)] = []
             for r in results.filter({ $0.track == track }).sorted(by: { $0.chunk.index < $1.chunk.index }) {
                 if let ws = r.result.words, !ws.isEmpty {
                     for w in ws {
                         var span = r.chunk.sourceSpan(chunkStart: w.start, chunkEnd: w.end, rate: Resampler.asrRate)
                         if r.result.segmentTiming == true {
                             // Segment może przejść przez sklejenie fragmentów: koniec mapujemy we fragmencie, w którym leży.
-                            let tail = max(w.start, w.end - 1 / Resampler.asrRate)
-                            span.end = r.chunk.sourceSpan(chunkStart: tail, chunkEnd: w.end, rate: Resampler.asrRate).end
+                            span.end = r.chunk.sourceEnd(chunkEnd: w.end, rate: Resampler.asrRate)
                         }
                         let s = clock.sessionSeconds(track: track, trackSeconds: span.start)
                         let e = clock.sessionSeconds(track: track, trackSeconds: span.end)
-                        words.append(Word(text: w.word.trimmingCharacters(in: .whitespaces), start: s, end: max(s, e)))
+                        words.append((Word(text: w.word.trimmingCharacters(in: .whitespaces), start: s, end: max(s, e)),
+                                      r.result.segmentTiming == true))
                     }
                 } else if !r.result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     let s = clock.sessionSeconds(track: track, trackSeconds: r.chunk.sourceStartSeconds)
@@ -57,18 +58,21 @@ public enum Merger {
                                                 words: [], approximateTiming: true, languageMismatch: nil))
                 }
             }
-            words.sort { $0.start < $1.start }
+            words.sort { $0.word.start < $1.word.start }
             var group: [Word] = []
+            var approx = false
             func flush() {
                 guard let f = group.first, let l = group.last else { return }
                 utterances.append(Utterance(speaker: speaker, start: f.start, end: l.end,
                                             text: group.map(\.text).joined(separator: " "), words: group,
-                                            approximateTiming: false, languageMismatch: nil))
+                                            approximateTiming: approx, languageMismatch: nil))
                 group = []
+                approx = false
             }
-            for w in words {
+            for (w, a) in words {
                 if let last = group.last, w.start - last.end > utteranceGap { flush() }
                 group.append(w)
+                approx = approx || a
             }
             flush()
         }

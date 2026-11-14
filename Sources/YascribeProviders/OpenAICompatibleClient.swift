@@ -32,7 +32,7 @@ public struct TranscriptionResult: Codable, Equatable, Sendable {
     public var text: String
     /// `nil`, gdy kształt nie daje znaczników słów (czat).
     public var words: [TranscribedWord]?
-    /// true = `words` to segmenty (kilka sekund, mogą przechodzić przez sklejenie fragmentów okna), nie słowa.
+    /// true = `words` zawiera segmenty (kilka sekund, mogą przechodzić przez sklejenie fragmentów okna), więc czasy są przybliżone.
     public var segmentTiming: Bool?
 
     public init(text: String, words: [TranscribedWord]?, segmentTiming: Bool? = nil) {
@@ -138,25 +138,26 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             var body: [String: Any] = ["model": model, "input_audio": audio, "response_format": "verbose_json",
                                        "timestamp_granularities": ["word"]]
             if let language { body["language"] = language.rawValue }
+            let shapeRejection: Set<Int> = [400, 415, 422]
             let obj: [String: Any]
             do {
                 obj = try await json(try request("audio/transcriptions", body: body))
-            } catch ProviderError.http(let status, _) where status == 400 || status == 415 || status == 422 {
-                // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
-                // bez pola. Zostają same `segments` (bez czasów słów) — `words(obj)` bierze je jako jednostki.
-                body["timestamp_granularities"] = nil
-                do {
-                    obj = try await json(try request("audio/transcriptions", body: body))
-                } catch ProviderError.http(let status, let message) where status == 400 || status == 415 || status == 422 {
-                    // Oryginalne API OpenAI i serwery lokalne (oMLX, mlx-audio) przyjmują tylko multipart/form-data, a JSON
-                    // z `input_audio` odrzucają jako brak pól. Multipart też odrzucony kształtem → błąd JSON (dostawca JSON-owy
-                    // nie dostaje mylącej diagnozy); 429/5xx/timeout z multipart idą dalej, do ponowień i sondy.
-                    do { obj = try await json(multipartTranscription(wav: wav, model: model, language: language)) }
-                    catch ProviderError.http(let s, _) where provider.isLocal && (s == 400 || s == 422) {
-                        // Inny lokalny serwer może nie znać rozszerzenia oMLX `word_timestamps`: jedno ponowienie bez niego.
-                        do { obj = try await json(multipartTranscription(wav: wav, model: model, language: language, wordTimestamps: false)) }
-                        catch ProviderError.http(let s, _) where s == 400 || s == 415 || s == 422 { throw ProviderError.http(status, message) }
-                    } catch ProviderError.http(let s, _) where s == 400 || s == 415 || s == 422 { throw ProviderError.http(status, message) }
+            } catch ProviderError.http(let status, let message) where shapeRejection.contains(status) {
+                if status == 415 && (provider.isLocal || Self.mentionsAudioField(message)) {
+                    // 415 = serwer nie przyjmuje JSON w ogóle: drugi JSON też dostałby 415, od razu multipart.
+                    obj = try await multipartAfterJSONRejection(wav: wav, model: model, language: language, message: message)
+                } else {
+                    // Voxtral odrzuca `word` kodem 400 bez treści, więc nie da się go poznać po komunikacie: jedno ponowienie
+                    // bez pola. Zostają same `segments` (bez czasów słów) — `timedUnits(obj)` bierze je jako jednostki.
+                    body["timestamp_granularities"] = nil
+                    do {
+                        obj = try await json(try request("audio/transcriptions", body: body))
+                    } catch ProviderError.http(let retryStatus, let retryMessage) where shapeRejection.contains(retryStatus)
+                                && (provider.isLocal || Self.mentionsAudioField(message) || Self.mentionsAudioField(retryMessage)) {
+                        // Oryginalne API OpenAI i serwery lokalne (oMLX, mlx-audio) przyjmują tylko multipart/form-data, a JSON
+                        // z `input_audio` odrzucają jako brak pól. Dostawca JSON-owy (OpenRouter) z innym 400 multipartu nie dostaje.
+                        obj = try await multipartAfterJSONRejection(wav: wav, model: model, language: language, message: retryMessage)
+                    }
                 }
             }
             guard let text = obj["text"] as? String else { throw ProviderError.badResponse("no text") }
@@ -172,6 +173,27 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             let obj = try await json(try request("chat/completions", body: body))
             return TranscriptionResult(text: try Self.chatContent(obj), words: nil)
         }
+    }
+
+    /// Komunikat odrzucenia JSON wskazuje na kształt żądania (brak pliku / nieznane `input_audio`), nie na treść.
+    static func mentionsAudioField(_ message: String) -> Bool {
+        let m = message.lowercased()
+        return m.contains("file") || m.contains("input_audio")
+    }
+
+    /// Multipart po odrzuceniu JSON. Odrzucony też kształtem (400/415/422) → błąd ze statusem multipart i oboma komunikatami
+    /// (sonda języka patrzy na status; komunikat multipart to zwykle prawdziwa przyczyna). 401/404/429/5xx/timeout z multipart
+    /// idą dalej bez zmian, do ponowień i sondy.
+    func multipartAfterJSONRejection(wav: Data, model: String, language: LanguageCode?, message: String) async throws -> [String: Any] {
+        func combined(_ s: Int, _ m: String) -> ProviderError { .http(s, "\(message) | multipart \(s): \(m)") }
+        do { return try await json(multipartTranscription(wav: wav, model: model, language: language)) }
+        catch ProviderError.http(let s, let m) where provider.isLocal && (s == 400 || s == 422) {
+            // Inny lokalny serwer może nie znać rozszerzenia oMLX `word_timestamps`: jedno ponowienie bez niego.
+            do { return try await json(multipartTranscription(wav: wav, model: model, language: language, wordTimestamps: false)) }
+            catch ProviderError.http(let s2, let m2) where s2 == 400 || s2 == 415 || s2 == 422 {
+                throw combined(s2, m2 == m ? m2 : "\(m2) (with word_timestamps: \(m))")
+            }
+        } catch ProviderError.http(let s, let m) where s == 400 || s == 415 || s == 422 { throw combined(s, m) }
     }
 
     /// Obrona przed cichym obcięciem wejścia przez lokalny serwer (Ollama + bonsai-2: prompt dłuższy niż kontekst → HTTP 200,
@@ -259,13 +281,20 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         }
         if let top = obj["words"] as? [[String: Any]], case let ws = parse(top), !ws.isEmpty { return (ws, false) }
         guard let segs = obj["segments"] as? [[String: Any]] else { return (nil, false) }
-        let all = segs.flatMap { ($0["words"] as? [[String: Any]]).map(parse) ?? [] }
-        if !all.isEmpty { return (all, false) }
         // Bez czasów słów (Voxtral, Whisper bez `word_timestamps`) segment z czasami jest jedną jednostką: Merger dzieli
-        // okno na wypowiedzi po przerwach między segmentami, zamiast wrzucać całe okno do jednego wiersza.
+        // okno na wypowiedzi po przerwach między segmentami, zamiast wrzucać całe okno do jednego wiersza. Segment ze
+        // słowami daje słowa, segment bez nich — siebie (nic nie znika przy mieszanej odpowiedzi).
         // Segment z tekstem bez czasów → cały tekst okna z czasem przybliżonym, żeby nic nie zginęło.
-        let spoken = segs.filter { !(($0["text"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        let units = parse(spoken.map { ["word": $0["text"] ?? "", "start": $0["start"] ?? "", "end": $0["end"] ?? ""] })
-        return units.isEmpty || units.count != spoken.count ? (nil, false) : (units, true)
+        var units: [TranscribedWord] = []
+        var fromSegments = false
+        for seg in segs {
+            let ws = (seg["words"] as? [[String: Any]]).map(parse) ?? []
+            if !ws.isEmpty { units += ws; continue }
+            guard let text = seg["text"] as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            guard let unit = parse([["word": text, "start": seg["start"] ?? "", "end": seg["end"] ?? ""]]).first else { return (nil, false) }
+            units.append(unit)
+            fromSegments = true
+        }
+        return units.isEmpty ? (nil, false) : (units, fromSegments)
     }
 }
