@@ -92,4 +92,21 @@ import Testing
             #expect(r.text == c && r.reverted == 0, "\(o) → \(c)")
         }
     }
+
+    @Test func deletedWordsAreRestoredButFillersMayGo() {
+        // Spike A/B korekty: model usuwa urwany początek („wrzucić tam wrzucamy") albo słowo („jeszcze").
+        let f = ["yyy", "eee", "mhm"]
+        func deleted(_ o: String, _ c: String) -> CorrectionGuard.Result { CorrectionGuard.apply(original: o, corrected: c, fillerWords: f) }
+        let r = deleted("no to wrzucić tam wrzucamy na listę", "No to wrzucamy na listę")
+        #expect(r.text == "No to wrzucić tam wrzucamy na listę" && r.reverted == 1)
+        #expect(deleted("trzeba było jeszcze oprócz tego", "trzeba było oprócz tego").text == "trzeba było jeszcze oprócz tego")
+        // Przerywniki z listy (także rozciągnięte) i same znaki mogą zniknąć.
+        for (o, c) in [("to yyy jest eeee dobre", "To jest dobre"), ("wiem -- mhm, tak", "Wiem, tak"),
+                       ("I, i, no i chłopaki", "No i chłopaki"), ("Nie kojarzę, kojarzę, żeby", "Nie kojarzę, żeby")] { // + powtórzenie sąsiada
+            let k = deleted(o, c)
+            #expect(k.text == c && k.reverted == 0, "\(o) → \(c)")
+        }
+        // Bez listy przerywników usunięte „yyy" też wraca: użytkownik nie chciał ich usuwać.
+        #expect(CorrectionGuard.apply(original: "to yyy jest", corrected: "to jest").text == "to yyy jest")
+    }
 }
