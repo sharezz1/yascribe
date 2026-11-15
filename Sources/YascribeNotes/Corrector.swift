@@ -261,7 +261,8 @@ public struct Corrector: Sendable {
                 result.answered += 1
                 guard let new = fixed[k + 1], CorrectionRules.accepts(original: l.text, corrected: new),
                       CorrectionRules.similar(original: l.text, corrected: new) else { result.rejected += 1; continue }
-                let guarded = CorrectionGuard.apply(original: l.text, corrected: new, isMisspelled: isMisspelled, terms: vocabulary?.terms ?? [])
+                let guarded = CorrectionGuard.apply(original: l.text, corrected: new, isMisspelled: isMisspelled, terms: vocabulary?.terms ?? [],
+                                                   fillerWords: fillerWords)
                 result.reverted += guarded.reverted
                 result.applied.append((l.n, guarded.text))
             }

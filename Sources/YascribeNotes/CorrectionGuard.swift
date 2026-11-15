@@ -5,6 +5,8 @@ import Foundation
 /// - zmiany zapisu liczb i godzin (`13.30` → `13:30`, „dwunastej" → `12:00`, `2` → „dwa"): prompt każe zostawić zapis;
 /// - nowe słowa z artefaktem (`_` w środku, zdublowana litera z ogonkiem `podepnąą`, trzy takie same litery z rzędu);
 /// - wstawkę dwóch lub więcej nowych słów bez odpowiednika w oryginale (halucynacja typu „jest try to.").
+/// - usunięcie słów bez zamiennika („wrzucić tam wrzucamy" → „wrzucamy"); wolno usunąć przerywniki z `fillerWords`, same znaki
+///   i powtórzenie słowa stojącego tuż obok (jąkanie „I, i, no i"; przy nim LCS i tak nie wie, który egzemplarz zniknął).
 /// - nowe słowo z błędem pisowni, gdy wszystkie zastąpione słowa były poprawne (`oddziałów` → `odziałów`); tylko z `isMisspelled`.
 /// Poza cofaniem przywracamy końcówkę, gdy model zamienił odmienione słowo na Term w formie podstawowej
 /// (`na Genesisa` → `na Genesys` daje `na Genesysa`); liczy się to jak cofnięcie.
@@ -18,9 +20,9 @@ public enum CorrectionGuard {
     }
 
     /// `isMisspelled`: słownik systemowy (aplikacja); `nil` = bez kontroli pisowni. `terms`: Termy ze słownika użytkownika
-    /// (też ich odmienione formy) nie są uznawane za błąd.
+    /// (też ich odmienione formy) nie są uznawane za błąd. `fillerWords`: przerywniki, które model może usunąć (pusta = żadne).
     public static func apply(original: String, corrected: String, isMisspelled: (@Sendable (String) -> Bool)? = nil,
-                             terms: [String] = []) -> Result {
+                             terms: [String] = [], fillerWords: [String] = []) -> Result {
         let o = original.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         let c = corrected.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
         guard !o.isEmpty, !c.isEmpty else { return Result(text: corrected, reverted: 0) }
@@ -31,7 +33,11 @@ public enum CorrectionGuard {
             case .same(_, let j): out.append(c[j])
             case .changed(let oi, let ci):
                 let before = Array(o[oi]), after = Array(c[ci])
-                if suspicious(original: before, corrected: after, isMisspelled: isMisspelled, terms: terms) { out += before; reverted += 1 }
+                if suspicious(original: before, corrected: after, isMisspelled: isMisspelled, terms: terms)
+                    || deletesWords(original: before, corrected: after, fillerWords: fillerWords,
+                                    neighbours: o[max(0, oi.lowerBound - 2)..<oi.lowerBound].map(key) + o[oi.upperBound..<min(o.count, oi.upperBound + 2)].map(key)) {
+                    out += before; reverted += 1
+                }
                 else if before.count == after.count, let fixed = restoredEndings(original: before, corrected: after, terms: terms) { out += fixed; reverted += 1 }
                 else { out += after }
             }
@@ -80,6 +86,13 @@ public enum CorrectionGuard {
         return known && corrected.contains { token in
             guard let w = spellable(token), !isTerm(w, terms), isMisspelled(w) else { return false }
             return true
+        }
+    }
+
+    /// Blok bez zamiennika, w którym znika token z literami, niebędący przerywnikiem ani powtórzeniem sąsiada (dwa słowa z każdej strony).
+    static func deletesWords(original: [String], corrected: [String], fillerWords: [String], neighbours: [String] = []) -> Bool {
+        corrected.isEmpty && original.contains {
+            $0.contains(where: \.isLetter) && !FillerWords.isFiller($0, words: fillerWords) && !neighbours.contains(key($0))
         }
     }
 
