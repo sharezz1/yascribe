@@ -1,7 +1,7 @@
 #!/bin/bash
 # Pokrycie skryptów składania (S18, BACKLOG): bundle.sh z podpisem ad-hoc, poprawny Info.plist z kluczami TCC
 # i podpis, który się weryfikuje. Buduje do OSOBNEJ ścieżki (.build/check), żeby nie nadpisać pakietu
-# podpisanego „MeetNotes Dev" (ad-hoc zmienia cdhash i TCC resetuje uprawnienia).
+# podpisanego „Apple Development" (ad-hoc zmienia cdhash i TCC resetuje uprawnienia).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 APP="$(YASCRIBE_APP=.build/check/Yascribe.app YASCRIBE_SIGN_IDENTITY=- scripts/bundle.sh 2>/dev/null | tail -1)"

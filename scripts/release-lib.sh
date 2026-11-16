@@ -3,25 +3,27 @@
 # Każdy krok kończy się `die` przed jakimkolwiek zapisem poza katalogiem tymczasowym, aż do kroku (8) (gh).
 # NIGDY `set -x`: log nie może zawierać kluczy ani tokenów. Wykonawcy podstawialni zmiennymi środowiskowymi:
 #   YASCRIBE_TEST_CMD (scripts/test.sh), YASCRIBE_BUNDLE_CMD (CONFIG=release scripts/bundle.sh), YASCRIBE_SIGN_UPDATE,
-#   YASCRIBE_GH (gh), YASCRIBE_FETCH (curl -fsSL), YASCRIBE_IDENTITY_CHECK, YASCRIBE_REMOTE_HEAD_CMD.
+#   YASCRIBE_GH (gh), YASCRIBE_FETCH (curl -fsSL), YASCRIBE_IDENTITY_CHECK, YASCRIBE_REMOTE_HEAD_CMD,
+#   YASCRIBE_ED_VERIFY (swift scripts/ed25519-verify.swift).
 
 REPO="sharezz1/yascribe"
 
 die() { echo "release: $*" >&2; exit 1; }
 
-# Kontrola tożsamości podpisu (S0, wersja z raportu): nie ad-hoc, designated requirement ma identifier i odcisk SHA-1
-# certyfikatu „MeetNotes Dev" z `security find-identity` (bez `-v`: certyfikat samopodpisany jest NOT_TRUSTED);
-# nie polegamy na `Authority=`.
+# Kontrola tożsamości podpisu (TASK-99). Certyfikat Apple z Team ID: pęk przypisuje wtedy aplikacji partycję `teamid:`
+# zamiast `cdhash:` (securityd, clientid.cpp), więc nie pyta o hasło po każdej aktualizacji.
+# 1) `codesign --verify -R`: podpis faktycznie spełnia wymaganie Apple Development (CA WWDR, liść Mac Development) naszego zespołu;
+#    przeszukiwanie tekstu DR dałoby się oszukać gałęzią `or`.
+# 2) Zapisane DR dokładnie równe zespołowemu (bundle.sh `-r=`): ACL pęku i TCC przeżyją odnowienie certyfikatu.
+YASCRIBE_TEAM_ID="${YASCRIBE_TEAM_ID:-885WJQV8LG}"
 default_identity_check() {
-    local app="$1" dv dr want
-    dv="$(codesign -dv "$app" 2>&1)" || return 1
-    case "$dv" in *"Signature=adhoc"*) echo "podpis ad-hoc" >&2; return 1 ;; esac
-    dr="$(codesign -dr - "$app" 2>&1)" || return 1
-    case "$dr" in *'identifier "io.github.sharezz1.yascribe"'*) ;; *) echo "zły identifier w designated requirement" >&2; return 1 ;; esac
-    want="$(security find-identity -p codesigning | awk '/"MeetNotes Dev"/ {print tolower($2); exit}')"
-    [ -n "$want" ] || { echo "brak certyfikatu MeetNotes Dev w pęku" >&2; return 1; }
-    case "$(echo "$dr" | tr 'A-Z' 'a-z')" in *"certificate leaf = h\"$want\""*) ;; *) echo "odcisk certyfikatu nie zgadza się z pękiem" >&2; return 1 ;; esac
-    codesign --verify --strict --deep "$app" 2>/dev/null
+    local app="$1" dr
+    local base="identifier \"io.github.sharezz1.yascribe\" and anchor apple generic"
+    local team="certificate leaf[subject.OU] = \"$YASCRIBE_TEAM_ID\""
+    codesign --verify --strict --deep "-R=$base and certificate 1[field.1.2.840.113635.100.6.2.1] and certificate leaf[field.1.2.840.113635.100.6.1.12] and $team" "$app" 2>/dev/null \
+        || { echo "podpis nie spełnia wymagania Apple Development zespołu $YASCRIBE_TEAM_ID (ad-hoc albo obcy certyfikat)" >&2; return 1; }
+    dr="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => //p')"
+    [ "$dr" = "$base and $team" ] || { echo "designated requirement nie jest zespołowe: $dr" >&2; return 1; }
 }
 
 # Pobranie feedu: 0 = treść na stdout, 22 = HTTP 404 (brak feedu), inny kod = błąd. Z atrapą (YASCRIBE_FETCH) kody idą wprost;
@@ -102,6 +104,13 @@ release_main() {
     SIG="$(printf '%s' "$SIGOUT" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' | head -1)"
     LENGTH="$(printf '%s' "$SIGOUT" | sed -n 's/.*length="\([0-9]*\)".*/\1/p' | head -1)"
     [ -n "$SIG" ] && [ -n "$LENGTH" ] || die "brak podpisu EdDSA albo długości z sign_update: odmowa wydania bez podpisu"
+    # Sparkle przyjmuje aktualizację, gdy zgadza się EdDSA albo podpis Apple tego samego dewelopera. Po zmianie certyfikatu
+    # (TASK-99) zostaje tylko EdDSA, więc sprawdzamy podpis kluczem publicznym z paczki, a klucz paczki = klucz z repo.
+    # shortcut: nie porównujemy z kluczem z poprzedniego wydania; zmiana SUPublicEDKey w repo musi być świadomą rotacją.
+    [ "$(plutil -extract SUPublicEDKey raw "$PLIST" 2>/dev/null)" = "$KEY" ] || die "SUPublicEDKey paczki różni się od Resources/Info.plist"
+    if [ -n "${YASCRIBE_ED_VERIFY:-}" ]; then "$YASCRIBE_ED_VERIFY" "$KEY" "$SIG" "$ZIP"
+    else swift "$(dirname "${BASH_SOURCE[0]}")/ed25519-verify.swift" "$KEY" "$SIG" "$ZIP"; fi \
+        || die "podpis EdDSA zipa nie zgadza się z SUPublicEDKey: Sparkle odrzuciłby aktualizację"
     "$(dirname "${BASH_SOURCE[0]}")/make-appcast.sh" "$ZIP" "$VERSION" "$BUILD" "$SIG" "$LENGTH" > "$OUT/appcast.xml"
     xmllint --noout "$OUT/appcast.xml" || die "appcast.xml nie jest poprawnym XML"
 
