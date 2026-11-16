@@ -52,3 +52,40 @@ private func prov(_ url: String, kind: ProviderKind? = nil) -> Provider {
     }
     #expect(await p.verify(key: nil) == .failed("Checked inside the app."))
 }
+
+// MARK: agenci CLI (TASK-86)
+
+private let codexAgent = Provider(name: "Codex", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI)
+private let claudeAgent = Provider(name: "Claude Code", baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/claude"), kind: .claudeCLI)
+
+@Test func agentCLIsAreRemoteKeylessAndOnlyForCorrectionAndSummary() {
+    for p in [codexAgent, claudeAgent] {
+        #expect(!p.isLocal && !p.requiresKey)
+        #expect(p.supports(.correction) && p.supports(.summary))
+        #expect(!p.supports(.asr) && !p.supports(.embedding))
+    }
+    #expect(codexAgent.api.agentVendor == "OpenAI" && claudeAgent.api.agentVendor == "Anthropic")
+    let all = [codexAgent, claudeAgent]
+    #expect(RoleProviders.choices(all, role: .summary, current: nil).count == 2)
+    #expect(RoleProviders.choices(all, role: .asr, current: nil).isEmpty)
+}
+
+@Test func agentKindDecodesAndOlderRecordsKeepTheirIDs() throws {
+    let cli = UUID(), kept = UUID()
+    let json = #"[{"id":"\#(cli)","name":"Codex","baseURL":"file:///opt/homebrew/bin/codex","kind":"codexCLI"},"#
+        + #"{"id":"\#(kept)","name":"Old","baseURL":"https://openrouter.ai/api/v1"}]"#
+    let list = try JSONDecoder().decode([Provider].self, from: Data(json.utf8))
+    #expect(list.map(\.api) == [.codexCLI, .openAICompatible])
+    // R12: po ręcznym usunięciu rekordu CLI (procedura downgrade) reszta dekoduje się z tymi samymi UUID.
+    let pruned = try JSONDecoder().decode([Provider].self, from: JSONEncoder().encode(list.filter { !$0.api.isAgentCLI }))
+    #expect(pruned.map(\.id) == [kept])
+}
+
+@Test func dictationNeverOffersAnAgentAndRefusesASavedOne() {
+    let cloud = prov("https://openrouter.ai/api/v1")
+    let all = [cloud, codexAgent, claudeAgent]
+    #expect(DictationChoices.correction(all, current: nil).map(\.id) == [cloud.id])
+    #expect(DictationChoices.correction(all, current: claudeAgent.id).map(\.id) == [cloud.id, claudeAgent.id])
+    #expect(DictationChoices.refusal(cloud) == nil && DictationChoices.refusal(nil) == nil)
+    #expect(DictationChoices.refusal(codexAgent) == .agentFailed("Codex can't correct dictation. Pick another model in Dictation settings."))
+}

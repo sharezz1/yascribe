@@ -161,8 +161,11 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var askModel: RoleAssignment?
     /// Ustawienia dyktowania (opcjonalne, E6). Czytaj przez `dictationOrDefault`.
     public var dictation: DictationSettings?
+    /// Experimental: agenci CLI (Codex, Claude Code) na liście dostawców (TASK-86). Opcjonalne (E6): `nil` = wyłączone.
+    public var experimentalAgentCLIs: Bool?
 
     public static let defaultKeepAudioDays = 30
+    public var agentCLIsEnabled: Bool { experimentalAgentCLIs == true }
 
     public var summaryThinkingEnabled: Bool { summaryThinking ?? true }
     public var removeFillersEnabled: Bool { removeFillers ?? true }

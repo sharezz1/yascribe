@@ -106,7 +106,8 @@ final class ProviderSheetState: ObservableObject {
 
     func editKey(_ provider: Provider) {
         let match = ProviderPreset.matching(provider)
-        open(preset: match ?? .custom, logo: match, editing: provider, name: provider.name, url: provider.baseURL.absoluteString)
+        open(preset: match ?? .custom, logo: match, editing: provider, name: provider.name,
+             url: provider.api.isAgentCLI ? provider.baseURL.path : provider.baseURL.absoluteString)
         context = provider.contextTokens.map(String.init) ?? ""
     }
 
@@ -146,11 +147,13 @@ struct SettingsView: View {
                     ModelCardSection(support: model.localASR)
                     SectionHeader("Providers")
                     Card {
-                        let rows = ProviderListRow.rows(for: model.providers.providers)
+                        let rows = ProviderListRow.rows(for: model.providers.providers, agents: model.settings.agentCLIsEnabled)
                         ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
                             ProviderRowView(row: row, sheet: sheet)
                             if i < rows.count - 1 { RowDivider() }
                         }
+                        RowDivider()
+                        agentCLIsRow
                     }
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     UpdatesSection()
@@ -277,6 +280,17 @@ struct SettingsView: View {
                 }
             }
             .padding(.vertical, 10).padding(.horizontal, 16)
+        }
+    }
+
+    /// Experimental (TASK-86): zapis od razu, jak lista dostawców — bez Save.
+    private var agentCLIsRow: some View {
+        FormRow(label: "Agent apps",
+                caption: "Experimental. Adds Codex and Claude Code as correction and summary providers. They run on this Mac with your sign-in in that app and send the transcript to OpenAI or Anthropic.") {
+            Toggle("Agent apps", isOn: Binding(
+                get: { model.settings.agentCLIsEnabled },
+                set: { model.settings.experimentalAgentCLIs = $0 ? true : nil; model.save() }))
+                .labelsHidden().toggleStyle(.switch)
         }
     }
 
@@ -463,7 +477,7 @@ private struct ProviderRowView: View {
         case .addCustom: ProviderPreset.custom.role
         }
     }
-    private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try model.secrets.get(p.id) }) } }
+    private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try p.storedKey(in: model.secrets) }) } }
     private var failure: String? {
         // „On this Mac": stan modelu opisuje karta poniżej, więc bez czerwonej linii i bez Retry (nic do ponowienia przez sieć).
         guard let p = provider, p.api != .fluidAudio, !model.providerVerifying.contains(p.id),
@@ -509,7 +523,8 @@ private struct ProviderRowView: View {
                     .buttonStyle(.pillSmall).help("Test the connection again")
             }
             Menu {
-                if preset.map({ $0.needsKey || $0.keyOptional }) ?? true { Button("Edit key…") { sheet.editKey(p) } }
+                if p.api.isAgentCLI { Button("Edit path…") { sheet.editKey(p) } }
+                else if preset.map({ $0.needsKey || $0.keyOptional }) ?? true { Button("Edit key…") { sheet.editKey(p) } }
                 if p.isLocal && p.api == .openAICompatible { Button("Context window…") { sheet.editKey(p) } }
                 Button("Test again") { Task { await model.verifyProvider(p.id) } }
                 Button("Refresh Models") { Task { await model.refreshModels(p.id) } }
@@ -561,6 +576,8 @@ struct ProviderSetupSheet: View {
     private var needsKey: Bool { preset.needsKey }
     private var showsKeyField: Bool { preset.needsKey || preset.keyOptional }
     private var editableAddress: Bool { preset == .custom && !editing }
+    /// Agent CLI: pole ścieżki programu (także przy edycji, R10) zamiast adresu i klucza.
+    private var isAgent: Bool { (state.editing?.kind ?? preset.kind)?.isAgentCLI == true }
     /// Pole kontekstu tylko dla lokalnego serwera OpenAI-compatible (Ollama, llama.cpp, oMLX, własny na loopbacku).
     private var showsContext: Bool {
         guard let url = state.editing?.baseURL ?? URL(string: state.url.trimmingCharacters(in: .whitespaces)) else { return false }
@@ -580,7 +597,15 @@ struct ProviderSetupSheet: View {
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
             ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-            if editableAddress {
+            if isAgent {
+                FormRow(label: "Program", labelWidth: 70) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        TextField("/opt/homebrew/bin/codex", text: $state.url).textFieldStyle(.plain).fieldBox()
+                        Text("Yascribe starts this app with its tools off. It uses your sign-in there (subscription or API key) and keeps no key itself. The transcript goes to \((state.editing?.kind ?? preset.kind)?.agentVendor ?? "the vendor"), under that vendor's terms.")
+                            .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            } else if editableAddress {
                 FormRow(label: "Address", labelWidth: 70) { TextField("https://example.com/v1", text: $state.url).textFieldStyle(.plain).fieldBox() }
                 FormRow(label: "Name", labelWidth: 70) { TextField("Name", text: $state.name).textFieldStyle(.plain).fieldBox() }
             } else {
@@ -674,6 +699,14 @@ struct ProviderSetupSheet: View {
 
     private func trimmedKey() -> String { state.key.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// Ścieżka programu agenta: istniejący plik wykonywalny (`AgentCLI.binaryURL`); inaczej błąd w arkuszu.
+    private func agentPath() -> URL? {
+        switch AgentCLI.binaryURL(from: state.url) {
+        case .success(let url): return url
+        case .failure(let e): state.error = ProviderCheck.describe(e); return nil
+        }
+    }
+
     private func address() -> URL? {
         guard let u = URL(string: state.url.trimmingCharacters(in: .whitespaces)), ["http", "https"].contains(u.scheme), u.host() != nil else {
             state.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
@@ -686,12 +719,12 @@ struct ProviderSetupSheet: View {
         state.error = nil; state.result = nil; state.note = nil
         let key = trimmedKey()
         if needsKey && key.isEmpty && !editing { state.error = "Paste your key first."; return }
-        guard let url = state.editing?.baseURL ?? address() else { return }
+        guard let url = isAgent ? agentPath() : state.editing?.baseURL ?? address() else { return }
         let kind = state.editing?.kind ?? preset.kind
         state.testing = true
         defer { state.testing = false }
         // Edit key… z pustym polem: test zapisanego klucza. Inaczej: klucz z pola, bez zapisu do pęku.
-        if let id = state.editing?.id, key.isEmpty {
+        if let id = state.editing?.id, key.isEmpty, !isAgent {
             await model.verifyProvider(id)
             state.result = model.providerChecks[id]
         } else {
@@ -716,6 +749,12 @@ struct ProviderSetupSheet: View {
         if needsKey && key.isEmpty { state.error = "Paste your key first."; return }
         guard case .success(let context) = contextTokens() else {
             state.error = "Context window: enter a number from \(ContextBudget.userRange.lowerBound) to \(ContextBudget.userRange.upperBound), or leave it empty for \(ContextBudget.defaultTokens)."
+            return
+        }
+        if isAgent {
+            guard let url = agentPath() else { return }
+            if let p = state.editing { model.setBaseURL(p.id, url); state.showing = false; return }
+            if let e = model.addProvider(name: preset.name, baseURL: url, key: "", kind: preset.kind) { state.error = e } else { state.showing = false }
             return
         }
         if let p = state.editing {

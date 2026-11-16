@@ -17,9 +17,11 @@ public struct CorrectedTranscript: Codable, Equatable, Sendable {
     public var prompt: PromptTrace?
     /// Ile podejrzanych zmian słów cofnęła `CorrectionGuard` (opcjonalne: starsze pliki go nie mają).
     public var guardedChanges: Int?
+    /// Agent CLI użył narzędzia albo nie jest zalogowany: korekta przerwana w całości (TASK-86, spec §4.5). `nil` w starszych plikach.
+    public var aborted: Bool?
 
     /// Żadna partia nie przeszła: nic nie zostało poprawione (to jest „Correction failed", a nie „parts kept as heard").
-    public var failedCompletely: Bool { batches > 0 && failedBatches == batches }
+    public var failedCompletely: Bool { aborted == true || (batches > 0 && failedBatches == batches) }
 
     public init(transcript: Transcript, model: String, batches: Int, failedBatches: Int, rejectedLines: Int, firstError: String? = nil,
                 providerID: UUID? = nil, guardedChanges: Int? = nil) {
@@ -217,6 +219,8 @@ public struct Corrector: Sendable {
         var answered = 0
         var error: String?
         var reverted = 0
+        /// Naruszenie terminalne agenta: bez dalszych wywołań (także połówek i kolejnych partii).
+        var terminal = false
     }
 
     /// Jedna partia → jedno wywołanie modelu; zła numeracja (nie błąd transportu) → ponowienie połówkami, aż do pojedynczej linii.
@@ -249,11 +253,13 @@ public struct Corrector: Sendable {
                 guard batch.count > 1 else { return unanswered(why) }
                 let mid = batch.count / 2
                 var left = await process(Array(batch[..<mid]), system: system, started: started, isCancelled: isCancelled, retry: true)
+                if left.terminal { left.rejected += batch.count - mid; return left }
                 let right = await process(Array(batch[mid...]), system: system, started: started, isCancelled: isCancelled, retry: true)
                 left.applied += right.applied
                 left.rejected += right.rejected
                 left.answered += right.answered
                 left.reverted += right.reverted
+                if right.terminal { left.terminal = true; left.error = right.error; return left }
                 left.error = why // pierwsza przyczyna to numeracja rodzica
                 return left
             }
@@ -269,7 +275,13 @@ public struct Corrector: Sendable {
             return result
         } catch {
             let hinted = ContextError.localHint(provider: client.provider, error, transport: chatTimeout) != nil
+            if ContextError.isTerminalAgentError(error) {
+                var out = unanswered(ContextError.describe(model: assignment.model, error, provider: client.provider))
+                out.terminal = true
+                return out
+            }
             return unanswered(ContextError.isCutOff(error) || ContextError.isEmptyReply(error) || ContextError.isInputTruncated(error) || hinted
+                || ContextError.isAgentError(error) || error is DeadlineExceeded && client.provider.api.isAgentCLI
                 ? ContextError.describe(model: assignment.model, error, provider: client.provider, transport: chatTimeout) : "\(error)")
         }
     }
@@ -296,6 +308,7 @@ public struct Corrector: Sendable {
         var rejected = all.count - lines.count
         var firstError: String?
         var reverted = 0
+        var aborted = false
         for (index, batch) in batches.enumerated() {
             if isCancelled() {
                 failed += batches.count - index
@@ -311,14 +324,22 @@ public struct Corrector: Sendable {
                 failed += 1
                 if firstError == nil { firstError = outcome.error }
             }
+            if outcome.terminal { // powód przerwania wygrywa z wcześniejszymi błędami partii
+                aborted = true
+                firstError = outcome.error
+                failed += batches.count - index - 1
+                break
+            }
         }
         // Filtr po modelu (F20 P2): działa też na liniach, których model nie poprawił (odrzucone, nieudana partia). Całkowita porażka
         // zostaje bez zmian — `NotesModel` i tak wtedy zwraca oryginał.
-        if !fillerWords.isEmpty, failed < batches.count {
+        if !fillerWords.isEmpty, failed < batches.count, !aborted {
             for l in lines { out.utterances[l.n - 1].text = FillerWords.remove(out.utterances[l.n - 1].text, words: fillerWords) }
         }
-        return CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
-                                   failedBatches: failed, rejectedLines: rejected, firstError: firstError,
-                                   providerID: assignment.providerID, guardedChanges: reverted)
+        var result = CorrectedTranscript(transcript: out, model: assignment.model, batches: batches.count,
+                                         failedBatches: failed, rejectedLines: rejected, firstError: firstError,
+                                         providerID: assignment.providerID, guardedChanges: reverted)
+        if aborted { result.aborted = true }
+        return result
     }
 }

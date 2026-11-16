@@ -272,6 +272,10 @@ struct RoleSection<Extra: View>: View {
                     LocalRoleNote(warnsAboutCorrection: role == .correction)
                 }
             }
+            if let note = AgentPrivacy.caption(providers.first(where: { $0.id == a.providerID })) {
+                WarnLabel(note).frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, 158).padding(.trailing, 16).padding(.bottom, 10)
+            }
             if hasExtra { RowDivider(); extra }
             RowDivider()
             // Wzorzec: „Advanced" w `MeetingSettingsView`. Stan zamrażany przy pojawieniu się, żeby wynik „Test" ani pisanie w polu go nie przełączały.
