@@ -31,6 +31,7 @@ plutil -create xml1 "$APP/Contents/Info.plist"
 plutil -insert CFBundleShortVersionString -string "${FAKE_VERSION:-$(tr -d '[:space:]' < VERSION)}" "$APP/Contents/Info.plist"
 plutil -insert CFBundleVersion -string "${FAKE_BUILD:-$(git rev-list --count HEAD)}" "$APP/Contents/Info.plist"
 plutil -insert SUFeedURL -string "https://example.invalid/appcast.xml" "$APP/Contents/Info.plist"
+plutil -insert SUPublicEDKey -string "${FAKE_BUNDLE_KEY:-test-fake-public-key}" "$APP/Contents/Info.plist"
 echo "$APP"
 EOF
 cat > "$T/fake/identity" <<'EOF'
@@ -70,6 +71,11 @@ case "$1 $2" in
 esac
 exit 0
 EOF
+cat > "$T/fake/edverify" <<'EOF2'
+#!/bin/bash
+# argumenty: klucz publiczny, podpis, plik
+[ "${FAKE_ED:-ok}" = "ok" ] && [ "$1" = "test-fake-public-key" ] && [ "$2" = "test-fake-sig" ] && [ -f "$3" ]
+EOF2
 chmod +x "$T"/fake/*
 
 # Świeże repo testowe: bare origin + klon z jednym commitem na master (z kopiami skryptów wydania).
@@ -93,7 +99,7 @@ mkrepo() {
 run_release() {
     ( cd "$W" && env FAKE_DIR="$FAKE_DIR" YASCRIBE_TEST_CMD="$T/fake/test" YASCRIBE_BUNDLE_CMD="$T/fake/bundle" \
         YASCRIBE_SIGN_UPDATE="$T/fake/sign" YASCRIBE_GH="$T/fake/gh" YASCRIBE_FETCH="$T/fake/fetch" \
-        YASCRIBE_IDENTITY_CHECK="$T/fake/identity" "$@" scripts/release.sh "${ARGS[@]}" ) > "$T/out.log" 2>&1
+        YASCRIBE_IDENTITY_CHECK="$T/fake/identity" YASCRIBE_ED_VERIFY="$T/fake/edverify" "$@" scripts/release.sh "${ARGS[@]}" ) > "$T/out.log" 2>&1
     RC=$?
 }
 gh_called() { [ -f "$FAKE_DIR/gh.log" ]; }
@@ -152,6 +158,48 @@ if [ "$RC" -ne 0 ]; then ok; else fail "feed-never-matching-fails (RC=$RC)"; fi
 # publikacja odmówiona, gdy bajty szkicu się różnią
 mkrepo tamper; ARGS=(0.1.0); run_release FAKE_GH_TAMPER=1
 if [ "$RC" -ne 0 ] && gh_called && ! grep -q 'draft=false' "$FAKE_DIR/gh.log"; then ok; else fail "publish-refused-when-draft-bytes-differ (RC=$RC)"; fi
+
+# EdDSA: podpis zipa niezgodny z SUPublicEDKey paczki blokuje wydanie (TASK-99: po zmianie certyfikatu to jedyna droga zaufania Sparkle)
+ARGS=(0.1.0 --dry-run)
+mkrepo edbad; run_release FAKE_ED=bad; expect_refused eddsa-signature-mismatch-rejected
+mkrepo edkey; run_release FAKE_BUNDLE_KEY=other-key; expect_refused bundle-public-key-differs-rejected
+
+# default_identity_check (TASK-99) na atrapie codesign: -R z kotwicą Apple, typem liścia i zespołem; zapisane DR dokładnie zespołowe.
+mkdir -p "$T/cs"
+cat > "$T/cs/codesign" <<'EOF'
+#!/bin/bash
+# Dokładne argumenty, nie sklejone "$*": zgubione cudzysłowy wokół -R= zmieniłyby ich liczbę.
+if [ "$#" -eq 5 ] && [ "$1 $2 $3 $5" = "--verify --strict --deep /x" ]; then
+    [ "$4" = "$FAKE_CS_WANT_R" ] && [ "${FAKE_CS_VERIFY:-ok}" = "ok" ]
+elif [ "$#" -eq 3 ] && [ "$1 $2 $3" = "-d -r- /x" ]; then
+    echo "Executable=/x"; echo "designated => $FAKE_CS_DR"
+else exit 3; fi
+EOF
+chmod +x "$T/cs/codesign"
+TEAM_DR='identifier "io.github.sharezz1.yascribe" and anchor apple generic and certificate leaf[subject.OU] = "885WJQV8LG"'
+export FAKE_CS_WANT_R='-R=identifier "io.github.sharezz1.yascribe" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.1] and certificate leaf[field.1.2.840.113635.100.6.1.12] and certificate leaf[subject.OU] = "885WJQV8LG"'
+idcheck() { # wynik: RC
+    ( export PATH="$T/cs:$PATH" "$@"; . "$SRC/scripts/release-lib.sh"; default_identity_check /x ) > /dev/null 2>&1
+    RC=$?
+}
+idcheck FAKE_CS_DR="$TEAM_DR"
+[ "$RC" -eq 0 ] && ok || fail "identity-check-passes-with-apple-team-requirement (RC=$RC)"
+idcheck FAKE_CS_DR="$TEAM_DR" FAKE_CS_VERIFY=fail
+[ "$RC" -ne 0 ] && ok || fail "identity-check-rejects-failed-verify"
+idcheck FAKE_CS_DR='identifier "io.github.sharezz1.yascribe" and certificate leaf = H"7c8ca11f4e66100390a76d709b1f116db9bad29d"'
+[ "$RC" -ne 0 ] && ok || fail "identity-check-rejects-leaf-hash-dr"
+idcheck FAKE_CS_DR="$TEAM_DR or anchor trusted"
+[ "$RC" -ne 0 ] && ok || fail "identity-check-rejects-dr-with-extra-branch"
+
+# Prawdziwy weryfikator EdDSA na stałym wektorze (podpis z sign_update --ed-key-file, klucz jednorazowy, TASK-99).
+printf 'yascribe TASK-99 wektor testowy EdDSA\n' > "$T/ed.txt"
+ED_PUB='DKnd+LiZjZGPOjSPUGeOeV4lRuSd72NAcwJvS/ymCAw='
+ED_SIG='bsOiyaPLF+ViaSGH4P+XG2TpbW9E+f77TgVwSRhX09z4OCzBmXwAVYzMDwF9H9ZGgDovi86ICpG3kc6HPNTVBA=='
+ED_OTHER='GnVnXHWnqqptDh+hvMaYOfbV7eRlddagipKKSsfs6sc='
+swift "$SRC/scripts/ed25519-verify.swift" "$ED_PUB" "$ED_SIG" "$T/ed.txt" 2>/dev/null && ok || fail "ed25519-verify-accepts-valid-signature"
+swift "$SRC/scripts/ed25519-verify.swift" "$ED_OTHER" "$ED_SIG" "$T/ed.txt" 2>/dev/null && fail "ed25519-verify-rejects-other-key" || ok
+echo x >> "$T/ed.txt"
+swift "$SRC/scripts/ed25519-verify.swift" "$ED_PUB" "$ED_SIG" "$T/ed.txt" 2>/dev/null && fail "ed25519-verify-rejects-tampered-file" || ok
 
 # izolacja env (TASK-63): zewnętrzne YASCRIBE_OUT_DIR nie może dostać żadnych plików, a potomek ma przejść
 if [ "$INNER" != "--inner" ]; then
