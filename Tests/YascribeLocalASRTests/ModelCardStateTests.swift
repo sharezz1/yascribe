@@ -34,8 +34,17 @@ private let statuses: [ModelStatus] = [.missing, .ready, .invalid(reason: "Encod
 }
 
 @Test func cardSizeComesFromTheManifest() {
-    let small = ModelManifest(model: "x", files: ["a": 1_500_000, "b": 500_000])
-    #expect(ModelCardState(status: .missing, activity: .idle, manifest: small).primaryLabel == "Download (2 MB)")
+    let ultra = ModelCardState(status: .missing, activity: .idle, variant: .parakeetUltra)
+    #expect(ultra.primaryLabel == "Download (\(ModelCardState.sizeText(ModelManifest.parakeetUltra.totalBytes)))")
     #expect(ModelCardState.sizeText(1_260_000_000) == "1.3 GB")
     #expect(ModelCardState.sizeText(ModelManifest.parakeetV3.totalBytes) == "483 MB")
+}
+
+/// Karta Ultra: własna nazwa i folder; uwaga o starym układzie FluidAudio dotyczy tylko v3.
+@Test func ultraCardHasItsOwnNameAndFolderAndNoLegacyNote() {
+    let v3 = ModelCardState(status: .missing, activity: .idle)
+    let ultra = ModelCardState(status: .missing, activity: .idle, variant: .parakeetUltra)
+    #expect(v3.name == "Parakeet TDT v3" && v3.folder == "parakeet-tdt-0.6b-v3")
+    #expect(ultra.name == "Parakeet Ultra" && ultra.folder == "parakeet-ultra")
+    #expect(ultra.note == nil && ultra.primary == .download)
 }

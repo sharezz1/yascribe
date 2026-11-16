@@ -67,6 +67,8 @@ public struct OpenAICompatibleClient: TranscriptionClient {
 
     func request(_ path: String, method: String = "POST", query: [URLQueryItem] = [], body: [String: Any]? = nil,
                  timeout: Double = 120) throws -> URLRequest {
+        // Agent CLI nigdy nie idzie przez HTTP (transkrypcja, embeddingi): jawna odmowa zamiast żądania pod `file://`.
+        guard !provider.api.isAgentCLI else { throw ProviderError.agentFailed("\(provider.name) does only correction and summary.") }
         var comps = URLComponents(url: provider.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         if !query.isEmpty { comps.queryItems = query }
         var r = URLRequest(url: comps.url!)
@@ -111,6 +113,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
     /// dostawca, który parametru nie zna, odrzuci go (400/422 → ponawiamy RAZ bez niego) albo zignoruje (200 z pełną
     /// listą). Dlatego lokalny filtr działa zawsze, gdy odpowiedź niesie modalności; model bez modalności zostaje.
     public func listModels(output: String? = nil) async throws -> [ModelInfo] {
+        if provider.api.isAgentCLI { return output == nil ? AgentCLI.models(for: provider.api) : [] } // tylko modele tekstowe
         let items = output.map { [URLQueryItem(name: "output_modalities", value: $0)] } ?? []
         let obj: [String: Any]
         do {
@@ -217,6 +220,11 @@ public struct OpenAICompatibleClient: TranscriptionClient {
     /// Lokalny serwer ma `reasoning_effort: "none"` zawsze (S2), więc `thinking` go nie dotyczy.
     public func chat(model: String, system: String, user: String, timeout: Double = 120, maxTokens: Int? = nil,
                      temperature: Double? = nil, thinking: Bool = true) async throws -> String {
+        // Agent CLI (TASK-86): ten sam kontrakt czatu, ale proces na tym Macu zamiast HTTP. `maxTokens`/`temperature` nie mają odpowiednika.
+        if provider.api.isAgentCLI {
+            return try await AgentCLI.chat(provider: provider, model: model, system: system, user: user,
+                                           effort: thinking ? nil : "low", limit: timeout)
+        }
         var body: [String: Any] = ["model": model, "messages": [["role": "system", "content": system],
                                                                 ["role": "user", "content": user]]]
         if let maxTokens { body["max_tokens"] = maxTokens }

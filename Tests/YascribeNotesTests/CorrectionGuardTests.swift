@@ -75,4 +75,38 @@ import Testing
         #expect(spelled("spotkanie mamy dobry", "spotkanie ab dobry").reverted == 0)     // za krótkie
         #expect(spelled("spotkanie mamy dobry", "spotkanie e-mail dobry").reverted == 0) // nie same litery
     }
+
+    @Test func termInBaseFormKeepsTheHeardCaseEnding() {
+        // Model poprawia pisownię Termu, ale gubi końcówkę (spike A/B korekty: 13 razy w 4 przebiegach).
+        let t = ["Genesys", "Citrix", "Lekta"]
+        func termed(_ o: String, _ c: String) -> CorrectionGuard.Result { CorrectionGuard.apply(original: o, corrected: c, terms: t) }
+        let r = termed("tą grupę na Genesisa czy raczej nie?", "tą grupę na Genesys, czy raczej nie?")
+        #expect(r.text == "tą grupę na Genesysa, czy raczej nie?" && r.reverted == 1)
+        #expect(termed("już jest w Genesisie tam", "już jest w Genesys tam").text == "już jest w Genesysie tam")
+        #expect(termed("też chcą mieć Genesysa, tylko", "też chcą mieć Genesys, tylko").text == "też chcą mieć Genesysa, tylko")
+        #expect(termed("pracujemy w Citriksie", "pracujemy w Citrix.").text == "pracujemy w Citrixie.")
+        // Bez końcówki w oryginale, Term kończący się tą samą literą, krótszy oryginał albo forma odmieniona: bez zmian.
+        for (o, c) in [("tam Genesis 3", "tam Genesys 3"), ("związanych z Elekta.", "związanych z Lekta."),
+                       ("u Genesa jest", "u Genesys jest"), ("od Lecty a propos", "od Lekty a propos")] {
+            let r = termed(o, c)
+            #expect(r.text == c && r.reverted == 0, "\(o) → \(c)")
+        }
+    }
+
+    @Test func deletedWordsAreRestoredButFillersMayGo() {
+        // Spike A/B korekty: model usuwa urwany początek („wrzucić tam wrzucamy") albo słowo („jeszcze").
+        let f = ["yyy", "eee", "mhm"]
+        func deleted(_ o: String, _ c: String) -> CorrectionGuard.Result { CorrectionGuard.apply(original: o, corrected: c, fillerWords: f) }
+        let r = deleted("no to wrzucić tam wrzucamy na listę", "No to wrzucamy na listę")
+        #expect(r.text == "No to wrzucić tam wrzucamy na listę" && r.reverted == 1)
+        #expect(deleted("trzeba było jeszcze oprócz tego", "trzeba było oprócz tego").text == "trzeba było jeszcze oprócz tego")
+        // Przerywniki z listy (także rozciągnięte) i same znaki mogą zniknąć.
+        for (o, c) in [("to yyy jest eeee dobre", "To jest dobre"), ("wiem -- mhm, tak", "Wiem, tak"),
+                       ("I, i, no i chłopaki", "No i chłopaki"), ("Nie kojarzę, kojarzę, żeby", "Nie kojarzę, żeby")] { // + powtórzenie sąsiada
+            let k = deleted(o, c)
+            #expect(k.text == c && k.reverted == 0, "\(o) → \(c)")
+        }
+        // Bez listy przerywników usunięte „yyy" też wraca: użytkownik nie chciał ich usuwać.
+        #expect(CorrectionGuard.apply(original: "to yyy jest", corrected: "to jest").text == "to yyy jest")
+    }
 }

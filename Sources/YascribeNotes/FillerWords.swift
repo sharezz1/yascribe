@@ -34,6 +34,12 @@ public enum FillerWords {
         words.contains { $0 == core || (core.count >= 2 && collapsed($0) == collapsed(core)) }
     }
 
+    /// Pojedynczy token jest przerywnikiem z listy (to samo dopasowanie co `remove`); `CorrectionGuard` pozwala modelowi go usunąć.
+    static func isFiller(_ token: String, words: [String]) -> Bool {
+        let core = normalize(token)
+        return !core.isEmpty && matches(core, words.map(normalize))
+    }
+
     private static func endsSentence(_ token: String) -> Bool { token.last.map { ".!?…".contains($0) } ?? false }
 
     /// Usuwa słowa z listy. Kropka lub znak zapytania usuniętego słowa przechodzi na poprzednie („Wiem yyy." → „Wiem."), a po usuniętym

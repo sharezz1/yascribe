@@ -488,14 +488,14 @@ enum Snapshots {
                 try render("settings-sheet-custom", size: CGSize(width: 520, height: 400), dark: dark, model: model) { ProviderSetupSheet(state: sheetCustom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                 // F20 T7: karta modelu lokalnego ASR w czterech stanach. Statusy są wymyślone (nic nie czyta magazynu, nic nie pobiera).
-                let cardFolder = "~/Library/Application Support/FluidAudio/Models/\(ModelCardState.folder)"
+                let cardFolder = "~/Library/Application Support/FluidAudio/Models/\(LocalASRVariant.parakeetV3.rawValue)"
                 let cardScenes: [(String, ModelStatus, ModelActivity)] = [
                     ("ready", .ready, .idle), ("downloading", .missing, .downloading(0.41)), ("missing", .missing, .idle),
                     ("invalid", .invalid(reason: "Encoder.mlmodelc/weights/weight.bin has 218103808 bytes, expected 445187200"), .idle)]
                 for (name, status, activity) in cardScenes {
                     try render("model-card-\(name)", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                         VStack(alignment: .leading, spacing: 0) {
-                            SectionHeader("Yascribe model")
+                            SectionHeader("Yascribe models")
                             ModelCardContent(card: ModelCardState(status: status, activity: activity), location: cardFolder)
                         }
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
@@ -504,7 +504,7 @@ enum Snapshots {
                 // Błąd pobrania pod opisem i wiersze edytora presetu (ASR, „On this Mac"): brak modelu / pobieranie / gotowy.
                 try render("model-card-download-error", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 0) {
-                        SectionHeader("Yascribe model")
+                        SectionHeader("Yascribe models")
                         ModelCardContent(card: ModelCardState(status: .missing, activity: .idle), location: cardFolder,
                                          error: "The download didn't finish: The Internet connection appears to be offline.")
                     }
@@ -523,7 +523,7 @@ enum Snapshots {
                 // komputera (tylko odczyt), więc ta para nie jest deterministyczna; wymyślone stany są w migawkach powyżej.
                 let onDevice = Provider(name: ProviderPreset.onThisMac.name, baseURL: Provider.fluidAudioBaseURL, kind: .fluidAudio)
                 model.providers.providers.append(onDevice)
-                model.providerChecks[onDevice.id] = RunGate.check(status: model.localASR.status).map { .failed($0.message) } ?? .verified(models: 1)
+                model.providerChecks[onDevice.id] = RunGate.check(status: model.localASR("")!.status).map { .failed($0.message) } ?? .verified(models: 1)
                 try render("settings-on-this-mac", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
                 let localEditor = PresetEditorState(draft: Preset(name: "Polish, on this Mac", language: .polish,
                                                                   asr: RoleAssignment(providerID: onDevice.id, model: LocalASRModels.parakeetV3)), original: nil)
@@ -567,6 +567,29 @@ enum Snapshots {
                 model.presets = presetsBefore
                 model.providers.providers.removeAll { p in (localServers + [parakeetLocal]).contains { $0.id == p.id } }
                 for p in localServers + [parakeetLocal] { model.providerChecks[p.id] = nil }
+                // TASK-86 T5: agenci CLI (Experimental). Stany wymyślone; ścieżki stałe, żeby migawka nie zależała od tego Maca.
+                let codexAgent = Provider(name: ProviderPreset.codexCLI.name, baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI)
+                let claudeAgent = Provider(name: ProviderPreset.claudeCLI.name, baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/claude"), kind: .claudeCLI)
+                let settingsBefore = model.settings
+                model.settings.experimentalAgentCLIs = true
+                model.providers.providers.append(contentsOf: [codexAgent, claudeAgent])
+                model.providerChecks[codexAgent.id] = .verified(models: 3)
+                model.providerChecks[claudeAgent.id] = .failed(AgentCLI.signInHint(.claudeCLI))
+                try render("settings-agents", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
+                let sheetCodex = ProviderSheetState(); sheetCodex.setUp(.codexCLI); sheetCodex.url = codexAgent.baseURL.path
+                sheetCodex.result = .verified(models: 3)
+                try render("settings-sheet-codex", size: CGSize(width: 560, height: 360), dark: dark, model: model) { ProviderSetupSheet(state: sheetCodex) }
+                let sheetClaude = ProviderSheetState(); sheetClaude.editKey(claudeAgent)
+                sheetClaude.result = .failed(AgentCLI.signInHint(.claudeCLI))
+                try render("settings-sheet-claude-edit", size: CGSize(width: 560, height: 360), dark: dark, model: model) { ProviderSetupSheet(state: sheetClaude) }
+                let agentPreset = Preset(name: "Polish, notes by Codex", language: .polish, asr: nil,
+                                         correction: RoleAssignment(providerID: claudeAgent.id, model: "sonnet"),
+                                         summary: RoleAssignment(providerID: codexAgent.id, model: "gpt-6.1-terra"))
+                let agentEditing = PresetEditorState(); agentEditing.select(agentPreset)
+                try render("preset-sheet-agents", size: CGSize(width: 560, height: 1000), dark: dark, model: model) { PresetSheet(state: agentEditing, onSave: {}) }
+                model.providers.providers.removeAll { $0.id == codexAgent.id || $0.id == claudeAgent.id }
+                model.providerChecks[codexAgent.id] = nil; model.providerChecks[claudeAgent.id] = nil
+                model.settings = settingsBefore
                 // Faza 1.6 T7: Integrations + Meeting detection (kalendarz połączony, trzy kalendarze, jeden odznaczony; Advanced rozwinięte).
                 let meetingState = MeetingSettingsState()
                 meetingState.authorization = .granted

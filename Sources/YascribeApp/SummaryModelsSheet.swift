@@ -109,6 +109,7 @@ struct SummaryModelsSheet: View {
                 ModelPicker(providerID: pid, role: .summary, selection: $draft.model, showProvider: false).frame(maxWidth: .infinity)
                 if provider(pid)?.isLocal == true { OnThisMacTag() }
             }
+            if let note = AgentPrivacy.caption(provider(pid)) { SheetNote(note) }
             if provider(pid)?.isLocal != true {
                 SheetRow(label: "Thinking") {
                     Toggle("Thinking", isOn: Binding(get: { draft.thinking ?? model.settings.summaryThinkingEnabled },

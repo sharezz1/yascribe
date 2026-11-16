@@ -167,15 +167,16 @@ struct HotkeySettingsGate {
     // MARK: Wejście potoku
 
     /// Wołane z `[]` przy starcie tylko po to, by sprawdzić model: wtedy bez Keychain, sieci i ładowania modeli.
-    private func buildInput(_ pcm: [Int16]) -> (input: DictationPipelineInput, meta: DictationRecordMeta)? {
+    func buildInput(_ pcm: [Int16]) -> (input: DictationPipelineInput, meta: DictationRecordMeta)? {
         let s = model.settings.dictationOrDefault
-        // Model Yascribe (Parakeet) ma jedną pozycję na liście: wybrany dostawca bez nazwy modelu znaczy właśnie ją.
+        // Model Yascribe: wybrany dostawca bez nazwy modelu znaczy domyślny Parakeet v3.
         let onDevice = s.asr.flatMap { a in
             model.provider(a.providerID)?.api == .fluidAudio ? RoleAssignment(providerID: a.providerID, model: LocalASRModels.parakeetV3) : nil
         }
-        guard let asr = s.usableASR ?? onDevice, let provider = model.provider(asr.providerID) else { return nil }
+        guard var asr = s.usableASR ?? onDevice, let provider = model.provider(asr.providerID) else { return nil }
+        if provider.api == .fluidAudio { asr.model = model.localASRForRun(asr.model).store.variant.rawValue }
         // Brak lokalnego modelu: odmowa przy starcie, a nie po wypowiedzi (sam odczyt magazynu, bez ładowania).
-        if provider.api == .fluidAudio, RunGate.check(status: model.localASR.store.status()) != nil { return nil }
+        if provider.api == .fluidAudio, RunGate.check(status: model.localASRForRun(asr.model).store.status()) != nil { return nil }
         let correction = s.usableCorrection
         let meta = DictationRecordMeta(asrModel: asr.model, correctionModel: correction?.model)
         let language = language
@@ -191,7 +192,7 @@ struct HotkeySettingsGate {
         // Brak klienta przy `.stop` (klucz, model): nagranie jest już zrobione, więc nie odmawiamy po cichu ani nie
         // wyświetlamy alertu — transkrypcja zgłasza powód i silnik przechodzi w `.failed` z „Retry".
         let errorBefore = model.lastError
-        guard let client = model.transcriptionClient(for: asr.providerID) else {
+        guard let client = model.transcriptionClient(for: asr.providerID, model: asr.model) else {
             let reason = model.lastError ?? "Couldn't start transcription."
             model.lastError = errorBefore
             return (DictationPipelineInput(pcm: pcm, language: language, asrModel: asr.model,
@@ -199,12 +200,15 @@ struct HotkeySettingsGate {
                                            chat: nil, vocabulary: PromptVocabulary(), removeFillers: fillers,
                                            replacement: model.replacementRules), meta)
         }
-        let transcriber: any TranscriptionClient = client is any ReleasableClient
-            ? ReleasingTranscriber(inner: client, support: model.localASR) : client
+        let transcriber: any TranscriptionClient = if client is any ReleasableClient {
+            ReleasingTranscriber(inner: client, support: model.localASRForRun(asr.model))
+        } else { client }
 
         var chat: ChatFunction?
         var vocabulary = PromptVocabulary()
-        if let correction {
+        if let correction, let refusal = DictationChoices.refusal(model.provider(correction.providerID)) {
+            chat = { _, _ in throw refusal } // jak niedostępna korekta: surowy tekst i `correctionFailed`
+        } else if let correction {
             switch model.makeClient(for: correction.providerID) {
             case .success(let c):
                 let budget = ContextBudget.resolve(provider: c.provider, detected: nil)
@@ -273,7 +277,7 @@ struct HotkeySettingsGate {
 
 /// Lokalny ASR trzyma model w pamięci do `release()` (jak po przebiegu spotkania): zwalniamy po każdej transkrypcji.
 /// `beginRun`/`endRun` w tym samym zakresie: póki trwa, model nie da się usunąć.
-private struct ReleasingTranscriber: TranscriptionClient {
+struct ReleasingTranscriber: TranscriptionClient {
     let inner: any TranscriptionClient
     let support: LocalASRSupport
     var provider: Provider { inner.provider }

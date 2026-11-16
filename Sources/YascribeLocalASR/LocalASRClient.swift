@@ -44,6 +44,9 @@ public actor LocalASRClient: TranscriptionClient, ReleasableClient {
     }
 
     public func transcribe(wav: Data, model: String, language: LanguageCode?, shape: ASRShape) async throws -> TranscriptionResult {
+        guard LocalASRVariant(model: model) == store.variant else {
+            throw ProviderError.badResponse("On-device model \(model) doesn't match this client's model (\(store.variant.rawValue)).")
+        }
         // `language` ignorowany: wskazówka FluidAudio jest tylko skryptowa, język pilnuje strażnik runnera.
         guard shape == .audioTranscriptions else {
             throw ProviderError.badResponse("On-device transcription supports only the audio transcriptions shape.")
