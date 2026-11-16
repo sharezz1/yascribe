@@ -4,7 +4,7 @@ import Foundation
 /// Klient HTTP z odpowiedziami z ręki. Zapisuje żądania, żeby testy mogły
 /// sprawdzić, co poszło w sieć.
 final class StubHTTP: HTTPClient, @unchecked Sendable {
-    struct Call { let path: String; let body: [String: Any]; let headers: [String: String]; let timeout: TimeInterval }
+    struct Call { let path: String; let body: [String: Any]; let headers: [String: String]; let timeout: TimeInterval; var raw = Data() }
     private let lock = NSLock()
     private(set) var calls: [Call] = []
     let respond: @Sendable (String, [String: Any]) -> (Int, Any)
@@ -15,7 +15,8 @@ final class StubHTTP: HTTPClient, @unchecked Sendable {
         let url = request.url!
         let path = url.path + (url.query.map { "?\($0)" } ?? "") // zapytanie jest częścią „ścieżki" w testach
         let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
-        lock.withLock { calls.append(Call(path: path, body: body, headers: request.allHTTPHeaderFields ?? [:], timeout: request.timeoutInterval)) }
+        lock.withLock { calls.append(Call(path: path, body: body, headers: request.allHTTPHeaderFields ?? [:], timeout: request.timeoutInterval,
+                                             raw: request.httpBody ?? Data())) }
         let (status, obj) = respond(path, body)
         let data = try (obj as? String).map { Data($0.utf8) } ?? JSONSerialization.data(withJSONObject: obj)
         return (data, HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
