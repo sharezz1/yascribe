@@ -76,8 +76,7 @@ struct DictationSettingsSection: View {
                 FieldMenu(label: "Provider", value: asrProviders.first { $0.id == s.asr?.providerID }?.roleLabel ?? "Choose…", width: 180) {
                     Picker("Provider", selection: Binding(get: { s.asr?.providerID }, set: { id in
                         guard let id, id != s.asr?.providerID else { return }
-                        let onDevice = model.provider(id)?.api == .fluidAudio   // jedyny model na liście: wybierany od razu
-                        update { $0.asr = RoleAssignment(providerID: id, model: onDevice ? LocalASRModels.parakeetV3 : "") }
+                        update { $0.asr = RoleAssignment(providerID: id, model: LocalASRModels.modelWhenSelecting(model.provider(id))) }
                     })) {
                         ForEach(asrProviders) { p in Text(p.roleLabel).tag(Optional(p.id)) }
                     }
@@ -92,7 +91,11 @@ struct DictationSettingsSection: View {
             }
             if let p = model.provider(a.providerID) {
                 if p.api == .fluidAudio {
-                    OnThisMacRoleRow(support: model.localASR)
+                    if let support = model.localASR(a.model) {
+                        OnThisMacRoleRow(support: support)
+                    } else {
+                        UnknownOnDeviceModelRow { setASRModel(LocalASRModels.parakeetV3) }
+                    }
                 } else {
                     probeRow(a)
                 }

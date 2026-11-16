@@ -27,12 +27,12 @@ public struct ModelCardState: Equatable, Sendable {
         case progress(Double?)
     }
 
-    public static let name = "Parakeet TDT v3"
-    /// Folder modelu w magazynie (jedyny, który „Remove…" kasuje).
-    public static let folder = ModelManifest.parakeetV3.model
-    /// Układ FluidAudio sprzed pinu 0.17.7 — nieużywany, nietykany (decyzja Opusa 2).
+    /// Układ FluidAudio sprzed pinu 0.17.7 (tylko v3) — nieużywany, nietykany (decyzja Opusa 2).
     public static let legacyFolder = "parakeet-tdt-0.6b-v3-coreml"
 
+    public var name: String
+    /// Folder modelu w magazynie (jedyny, który „Remove…" kasuje).
+    public var folder: String
     public var meta: String
     public var title: String
     public var tone: Tone
@@ -45,8 +45,10 @@ public struct ModelCardState: Equatable, Sendable {
     /// Rozmiar pobrania z manifestu, np. „483 MB".
     public var size: String
 
-    public init(status: ModelStatus, activity: ModelActivity, manifest: ModelManifest = .parakeetV3) {
-        size = Self.sizeText(manifest.totalBytes)
+    public init(status: ModelStatus, activity: ModelActivity, variant: LocalASRVariant = .parakeetV3) {
+        name = variant.displayName
+        folder = variant.manifest.model
+        size = Self.sizeText(variant.manifest.totalBytes)
         meta = "Multilingual · \(size)"
         note = nil
         primary = nil
@@ -67,7 +69,9 @@ public struct ModelCardState: Equatable, Sendable {
                 tone = .neutral
                 title = "Not downloaded"
                 description = "Transcribes speech on this Mac, with no network. Nothing is downloaded until you click Download."
-                note = "Copies saved by older FluidAudio versions (\(Self.legacyFolder)) can't be used and are left untouched."
+                if variant == .parakeetV3 {
+                    note = "Copies saved by older FluidAudio versions (\(Self.legacyFolder)) can't be used and are left untouched."
+                }
                 primary = .download
                 primaryLabel = "Download (\(size))"
                 roleWarning = "Model not downloaded"
