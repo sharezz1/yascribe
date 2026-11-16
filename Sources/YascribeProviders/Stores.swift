@@ -90,6 +90,14 @@ public struct ProvidersFile: Codable, Equatable, Sendable {
         return nil
     }
 
+    /// Nowa ścieżka programu agenta CLI (R10): ten sam rekord i UUID, więc presety dalej go wskazują. `false` = brak dostawcy.
+    @discardableResult
+    public mutating func setBaseURL(_ id: UUID, _ url: URL) -> Bool {
+        guard let i = providers.firstIndex(where: { $0.id == id }) else { return false }
+        providers[i].baseURL = url
+        return true
+    }
+
     /// Model Yascribe (Parakeet w procesie) to rekord techniczny, nie dostawca na liście: presety trzymają jego `providerID`,
     /// a lista Providers go nie pokazuje (F20 P3). Dopisuje go, gdy brak — po rodzaju API, nie po nazwie. `true` = dopisano.
     @discardableResult

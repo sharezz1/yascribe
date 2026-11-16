@@ -102,6 +102,8 @@ public struct ProbeRunner: Sendable {
                 r.failure = ProviderCheck.describe(ProviderError.replyCutOff)
             } catch ProviderError.inputTruncated(let chars, let tokens) {
                 r.failure = ProviderCheck.describe(ProviderError.inputTruncated(sentChars: chars, readTokens: tokens))
+            } catch let e as ProviderError where e.isAgentError {
+                r.failure = ProviderCheck.describe(e) // „Run `codex login`…", nie surowy opis enuma
             } catch { r.failure = "\(error)" }
         case .embedding:
             guard let client = textClient else { r.failure = asrOnly; break }

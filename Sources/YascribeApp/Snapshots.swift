@@ -567,6 +567,29 @@ enum Snapshots {
                 model.presets = presetsBefore
                 model.providers.providers.removeAll { p in (localServers + [parakeetLocal]).contains { $0.id == p.id } }
                 for p in localServers + [parakeetLocal] { model.providerChecks[p.id] = nil }
+                // TASK-86 T5: agenci CLI (Experimental). Stany wymyślone; ścieżki stałe, żeby migawka nie zależała od tego Maca.
+                let codexAgent = Provider(name: ProviderPreset.codexCLI.name, baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/codex"), kind: .codexCLI)
+                let claudeAgent = Provider(name: ProviderPreset.claudeCLI.name, baseURL: URL(fileURLWithPath: "/opt/homebrew/bin/claude"), kind: .claudeCLI)
+                let settingsBefore = model.settings
+                model.settings.experimentalAgentCLIs = true
+                model.providers.providers.append(contentsOf: [codexAgent, claudeAgent])
+                model.providerChecks[codexAgent.id] = .verified(models: 3)
+                model.providerChecks[claudeAgent.id] = .failed(AgentCLI.signInHint(.claudeCLI))
+                try render("settings-agents", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
+                let sheetCodex = ProviderSheetState(); sheetCodex.setUp(.codexCLI); sheetCodex.url = codexAgent.baseURL.path
+                sheetCodex.result = .verified(models: 3)
+                try render("settings-sheet-codex", size: CGSize(width: 560, height: 360), dark: dark, model: model) { ProviderSetupSheet(state: sheetCodex) }
+                let sheetClaude = ProviderSheetState(); sheetClaude.editKey(claudeAgent)
+                sheetClaude.result = .failed(AgentCLI.signInHint(.claudeCLI))
+                try render("settings-sheet-claude-edit", size: CGSize(width: 560, height: 360), dark: dark, model: model) { ProviderSetupSheet(state: sheetClaude) }
+                let agentPreset = Preset(name: "Polish, notes by Codex", language: .polish, asr: nil,
+                                         correction: RoleAssignment(providerID: claudeAgent.id, model: "sonnet"),
+                                         summary: RoleAssignment(providerID: codexAgent.id, model: "gpt-6.1-terra"))
+                let agentEditing = PresetEditorState(); agentEditing.select(agentPreset)
+                try render("preset-sheet-agents", size: CGSize(width: 560, height: 1000), dark: dark, model: model) { PresetSheet(state: agentEditing, onSave: {}) }
+                model.providers.providers.removeAll { $0.id == codexAgent.id || $0.id == claudeAgent.id }
+                model.providerChecks[codexAgent.id] = nil; model.providerChecks[claudeAgent.id] = nil
+                model.settings = settingsBefore
                 // Faza 1.6 T7: Integrations + Meeting detection (kalendarz połączony, trzy kalendarze, jeden odznaczony; Advanced rozwinięte).
                 let meetingState = MeetingSettingsState()
                 meetingState.authorization = .granted

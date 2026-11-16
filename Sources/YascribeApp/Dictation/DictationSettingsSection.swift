@@ -15,7 +15,7 @@ struct DictationSettingsSection: View {
 
     private var s: DictationSettings { settings }
     private var asrProviders: [Provider] { RoleProviders.choices(model.providers.providers, role: .asr, current: s.asr?.providerID) }
-    private var correctionProviders: [Provider] { RoleProviders.choices(model.providers.providers, role: .correction, current: s.correction?.model?.providerID) }
+    private var correctionProviders: [Provider] { DictationChoices.correction(model.providers.providers, current: s.correction?.model?.providerID) }
     /// Język, z którym dyktowanie naprawdę ruszy: jawny, inaczej język aktywnego presetu (Auto nie przechodzi).
     private var effectiveLanguage: LanguageCode? { s.language ?? model.activePreset?.language }
 

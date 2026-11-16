@@ -83,7 +83,8 @@ enum MeetingFilter: Equatable {
 @Observable
 final class AppModel {
     let paths = YascribePaths.fromEnvironment()
-    let secrets: any SecretStore = KeychainSecretStore()
+    /// `var` tylko dla testów (atrapa liczy dostępy; TASK-86 R5) — aplikacja zawsze używa pęku kluczy.
+    var secrets: any SecretStore = KeychainSecretStore()
 
     var section: Section = .meetings
     var scrollToDictationSettings = false
@@ -481,7 +482,7 @@ final class AppModel {
     private func providerWithKey(_ providerID: UUID) -> Result<(Provider, String?), ClientProblem> {
         guard let p = provider(providerID) else { return .failure(ClientProblem(message: "This provider no longer exists.")) }
         let key: String?
-        do { key = try secrets.get(p.id) } catch {
+        do { key = try p.storedKey(in: secrets) } catch {
             return .failure(ClientProblem(message: "Couldn't read the API key for \(p.name) from Keychain: \(error)"))
         }
         guard key != nil || !p.requiresKey else {
@@ -494,7 +495,7 @@ final class AppModel {
     /// pokazuje powód przy dostawcy). ElevenLabs tu nie pasuje: robi tylko transkrypcję (`transcriptionClient`).
     func makeClient(for providerID: UUID) -> Result<OpenAICompatibleClient, ClientProblem> {
         providerWithKey(providerID).flatMap { p, key in
-            p.api == .openAICompatible ? .success(OpenAICompatibleClient(provider: p, key: key))
+            p.api == .openAICompatible || p.api.isAgentCLI ? .success(OpenAICompatibleClient(provider: p, key: key))
                 : .failure(ClientProblem(message: "\(p.name) does only speech-to-text."))
         }
     }
@@ -589,8 +590,15 @@ final class AppModel {
         await Provider(name: name, baseURL: baseURL, kind: kind).verify(key: key.isEmpty ? nil : key)
     }
 
+    /// Nowa ścieżka programu agenta CLI (R10): ten sam UUID, zapis i ponowny Check.
+    func setBaseURL(_ id: UUID, _ url: URL) {
+        guard providers.setBaseURL(id, url) else { return }
+        save()
+        Task { await verifyProvider(id) }
+    }
+
     func removeProvider(_ id: UUID) {
-        try? secrets.delete(id)
+        if let p = provider(id) { try? p.forgetKey(in: secrets) }
         providers.providers.removeAll { $0.id == id }
         save()
     }
@@ -640,6 +648,14 @@ final class AppModel {
     }
 
     func probe(providerID: UUID, model: String, role: Role, language: LanguageCode?) async {
+        // Agent CLI: sonda czatu przez `makeClient` (R4); ASR i embeddingi odrzuca `ProbeRunner` jako nie-tekstowe.
+        if self.provider(providerID)?.api.isAgentCLI == true {
+            switch makeClient(for: providerID) {
+            case .success(let c): probeCache.record(await ProbeRunner(client: c).probe(model: model, role: role, language: language)); save()
+            case .failure(let problem): lastError = problem.message
+            }
+            return
+        }
         guard let c = transcriptionClient(for: providerID, model: model) else { return }
         let support = c is any ReleasableClient ? localASRForRun(model) : nil
         support?.beginRun()

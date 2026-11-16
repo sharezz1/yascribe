@@ -206,7 +206,9 @@ struct HotkeySettingsGate {
 
         var chat: ChatFunction?
         var vocabulary = PromptVocabulary()
-        if let correction {
+        if let correction, let refusal = DictationChoices.refusal(model.provider(correction.providerID)) {
+            chat = { _, _ in throw refusal } // jak niedostępna korekta: surowy tekst i `correctionFailed`
+        } else if let correction {
             switch model.makeClient(for: correction.providerID) {
             case .success(let c):
                 let budget = ContextBudget.resolve(provider: c.provider, detected: nil)

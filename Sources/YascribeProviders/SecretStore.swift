@@ -79,3 +79,11 @@ public enum KeyStatus: Equatable, Sendable {
         do { return try read().map { .set(maskedKey($0)) } ?? .missing } catch { return .unreadable("\(error)") }
     }
 }
+
+extension Provider {
+    /// Klucz dostawcy z pęku. Agent CLI loguje się we własnym CLI, więc Yascribe nie czyta ani nie trzyma jego klucza (TASK-86, R5).
+    public func storedKey(in store: any SecretStore) throws -> String? { api.isAgentCLI ? nil : try store.get(id) }
+
+    /// Usunięcie klucza przy usuwaniu dostawcy; dla agenta CLI pęk nie jest dotykany.
+    public func forgetKey(in store: any SecretStore) throws { if !api.isAgentCLI { try store.delete(id) } }
+}

@@ -23,6 +23,14 @@ public struct ChatLimits: Equatable, Sendable {
 
     /// Wartości z S2 (spec fazy 2.0 §14 pkt 5). API: dzisiejsze, bez zmian (niespójność notatki 180 > 120 zostaje).
     public static func `for`(_ provider: Provider, call: ChatCall) -> ChatLimits {
+        if provider.api.isAgentCLI { // start agenta i jego narzut: partia Codex ~40 s w spike'u (TASK-86 §5); jeden limit = czas procesu
+            switch call {
+            case .correctionBatch: return ChatLimits(soft: 240, transport: 240)
+            case .note: return ChatLimits(soft: 600, transport: 600)
+            case .title: return ChatLimits(soft: 120, transport: 120)
+            case .mapPart: return ChatLimits(soft: 300, transport: 300)
+            }
+        }
         if provider.isLocal {
             switch call {
             case .note: return ChatLimits(soft: 600, transport: 660, maxTokens: localNoteMaxTokens)
