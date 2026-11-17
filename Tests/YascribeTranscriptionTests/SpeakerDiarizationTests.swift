@@ -18,18 +18,18 @@ private func sampleDiarization() -> SpeakerDiarization {
     let session = try temporarySession(); defer { try? FileManager.default.removeItem(at: session) }
     let run = RunDirectory(session: session, runID: "r")
     #expect(run.speakers == session.appendingPathComponent("runs/r/speakers.json"))
-    #expect(SpeakerDiarization.load(run: run, currentPin: "pin", currentAudioFingerprint: nil) == nil)
+    #expect(SpeakerDiarization.load(run: run, acceptedPins: ["pin"], currentAudioFingerprint: nil) == nil)
     let sample = sampleDiarization()
     try JSONFile.save(sample, to: run.speakers)
-    #expect(SpeakerDiarization.load(run: run, currentPin: "pin", currentAudioFingerprint: "fingerprint") == sample)
-    #expect(SpeakerDiarization.load(run: run, currentPin: "pin", currentAudioFingerprint: nil) == sample)
-    #expect(SpeakerDiarization.load(run: run, currentPin: "other", currentAudioFingerprint: nil) == nil)
-    #expect(SpeakerDiarization.load(run: run, currentPin: "pin", currentAudioFingerprint: "other") == nil)
+    #expect(SpeakerDiarization.load(run: run, acceptedPins: ["pin"], currentAudioFingerprint: "fingerprint") == sample)
+    #expect(SpeakerDiarization.load(run: run, acceptedPins: ["pin"], currentAudioFingerprint: nil) == sample)
+    #expect(SpeakerDiarization.load(run: run, acceptedPins: ["other"], currentAudioFingerprint: nil) == nil)
+    #expect(SpeakerDiarization.load(run: run, acceptedPins: ["pin"], currentAudioFingerprint: "other") == nil)
     var future = sample; future.version = 2
     try JSONFile.save(future, to: run.speakers)
-    #expect(SpeakerDiarization.load(run: run, currentPin: "pin", currentAudioFingerprint: nil) == nil)
+    #expect(SpeakerDiarization.load(run: run, acceptedPins: ["pin"], currentAudioFingerprint: nil) == nil)
     try Data("broken".utf8).write(to: run.speakers)
-    #expect(SpeakerDiarization.load(run: run, currentPin: "pin", currentAudioFingerprint: nil) == nil)
+    #expect(SpeakerDiarization.load(run: run, acceptedPins: ["pin"], currentAudioFingerprint: nil) == nil)
 }
 @Test func speakerDiarizationDecodesWithoutOptionalFields() throws {
     let d = try JSONDecoder().decode(SpeakerDiarization.self, from: Data(#"{"version":1,"modelPin":"p","segments":[]}"#.utf8))

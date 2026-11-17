@@ -26,6 +26,9 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                                   needsKey: true, note: nil,
                                                   role: "Scribe v2 transcription · direct API",
                                                   kind: .elevenLabs, keyPage: URL(string: "https://elevenlabs.io/app/settings/api-keys"))
+    public static let mistral = ProviderPreset(id: "mistral", name: "Mistral", baseURL: "https://api.mistral.ai/v1",
+                                               needsKey: true, note: nil, role: "Speaker detection · direct API",
+                                               kind: .mistral, keyPage: URL(string: "https://console.mistral.ai/api-keys"))
     /// Ollama nie robi ASR (docs/wymagania.md §2): tylko korekta i podsumowanie.
     public static let ollama = ProviderPreset(id: "ollama", name: "Ollama", baseURL: "http://localhost:11434/v1", needsKey: false,
                                               note: "correction and summary only, no transcription",
@@ -57,10 +60,10 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
                                               note: "Any OpenAI-compatible server.",
                                               role: "Any OpenAI-compatible API · address and key",
                                               kind: nil, keyPage: nil)
-    public static let all: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx, custom]
+    public static let all: [ProviderPreset] = [openRouter, elevenLabs, mistral, ollama, llamaCpp, omlx, custom]
     /// Gotowi (z wpisanym adresem), w kolejności listy. `onThisMac` (model Yascribe) to nie dostawca: ma własną kartę
     /// „Yascribe model" w Settings, więc na liście Providers go nie ma (F20 P3).
-    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, ollama, llamaCpp, omlx]
+    public static let ready: [ProviderPreset] = [openRouter, elevenLabs, mistral, ollama, llamaCpp, omlx]
     /// Agenci CLI: na liście tylko z przełącznikiem Experimental albo gdy są już zapisani.
     public static let agents: [ProviderPreset] = [codexCLI, claudeCLI]
 
@@ -80,6 +83,7 @@ public struct ProviderPreset: Identifiable, Equatable, Sendable {
 
     /// Gotowy dostawca pasujący do zapisanego dostawcy (rodzaj API, a dla OpenAI-compatible adres); Custom nigdy.
     public static func matching(_ provider: Provider) -> ProviderPreset? {
+        if provider.api == .mistral { return mistral }
         if provider.api == .elevenLabs { return elevenLabs }
         if provider.api == .fluidAudio { return onThisMac } // po rodzaju, nie po adresie: `local://` nie ma hosta
         if provider.api == .codexCLI { return codexCLI } // `file://` binarki nie ma hosta; bez tego wiersz pokazałby „Edit key…"

@@ -135,6 +135,9 @@ final class AppModel {
     private(set) var speakerTickets: [String: SpeakerDetectionTicket] = [:]
     @ObservationIgnored private var speakerTasks: [String: Task<SpeakerDiarization, any Error>] = [:]
     @ObservationIgnored private var speakerGeneration = 0
+    @ObservationIgnored var mistralHTTP: any HTTPClient = URLSessionHTTPClient()
+    @ObservationIgnored var mistralPartSeconds: Double = 1800
+    @ObservationIgnored var speakerWorkOverride: (@Sendable () async throws -> SpeakerDiarization)?
 
     let recording = RecordingController()
     /// Aktualizacje (Sparkle): bramka restartu i kontroler. Tworzone w `init` (bramka potrzebuje `self`).
@@ -330,7 +333,7 @@ final class AppModel {
     func applyRetention() {
         guard Snapshots.directory == nil, recordingsMove == nil else { return }
         let r = AudioRetention.apply(sessions: sessionsDirectory, days: settings.audioRetentionDays, skip: busySessions,
-                                     speakersPin: DiarizerManifest.pin)
+                                     speakersPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin))
         if !r.errors.isEmpty { lastError = "Couldn't delete old audio: " + r.errors.joined(separator: "\n") }
         if !r.purged.isEmpty { reloadSessions(); refreshRecordingsSize() }
     }
@@ -464,7 +467,7 @@ final class AppModel {
             let loaded = await Task.detached {
                 runs.map { url, runID in
                     (url, runID, SpeakerDiarization.load(run: RunDirectory(session: url, runID: runID),
-                        currentPin: DiarizerManifest.pin, currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: url)))
+                        acceptedPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin), currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: url)))
                 }
             }.value
             guard speakersReloadID == reloadID else { return }
@@ -652,6 +655,7 @@ final class AppModel {
 
     /// Lista modeli dla roli: pobierana raz na dostawcę i rolę (`force` = odśwież).
     func loadModels(provider: UUID, role: Role, force: Bool = false) async {
+        if let p = self.provider(provider), ![Role.asr, .correction, .summary, .embedding].contains(where: { p.supports($0) }) { return }
         let k = key(provider, role)
         if self.provider(provider)?.api == .elevenLabs { // stała lista (Scribe v2 dla ASR, poza tym pusto), bez sieci
             modelLists[k] = ElevenLabsClient.models(for: role)
@@ -1154,11 +1158,8 @@ final class AppModel {
             var post = finished != nil && RunSelection.shouldPostProcess(session: sessionURL, runID: runID)
             // TASK-22 D7: etykiety mówców przed notatką (notatka czyta `speakers.json` z dysku); błąd tylko w `lastError`.
             // `transcribing` zdejmujemy dopiero po diaryzacji: do tego czasu bramki korekty, notatki i transkrypcji odmawiają (F01).
-            if let finished, post, await SpeakerDetectionDecision.shouldRun(
-                modelReady: self.speakerModel.store.status() == .ready, setting: self.settings.detectSpeakers,
-                themUtterances: finished.utterances.filter { $0.speaker == .them }.count,
-                hasSystemTrack: { await Task.detached { Self.hasSystemTrack(sessionURL) }.value }) {
-                await self.detectSpeakers(sessionURL: sessionURL, runID: runID, sensitivity: self.settings.speakerSensitivityOrDefault)
+            if let finished, post, await self.detectSpeakersAfterTranscription(sessionURL: sessionURL, runID: runID,
+                themUtterances: finished.utterances.filter { $0.speaker == .them }.count) {
                 post = RunSelection.shouldPostProcess(session: sessionURL, runID: runID)
             }
             self.transcribing.remove(id)
@@ -1170,9 +1171,22 @@ final class AppModel {
         return true
     }
 
+    func detectSpeakersAfterTranscription(sessionURL: URL, runID: String, themUtterances: Int) async -> Bool {
+        guard await SpeakerDetectionDecision.shouldRun(
+            ready: speakerSourceReady, setting: settings.detectSpeakers, themUtterances: themUtterances,
+            hasSystemTrack: { await Task.detached { Self.hasSystemTrack(sessionURL) }.value }) else { return false }
+        await detectSpeakers(sessionURL: sessionURL, runID: runID, sensitivity: settings.speakerSensitivityOrDefault)
+        return true
+    }
+
     // MARK: Mówcy (TASK-22 T5)
 
     func isDetectingSpeakers(_ item: SessionItem) -> Bool { speakerTickets[item.id] != nil }
+
+    var mistralProvider: (Provider, String)? { MistralSource.provider(providers: providers.providers, secrets: secrets) }
+    var speakerSourceReady: Bool {
+        settings.speakerSourceOrDefault == .local ? speakerModel.store.status() == .ready : mistralProvider != nil
+    }
 
     /// Tor `system` z klatkami i plikiem na dysku (retencja mogła skasować audio) — ten sam warunek co CLI `diarize`.
     /// Czyta dziennik — wołać poza MainActor (F04).
@@ -1187,13 +1201,26 @@ final class AppModel {
     }
 
     /// Cała praca na dysku i modelu poza MainActor (F04): dziennik, diaryzacja, przeliczenie segmentów, odcisk audio.
-    nonisolated private static func diarization(sessionURL: URL, sensitivity: SpeakerSensitivity, store: DiarizerModelStore) async throws -> SpeakerDiarization {
+    nonisolated private static func diarization(sessionURL: URL, runID: String, sensitivity: SpeakerSensitivity, store: DiarizerModelStore, mistral: (Provider, String)?, http: any HTTPClient, partSeconds: Double) async throws -> SpeakerDiarization {
         guard hasSystemTrack(sessionURL) else { throw NoCallAudio() }
         let session = SessionDirectory(url: sessionURL)
         let summary = try session.summarize()
-        let segments = try await SpeakerDiarizer(store: store).run(systemTrack: session.trackURL("system"), sensitivity: sensitivity, progress: nil)
+        let segments: [(speaker: String, start: Double, end: Double)]
+        let pin: String
+        let selectedSensitivity: SpeakerSensitivity?
+        if let (provider, key) = mistral {
+            let input = try JSONFile.load(RunInput?.self, from: RunDirectory(session: sessionURL, runID: runID).input, default: nil)
+            let client = MistralDiarizationClient(baseURL: provider.baseURL, key: key, http: http)
+            segments = try await MistralDiarization.run(track: session.trackURL("system"), client: client, language: input?.snapshot.language, partSeconds: partSeconds)
+            pin = MistralDiarization.pin
+            selectedSensitivity = nil
+        } else {
+            segments = try await SpeakerDiarizer(store: store).run(systemTrack: session.trackURL("system"), sensitivity: sensitivity, progress: nil)
+            pin = DiarizerManifest.pin
+            selectedSensitivity = sensitivity
+        }
         return SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
-                                            modelPin: DiarizerManifest.pin, sensitivity: sensitivity,
+                                            modelPin: pin, sensitivity: selectedSensitivity,
                                             audioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL), createdAt: Date())
     }
 
@@ -1201,7 +1228,9 @@ final class AppModel {
     /// Nowsza operacja tej sesji anuluje starszą; błąd albo anulowanie zostawia poprzedni plik nietknięty.
     func detectSpeakers(sessionURL: URL, runID: String, sensitivity: SpeakerSensitivity) async {
         guard !Task.isCancelled, let ticket = reserveSpeakerTicket(sessionURL: sessionURL, runID: runID) else { return }
-        await performSpeakerDetection(ticket, sessionURL: sessionURL, sensitivity: sensitivity)
+        let source = settings.speakerSourceOrDefault
+        let mistral = source == .mistral ? mistralProvider : nil
+        await performSpeakerDetection(ticket, sessionURL: sessionURL, sensitivity: sensitivity, source: source, mistral: mistral)
     }
 
     /// Synchronicznie, przed pierwszym `await` i przed utworzeniem `Task`: sesja od razu chroniona przed retencją i przeniesieniem (F03).
@@ -1218,11 +1247,32 @@ final class AppModel {
         return ticket
     }
 
-    private func performSpeakerDetection(_ ticket: SpeakerDetectionTicket, sessionURL: URL, sensitivity: SpeakerSensitivity) async {
+    private func performSpeakerDetection(_ ticket: SpeakerDetectionTicket, sessionURL: URL, sensitivity: SpeakerSensitivity,
+                                         source: SpeakerSource, mistral: (Provider, String)?) async {
         let id = ticket.session
         guard speakerTickets[id] == ticket else { return } // zastąpiony, zanim ruszył
         let store = speakerModel.store
-        let work = Task.detached { try await Self.diarization(sessionURL: sessionURL, sensitivity: sensitivity, store: store) }
+        let previous = speakerTasks[id]
+        if let previous { _ = await previous.result }
+        guard speakerTickets[id] == ticket else { return }
+        if Task.isCancelled {
+            speakerTickets[id] = nil
+            speakerTasks[id] = nil
+            return
+        }
+        guard source == .local || mistral != nil else {
+            lastError = "Couldn't detect speakers: Add a Mistral provider with an API key in Settings."
+            speakerTickets[id] = nil
+            speakerTasks[id] = nil
+            return
+        }
+        let http = mistralHTTP
+        let partSeconds = mistralPartSeconds
+        let override = speakerWorkOverride
+        let work = Task.detached {
+            if let override { return try await override() }
+            return try await Self.diarization(sessionURL: sessionURL, runID: ticket.runID, sensitivity: sensitivity, store: store, mistral: mistral, http: http, partSeconds: partSeconds)
+        }
         speakerTasks[id] = work
         // Wraca po faktycznym końcu pracy, także anulowanej — dopiero wtedy bilet schodzi (F02).
         let result = await SpeakerDetectionWork.result(of: work)
@@ -1253,7 +1303,9 @@ final class AppModel {
         // Zastąpiłaby automatyczną diaryzację, a notatka ruszyłaby bez etykiet (F01).
         guard !notes.isTranscribing(item.id) else { lastError = "This recording is being transcribed. Try again when that finishes."; return }
         guard let ticket = reserveSpeakerTicket(sessionURL: item.url, runID: runID) else { return }
-        Task { await performSpeakerDetection(ticket, sessionURL: item.url, sensitivity: sensitivity) }
+        let source = settings.speakerSourceOrDefault
+        let mistral = source == .mistral ? mistralProvider : nil
+        Task { await performSpeakerDetection(ticket, sessionURL: item.url, sensitivity: sensitivity, source: source, mistral: mistral) }
     }
 
     static func sessionName(_ d: Date) -> String {

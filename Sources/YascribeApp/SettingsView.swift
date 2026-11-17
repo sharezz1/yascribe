@@ -15,6 +15,7 @@ final class SettingsDraft: ObservableObject {
     /// Sekcja Summary: „Thinking" (F20 P1).
     @Published var summaryThinking = true
     /// Karta „Speaker detection" (TASK-22).
+    @Published var speakerSource = SpeakerSource.local
     @Published var detectSpeakers = true
     @Published var speakerSensitivity = SpeakerSensitivity.defaultValue
     @Published var dictation = DictationSettings()
@@ -81,6 +82,7 @@ final class SettingsDraft: ObservableObject {
         embedding = s.embedding; askModel = s.askModel; dictation = s.dictationOrDefault; saved = false
         removeFillers = s.removeFillersEnabled
         summaryThinking = s.summaryThinkingEnabled
+        speakerSource = s.speakerSourceOrDefault
         detectSpeakers = s.detectSpeakers ?? true
         speakerSensitivity = s.speakerSensitivityOrDefault
         fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
@@ -134,6 +136,7 @@ struct SettingsView: View {
             || draft.askModel != model.settings.askModel
             || draft.removeFillers != model.settings.removeFillersEnabled
             || draft.summaryThinking != model.settings.summaryThinkingEnabled
+            || draft.speakerSource != model.settings.speakerSourceOrDefault
             || draft.detectSpeakers != (model.settings.detectSpeakers ?? true)
             || draft.speakerSensitivity != model.settings.speakerSensitivityOrDefault
             || draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
@@ -153,7 +156,7 @@ struct SettingsView: View {
                     // Model Yascribe (Parakeet) nie jest dostawcą: własna karta na górze, nad listą Providers (F20 P3).
                     SectionHeader("Yascribe models")
                     ForEach(model.localASRModels, id: \.store.variant) { ModelCardSection(support: $0) }
-                    SpeakerModelCardSection(support: model.speakerModel, detect: $draft.detectSpeakers, sensitivity: $draft.speakerSensitivity)
+                    SpeakerModelCardSection(support: model.speakerModel, source: $draft.speakerSource, detect: $draft.detectSpeakers, sensitivity: $draft.speakerSensitivity, providerName: model.mistralProvider?.0.name, onAdd: { sheet.setUp(.mistral) })
                     SectionHeader("Providers")
                     Card {
                         let rows = ProviderListRow.rows(for: model.providers.providers, agents: model.settings.agentCLIsEnabled)
@@ -433,6 +436,7 @@ struct SettingsView: View {
         model.settings.removeFillers = draft.removeFillers
         model.settings.fillerWords = words == FillerWords.defaults ? nil : words
         model.settings.summaryThinking = draft.summaryThinking
+        model.settings.speakerSource = draft.speakerSource
         model.settings.detectSpeakers = draft.detectSpeakers
         model.settings.speakerSensitivity = draft.speakerSensitivity
         let dictationChanged = draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
@@ -538,7 +542,9 @@ private struct ProviderRowView: View {
                 else if preset.map({ $0.needsKey || $0.keyOptional }) ?? true { Button("Edit key…") { sheet.editKey(p) } }
                 if p.isLocal && p.api == .openAICompatible { Button("Context window…") { sheet.editKey(p) } }
                 Button("Test again") { Task { await model.verifyProvider(p.id) } }
-                Button("Refresh Models") { Task { await model.refreshModels(p.id) } }
+                if [Role.asr, .correction, .summary, .embedding].contains(where: { p.supports($0) }) {
+                    Button("Refresh Models") { Task { await model.refreshModels(p.id) } }
+                }
                 Divider()
                 Button("Remove…", role: .destructive) { rowState.confirmingRemove = true }
             } label: {

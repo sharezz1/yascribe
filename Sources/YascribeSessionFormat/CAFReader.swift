@@ -18,9 +18,26 @@ public struct CAFReader: Sendable {
 
     public var frames: Int { samples.count / channels }
 
-    public init(url: URL) throws {
-        let d = try Data(contentsOf: url, options: .mappedIfSafe)
-        guard d.count >= CAFLayout.headerSize else { throw CAFReadError.tooShort }
+    public init(url: URL) throws { try self.init(url: url, frames: nil) }
+
+    public static func read(url: URL, frames: Range<Int>) throws -> CAFReader {
+        try CAFReader(url: url, frames: frames)
+    }
+
+    public static func info(url: URL) throws -> (sampleRate: Double, channels: Int, frames: Int) {
+        let reader = try CAFReader(url: url, frames: 0..<0)
+        let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber
+        return (reader.sampleRate, reader.channels, max(0, (size?.intValue ?? 0) - CAFLayout.headerSize) / CAFLayout.bytesPerFrame(channels: reader.channels))
+    }
+
+    private init(url: URL, frames: Range<Int>?) throws {
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+        let size = try file.seekToEnd()
+        guard size >= CAFLayout.headerSize else { throw CAFReadError.tooShort }
+        try file.seek(toOffset: 0)
+        let d = try file.read(upToCount: CAFLayout.headerSize) ?? Data()
+        guard d.count == CAFLayout.headerSize else { throw CAFReadError.tooShort }
         func fourCC(_ at: Int) -> String { String(decoding: d[at..<(at + 4)], as: UTF8.self) }
         func u32(_ at: Int) -> UInt32 { d[at..<(at + 4)].reduce(0) { $0 << 8 | UInt32($1) } }
         func u64(_ at: Int) -> UInt64 { d[at..<(at + 8)].reduce(0) { $0 << 8 | UInt64($1) } }
@@ -33,7 +50,14 @@ public struct CAFReader: Sendable {
         guard ch > 0 else { throw CAFReadError.notOurLayout("channels") }
         sampleRate = Double(bitPattern: u64(20))
         channels = ch
-        let body = d[CAFLayout.headerSize...]
+        let totalFrames = (Int(size) - CAFLayout.headerSize) / CAFLayout.bytesPerFrame(channels: ch)
+        let selected = frames ?? 0..<totalFrames
+        guard selected.lowerBound >= 0, selected.upperBound <= totalFrames else { throw CAFReadError.notOurLayout("frame range") }
+        let stride = CAFLayout.bytesPerFrame(channels: ch)
+        try file.seek(toOffset: UInt64(CAFLayout.headerSize + selected.lowerBound * stride))
+        let byteCount = (selected.upperBound - selected.lowerBound) * stride
+        let body = try file.read(upToCount: byteCount) ?? Data()
+        guard body.count == byteCount else { throw CAFReadError.tooShort }
         let count = (body.count / CAFLayout.bytesPerFrame(channels: ch)) * ch
         var out = [Int16](repeating: 0, count: count)
         _ = out.withUnsafeMutableBytes { body.copyBytes(to: $0, count: count * CAFLayout.bytesPerSample) }

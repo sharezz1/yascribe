@@ -31,10 +31,10 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
     }
 
     public static func fromTrack(segments: [(speaker: String, start: Double, end: Double)], clock: SessionClock,
-                                 track: String = "system", modelPin: String, sensitivity: SpeakerSensitivity,
+                                 track: String = "system", modelPin: String, sensitivity: SpeakerSensitivity?,
                                  threshold: Double = 0.6, minClusterSeconds: Double = 10,
                                  audioFingerprint: String?, createdAt: Date) -> SpeakerDiarization {
-        SpeakerDiarization(version: 1, modelPin: modelPin, sensitivity: sensitivity, fa: sensitivity.fa, fb: sensitivity.fb,
+        SpeakerDiarization(version: 1, modelPin: modelPin, sensitivity: sensitivity, fa: sensitivity?.fa, fb: sensitivity?.fb,
                            threshold: threshold, minClusterSeconds: minClusterSeconds, audioFingerprint: audioFingerprint,
                            createdAt: createdAt, segments: segments.map {
             Segment(speaker: $0.speaker, start: clock.sessionSeconds(track: track, trackSeconds: $0.start),
@@ -53,9 +53,11 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    public static func load(run: RunDirectory, currentPin: String, currentAudioFingerprint: String?) -> SpeakerDiarization? {
+    public static func knownPins(localPin: String) -> Set<String> { [localPin, MistralDiarization.pin] }
+
+    public static func load(run: RunDirectory, acceptedPins: Set<String>, currentAudioFingerprint: String?) -> SpeakerDiarization? {
         guard let value = try? JSONFile.load(SpeakerDiarization?.self, from: run.speakers, default: nil),
-              value.version == 1, value.modelPin == currentPin,
+              value.version == 1, acceptedPins.contains(value.modelPin),
               currentAudioFingerprint == nil || value.audioFingerprint == currentAudioFingerprint else { return nil }
         return value
     }
