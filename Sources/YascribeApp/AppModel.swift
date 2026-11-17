@@ -135,8 +135,7 @@ final class AppModel {
     private(set) var speakerTickets: [String: SpeakerDetectionTicket] = [:]
     @ObservationIgnored private var speakerTasks: [String: Task<SpeakerDiarization, any Error>] = [:]
     @ObservationIgnored private var speakerGeneration = 0
-    @ObservationIgnored var mistralHTTP: any HTTPClient = URLSessionHTTPClient()
-    @ObservationIgnored var mistralPartSeconds: Double = 1800
+    @ObservationIgnored var diarizationHTTP: any HTTPClient = URLSessionHTTPClient()
     @ObservationIgnored var speakerWorkOverride: (@Sendable () async throws -> SpeakerDiarization)?
 
     let recording = RecordingController()
@@ -516,12 +515,15 @@ final class AppModel {
     struct ClientProblem: Error { let message: String }
 
     /// Dostawca z kluczem albo powód, dlaczego nie da się do niego wysłać żądania.
-    private func providerWithKey(_ providerID: UUID) -> Result<(Provider, String?), ClientProblem> {
+    private func providerWithKey(_ providerID: UUID, diarization: Bool = false) -> Result<(Provider, String?), ClientProblem> {
         guard let p = provider(providerID) else { return .failure(ClientProblem(message: "This provider no longer exists.")) }
-        let key: String?
+        var key: String?
         do { key = try p.storedKey(in: secrets) } catch {
             return .failure(ClientProblem(message: "Couldn't read the API key for \(p.name) from Keychain: \(error)"))
         }
+        #if DEBUG
+        if diarization, key?.isEmpty != false { key = ProcessInfo.processInfo.environment["YASCRIBE_API_KEY"].flatMap { $0.isEmpty ? nil : $0 } }
+        #endif
         guard key != nil || !p.requiresKey else {
             return .failure(ClientProblem(message: "No API key for \(p.name). Remove the provider and add it again with a key."))
         }
@@ -1172,20 +1174,31 @@ final class AppModel {
     }
 
     func detectSpeakersAfterTranscription(sessionURL: URL, runID: String, themUtterances: Int) async -> Bool {
-        guard await SpeakerDetectionDecision.shouldRun(
-            ready: speakerSourceReady, setting: settings.detectSpeakers, themUtterances: themUtterances,
-            hasSystemTrack: { await Task.detached { Self.hasSystemTrack(sessionURL) }.value }) else { return false }
-        await detectSpeakers(sessionURL: sessionURL, runID: runID, sensitivity: settings.speakerSensitivityOrDefault)
+        guard let snapshot = runSnapshot(sessionURL: sessionURL, runID: runID),
+              let provider = provider(snapshot.providerID),
+              await SpeakerDetectionDecision.shouldRun(capable: SpeakerCapability.supports(api: provider.api, model: snapshot.model),
+                  themUtterances: themUtterances, hasSystemTrack: { await Task.detached { Self.hasSystemTrack(sessionURL) }.value }),
+              let cloud = cloudProvider(snapshot.providerID) else { return false }
+        guard let ticket = reserveSpeakerTicket(sessionURL: sessionURL, runID: runID) else { return false }
+        await performSpeakerDetection(ticket, sessionURL: sessionURL, cloud: cloud)
         return true
     }
 
-    // MARK: Mówcy (TASK-22 T5)
-
     func isDetectingSpeakers(_ item: SessionItem) -> Bool { speakerTickets[item.id] != nil }
 
-    var mistralProvider: (Provider, String)? { MistralSource.provider(providers: providers.providers, secrets: secrets) }
-    var speakerSourceReady: Bool {
-        settings.speakerSourceOrDefault == .local ? speakerModel.store.status() == .ready : mistralProvider != nil
+    private func runSnapshot(sessionURL: URL, runID: String) -> RunSnapshot? {
+        (try? JSONFile.load(RunInput?.self, from: RunDirectory(session: sessionURL, runID: runID).input, default: nil))?.snapshot
+    }
+
+    func supportsCloudSpeakers(_ item: SessionItem) -> Bool {
+        guard let snapshot = item.runSnapshot else { return false }
+        if let provider = provider(snapshot.providerID) { return SpeakerCapability.supports(api: provider.api, model: snapshot.model) }
+        return SpeakerCapability.supports(api: .openAICompatible, model: snapshot.model) || SpeakerCapability.supports(api: .elevenLabs, model: snapshot.model)
+    }
+
+    private func cloudProvider(_ id: UUID) -> (Provider, String)? {
+        if case let .success((provider, key)) = providerWithKey(id, diarization: true), let key, !key.isEmpty { return (provider, key) }
+        return nil
     }
 
     /// Tor `system` z klatkami i plikiem na dysku (retencja mogła skasować audio) — ten sam warunek co CLI `diarize`.
@@ -1201,36 +1214,34 @@ final class AppModel {
     }
 
     /// Cała praca na dysku i modelu poza MainActor (F04): dziennik, diaryzacja, przeliczenie segmentów, odcisk audio.
-    nonisolated private static func diarization(sessionURL: URL, runID: String, sensitivity: SpeakerSensitivity, store: DiarizerModelStore, mistral: (Provider, String)?, http: any HTTPClient, partSeconds: Double) async throws -> SpeakerDiarization {
+    nonisolated private static func diarization(sessionURL: URL, runID: String, store: DiarizerModelStore, cloud: (Provider, String)?, http: any HTTPClient) async throws -> SpeakerDiarization {
         guard hasSystemTrack(sessionURL) else { throw NoCallAudio() }
         let session = SessionDirectory(url: sessionURL)
         let summary = try session.summarize()
         let segments: [(speaker: String, start: Double, end: Double)]
         let pin: String
-        let selectedSensitivity: SpeakerSensitivity?
-        if let (provider, key) = mistral {
+        let sensitivity: SpeakerSensitivity?
+        if let (provider, key) = cloud {
             let input = try JSONFile.load(RunInput?.self, from: RunDirectory(session: sessionURL, runID: runID).input, default: nil)
-            let client = MistralDiarizationClient(baseURL: provider.baseURL, key: key, http: http)
-            segments = try await MistralDiarization.run(track: session.trackURL("system"), client: client, language: input?.snapshot.language, partSeconds: partSeconds)
-            pin = MistralDiarization.pin
-            selectedSensitivity = nil
+            guard let snapshot = input?.snapshot else { throw NoCallAudio() }
+            let client: any DiarizationClient = provider.api == .elevenLabs
+                ? ElevenLabsClient(provider: provider, key: key, http: http)
+                : OpenAICompatibleClient(provider: provider, key: key, http: http)
+            segments = try await CloudDiarization.run(track: session.trackURL("system"), client: client, model: snapshot.model, language: snapshot.language, limitBytes: provider.api == .elevenLabs ? nil : CloudDiarization.openRouterLimitBytes)
+            pin = SpeakerCapability.pin(api: provider.api, model: snapshot.model)
+            sensitivity = nil
         } else {
-            segments = try await SpeakerDiarizer(store: store).run(systemTrack: session.trackURL("system"), sensitivity: sensitivity, progress: nil)
+            segments = try await SpeakerDiarizer(store: store).run(systemTrack: session.trackURL("system"), sensitivity: .medium, progress: nil)
             pin = DiarizerManifest.pin
-            selectedSensitivity = sensitivity
+            sensitivity = .medium
         }
-        return SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
-                                            modelPin: pin, sensitivity: selectedSensitivity,
+        return SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary), modelPin: pin, sensitivity: sensitivity,
                                             audioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL), createdAt: Date())
     }
 
-    /// Diaryzacja toru `system` przebiegu → `runs/<id>/speakers.json` (przebieg jak CLI `diarize`, spec §4.2, R05).
-    /// Nowsza operacja tej sesji anuluje starszą; błąd albo anulowanie zostawia poprzedni plik nietknięty.
     func detectSpeakers(sessionURL: URL, runID: String, sensitivity: SpeakerSensitivity) async {
         guard !Task.isCancelled, let ticket = reserveSpeakerTicket(sessionURL: sessionURL, runID: runID) else { return }
-        let source = settings.speakerSourceOrDefault
-        let mistral = source == .mistral ? mistralProvider : nil
-        await performSpeakerDetection(ticket, sessionURL: sessionURL, sensitivity: sensitivity, source: source, mistral: mistral)
+        await performSpeakerDetection(ticket, sessionURL: sessionURL, cloud: nil)
     }
 
     /// Synchronicznie, przed pierwszym `await` i przed utworzeniem `Task`: sesja od razu chroniona przed retencją i przeniesieniem (F03).
@@ -1247,8 +1258,7 @@ final class AppModel {
         return ticket
     }
 
-    private func performSpeakerDetection(_ ticket: SpeakerDetectionTicket, sessionURL: URL, sensitivity: SpeakerSensitivity,
-                                         source: SpeakerSource, mistral: (Provider, String)?) async {
+    private func performSpeakerDetection(_ ticket: SpeakerDetectionTicket, sessionURL: URL, cloud: (Provider, String)?) async {
         let id = ticket.session
         guard speakerTickets[id] == ticket else { return } // zastąpiony, zanim ruszył
         let store = speakerModel.store
@@ -1260,18 +1270,11 @@ final class AppModel {
             speakerTasks[id] = nil
             return
         }
-        guard source == .local || mistral != nil else {
-            lastError = "Couldn't detect speakers: Add a Mistral provider with an API key in Settings."
-            speakerTickets[id] = nil
-            speakerTasks[id] = nil
-            return
-        }
-        let http = mistralHTTP
-        let partSeconds = mistralPartSeconds
+        let http = diarizationHTTP
         let override = speakerWorkOverride
         let work = Task.detached {
             if let override { return try await override() }
-            return try await Self.diarization(sessionURL: sessionURL, runID: ticket.runID, sensitivity: sensitivity, store: store, mistral: mistral, http: http, partSeconds: partSeconds)
+            return try await Self.diarization(sessionURL: sessionURL, runID: ticket.runID, store: store, cloud: cloud, http: http)
         }
         speakerTasks[id] = work
         // Wraca po faktycznym końcu pracy, także anulowanej — dopiero wtedy bilet schodzi (F02).
@@ -1296,16 +1299,37 @@ final class AppModel {
         reloadSessions()
     }
 
-    /// Ręczne ponowne wykrycie z menu ⋯ Transcript (spec §4.3; przycisk w T6): bieżący przebieg, wybrana czułość.
-    /// Notatka nie generuje się sama od nowa. Brak modelu zgłasza `SpeakerDiarizer`, brak toru — praca (komunikat w `lastError`).
-    func detectSpeakersAgain(item: SessionItem, sensitivity: SpeakerSensitivity) {
+    func detectSpeakersAgain(item: SessionItem) {
+        guard let snapshot = item.runSnapshot, let cloud = cloudProvider(snapshot.providerID) else {
+            lastError = "Couldn't detect speakers: No API key."
+            return
+        }
+        startManualDetection(item: item, cloud: cloud)
+    }
+
+    func detectSpeakersOnThisMac(item: SessionItem) { startManualDetection(item: item, cloud: nil) }
+
+    private func startManualDetection(item: SessionItem, cloud: (Provider, String)?) {
         guard let runID = item.runID else { lastError = "Transcribe this meeting first."; return }
-        // Zastąpiłaby automatyczną diaryzację, a notatka ruszyłaby bez etykiet (F01).
         guard !notes.isTranscribing(item.id) else { lastError = "This recording is being transcribed. Try again when that finishes."; return }
         guard let ticket = reserveSpeakerTicket(sessionURL: item.url, runID: runID) else { return }
-        let source = settings.speakerSourceOrDefault
-        let mistral = source == .mistral ? mistralProvider : nil
-        Task { await performSpeakerDetection(ticket, sessionURL: item.url, sensitivity: sensitivity, source: source, mistral: mistral) }
+        Task { await performSpeakerDetection(ticket, sessionURL: item.url, cloud: cloud) }
+    }
+
+    func renameSpeaker(item: SessionItem, key: String, name: String?) {
+        guard let runID = item.runID else { return }
+        let url = RunDirectory(session: item.url, runID: runID).speakers
+        do {
+            guard let current = try JSONFile.load(SpeakerDiarization?.self, from: url, default: nil),
+                  let renamed = current.renamed(key, to: name) else { return }
+            try JSONFile.save(renamed, to: url, createParents: false)
+            if let name {
+                var people = KnownPeople.load(root: paths.root)
+                people.use(name)
+                try people.save(root: paths.root)
+            }
+            reloadSessions()
+        } catch { lastError = "Couldn't rename speaker: \(error.localizedDescription)" }
     }
 
     static func sessionName(_ d: Date) -> String {

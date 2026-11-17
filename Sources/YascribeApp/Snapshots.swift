@@ -510,21 +510,6 @@ enum Snapshots {
                     }
                     .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                 }
-                // TASK-22 T6: karta „Speaker detection" — brak modelu, pobieranie, gotowy (stany wymyślone) i wiersze z „Them A".
-                let speakerScenes: [(String, DiarizerModelStatus, Double?)] = [("missing", .missing, nil), ("downloading", .missing, 0.41), ("ready", .ready, nil)]
-                for (name, status, progress) in speakerScenes {
-                    try render("speaker-card-\(name)", size: CGSize(width: 700, height: 370), dark: dark, model: model) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            SectionHeader("Yascribe models")
-                            SpeakerModelCardContent(status: status, progress: progress, detect: .constant(true), sensitivity: .constant(.medium), source: .constant(.local))
-                        }
-                        .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
-                    }
-                }
-                try render("speaker-card-mistral", size: CGSize(width: 700, height: 300), dark: dark, model: model) {
-                    SpeakerModelCardContent(status: .missing, progress: nil, detect: .constant(true), sensitivity: .constant(.medium), source: .constant(.mistral), providerName: "Mistral")
-                        .padding(30).contentBackground()
-                }
                 // Etykiety nadaje odczyt z `speakers.json`, więc wiersze renderujemy wprost: „Me", „Them", „Them A", „Them AA".
                 if var t = try? JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8)) {
                     t.utterances[0].speakerLabel = "Speaker 1"
