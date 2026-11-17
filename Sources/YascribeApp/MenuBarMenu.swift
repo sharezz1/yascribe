@@ -1,5 +1,4 @@
 import AppKit
-import YascribeMeetings
 import SwiftUI
 
 /// Wyciąga okno główne na wierzch albo otwiera je na nowo, gdy użytkownik je zamknął (aplikacja żyje bez okna).
@@ -17,22 +16,23 @@ enum MainWindow {
     }
 }
 
-/// Menu w pasku menu (faza 1.6, spec §4.8): stan wykrywania, otwarcie okna, wyjście (które wyłącza wykrywanie).
+/// Znak marki (pióro i słupki) jako obraz-szablon: system barwi go na jasnym i ciemnym pasku (TASK-106).
+/// Źródło: docs/design/marka/zloz-pasek.py. Bez pakietu (`swift run`) zostaje dawny symbol.
+@MainActor
+enum MenuBarIcon {
+    static let image: NSImage = {
+        let img = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "svg").flatMap(NSImage.init(contentsOf:))
+            ?? NSImage(systemSymbolName: "pencil.and.scribble", accessibilityDescription: nil)!
+        img.size = NSSize(width: 16 * 220 / 292, height: 16)
+        img.isTemplate = true
+        return img
+    }()
+}
+
+/// Menu w pasku menu (faza 1.6, spec §4.8; TASK-106 bez szarych linii stanu): otwarcie okna, aktualizacje, wyjście.
 struct MenuBarMenu: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
-
-    private var status: String {
-        let m = model.settings.meetings
-        let problem: DetectionStatus.CalendarProblem? = switch model.monitor.state {
-        case .calendarDenied: .denied
-        case .calendarSelectionStale: .selectionStale
-        default: nil
-        }
-        return model.monitor.state == .off
-            ? "Detection off"
-            : DetectionStatus.text(calls: m?.detectCallsOrDefault ?? true, calendar: m?.appleCalendarOrDefault ?? false, problem: problem)
-    }
 
     /// Wyjście w trakcie nagrywania: najpierw Stop (sesja zamknięta czysto, nie "Recovered"), po potwierdzeniu.
     /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
@@ -42,11 +42,8 @@ struct MenuBarMenu: View {
     }
 
     var body: some View {
-        Text(status)
-        Divider()
         Button("Open Yascribe") { MainWindow.show(openWindow) }
         CheckForUpdatesButton(updater: model.updater)
         Button("Quit Yascribe") { quit() }
-        Text("Quitting turns off detection")
     }
 }

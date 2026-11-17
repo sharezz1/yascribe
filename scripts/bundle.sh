@@ -20,6 +20,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/YascribeApp"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp Resources/MenuBarIcon.svg "$APP/Contents/Resources/MenuBarIcon.svg"
 cp -R Resources/ThirdPartyNotices "$APP/Contents/Resources/ThirdPartyNotices"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
