@@ -93,11 +93,13 @@ private struct FactoryFailed: Error {}
 /// Atrapa kroków menedżera: zapisuje kolejność; `prepare` rzuca, bo prawdziwego wyniku nie da się zbudować bez modelu.
 private final class SpySteps: DiarizationSteps, Sendable {
     let calls = Mutex<[String]>([])
+    let prepareError: any Error & Sendable
+    init(prepareError: any Error & Sendable = FactoryFailed()) { self.prepareError = prepareError }
     func initialize(models: Int) { calls.withLock { $0.append("initialize(\(models))") } }
     func prepare(audioSource: any AudioSampleSource, audioLoadingSeconds: TimeInterval,
                  progressCallback: (@Sendable (Int, Int) -> Void)?) async throws -> PreparedDiarization {
         calls.withLock { $0.append("prepare") }
-        throw FactoryFailed()
+        throw prepareError
     }
     func cluster(_ prepared: PreparedDiarization) throws -> DiarizationResult {
         calls.withLock { $0.append("cluster") }
@@ -112,4 +114,13 @@ private final class SpySteps: DiarizationSteps, Sendable {
         _ = try await diarizer.diarize(spy, models: 7, source: ArrayAudioSampleSource(samples: []), progress: nil)
     }
     #expect(spy.calls.withLock { $0 } == ["initialize(7)", "prepare"])
+}
+
+/// Tor rozmówców bez mowy: FluidAudio rzuca `noSpeechDetected`; to pusty wynik (bez etykiet), nie błąd w aplikacji.
+@Test func diarizerTreatsNoSpeechAsNoSegments() async throws {
+    let spy = SpySteps(prepareError: OfflineDiarizationError.noSpeechDetected)
+    let diarizer = SpeakerDiarizer(store: DiarizerModelStore(directory: URL(fileURLWithPath: "/nonexistent"), fetch: { _ in throw CancellationError() }))
+    let segments = try await diarizer.diarize(spy, models: 1, source: ArrayAudioSampleSource(samples: []), progress: nil)
+    #expect(segments.isEmpty)
+    #expect(spy.calls.withLock { $0 } == ["initialize(1)", "prepare"])
 }

@@ -150,7 +150,7 @@ final class AppModel {
     /// Lokalny ASR (F20): magazyn i faza pobierania/przygotowania — po jednym na wariant (kolejność = karty w Settings).
     let localASRModels: [LocalASRSupport]
     /// Model wykrywania mówców (TASK-22): status i pobieranie dla karty w Settings i menu ⋯ Transcript.
-    let speakerModel = SpeakerModelSupport()
+    let speakerModel: SpeakerModelSupport
 
     /// `nil` = nieznany model lokalny; pusty = v3 (jak `LocalASRVariant(model:)`).
     func localASR(_ model: String) -> LocalASRSupport? {
@@ -169,6 +169,7 @@ final class AppModel {
 
     init(localASRModels: [LocalASRSupport]? = nil, localASREngine: (@Sendable (ModelStore) -> any LocalASREngine)? = nil) {
         self.localASREngine = localASREngine
+        speakerModel = SpeakerModelSupport(store: DiarizerModelStore(directory: DiarizerModelStore.directory(root: paths.root)))
         self.localASRModels = localASRModels ?? LocalASRVariant.allCases.map { LocalASRSupport(store: ModelStore(variant: $0)) }
         recording.model = self
         monitor.model = self
@@ -1154,7 +1155,7 @@ final class AppModel {
             // TASK-22 D7: etykiety mówców przed notatką (notatka czyta `speakers.json` z dysku); błąd tylko w `lastError`.
             // `transcribing` zdejmujemy dopiero po diaryzacji: do tego czasu bramki korekty, notatki i transkrypcji odmawiają (F01).
             if let finished, post, await SpeakerDetectionDecision.shouldRun(
-                modelReady: DiarizerModelStore().status() == .ready, setting: self.settings.detectSpeakers,
+                modelReady: self.speakerModel.store.status() == .ready, setting: self.settings.detectSpeakers,
                 themUtterances: finished.utterances.filter { $0.speaker == .them }.count,
                 hasSystemTrack: { await Task.detached { Self.hasSystemTrack(sessionURL) }.value }) {
                 await self.detectSpeakers(sessionURL: sessionURL, runID: runID, sensitivity: self.settings.speakerSensitivityOrDefault)
@@ -1186,11 +1187,11 @@ final class AppModel {
     }
 
     /// Cała praca na dysku i modelu poza MainActor (F04): dziennik, diaryzacja, przeliczenie segmentów, odcisk audio.
-    nonisolated private static func diarization(sessionURL: URL, sensitivity: SpeakerSensitivity) async throws -> SpeakerDiarization {
+    nonisolated private static func diarization(sessionURL: URL, sensitivity: SpeakerSensitivity, store: DiarizerModelStore) async throws -> SpeakerDiarization {
         guard hasSystemTrack(sessionURL) else { throw NoCallAudio() }
         let session = SessionDirectory(url: sessionURL)
         let summary = try session.summarize()
-        let segments = try await SpeakerDiarizer().run(systemTrack: session.trackURL("system"), sensitivity: sensitivity, progress: nil)
+        let segments = try await SpeakerDiarizer(store: store).run(systemTrack: session.trackURL("system"), sensitivity: sensitivity, progress: nil)
         return SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
                                             modelPin: DiarizerManifest.pin, sensitivity: sensitivity,
                                             audioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL), createdAt: Date())
@@ -1220,7 +1221,8 @@ final class AppModel {
     private func performSpeakerDetection(_ ticket: SpeakerDetectionTicket, sessionURL: URL, sensitivity: SpeakerSensitivity) async {
         let id = ticket.session
         guard speakerTickets[id] == ticket else { return } // zastąpiony, zanim ruszył
-        let work = Task.detached { try await Self.diarization(sessionURL: sessionURL, sensitivity: sensitivity) }
+        let store = speakerModel.store
+        let work = Task.detached { try await Self.diarization(sessionURL: sessionURL, sensitivity: sensitivity, store: store) }
         speakerTasks[id] = work
         // Wraca po faktycznym końcu pracy, także anulowanej — dopiero wtedy bilet schodzi (F02).
         let result = await SpeakerDetectionWork.result(of: work)
