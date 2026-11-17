@@ -513,15 +513,19 @@ enum Snapshots {
                 // Etykiety nadaje odczyt z `speakers.json`, więc wiersze renderujemy wprost: „Me", „Them", „Them A", „Them AA".
                 if var t = try? JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8)) {
                     t.utterances[0].speakerLabel = "Speaker 1"
-                    t.utterances.append(t.utterances[2])
+                    t.utterances[0].speakerKey = "first"
                     t.utterances[2].speakerLabel = "Ala"
-                    t.utterances[3].speakerLabel = nil
+                    t.utterances[2].speakerKey = "second"
                     try render("transcript-speaker-rows", size: CGSize(width: 760, height: 230), dark: dark, model: model) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(t.utterances.enumerated()), id: \.offset) { i, u in
-                                if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
-                                UtteranceRow(utterance: u, isAuto: false) {}
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(t.utterances.enumerated()), id: \.offset) { i, u in
+                                    if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
+                                    UtteranceRow(utterance: u, isAuto: false, item: model.sessions.first!, speakerNumber: UtteranceRow.speakerNumbers(t)[u.speakerKey ?? ""]) {}
+                                }
                             }
+                            SpeakerPicker(attendees: [.init(name: "Ala"), .init(email: "ola@example.com")], known: ["Piotr"], currentName: "Ala", number: 2) { _ in }
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
                         }
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                     }

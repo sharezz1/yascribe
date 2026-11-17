@@ -269,6 +269,7 @@ struct TranscriptTab: View {
 
     @ViewBuilder private var content: some View {
         if let t = shown {
+            let numbers = UtteranceRow.speakerNumbers(t)
             // Uwaga 7: lista rośnie z treścią (przewija strona), separator `line2` między wierszami.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !t.failedChunks.isEmpty {
@@ -282,7 +283,7 @@ struct TranscriptTab: View {
                 ForEach(Array(Self.lines(t, item: item).enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
-                    case .utterance(let u): UtteranceRow(utterance: u, isAuto: isAuto) { onJump(u) }
+                    case .utterance(let u): UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: numbers[u.speakerKey ?? ""]) { onJump(u) }
                     case .mute(let m): MuteRow(note: m)
                     }
                 }
