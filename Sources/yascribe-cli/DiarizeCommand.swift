@@ -63,7 +63,7 @@ extension CLI {
                 ? ElevenLabsClient(provider: provider, key: key) : OpenAICompatibleClient(provider: provider, key: key)
             cloudPin = SpeakerCapability.pin(api: provider.api, model: snapshot.model)
             segments = try await CloudDiarization.run(track: SessionDirectory(url: session).trackURL("system"), client: client,
-                model: snapshot.model, language: snapshot.language, limitBytes: provider.api == .openAICompatible ? 52_428_800 : nil)
+                model: snapshot.model, language: snapshot.language, limitBytes: provider.api == .openAICompatible ? CloudDiarization.openRouterLimitBytes : nil)
         } else if mistral {
             guard let key = ProcessInfo.processInfo.environment["MISTRAL_API_KEY"], !key.isEmpty else { fail("Brak MISTRAL_API_KEY", code: 64) }
             let metadata = try JSONFile.load(RunMetadata?.self, from: run.metadata, default: nil)

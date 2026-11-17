@@ -13,6 +13,8 @@ public enum CloudDiarizationError: Error, LocalizedError, Equatable {
 }
 
 public enum CloudDiarization {
+    /// Limit treści żądania OpenRouter (413 powyżej, zmierzone 2026-11-17).
+    public static let openRouterLimitBytes = 52_428_800
     public static func bitrate(trackSeconds: Double, limitBytes: Int?) -> Int? {
         guard let limitBytes else { return 48_000 }
         return [48_000, 24_000].first { trackSeconds * Double($0) / 8 * 4 / 3 <= Double(limitBytes) * 0.9 }

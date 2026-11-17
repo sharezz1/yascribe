@@ -9,6 +9,7 @@ public enum AACEncoder {
               let converter = AVAudioConverter(from: input.processingFormat, to: mono),
               let inBuffer = AVAudioPCMBuffer(pcmFormat: input.processingFormat, frameCapacity: 16_384),
               let outBuffer = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: 16_384) else { throw CloudDiarizationError.audioFormat }
+        converter.downmix = true // tor stereo: oba kanały, nie tylko lewy
         let settings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: rate,
                                         AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: bitrate]
         let output = try AVAudioFile(forWriting: to, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
