@@ -48,7 +48,7 @@ public enum NotePromptBuilder {
         You write meeting notes from the transcript of a two-channel recording. "Me" is the user's microphone, "Them" is \
         everyone else on the call.
 
-        Rules:
+        \(hasSpeakerLabels(lines) ? speakerSentence + "\n\n" : "")Rules:
         \(rulesBody.trimmingCharacters(in: .whitespacesAndNewlines))
         - Output Markdown. The FIRST line must be the title, written as "# <short descriptive title>". Nothing may \
         come before it. \(NoteTitle.rule)
@@ -86,7 +86,7 @@ public enum NotePromptBuilder {
         "[m:ss] Them: text" (after the first hour "[h:mm:ss] Me: text"); "Me" is the user's microphone, "Them" is \
         everyone else on the call.
 
-        Rules:
+        \(hasSpeakerLabels(part) ? speakerSentence + "\n\n" : "")Rules:
         - Reply with condensed lines in the same format: each line starts with its [m:ss] or [h:mm:ss] and its speaker, in \
         the same order. You may merge consecutive lines of the same speaker into one, keeping the first timestamp.
         - Keep names, numbers, dates, decisions and tasks exactly as spoken. Drop filler and repetition.
@@ -99,8 +99,18 @@ public enum NotePromptBuilder {
 
     /// Długość promptu systemowego mapy z zapasem na numer części — do liczenia `pairedInputChars` przed podziałem. Liczona z prawdziwego
     /// `mapPrompt`: `DictionaryPrompt.maxChars` nie obejmuje stałych nagłówków linii, więc koszt linii słownika trzeba mierzyć, nie szacować.
-    static func mapSystemChars(vocabulary: PromptVocabulary?) -> Int {
-        mapPrompt(part: [], index: 99_999, count: 99_999, notesLanguage: nil, vocabulary: vocabulary).system.count
+    static func mapSystemChars(vocabulary: PromptVocabulary?, hasSpeakerLabels: Bool = false) -> Int {
+        mapPrompt(part: hasSpeakerLabels ? ["[0:00] Them A: x"] : [], index: 99_999, count: 99_999, notesLanguage: nil, vocabulary: vocabulary).system.count
+    }
+
+    static let speakerSentence = "\"Them A\", \"Them B\"… are different voices on the call, detected automatically; one label can cover two people and one person can get two labels; never turn labels into names."
+    static let localSpeakerSentence = "Speaker labels are local to each meeting, do not connect people across meetings, and can merge or split people."
+
+    static func hasSpeakerLabels(_ lines: [String]) -> Bool {
+        lines.contains { line in
+            let prefix = TranscriptSplitter.prefix(of: line)
+            return prefix.contains(" Them ")
+        }
     }
 
     /// `[m:ss] Me|Them: tekst` — bez wypowiedzi pustych i oznaczonych strażnikiem języka.
@@ -108,7 +118,7 @@ public enum NotePromptBuilder {
         t.utterances
             .filter { !$0.excludedFromNotes && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.start < $1.start }
-            .map { "[\(clock($0.start))] \($0.speaker == .me ? "Me" : "Them"): \($0.text)" }
+            .map { "[\(clock($0.start))] \($0.speaker == .me ? "Me" : "Them" + ($0.speakerLabel.map { " " + $0 } ?? "")): \($0.text)" }
     }
 
     static func clock(_ seconds: Double) -> String {

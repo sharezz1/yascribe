@@ -221,3 +221,46 @@ extension VocabularyInPromptTests {
         }
     }
 }
+
+@Test func speakerLabelsStayInMemoryAndOldJSONStillDecodes() throws {
+    var utterance = utt("hello", .them, at: 1)
+    utterance.languageMismatch = .polish
+    utterance.echoOfThem = true
+    utterance.speakerLabel = "A"
+    let t = transcript([utterance])
+    let encoded = try JSONEncoder().encode(t)
+    let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let fields = try #require((object["utterances"] as? [[String: Any]])?.first)
+    #expect(Set(fields.keys) == Set(Mirror(reflecting: utterance).children.compactMap(\.label)).subtracting(["speakerLabel"]))
+    #expect(!String(decoding: encoded, as: UTF8.self).contains("speakerLabel"))
+    let corrected = CorrectedTranscript(transcript: t, model: "test", batches: 1, failedBatches: 0, rejectedLines: 0)
+    #expect(!String(decoding: try JSONEncoder().encode(corrected), as: UTF8.self).contains("speakerLabel"))
+    let decoded = try JSONDecoder().decode(Transcript.self, from: encoded)
+    #expect(decoded.utterances[0].speakerLabel == nil)
+    utterance.speakerLabel = nil
+    #expect(decoded.utterances[0] == utterance)
+}
+
+@Test func labeledPromptsExplainVoicesAndUnlabeledPromptsStayIdentical() throws {
+    var t = transcript([utt("hello", .them, at: 1)])
+    let old = try #require(build(t))
+    let oldMap = NotePromptBuilder.mapPrompt(part: NotePromptBuilder.transcriptLines(t), index: 1, count: 1, notesLanguage: nil)
+    #expect(!old.system.contains(NotePromptBuilder.speakerSentence))
+    #expect(!oldMap.system.contains(NotePromptBuilder.speakerSentence))
+    t.utterances[0].speakerLabel = "A"
+    let labeled = try #require(build(t))
+    #expect(labeled.user.contains("Them A: hello"))
+    #expect(labeled.system == old.system.replacingOccurrences(of: "Rules:", with: NotePromptBuilder.speakerSentence + "\n\nRules:"))
+    let map = NotePromptBuilder.mapPrompt(part: NotePromptBuilder.transcriptLines(t), index: 1, count: 1, notesLanguage: nil)
+    #expect(map.system == oldMap.system.replacingOccurrences(of: "Rules:", with: NotePromptBuilder.speakerSentence + "\n\nRules:"))
+    #expect(try #require(Overview.prompt(transcript: t, notesLanguage: nil)).system.contains(NotePromptBuilder.localSpeakerSentence))
+}
+
+@Test func archiveExplainsThatSpeakerLabelsAreMeetingLocal() throws {
+    let chunk = ArchiveIndex.Chunk(sessionID: "one", start: 0, text: "[0:00] Them A: hello")
+    let labeled = try ArchiveAsk.prompt(question: "Who?", history: [], evidence: [chunk], labels: [:], maxChars: 10_000).prompt
+    #expect(labeled.system.contains(NotePromptBuilder.localSpeakerSentence))
+    let plain = ArchiveIndex.Chunk(sessionID: "one", start: 0, text: "[0:00] Them: hello")
+    let old = try ArchiveAsk.prompt(question: "Who?", history: [], evidence: [plain], labels: [:], maxChars: 10_000).prompt
+    #expect(!old.system.contains(NotePromptBuilder.localSpeakerSentence))
+}

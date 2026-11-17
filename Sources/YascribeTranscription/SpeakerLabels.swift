@@ -46,3 +46,13 @@ public enum SpeakerLabels {
         return assigned.map { $0.flatMap { names[$0] } }
     }
 }
+
+public extension Transcript {
+    func withSpeakerLabels(_ diarization: SpeakerDiarization?) -> Transcript {
+        var result = self
+        for (index, label) in SpeakerLabels.labels(for: self, diarization: diarization).enumerated() {
+            result.utterances[index].speakerLabel = label
+        }
+        return result
+    }
+}

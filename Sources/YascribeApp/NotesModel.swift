@@ -1,4 +1,5 @@
 import Foundation
+import YascribeLocalASR
 import YascribeNotes
 import YascribeProviders
 import YascribeTranscription
@@ -310,7 +311,7 @@ final class NotesModel {
         let session = item.url
         // Słownik, reguły i uczestnicy z chwili kliknięcia, przed pierwszym `await` (sonda kontekstu); Replacement idempotentny.
         let dict = dictionary(), link = item.notes.meta.calendarEvent
-        let transcript = Replacement.apply(source, rules: replacementRules())
+        let transcript = Replacement.apply(source, rules: replacementRules()).withSpeakerLabels(item.speakers)
         let token = UUID()
         startTicket(id, token) // bilet przed pierwszym `await`: Cancel nie zwalnia sesji przed końcem zadania
         let task = Task {
@@ -391,13 +392,18 @@ final class NotesModel {
         if let choice = SummaryModel.resolve(frozen: snapshot.preset, override: saved?.usable(.summary, knownProviders: known),
                                              defaultPresetID: info.defaultID, presets: info.presets),
            let client = clientFor(choice.assignment.providerID) {
+            let speakers = await Task.detached {
+                SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runID), currentPin: DiarizerManifest.pin,
+                    currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))
+            }.value
+            guard RunSelection.shouldPostProcess(session: sessionURL, runID: runID) else { return }
             let corrected = CorrectedTranscript.load(session: sessionURL, runID: runID)?.transcript
             let ticket = titles.start(session: id, runID: runID)
             onChange()
             let limits = ChatLimits.for(client.provider, call: .title)
             // Tytuł z tekstu po Replacement — także bez korekty w presecie i po jej porażce (wtedy `working` jest surowy).
             _ = await AutoTitle.generate(client: client, model: choice.assignment.model,
-                                         transcript: Replacement.apply(working, rules: replacementRules()),
+                                         transcript: Replacement.apply(working, rules: replacementRules()).withSpeakerLabels(speakers),
                                          notesLanguage: snapshot.preset.effectiveNotesLanguage,
                                          store: store(sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
                                          maxTokens: limits.maxTokens,
@@ -405,7 +411,7 @@ final class NotesModel {
                                          onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
             if RunSelection.shouldPostProcess(session: sessionURL, runID: runID) {
                 let ok = await Overview.generate(client: client, model: choice.assignment.model,
-                    transcript: Replacement.apply(corrected ?? transcript, rules: replacementRules()),
+                    transcript: Replacement.apply(corrected ?? transcript, rules: replacementRules()).withSpeakerLabels(speakers),
                     notesLanguage: snapshot.preset.effectiveNotesLanguage, store: store(sessionURL), runID: runID, sourceTranscript: transcript,
                     correctedTranscript: corrected,
                     timeout: limits.soft, chatTimeout: limits.transport, maxTokens: limits.maxTokens,
@@ -427,7 +433,7 @@ final class NotesModel {
         let ticket = titles.start(session: item.id, runID: runID)
         let limits = ChatLimits.for(client.provider, call: .title)
         let language = (item.runSnapshot?.preset ?? presetFor(item.url))?.effectiveNotesLanguage
-        let text = Replacement.apply(transcript, rules: replacementRules())
+        let text = Replacement.apply(transcript, rules: replacementRules()).withSpeakerLabels(item.speakers)
         let corrected = item.corrected?.transcript
         onChange()
         Task {

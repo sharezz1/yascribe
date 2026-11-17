@@ -1,4 +1,5 @@
 import Foundation
+import YascribeLocalASR
 import YascribeNotes
 import YascribeProviders
 import YascribeTranscription
@@ -6,7 +7,7 @@ import YascribeTranscription
 extension CLI {
     /// Summary przebiegu tą samą ścieżką co aplikacja (`NoteGenerator`), bez zapisu do sesji. Narzędzie do porównywania modeli.
     /// `note <przebieg> <baseURL> <model> --language pl --out plik.json [--source raw|corrected] [--thinking on|off] [--vocabulary vocabulary.txt]`
-    static func note(_ args: [String]) async throws {
+    static func note(_ args: [String], clientOverride: OpenAICompatibleClient? = nil) async throws {
         let runURL = URL(fileURLWithPath: try positional(args, 0))
         guard let langRaw = value(args, "--language"), let outPath = value(args, "--out") else {
             FileHandle.standardError.write(Data("--language i --out są obowiązkowe\n".utf8)); exit(64)
@@ -17,11 +18,15 @@ extension CLI {
             transcript = try JSONDecoder().decode(CorrectedTranscript.self,
                                                   from: Data(contentsOf: runURL.appendingPathComponent("corrected.json"))).transcript
         }
+        let sessionURL = runURL.deletingLastPathComponent().deletingLastPathComponent()
+        let speakers = SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runURL.lastPathComponent),
+            currentPin: DiarizerManifest.pin, currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))
+        transcript = transcript.withSpeakerLabels(speakers)
         var vocabulary: PromptVocabulary?
         if let path = value(args, "--vocabulary") {
             vocabulary = noteVocabulary(try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8))
         }
-        let client = try client(try positional(args, 1))
+        let client = try clientOverride ?? client(positional(args, 1))
         let limits = ChatLimits.for(client.provider, call: .note)
         var generator = NoteGenerator(client: client, model: try positional(args, 2), timeout: limits.soft,
                                       chatTimeout: limits.transport, maxTokens: limits.maxTokens)

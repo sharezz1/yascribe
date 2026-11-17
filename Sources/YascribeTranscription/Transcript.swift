@@ -28,6 +28,13 @@ public struct Utterance: Codable, Equatable, Sendable {
     /// Echo z głośników: ta sama wypowiedź jest też w ścieżce „Them" (`EchoFilter`). Opcjonalne — stare pliki go nie mają.
     public var echoOfThem: Bool?
 
+    /// Tylko w pamięci, nadawana przy odczycie.
+    public var speakerLabel: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case speaker, start, end, text, words, approximateTiming, languageMismatch, echoOfThem
+    }
+
     /// Oznaczona wypowiedź (zły język albo echo) nie trafia do notatki jako fakt.
     public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true }
 }

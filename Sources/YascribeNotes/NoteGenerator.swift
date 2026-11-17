@@ -123,6 +123,7 @@ public struct NoteGenerator: Sendable {
                               vocabulary: PromptVocabulary?, budget: ContextBudget,
                               progress: (@Sendable (NoteProgress) -> Void)?) async throws -> (NotePrompt, Int) {
         let limit = budget.promptChars(replyTokens: ContextBudget.noteReplyTokens)
+        let hasSpeakerLabels = NotePromptBuilder.hasSpeakerLabels(lines)
         func reduce(_ lines: [String]) -> NotePrompt {
             NotePromptBuilder.prompt(template: template, lines: lines, myNotes: myNotes, context: context,
                                      notesLanguage: notesLanguage, condensed: true, vocabulary: vocabulary, rulesBody: rulesBody)
@@ -137,12 +138,12 @@ public struct NoteGenerator: Sendable {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes." + customPromptHint)
         }
         // My notes + kontekst + prompt szablonu same ponad budżetem — mapa niczego nie naprawi, więc nie marnujemy wywołań.
-        let room = limit - reduce([]).chars // miejsce na linie transkryptu w prompcie reduce
+        let room = limit - reduce(hasSpeakerLabels ? ["[0:00] Them A: x"] : []).chars + (hasSpeakerLabels ? "[0:00] Them A: x".count : 0) // miejsce na linie transkryptu w prompcie reduce
         guard room >= 0 else {
             throw NoteGenerationError.failed("Your notes and context are too long for this model's Context window." + customPromptHint)
         }
         let partChars = min(ContextBudget.mapPartCap,
-                            budget.pairedInputChars(fixedChars: NotePromptBuilder.mapSystemChars(vocabulary: vocabulary), replyFactor: ContextBudget.mapReplyFactor))
+                            budget.pairedInputChars(fixedChars: NotePromptBuilder.mapSystemChars(vocabulary: vocabulary, hasSpeakerLabels: hasSpeakerLabels), replyFactor: ContextBudget.mapReplyFactor))
         guard partChars > 0 else {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes." + customPromptHint)
         }

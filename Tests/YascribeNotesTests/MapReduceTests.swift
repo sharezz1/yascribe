@@ -576,3 +576,41 @@ private func waitForFirstCall(_ stub: ChatStub) async throws {
     #expect(message == "local-model's Context window (\(tokens) tokens) is too small for notes. Your custom summary prompt is 2000 characters; shorten it or reset it in Settings.")
     #expect(calls == 0)
 }
+
+@Test func labeledSpeakerPrefixesSurviveSplittingAndMapReplies() throws {
+    for tag in ["Them", "Them A", "Them 27", "Me"] {
+        let prefix = "[1:05] \(tag): "
+        let pieces = try TranscriptSplitter.parts([prefix + words(600)], maxChars: 100).flatMap { $0 }
+        #expect(pieces.count > 1 && pieces.allSatisfy { $0.hasPrefix(prefix) })
+        #expect(NoteGenerator.transcriptLines(inReply: pieces.joined(separator: "\n")) == pieces)
+    }
+}
+
+@Test func labeledMapBudgetReservesTheSpeakerInstructions() {
+    let extra = NotePromptBuilder.speakerSentence.count + 2
+    #expect(NotePromptBuilder.mapSystemChars(vocabulary: nil, hasSpeakerLabels: true) == NotePromptBuilder.mapSystemChars(vocabulary: nil) + extra)
+    let lines = ["[0:00] Them A: hello"]
+    let labeled = NotePromptBuilder.prompt(template: .standard, lines: lines, myNotes: "", context: "", notesLanguage: nil, condensed: true)
+    let plain = NotePromptBuilder.prompt(template: .standard, lines: ["[0:00] Them: hello"], myNotes: "", context: "", notesLanguage: nil, condensed: true)
+    #expect(labeled.chars == plain.chars + extra + 2)
+}
+
+@Test func labeledMapAndReduceStayInsideBudget() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    var t = transcript([utt(words(15_000), .them, at: 0)])
+    t.utterances[0].speakerLabel = "A"
+    let stub = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+    _ = try await run(stub, session: session, transcript: t)
+    let maps = stub.calls.filter(isMap)
+    #expect(!maps.isEmpty && maps.allSatisfy { $0.system.contains(NotePromptBuilder.speakerSentence) })
+    for map in maps {
+        let maxInput = budget.pairedInputChars(fixedChars: NotePromptBuilder.mapSystemChars(vocabulary: nil, hasSpeakerLabels: true), replyFactor: ContextBudget.mapReplyFactor)
+        #expect(map.user.count <= maxInput)
+        let tokens = Double(map.system.count + map.user.count) / ContextBudget.charsPerToken + Double(map.maxTokens ?? 0)
+        #expect(tokens + Double(ContextBudget.marginTokens) <= Double(budget.tokens) + 1)
+    }
+    let reduce = try #require(stub.calls.last)
+    #expect(isReduce(reduce) && reduce.system.contains(NotePromptBuilder.speakerSentence))
+    #expect(reduce.system.count + reduce.user.count <= noteLimit)
+}

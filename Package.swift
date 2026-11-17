@@ -35,7 +35,7 @@ let package = Package(
         .testTarget(name: "YascribeProvidersTests", dependencies: ["YascribeProviders"], exclude: ["Fixtures"]),
         .testTarget(name: "YascribeTranscriptionTests", dependencies: ["YascribeTranscription", "YascribeRecording"], exclude: ["Fixtures"]),
         .testTarget(name: "YascribeNotesTests", dependencies: ["YascribeNotes", "YascribeTranscription", "YascribeProviders",
-                                                                "YascribeSessionFormat", "YascribeRecording", "YascribeMeetings"]),
+                                                                "YascribeSessionFormat", "YascribeRecording", "YascribeMeetings", "YascribeLocalASR", "yascribe-cli"]),
         .testTarget(name: "YascribeLocalASRTests", dependencies: ["YascribeLocalASR", "YascribeProviders", "YascribeTranscription", .product(name: "FluidAudio", package: "FluidAudio")]),
         .testTarget(name: "YascribeMeetingsTests", dependencies: ["YascribeMeetings"]),
         .testTarget(name: "YascribeUpdatesTests", dependencies: ["YascribeUpdates"]),

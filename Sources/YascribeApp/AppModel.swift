@@ -47,6 +47,7 @@ struct SessionItem: Identifiable, Equatable {
     var latestAttemptID: String?
     /// Najnowsza próba, która nie została bieżącym przebiegiem (trwa, padła, z lukami albo pusta) — baner na karcie Transcript.
     var attemptNotPromoted: RunSelection.Attempt?
+    var speakers: SpeakerDiarization?
     var corrected: CorrectedTranscript?
     var notes = SessionNotes()
     /// Retencja usunęła audio po tylu dniach (`<sesja>/audio-deleted.json`); `nil` = audio nie było kasowane.
@@ -110,7 +111,7 @@ final class AppModel {
     private(set) var replacementRules = ReplacementRules(UserDictionary())
     /// Wynik Replacement (klucz: sesja i wariant transkryptu) razem ze źródłem, z którego powstał. Bez obserwacji, bo
     /// zapisywany w trakcie liczenia widoku.
-    @ObservationIgnored private var replaced: [ReplacedKey: (source: Transcript, result: Transcript)] = [:]
+    @ObservationIgnored private var replaced: [ReplacedKey: (source: Transcript, speakers: SpeakerDiarization?, result: Transcript)] = [:]
     private struct ReplacedKey: Hashable { var id: String; var corrected: Bool }
     var sessions: [SessionItem] = []
     var selectedSessionID: String?
@@ -416,6 +417,8 @@ final class AppModel {
         }
     }
 
+    @ObservationIgnored private var speakersReloadID = UUID()
+
     func reloadSessions() {
         let fm = FileManager.default
         let dirs = (try? fm.contentsOfDirectory(at: sessionsDirectory, includingPropertiesForKeys: nil)) ?? []
@@ -440,10 +443,27 @@ final class AppModel {
         // Pamięć Replacement: zostają wpisy, których źródło się nie zmieniło (ze świeżą kopią źródła, żeby następne porównanie
         // skończyło się na tożsamości buforów); reszta znika. Czyszczenie wszystkiego przy każdym `onChange` kosztowałoby
         // sekundy na następnym znaku wpisanym w wyszukiwarkę.
+        let reloadID = UUID()
+        speakersReloadID = reloadID
+        let runs = sessions.compactMap { item in item.runID.map { (item.url, $0) } }
+        Task {
+            let loaded = await Task.detached {
+                runs.map { url, runID in
+                    (url, runID, SpeakerDiarization.load(run: RunDirectory(session: url, runID: runID),
+                        currentPin: DiarizerManifest.pin, currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: url)))
+                }
+            }.value
+            guard speakersReloadID == reloadID else { return }
+            for (url, runID, speakers) in loaded {
+                if let index = sessions.firstIndex(where: { $0.url == url && $0.runID == runID }) {
+                    sessions[index].speakers = speakers
+                }
+            }
+        }
         let byID = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         replaced = replaced.reduce(into: [:]) { kept, entry in
-            if let fresh = byID[entry.key.id]?.transcript(corrected: entry.key.corrected), fresh == entry.value.source {
-                kept[entry.key] = (fresh, entry.value.result)
+            if let fresh = byID[entry.key.id]?.transcript(corrected: entry.key.corrected), fresh == entry.value.source, byID[entry.key.id]?.speakers == entry.value.speakers {
+                kept[entry.key] = (fresh, entry.value.speakers, entry.value.result)
             }
         }
     }
@@ -455,9 +475,9 @@ final class AppModel {
         let rules = replacementRules // odczyt obserwowany także przy trafieniu w pamięć: zmiana słownika odświeża widok
         guard let source = item.transcript(corrected: corrected) else { return nil }
         let key = ReplacedKey(id: item.id, corrected: corrected)
-        if let hit = replaced[key], hit.source == source { return hit.result }
-        let result = Replacement.apply(source, rules: rules)
-        replaced[key] = (source, result)
+        if let hit = replaced[key], hit.source == source, hit.speakers == item.speakers { return hit.result }
+        let result = Replacement.apply(source, rules: rules).withSpeakerLabels(item.speakers)
+        replaced[key] = (source, item.speakers, result)
         return result
     }
 
