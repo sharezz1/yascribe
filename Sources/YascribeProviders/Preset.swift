@@ -138,6 +138,8 @@ public struct MeetingSettings: Codable, Equatable, Sendable {
     public var appleCalendarOrDefault: Bool { appleCalendarEnabled ?? false }
 }
 
+public enum SpeakerSource: String, Codable, Sendable { case local, mistral }
+
 public struct GlobalSettings: Codable, Equatable, Sendable {
     /// Jeden model embeddingu dla całego archiwum (P13).
     public var embedding: RoleAssignment?
@@ -167,6 +169,8 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var detectSpeakers: Bool?
     /// Domyślna czułość wykrywania mówców. Opcjonalne (E6): `nil` = `SpeakerSensitivity.defaultValue` (D3).
     public var speakerSensitivity: SpeakerSensitivity?
+    public var speakerSource: SpeakerSource?
+    public var speakerSourceOrDefault: SpeakerSource { speakerSource ?? .local }
 
     public static let defaultKeepAudioDays = 30
     public var speakerSensitivityOrDefault: SpeakerSensitivity { speakerSensitivity ?? .defaultValue }

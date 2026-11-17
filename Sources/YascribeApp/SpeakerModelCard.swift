@@ -75,48 +75,67 @@ struct SpeakerModelCardContent: View {
     var error: String?
     @Binding var detect: Bool
     @Binding var sensitivity: SpeakerSensitivity
+    @Binding var source: SpeakerSource
+    var providerName: String? = nil
+    var onAdd: () -> Void = {}
     var onPrimary: () -> Void = {}
     var onLicense: () -> Void = {}
 
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
-                    ProviderLogo(preset: .onThisMac)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Speaker detection").font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
-                        Text("Call audio · \(SpeakerModelCardText.size)").font(.system(size: 11)).foregroundStyle(.mnText2)
+                Picker("Source", selection: $source) {
+                    Text("On this Mac").tag(SpeakerSource.local)
+                    Text("Mistral").tag(SpeakerSource.mistral)
+                }.pickerStyle(.segmented)
+                if source == .local {
+                    HStack(spacing: 12) {
+                        ProviderLogo(preset: .onThisMac)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Speaker detection").font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
+                            Text("Call audio · \(SpeakerModelCardText.size)").font(.system(size: 11)).foregroundStyle(.mnText2)
+                        }
+                        Spacer(minLength: 8)
+                        stateLabel
+                        if progress == nil {
+                            Button(SpeakerModelCardText.primaryLabel(status: status), action: onPrimary).buttonStyle(.pillSmall)
+                        }
                     }
-                    Spacer(minLength: 8)
-                    stateLabel
-                    if progress == nil {
-                        Button(SpeakerModelCardText.primaryLabel(status: status), action: onPrimary).buttonStyle(.pillSmall)
+                    if let progress { bar(progress) }
+                    Text("Labels the voices on the other side of a call as Them A, Them B… after transcription. Runs on this Mac; the audio never leaves it. Download is on request only.")
+                        .font(.callout).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
+                    if let error {
+                        Text(error).font(.callout).foregroundStyle(.mnRec).fixedSize(horizontal: false, vertical: true)
                     }
+                    Button(action: onLicense) {
+                        Text("License (CC BY 4.0)").font(.system(size: 11)).foregroundStyle(.mnText2).underline(color: .mnText3)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("Speaker detection").font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
+                    HStack {
+                        if let providerName { Text(providerName) }
+                        else { Button("Add Mistral…", action: onAdd).buttonStyle(.pillSmall) }
+                    }
+                    Text("Audio of the other participants is sent to Mistral (about $0.21 per hour of call).")
+                        .font(.callout).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                 }
-                if let progress { bar(progress) }
-                Text("Labels the voices on the other side of a call as Them A, Them B… after transcription. Runs on this Mac; the audio never leaves it. Download is on request only.")
-                    .font(.callout).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
-                if let error {
-                    Text(error).font(.callout).foregroundStyle(.mnRec).fixedSize(horizontal: false, vertical: true)
-                }
-                Button(action: onLicense) {
-                    Text("License (CC BY 4.0)").font(.system(size: 11)).foregroundStyle(.mnText2).underline(color: .mnText3)
-                }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
             RowDivider()
-            FormRow(label: "Detect speakers",
-                    caption: "After transcription, when the model is downloaded. The meeting menu ⋯ can run it again with another sensitivity.") {
+            FormRow(label: "Detect speakers after transcription",
+                    caption: source == .mistral ? "Sends the other participants' audio to Mistral after each transcription." : "After transcription, when the model is downloaded. The meeting menu ⋯ can run it again with another sensitivity.") {
                 Toggle("Detect speakers after transcription", isOn: $detect).labelsHidden().toggleStyle(.switch)
             }
-            RowDivider()
-            FormRow(label: "Sensitivity",
-                    caption: "Higher separates more voices, but may split one person into two.") {
-                Picker("Sensitivity", selection: $sensitivity) {
-                    ForEach(SpeakerSensitivity.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            if source == .local {
+                RowDivider()
+                FormRow(label: "Sensitivity",
+                        caption: "Higher separates more voices, but may split one person into two.") {
+                    Picker("Sensitivity", selection: $sensitivity) {
+                        ForEach(SpeakerSensitivity.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.segmented).fixedSize()
                 }
-                .labelsHidden().pickerStyle(.segmented).fixedSize()
             }
         }
     }
@@ -144,12 +163,15 @@ struct SpeakerModelCardContent: View {
 /// Karta w Settings obok karty modelu Yascribe. Przełącznik i czułość to szkic ustawień (zapis przyciskiem Save).
 struct SpeakerModelCardSection: View {
     @ObservedObject var support: SpeakerModelSupport
+    @Binding var source: SpeakerSource
     @Binding var detect: Bool
     @Binding var sensitivity: SpeakerSensitivity
+    var providerName: String?
+    var onAdd: () -> Void
 
     var body: some View {
         SpeakerModelCardContent(status: support.status, progress: support.progress, error: support.error,
-                                detect: $detect, sensitivity: $sensitivity,
+                                detect: $detect, sensitivity: $sensitivity, source: $source, providerName: providerName, onAdd: onAdd,
                                 onPrimary: { if support.status == .ready { support.remove() } else { Task { await support.download() } } },
                                 onLicense: support.openLicense)
             .padding(.bottom, 10)
@@ -165,12 +187,16 @@ struct DetectSpeakersMenu: View {
 
     var body: some View {
         Menu("Detect speakers…") {
-            ForEach(SpeakerSensitivity.allCases, id: \.self) { level in
-                Button(level.rawValue.capitalized) { model.detectSpeakersAgain(item: item, sensitivity: level) }
+            if model.settings.speakerSourceOrDefault == .mistral {
+                Button("With Mistral") { model.detectSpeakersAgain(item: item, sensitivity: model.settings.speakerSensitivityOrDefault) }
+            } else {
+                ForEach(SpeakerSensitivity.allCases, id: \.self) { level in
+                    Button(level.rawValue.capitalized) { model.detectSpeakersAgain(item: item, sensitivity: level) }
+                }
             }
         }
-        .disabled(support.status != .ready)
-        .help(support.status == .ready ? "Label the voices on the other side again" : SpeakerModelCardText.missingHint)
+        .disabled(!model.speakerSourceReady)
+        .help(model.speakerSourceReady ? "Label the voices on the other side again" : (model.settings.speakerSourceOrDefault == .local ? SpeakerModelCardText.missingHint : "Add a Mistral provider with an API key in Settings"))
         .onAppear { support.refresh() }
     }
 }
