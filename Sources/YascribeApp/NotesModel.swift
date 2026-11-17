@@ -393,7 +393,7 @@ final class NotesModel {
                                              defaultPresetID: info.defaultID, presets: info.presets),
            let client = clientFor(choice.assignment.providerID) {
             let speakers = await Task.detached {
-                SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runID), currentPin: DiarizerManifest.pin,
+                SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runID), acceptedPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin),
                     currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))
             }.value
             guard RunSelection.shouldPostProcess(session: sessionURL, runID: runID) else { return }

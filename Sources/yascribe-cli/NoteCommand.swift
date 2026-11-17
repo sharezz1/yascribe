@@ -20,7 +20,7 @@ extension CLI {
         }
         let sessionURL = runURL.deletingLastPathComponent().deletingLastPathComponent()
         let speakers = SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runURL.lastPathComponent),
-            currentPin: DiarizerManifest.pin, currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))
+            acceptedPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin), currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))
         transcript = transcript.withSpeakerLabels(speakers)
         var vocabulary: PromptVocabulary?
         if let path = value(args, "--vocabulary") {

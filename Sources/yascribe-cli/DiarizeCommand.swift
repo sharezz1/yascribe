@@ -30,15 +30,16 @@ extension CLI {
 
         // Transkrypt czytany przed diaryzacją: uszkodzony plik kończy komendę bez nadpisania poprzedniego speakers.json.
         let transcript = try JSONFile.load(Transcript?.self, from: run.transcript, default: nil)
+        let mistral = args.contains("--mistral")
         let store = DiarizerModelStore()
-        do {
+        if !mistral { do {
             if try DiarizerModelGate.decide(status: store.status(), download: args.contains("--download")) == .download {
                 let line = PercentLine(label: "model")
                 try await store.download { done, total in line.update(Double(done) / Double(max(total, 1))) }
                 FileHandle.standardError.write(Data("\n".utf8))
                 guard store.status() == .ready else { fail("model nie jest kompletny po pobraniu: \(store.directory.path)", code: 1) }
             }
-        } catch let e as DiarizerModelStoreError { fail(e.message, code: 1) }
+        } catch let e as DiarizerModelStoreError { fail(e.message, code: 1) } }
 
         let summary = try SessionDirectory(url: session).summarize()
         guard let track = summary.tracks.first(where: { $0.id == "system" }), let frames = track.frames, track.sampleRate > 0 else {
@@ -47,18 +48,30 @@ extension CLI {
         let trackSeconds = Double(frames) / track.sampleRate
         let line = PercentLine(label: "mówcy")
         let started = Date()
-        let segments = try await SpeakerDiarizer(store: store).run(systemTrack: SessionDirectory(url: session).trackURL("system"),
-                                                                    sensitivity: sensitivity) { line.update($0) }
+        let segments: [MistralDiarization.Segment]
+        if mistral {
+            guard let key = ProcessInfo.processInfo.environment["MISTRAL_API_KEY"], !key.isEmpty else { fail("Brak MISTRAL_API_KEY", code: 64) }
+            let metadata = try JSONFile.load(RunMetadata?.self, from: run.metadata, default: nil)
+            let input = try JSONFile.load(RunInput?.self, from: run.input, default: nil)
+            let language = metadata != nil ? metadata?.snapshot.language : input?.snapshot.language
+            segments = try await MistralDiarization.run(track: SessionDirectory(url: session).trackURL("system"),
+                client: MistralDiarizationClient(key: key), language: language) { part, total, tokens in
+                    print("część \(part)/\(total): \(tokens) tokenów")
+                }
+        } else {
+            segments = try await SpeakerDiarizer(store: store).run(systemTrack: SessionDirectory(url: session).trackURL("system"),
+                                                                      sensitivity: sensitivity) { line.update($0) }
+        }
         let elapsed = Date().timeIntervalSince(started)
         FileHandle.standardError.write(Data("\n".utf8))
 
         let diarization = SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
-                                                       modelPin: DiarizerManifest.pin, sensitivity: sensitivity,
+                                                       modelPin: mistral ? MistralDiarization.pin : DiarizerManifest.pin, sensitivity: mistral ? nil : sensitivity,
                                                        audioFingerprint: SpeakerDiarization.audioFingerprint(session: session), createdAt: Date())
         try JSONFile.save(diarization, to: run.speakers, createParents: false)
 
         print("przebieg: \(runID)")
-        print("czułość: \(sensitivity.rawValue) (Fa \(sensitivity.fa), Fb \(sensitivity.fb))")
+        if !mistral { print("czułość: \(sensitivity.rawValue) (Fa \(sensitivity.fa), Fb \(sensitivity.fb))") }
         print(String(format: "czas: %.1f s, tor %.1f s, RTF %.4f, szczyt RSS %@", elapsed, trackSeconds, elapsed / max(trackSeconds, 0.001),
                      peakResidentMegabytes().map { String(format: "%.0f MB", $0) } ?? "?"))
         let seconds = diarization.secondsBySpeaker

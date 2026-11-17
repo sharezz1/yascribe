@@ -31,7 +31,7 @@ public struct Provider: Codable, Equatable, Identifiable, Sendable {
     public var isLocal: Bool {
         switch api {
         case .fluidAudio: return true
-        case .elevenLabs, .codexCLI, .claudeCLI: return false // agent CLI wysyła transkrypt do OpenAI/Anthropic
+        case .elevenLabs, .mistral, .codexCLI, .claudeCLI: return false // agent CLI wysyła transkrypt do OpenAI/Anthropic
         case .openAICompatible:
             var host = baseURL.host()?.lowercased() ?? ""
             if host.hasSuffix(".") { host.removeLast() } // FQDN: „localhost."
@@ -53,7 +53,8 @@ public struct Provider: Codable, Equatable, Identifiable, Sendable {
     /// ElevenLabs (sam ASR) i Yascribe (Parakeet, sam ASR) ich nie mają. ASR: wszyscy poza agentem CLI (o wyniku decyduje sonda).
     /// Agent CLI (TASK-86) robi tylko czat: poprawę i podsumowanie.
     public func supports(_ role: Role) -> Bool {
-        switch role {
+        if api == .mistral { return false }
+        return switch role {
         case .asr: !api.isAgentCLI
         case .correction, .summary: api == .openAICompatible || api.isAgentCLI
         case .embedding: api == .openAICompatible
@@ -99,6 +100,7 @@ public enum DictationChoices {
 public enum ProviderKind: String, Codable, Sendable {
     case openAICompatible
     case elevenLabs
+    case mistral
     /// Parakeet w procesie (`YascribeLocalASR`); bez adresu i bez klucza.
     case fluidAudio
     /// Agent CLI na tym Macu (TASK-86): `codex exec` / `claude -p` z logowaniem użytkownika w CLI. `baseURL` = `file://` binarki.

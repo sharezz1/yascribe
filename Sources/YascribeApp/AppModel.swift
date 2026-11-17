@@ -330,7 +330,7 @@ final class AppModel {
     func applyRetention() {
         guard Snapshots.directory == nil, recordingsMove == nil else { return }
         let r = AudioRetention.apply(sessions: sessionsDirectory, days: settings.audioRetentionDays, skip: busySessions,
-                                     speakersPin: DiarizerManifest.pin)
+                                     speakersPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin))
         if !r.errors.isEmpty { lastError = "Couldn't delete old audio: " + r.errors.joined(separator: "\n") }
         if !r.purged.isEmpty { reloadSessions(); refreshRecordingsSize() }
     }
@@ -464,7 +464,7 @@ final class AppModel {
             let loaded = await Task.detached {
                 runs.map { url, runID in
                     (url, runID, SpeakerDiarization.load(run: RunDirectory(session: url, runID: runID),
-                        currentPin: DiarizerManifest.pin, currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: url)))
+                        acceptedPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin), currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: url)))
                 }
             }.value
             guard speakersReloadID == reloadID else { return }
@@ -652,6 +652,7 @@ final class AppModel {
 
     /// Lista modeli dla roli: pobierana raz na dostawcę i rolę (`force` = odśwież).
     func loadModels(provider: UUID, role: Role, force: Bool = false) async {
+        if let p = self.provider(provider), ![Role.asr, .correction, .summary, .embedding].contains(where: { p.supports($0) }) { return }
         let k = key(provider, role)
         if self.provider(provider)?.api == .elevenLabs { // stała lista (Scribe v2 dla ASR, poza tym pusto), bez sieci
             modelLists[k] = ElevenLabsClient.models(for: role)

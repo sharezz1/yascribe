@@ -3,7 +3,7 @@ import Testing
 @testable import YascribeProviders
 
 @Test func presetsComeWithReadyAddressesAndRoles() {
-    #expect(ProviderPreset.all.map(\.name) == ["OpenRouter", "ElevenLabs", "Ollama", "llama.cpp", "oMLX", "Custom endpoint"])
+    #expect(ProviderPreset.all.map(\.name) == ["OpenRouter", "ElevenLabs", "Mistral", "Ollama", "llama.cpp", "oMLX", "Custom endpoint"])
     #expect(ProviderPreset.openRouter.baseURL == "https://openrouter.ai/api/v1" && ProviderPreset.openRouter.needsKey)
     #expect(ProviderPreset.elevenLabs.baseURL == "https://api.elevenlabs.io/v1" && ProviderPreset.elevenLabs.kind == .elevenLabs)
     #expect(ProviderPreset.elevenLabs.role == "Scribe v2 transcription · direct API")
@@ -32,14 +32,14 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
 @Test func listShowsEveryPresetThenCustomProvidersThenAddCustom() {
     let empty = ProviderListRow.rows(for: [])
     // Model Yascribe (Parakeet) nie jest dostawcą: nie ma wiersza (F20 P3).
-    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx", "add-custom"])
+    #expect(empty.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-mistral", "preset-ollama", "preset-llamacpp", "preset-omlx", "add-custom"])
     #expect(empty.allSatisfy { if case .preset(_, let p) = $0 { p == nil } else { true } })
 
     let or = prov("https://openrouter.ai/api/v1", "OpenRouter")
     let or2 = prov("https://openrouter.ai/api/v1", "OpenRouter 2") // dostawca to instancja: drugi trafia do własnych
     let own = prov("https://llm.example.com/v1", "Work")
     let rows = ProviderListRow.rows(for: [own, or, or2])
-    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-ollama", "preset-llamacpp", "preset-omlx",
+    #expect(rows.map(\.id) == ["preset-openrouter", "preset-elevenlabs", "preset-mistral", "preset-ollama", "preset-llamacpp", "preset-omlx",
                                "custom-\(own.id.uuidString)", "custom-\(or2.id.uuidString)", "add-custom"])
     #expect(rows.first == .preset(.openRouter, or))
 }
@@ -52,7 +52,7 @@ private func prov(_ url: String, _ name: String = "x", kind: ProviderKind? = nil
     #expect(p.id == "on-this-mac" && p.name == "On this Mac · Parakeet" && !p.needsKey && p.kind == .fluidAudio)
     #expect(p.baseURL == "local://fluidaudio" && p.role == "Speech-to-text on this Mac · no network")
     // Preset zostaje (dopasowanie, logo), ale nie jest na liście gotowych dostawców.
-    #expect(ProviderPreset.ready == [.openRouter, .elevenLabs, .ollama, .llamaCpp, .omlx])
+    #expect(ProviderPreset.ready == [.openRouter, .elevenLabs, .mistral, .ollama, .llamaCpp, .omlx])
 }
 
 @Test func savedFluidAudioProviderIsNotShownInTheProviderList() {
