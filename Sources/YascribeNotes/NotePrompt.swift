@@ -103,7 +103,7 @@ public enum NotePromptBuilder {
         mapPrompt(part: hasSpeakerLabels ? ["[0:00] Speaker 1: x"] : [], index: 99_999, count: 99_999, notesLanguage: nil, vocabulary: vocabulary).system.count
     }
 
-    static let speakerSentence = "Speaker labels and names identify voices on the call, detected automatically; one label can cover two people and one person can get two labels."
+    static let speakerSentence = "\"Speaker 1\", \"Speaker 2\"… and names identify voices on the call, detected automatically; one label can cover two people and one person can get two labels; use names exactly as given and never guess a name for a \"Speaker N\" label."
     static let localSpeakerSentence = "Speaker labels are local to each meeting, do not connect people across meetings, and can merge or split people."
 
     static func hasSpeakerLabels(_ lines: [String]) -> Bool {
