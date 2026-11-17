@@ -288,7 +288,8 @@ struct UtteranceRow: View {
     }
 
     private var speakerColor: Color {
-        let colors: [Color] = [.mnAccent, Color(nsColor: .systemBlue), Color(nsColor: .systemPurple), .mnWarn,
+        // Bez .mnAccent: ten kolor ma „Me”.
+        let colors: [Color] = [Color(nsColor: .systemOrange), Color(nsColor: .systemBlue), Color(nsColor: .systemPurple), Color(nsColor: .systemBrown),
                                Color(nsColor: .systemPink), Color(nsColor: .systemTeal), .mnRec, Color(nsColor: .systemIndigo)]
         return utterance.speaker == .me ? .mnAccent : speakerNumber.map { colors[($0 - 1) % colors.count] } ?? .mnText
     }
