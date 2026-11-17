@@ -14,6 +14,9 @@ final class SettingsDraft: ObservableObject {
     @Published var fillers = ""
     /// Sekcja Summary: „Thinking" (F20 P1).
     @Published var summaryThinking = true
+    /// Karta „Speaker detection" (TASK-22).
+    @Published var detectSpeakers = true
+    @Published var speakerSensitivity = SpeakerSensitivity.defaultValue
     @Published var dictation = DictationSettings()
     /// Podstawy poleceń korekty i podsumowania (TASK-96): pole pokazuje własny tekst albo domyślny; `keepMine` = „Keep mine" po zmianie domyślnego.
     @Published var promptTexts: [PromptKind: String] = [:]
@@ -78,6 +81,8 @@ final class SettingsDraft: ObservableObject {
         embedding = s.embedding; askModel = s.askModel; dictation = s.dictationOrDefault; saved = false
         removeFillers = s.removeFillersEnabled
         summaryThinking = s.summaryThinkingEnabled
+        detectSpeakers = s.detectSpeakers ?? true
+        speakerSensitivity = s.speakerSensitivityOrDefault
         fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
     }
 }
@@ -129,6 +134,8 @@ struct SettingsView: View {
             || draft.askModel != model.settings.askModel
             || draft.removeFillers != model.settings.removeFillersEnabled
             || draft.summaryThinking != model.settings.summaryThinkingEnabled
+            || draft.detectSpeakers != (model.settings.detectSpeakers ?? true)
+            || draft.speakerSensitivity != model.settings.speakerSensitivityOrDefault
             || draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
             || FillerWords.parse(draft.fillers) != (model.settings.fillerWords ?? FillerWords.defaults)
             || draft.promptsApplied(to: model.prompts) != model.prompts
@@ -146,6 +153,7 @@ struct SettingsView: View {
                     // Model Yascribe (Parakeet) nie jest dostawcą: własna karta na górze, nad listą Providers (F20 P3).
                     SectionHeader("Yascribe models")
                     ForEach(model.localASRModels, id: \.store.variant) { ModelCardSection(support: $0) }
+                    SpeakerModelCardSection(support: model.speakerModel, detect: $draft.detectSpeakers, sensitivity: $draft.speakerSensitivity)
                     SectionHeader("Providers")
                     Card {
                         let rows = ProviderListRow.rows(for: model.providers.providers, agents: model.settings.agentCLIsEnabled)
@@ -425,6 +433,8 @@ struct SettingsView: View {
         model.settings.removeFillers = draft.removeFillers
         model.settings.fillerWords = words == FillerWords.defaults ? nil : words
         model.settings.summaryThinking = draft.summaryThinking
+        model.settings.detectSpeakers = draft.detectSpeakers
+        model.settings.speakerSensitivity = draft.speakerSensitivity
         let dictationChanged = draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
         if dictationChanged {
             var dictation = draft.dictation

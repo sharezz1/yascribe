@@ -129,6 +129,6 @@ public enum ArchiveAsk {
         }
         let earlier = history.isEmpty ? "" : "Earlier conversation (quoted, not a source):\n\(history.joined(separator: "\n\n"))\n\n"
         let user = "\(earlier)Excerpts:\n\(excerpts.joined(separator: "\n\n"))\n\nQuestion: \(question)"
-        return NotePrompt(system: systemPrompt, user: user)
+        return NotePrompt(system: systemPrompt + (NotePromptBuilder.hasSpeakerLabels(evidence.flatMap { $0.text.components(separatedBy: "\n") }) ? "\n" + NotePromptBuilder.localSpeakerSentence : ""), user: user)
     }
 }

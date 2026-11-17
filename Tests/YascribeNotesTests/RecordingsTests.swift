@@ -55,7 +55,7 @@ private func files(_ dir: URL) -> Set<String> {
     try FileManager.default.createDirectory(at: RunDirectory(session: rerun, runID: run2).url, withIntermediateDirectories: true)
     let busy = try seed(root, "busy")
 
-    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: ["busy"])
+    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: ["busy"], speakersPin: "pin")
     #expect(r.purged.isEmpty)
     #expect(r.errors.isEmpty)
     for s in [noRun, inProgress, partial, rerun, busy] {
@@ -78,7 +78,7 @@ private func files(_ dir: URL) -> Set<String> {
         #expect(!AudioRetention.transcriptionFinished(s), "\(s.lastPathComponent)")
     }
     #expect(AudioRetention.transcriptionFinished(done))
-    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: [])
+    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: [], speakersPin: "pin")
     #expect(r.purged == ["done"])
     #expect(AudioRetention.audioFiles(noMetadata).count == 1)
     #expect(AudioRetention.audioFiles(empty).count == 1)
@@ -95,7 +95,7 @@ private func files(_ dir: URL) -> Set<String> {
     try JSONFile.save(transcript([utt("hej")]), to: debug.transcript)
     #expect(RunDirectory.latestRunID(in: s) == run1)
     #expect(!AudioRetention.transcriptionFinished(s))
-    #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: []).purged.isEmpty)
+    #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: [], speakersPin: "pin").purged.isEmpty)
     #expect(AudioRetention.audioFiles(s).count == 1)
 }
 
@@ -106,18 +106,47 @@ private func files(_ dir: URL) -> Set<String> {
     #expect(before.contains("system.caf"))
 
     // Przed terminem i przy Forever — nic.
-    #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 29 * day, skip: []).purged.isEmpty)
-    #expect(AudioRetention.apply(sessions: root, days: nil, now: Date() + 3_650 * day, skip: []).purged.isEmpty)
+    #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 29 * day, skip: [], speakersPin: "pin").purged.isEmpty)
+    #expect(AudioRetention.apply(sessions: root, days: nil, now: Date() + 3_650 * day, skip: [], speakersPin: "pin").purged.isEmpty)
     #expect(files(s) == before)
 
-    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: [])
+    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: [], speakersPin: "pin")
     #expect(r.purged == ["done"])
     #expect(r.errors.isEmpty)
     #expect(files(s) == before.subtracting(["system.caf"]).union(["audio-deleted.json"]))
     #expect(AudioDeletion.read(s)?.afterDays == 30)
     #expect(NotesStore(session: s).readMyNotes() == "moje")
     // Drugi przebieg: nie ma już audio — nic do zrobienia.
-    #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 40 * day, skip: []).purged.isEmpty)
+    #expect(AudioRetention.apply(sessions: root, days: 30, now: Date() + 40 * day, skip: [], speakersPin: "pin").purged.isEmpty)
+}
+
+/// TASK-22 R07: po usunięciu audio `load` nie ma już czym unieważnić pliku, więc retencja usuwa niezgodny wcześniej.
+@Test func retentionRemovesStaleSpeakersBeforeDeletingAudio() throws {
+    let root = tempDir()
+    func diarization(_ s: URL, pin: String, fingerprint: String? = nil) -> SpeakerDiarization {
+        SpeakerDiarization(version: 1, modelPin: pin, sensitivity: .medium, fa: 0.15, fb: 0.4, threshold: 0.6, minClusterSeconds: 10,
+                           audioFingerprint: fingerprint ?? SpeakerDiarization.audioFingerprint(session: s), createdAt: Date(),
+                           segments: [.init(speaker: "S1", start: 0, end: 1)])
+    }
+    let stale = try seed(root, "stale"), fresh = try seed(root, "fresh"), none = try seed(root, "none")
+    let oldAudio = try seed(root, "oldAudio") // aktualny pin, odcisk sprzed zmiany audio/dziennika (F05)
+    let staleRun = RunDirectory(session: stale, runID: run1), freshRun = RunDirectory(session: fresh, runID: run1)
+    let oldAudioRun = RunDirectory(session: oldAudio, runID: run1)
+    try JSONFile.save(diarization(stale, pin: "old-pin"), to: staleRun.speakers)
+    try JSONFile.save(diarization(oldAudio, pin: "pin", fingerprint: "stale-fingerprint"), to: oldAudioRun.speakers)
+    try JSONFile.save(diarization(fresh, pin: "pin"), to: freshRun.speakers)
+
+    let r = AudioRetention.apply(sessions: root, days: 30, now: Date() + 31 * day, skip: [], speakersPin: "pin")
+    #expect(r.errors.isEmpty)
+    #expect(r.purged.sorted() == ["fresh", "none", "oldAudio", "stale"]) // sesja bez pliku też traci audio
+    for s in [stale, fresh, none, oldAudio] { #expect(AudioRetention.audioFiles(s).isEmpty) }
+    // Odcisk liczony przed usunięciem audio: po nim (albo z `nil`) plik z aktualnym pinem uszedłby jako ważny.
+    #expect(!FileManager.default.fileExists(atPath: oldAudioRun.speakers.path))
+    #expect(SpeakerDiarization.load(run: oldAudioRun, currentPin: "pin", currentAudioFingerprint: nil) == nil)
+    // Bez audio odcisk jest nil: niezgodny plik przeszedłby `load`, gdyby retencja go zostawiła.
+    #expect(SpeakerDiarization.load(run: staleRun, currentPin: "old-pin", currentAudioFingerprint: nil) == nil)
+    #expect(SpeakerDiarization.load(run: staleRun, currentPin: "pin", currentAudioFingerprint: nil) == nil)
+    #expect(SpeakerDiarization.load(run: freshRun, currentPin: "pin", currentAudioFingerprint: nil) != nil)
 }
 
 @Test func retentionPlanMatchesWhatRetentionDeletes() throws {
@@ -139,7 +168,7 @@ private func files(_ dir: URL) -> Set<String> {
     // Przed terminem (90 dni) — nic.
     #expect(AudioRetention.plan(sessions: root, days: 90, now: now, skip: ["busy"]).sessions.isEmpty)
 
-    let r = AudioRetention.apply(sessions: root, days: 30, now: now, skip: ["busy"])
+    let r = AudioRetention.apply(sessions: root, days: 30, now: now, skip: ["busy"], speakersPin: "pin")
     #expect(r.purged == p.sessions.map(\.lastPathComponent))
     #expect(AudioRetention.audioFiles(done).isEmpty)
     #expect(AudioRetention.audioFiles(done2).isEmpty)

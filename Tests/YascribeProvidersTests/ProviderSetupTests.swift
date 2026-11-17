@@ -211,3 +211,13 @@ private extension ProviderCheck {
     on.experimentalAgentCLIs = true
     #expect(try JSONDecoder().decode(GlobalSettings.self, from: JSONEncoder().encode(on)).agentCLIsEnabled)
 }
+
+@Test func speakerSettingsAreOptionalInOldSettingsFile() throws {
+    let old = try JSONDecoder().decode(GlobalSettings.self, from: Data(#"{"keepAudioDays": 14}"#.utf8))
+    #expect(old.detectSpeakers == nil && old.speakerSensitivity == nil && old.speakerSensitivityOrDefault == .medium)
+    var set = old
+    set.detectSpeakers = false
+    set.speakerSensitivity = .high
+    let back = try JSONDecoder().decode(GlobalSettings.self, from: JSONEncoder().encode(set))
+    #expect(back.detectSpeakers == false && back.speakerSensitivityOrDefault == .high && back.keepAudioDays == 14)
+}

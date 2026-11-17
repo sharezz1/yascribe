@@ -138,6 +138,7 @@ struct MeetingDetailView: View {
                 Menu {
                     if (state.tab ?? defaultTab) == .transcript {
                         Button("Transcript options…") { state.modelsSheet = true }
+                        DetectSpeakersMenu(support: model.speakerModel, item: item)
                     }
                     Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
                     Button("Show in Finder") { model.showInFinder(item) }
@@ -260,6 +261,11 @@ struct PlayRecordingButton: View {
     }
 }
 
+extension Utterance {
+    /// Kolumna mówcy i kopiowanie: „Me", „Them" albo „Them A" po wykryciu mówców (TASK-22 §4.4).
+    var speakerName: String { speaker == .me ? "Me" : "Them" + (speakerLabel.map { " " + $0 } ?? "") }
+}
+
 /// Wiersz transkryptu (b-transcript.png): czas (cyfry stałej szerokości, klik = odtwarzanie), mówca, tekst;
 /// echo, obcy język i przybliżony czas jako linie stanu pod tekstem.
 struct UtteranceRow: View {
@@ -275,10 +281,10 @@ struct UtteranceRow: View {
                 .frame(width: 72, alignment: .leading)
                 .help("Play from here")
                 .accessibilityLabel("Play from \(MeetingDetailView.time(utterance.start))")
-            Text(utterance.speaker == .me ? "Me" : "Them")
+            Text(utterance.speakerName)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.mnText)
-                .frame(width: 54, alignment: .leading)
+                .frame(width: 70, alignment: .leading)
             VStack(alignment: .leading, spacing: 6) {
                 Text(utterance.text).font(.system(size: 13)).lineSpacing(4)
                     .foregroundStyle(utterance.excludedFromNotes ? Color.mnText2 : Color.mnText)

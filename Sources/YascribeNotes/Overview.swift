@@ -37,7 +37,7 @@ public enum Overview {
         let lines = NotePromptBuilder.transcriptLines(transcript)
         guard !lines.isEmpty else { return nil }
         let language = notesLanguage.map { "in \($0.englishName)" } ?? "in the language that predominates in the transcript"
-        return NotePrompt(system: "Describe the meeting in one short sentence \(language). Reply only with that sentence.",
+        return NotePrompt(system: "Describe the meeting in one short sentence \(language). Reply only with that sentence." + (NotePromptBuilder.hasSpeakerLabels(lines) ? " " + NotePromptBuilder.localSpeakerSentence : ""),
                           user: AutoTitle.sample(lines))
     }
 

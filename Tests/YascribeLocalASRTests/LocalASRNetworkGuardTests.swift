@@ -23,9 +23,15 @@ private func matches(_ pattern: String, in text: String) -> [String] {
     return re.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range(at: 0), in: text).map { String(text[$0]) } }
 }
 
+/// Regexy, nie `contains`: `ModelHub .x` czy `prepareModels ()` też się kompilują.
+private let bannedLoaders = ["downloadAndLoad", "isModelValid", #"ModelHub\s*\."#, "DownloadUtils", "AssetDownloader", "HFClient", "ModelRegistry",
+                             #"OfflineDiarizerModels\s*\.\s*load"#, #"prepareModels\s*\("#]
+
 /// Decyzja Opusa 7a / anty-cel „pobieranie bez zgody": warianty ładowania FluidAudio przez centrum pobierań mogą dociągać pliki z HF.
 /// Z `AsrModels` wolno tylko: `loadLocal` (ładowanie bez sieci), `modelsExist` (lokalna obecność plików), `defaultCacheDirectory`
 /// oraz `download` — to ostatnie wyłącznie w `ModelStore.swift` (po akcji użytkownika). Reszta powierzchni sieciowej jest zakazana w całych Sources.
+/// Diaryzacja (TASK-22 R02): w `YascribeLocalASR` `URLSession` tylko w `DiarizerModelStore.swift` (własny pobieracz); ładowarki
+/// diaryzacji FluidAudio, które same pobierają, są zakazane wszędzie.
 @Test func sourcesNeverUseNetworkingModelLoaders() throws {
     let all = try swiftSources()
     #expect(all.count > 20)
@@ -39,8 +45,9 @@ private func matches(_ pattern: String, in text: String) -> [String] {
             default: Issue.record("\(name) uses AsrModels.\(member)")
             }
         }
-        for word in ["downloadAndLoad", "isModelValid", "ModelHub.", "DownloadUtils", "AssetDownloader", "HFClient", "ModelRegistry"] {
-            #expect(!text.contains(word), "\(name) uses \(word)")
+        for pattern in bannedLoaders { #expect(matches(pattern, in: text).isEmpty, "\(name) uses \(pattern)") }
+        if url.path.contains("/YascribeLocalASR/"), name != "DiarizerModelStore.swift" {
+            #expect(!text.contains("URLSession"), "\(name) uses URLSession")
         }
     }
 }
@@ -60,6 +67,10 @@ private func matches(_ pattern: String, in text: String) -> [String] {
     }
     #expect(matches(pattern, in: "import FluidAudioX").count == 1) // prefiks też łapany (lepiej fałszywy alarm)
     #expect(matches(#"AsrModels\s*\.\s*(\w+)"#, in: "AsrModels\n  .load(from: x)").count == 1)
+    for variant in ["OfflineDiarizerModels .load(from: x)", "OfflineDiarizerModels\n    .load(from: x)", "manager.prepareModels ()",
+                    "manager\n  .prepareModels\t()", "ModelHub .offlineMode"] {
+        #expect(bannedLoaders.contains { !matches($0, in: variant).isEmpty }, "\(variant)")
+    }
 }
 
 @Test func engineWithMissingModelFailsLocallyWithoutTouchingTheNetwork() async throws {
