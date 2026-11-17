@@ -149,6 +149,8 @@ final class AppModel {
     let archive = ArchiveModel()
     /// Lokalny ASR (F20): magazyn i faza pobierania/przygotowania — po jednym na wariant (kolejność = karty w Settings).
     let localASRModels: [LocalASRSupport]
+    /// Model wykrywania mówców (TASK-22): status i pobieranie dla karty w Settings i menu ⋯ Transcript.
+    let speakerModel = SpeakerModelSupport()
 
     /// `nil` = nieznany model lokalny; pusty = v3 (jak `LocalASRVariant(model:)`).
     func localASR(_ model: String) -> LocalASRSupport? {

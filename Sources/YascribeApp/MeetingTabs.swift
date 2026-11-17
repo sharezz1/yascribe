@@ -151,11 +151,14 @@ struct TranscriptActions: View {
         }
     }
 
+    /// Ten sam mówca co w kolumnie transkryptu (§4.4).
+    static func copyLine(_ u: Utterance) -> String { "[\(MeetingDetailView.time(u.start))] \(u.speakerName): \(u.text)" }
+
     private func copy() {
         guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return }
         let text = TranscriptTab.lines(t, item: item).map { line in
             switch line {
-            case .utterance(let u): "[\(MeetingDetailView.time(u.start))] \(u.speaker == .me ? "Me" : "Them"): \(u.text)"
+            case .utterance(let u): Self.copyLine(u)
             case .mute(let m): "[\(MeetingDetailView.time(m.start))] \(m.line)"
             }
         }.joined(separator: "\n")

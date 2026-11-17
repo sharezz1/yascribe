@@ -510,6 +510,33 @@ enum Snapshots {
                     }
                     .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                 }
+                // TASK-22 T6: karta „Speaker detection" — brak modelu, pobieranie, gotowy (stany wymyślone) i wiersze z „Them A".
+                let speakerScenes: [(String, DiarizerModelStatus, Double?)] = [("missing", .missing, nil), ("downloading", .missing, 0.41), ("ready", .ready, nil)]
+                for (name, status, progress) in speakerScenes {
+                    try render("speaker-card-\(name)", size: CGSize(width: 700, height: 330), dark: dark, model: model) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            SectionHeader("Yascribe models")
+                            SpeakerModelCardContent(status: status, progress: progress, detect: .constant(true), sensitivity: .constant(.medium))
+                        }
+                        .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                    }
+                }
+                // Etykiety nadaje odczyt z `speakers.json`, więc wiersze renderujemy wprost: „Me", „Them", „Them A", „Them AA".
+                if var t = try? JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8)) {
+                    t.utterances[0].speakerLabel = "A"
+                    t.utterances.append(t.utterances[2])
+                    t.utterances[2].speakerLabel = "AA"
+                    t.utterances[3].speakerLabel = nil
+                    try render("transcript-speaker-rows", size: CGSize(width: 760, height: 230), dark: dark, model: model) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(t.utterances.enumerated()), id: \.offset) { i, u in
+                                if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
+                                UtteranceRow(utterance: u, isAuto: false) {}
+                            }
+                        }
+                        .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                    }
+                }
                 try render("preset-on-this-mac-rows", size: CGSize(width: 700, height: 190), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach([("missing", ModelStatus.missing, ModelActivity.idle), ("downloading", .missing, .downloading(0.41)),
