@@ -21,13 +21,8 @@ public enum TranscriptSplitter {
     static func prefix(of line: String) -> String {
         guard line.hasPrefix("["), let close = line.firstIndex(of: "]") else { return "" }
         let rest = line[line.index(after: close)...]
-        for tag in [" Me: ", " Them: "] where rest.hasPrefix(tag) { return String(line[...close]) + tag }
-        if rest.hasPrefix(" Them "), let end = rest.range(of: ": ") {
-            let label = rest[rest.index(rest.startIndex, offsetBy: 6)..<end.lowerBound]
-            if (label.count == 1 && label.allSatisfy({ $0.isASCII && $0.isUppercase }))
-                || (!label.isEmpty && label.allSatisfy({ $0.isASCII && $0.isNumber })) {
-                return String(line[...close]) + String(rest[..<end.upperBound])
-            }
+        if rest.hasPrefix(" "), let end = rest.range(of: ": "), end.lowerBound > rest.index(after: rest.startIndex) {
+            return String(line[...close]) + String(rest[..<end.upperBound])
         }
         return ""
     }

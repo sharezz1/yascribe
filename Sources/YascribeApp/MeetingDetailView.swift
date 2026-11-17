@@ -263,7 +263,7 @@ struct PlayRecordingButton: View {
 
 extension Utterance {
     /// Kolumna mówcy i kopiowanie: „Me", „Them" albo „Them A" po wykryciu mówców (TASK-22 §4.4).
-    var speakerName: String { speaker == .me ? "Me" : "Them" + (speakerLabel.map { " " + $0 } ?? "") }
+    var speakerName: String { speaker == .me ? "Me" : speakerLabel ?? "Them" }
 }
 
 /// Wiersz transkryptu (b-transcript.png): czas (cyfry stałej szerokości, klik = odtwarzanie), mówca, tekst;

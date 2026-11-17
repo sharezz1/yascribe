@@ -27,7 +27,8 @@ private func line(_ start: Double, _ end: Double, _ speaker: Speaker = .them) ->
 @Test func speakerLabelCountsReportLettersAndUnlabeledThemOnly() {
     let d = diarization([("x", 0, 20), ("y", 30, 50), ("crumb", 100, 103)])
     let t = Transcript(utterances: [line(1, 2), line(31, 32), line(2, 3, .me), line(101, 102), line(200, 201)], failedChunks: [])
-    let counts = SpeakerLabelCounts(transcript: t, diarization: d)
+    let named = d.renamed("x", to: "Ala")!.renamed("y", to: "Ala")!
+    let counts = SpeakerLabelCounts(transcript: t, diarization: named)
     #expect(counts.letters == 2 && counts.them == 4 && counts.unlabeled == 2)
 }
 

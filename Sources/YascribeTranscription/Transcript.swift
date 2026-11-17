@@ -30,6 +30,7 @@ public struct Utterance: Codable, Equatable, Sendable {
 
     /// Tylko w pamięci, nadawana przy odczycie.
     public var speakerLabel: String? = nil
+    public var speakerKey: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case speaker, start, end, text, words, approximateTiming, languageMismatch, echoOfThem

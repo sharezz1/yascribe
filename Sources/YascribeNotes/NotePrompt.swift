@@ -100,16 +100,16 @@ public enum NotePromptBuilder {
     /// Długość promptu systemowego mapy z zapasem na numer części — do liczenia `pairedInputChars` przed podziałem. Liczona z prawdziwego
     /// `mapPrompt`: `DictionaryPrompt.maxChars` nie obejmuje stałych nagłówków linii, więc koszt linii słownika trzeba mierzyć, nie szacować.
     static func mapSystemChars(vocabulary: PromptVocabulary?, hasSpeakerLabels: Bool = false) -> Int {
-        mapPrompt(part: hasSpeakerLabels ? ["[0:00] Them A: x"] : [], index: 99_999, count: 99_999, notesLanguage: nil, vocabulary: vocabulary).system.count
+        mapPrompt(part: hasSpeakerLabels ? ["[0:00] Speaker 1: x"] : [], index: 99_999, count: 99_999, notesLanguage: nil, vocabulary: vocabulary).system.count
     }
 
-    static let speakerSentence = "\"Them A\", \"Them B\"… are different voices on the call, detected automatically; one label can cover two people and one person can get two labels; never turn labels into names."
+    static let speakerSentence = "Speaker labels and names identify voices on the call, detected automatically; one label can cover two people and one person can get two labels."
     static let localSpeakerSentence = "Speaker labels are local to each meeting, do not connect people across meetings, and can merge or split people."
 
     static func hasSpeakerLabels(_ lines: [String]) -> Bool {
         lines.contains { line in
             let prefix = TranscriptSplitter.prefix(of: line)
-            return prefix.contains(" Them ")
+            return !prefix.isEmpty && !prefix.hasSuffix(" Me: ") && !prefix.hasSuffix(" Them: ")
         }
     }
 
@@ -118,7 +118,7 @@ public enum NotePromptBuilder {
         t.utterances
             .filter { !$0.excludedFromNotes && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.start < $1.start }
-            .map { "[\(clock($0.start))] \($0.speaker == .me ? "Me" : "Them" + ($0.speakerLabel.map { " " + $0 } ?? "")): \($0.text)" }
+            .map { "[\(clock($0.start))] \($0.speaker == .me ? "Me" : ($0.speakerLabel ?? "Them")): \($0.text)" }
     }
 
     static func clock(_ seconds: Double) -> String {

@@ -25,7 +25,7 @@ import YascribeProviders
         try await CLI.note([run.url.path, "https://example.com/v1", "model", "--language", "pl", "--out", output.path,
                             "--source", source], clientOverride: chatClient(stub))
         let call = try #require(stub.calls.last)
-        #expect(call.user.contains("Them A: \(source) words"))
+        #expect(call.user.contains("Speaker 1: \(source) words"))
         #expect(call.system.contains("detected automatically"))
     }
 }

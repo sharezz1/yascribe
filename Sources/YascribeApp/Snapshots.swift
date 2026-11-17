@@ -527,9 +527,9 @@ enum Snapshots {
                 }
                 // Etykiety nadaje odczyt z `speakers.json`, więc wiersze renderujemy wprost: „Me", „Them", „Them A", „Them AA".
                 if var t = try? JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8)) {
-                    t.utterances[0].speakerLabel = "A"
+                    t.utterances[0].speakerLabel = "Speaker 1"
                     t.utterances.append(t.utterances[2])
-                    t.utterances[2].speakerLabel = "AA"
+                    t.utterances[2].speakerLabel = "Ala"
                     t.utterances[3].speakerLabel = nil
                     try render("transcript-speaker-rows", size: CGSize(width: 760, height: 230), dark: dark, model: model) {
                         VStack(alignment: .leading, spacing: 0) {

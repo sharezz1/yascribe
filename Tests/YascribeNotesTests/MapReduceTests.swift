@@ -578,7 +578,7 @@ private func waitForFirstCall(_ stub: ChatStub) async throws {
 }
 
 @Test func labeledSpeakerPrefixesSurviveSplittingAndMapReplies() throws {
-    for tag in ["Them", "Them A", "Them 27", "Me"] {
+    for tag in ["Them", "Them A", "Them 27", "Speaker 1", "Ala Nowak", "Me"] {
         let prefix = "[1:05] \(tag): "
         let pieces = try TranscriptSplitter.parts([prefix + words(600)], maxChars: 100).flatMap { $0 }
         #expect(pieces.count > 1 && pieces.allSatisfy { $0.hasPrefix(prefix) })
