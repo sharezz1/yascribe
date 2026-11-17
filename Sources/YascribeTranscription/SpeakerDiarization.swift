@@ -53,7 +53,7 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    public static func knownPins(localPin: String) -> Set<String> { [localPin, MistralDiarization.pin] }
+    public static func knownPins(localPin: String) -> Set<String> { Set([localPin, MistralDiarization.pin]).union(SpeakerCapability.pins) }
 
     public static func load(run: RunDirectory, acceptedPins: Set<String>, currentAudioFingerprint: String?) -> SpeakerDiarization? {
         guard let value = try? JSONFile.load(SpeakerDiarization?.self, from: run.speakers, default: nil),

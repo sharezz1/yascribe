@@ -31,8 +31,10 @@ extension CLI {
         // Transkrypt czytany przed diaryzacją: uszkodzony plik kończy komendę bez nadpisania poprzedniego speakers.json.
         let transcript = try JSONFile.load(Transcript?.self, from: run.transcript, default: nil)
         let mistral = args.contains("--mistral")
+        let cloud = args.contains("--cloud")
+        if mistral && cloud { fail("--mistral i --cloud wykluczają się", code: 64) }
         let store = DiarizerModelStore()
-        if !mistral { do {
+        if !mistral && !cloud { do {
             if try DiarizerModelGate.decide(status: store.status(), download: args.contains("--download")) == .download {
                 let line = PercentLine(label: "model")
                 try await store.download { done, total in line.update(Double(done) / Double(max(total, 1))) }
@@ -49,7 +51,20 @@ extension CLI {
         let line = PercentLine(label: "mówcy")
         let started = Date()
         let segments: [MistralDiarization.Segment]
-        if mistral {
+        var cloudPin: String?
+        if cloud {
+            guard let input = try JSONFile.load(RunInput?.self, from: run.input, default: nil) else { fail("Brak input.json przebiegu", code: 1) }
+            let snapshot = input.snapshot
+            let providers = try JSONFile.load(ProvidersFile.self, from: YascribePaths.fromEnvironment().providers, default: ProvidersFile())
+            guard let provider = providers.providers.first(where: { $0.id == snapshot.providerID }),
+                  SpeakerCapability.supports(api: provider.api, model: snapshot.model) else { fail("Dostawca lub model nie obsługuje diaryzacji", code: 1) }
+            guard let key = ProcessInfo.processInfo.environment["YASCRIBE_API_KEY"], !key.isEmpty else { fail("Brak YASCRIBE_API_KEY", code: 64) }
+            let client: any DiarizationClient = provider.api == .elevenLabs
+                ? ElevenLabsClient(provider: provider, key: key) : OpenAICompatibleClient(provider: provider, key: key)
+            cloudPin = SpeakerCapability.pin(api: provider.api, model: snapshot.model)
+            segments = try await CloudDiarization.run(track: SessionDirectory(url: session).trackURL("system"), client: client,
+                model: snapshot.model, language: snapshot.language, limitBytes: provider.api == .openAICompatible ? 52_428_800 : nil)
+        } else if mistral {
             guard let key = ProcessInfo.processInfo.environment["MISTRAL_API_KEY"], !key.isEmpty else { fail("Brak MISTRAL_API_KEY", code: 64) }
             let metadata = try JSONFile.load(RunMetadata?.self, from: run.metadata, default: nil)
             let input = try JSONFile.load(RunInput?.self, from: run.input, default: nil)
@@ -66,12 +81,12 @@ extension CLI {
         FileHandle.standardError.write(Data("\n".utf8))
 
         let diarization = SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
-                                                       modelPin: mistral ? MistralDiarization.pin : DiarizerManifest.pin, sensitivity: mistral ? nil : sensitivity,
+                                                       modelPin: cloudPin ?? (mistral ? MistralDiarization.pin : DiarizerManifest.pin), sensitivity: (mistral || cloud) ? nil : sensitivity,
                                                        audioFingerprint: SpeakerDiarization.audioFingerprint(session: session), createdAt: Date())
         try JSONFile.save(diarization, to: run.speakers, createParents: false)
 
         print("przebieg: \(runID)")
-        if !mistral { print("czułość: \(sensitivity.rawValue) (Fa \(sensitivity.fa), Fb \(sensitivity.fb))") }
+        if !mistral && !cloud { print("czułość: \(sensitivity.rawValue) (Fa \(sensitivity.fa), Fb \(sensitivity.fb))") }
         print(String(format: "czas: %.1f s, tor %.1f s, RTF %.4f, szczyt RSS %@", elapsed, trackSeconds, elapsed / max(trackSeconds, 0.001),
                      peakResidentMegabytes().map { String(format: "%.0f MB", $0) } ?? "?"))
         let seconds = diarization.secondsBySpeaker
