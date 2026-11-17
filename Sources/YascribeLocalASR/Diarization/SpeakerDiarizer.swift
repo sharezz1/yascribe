@@ -59,8 +59,13 @@ public actor SpeakerDiarizer {
     func diarize<Steps: DiarizationSteps>(_ steps: Steps, models: Steps.Models, source: any AudioSampleSource,
                                           progress: (@Sendable (Double) -> Void)?) async throws -> [(speaker: String, start: Double, end: Double)] {
         steps.initialize(models: models)
-        let prepared = try await steps.prepare(audioSource: source, audioLoadingSeconds: 0) { done, total in
-            if total > 0 { progress?(Double(done) / Double(total)) }
+        let prepared: PreparedDiarization
+        do {
+            prepared = try await steps.prepare(audioSource: source, audioLoadingSeconds: 0) { done, total in
+                if total > 0 { progress?(Double(done) / Double(total)) }
+            }
+        } catch OfflineDiarizationError.noSpeechDetected {
+            return [] // cisza na torze rozmówców to wynik (brak etykiet), nie błąd do pokazania
         }
         return try steps.cluster(prepared).segments.map { ($0.speakerId, Double($0.startTimeSeconds), Double($0.endTimeSeconds)) }
     }

@@ -40,9 +40,11 @@ public struct DiarizerModelStore: Sendable {
         self.fetch = fetch ?? { try await URLSession.shared.download(from: $0) }
     }
 
-    public static var defaultDirectory: URL {
-        YascribePaths.fromEnvironment().root.appendingPathComponent("Models", isDirectory: true)
-            .appendingPathComponent(DiarizerManifest.offline.model, isDirectory: true)
+    public static var defaultDirectory: URL { directory(root: YascribePaths.fromEnvironment().root) }
+
+    /// Katalog modelu w danym katalogu danych Yascribe (aplikacja podaje własne `paths`, nie czyta środowiska drugi raz).
+    public static func directory(root: URL) -> URL {
+        root.appendingPathComponent("Models", isDirectory: true).appendingPathComponent(DiarizerManifest.offline.model, isDirectory: true)
     }
 
     private var lockURL: URL { directory.appendingPathComponent(".lock") }
