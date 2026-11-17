@@ -141,6 +141,10 @@ struct TranscriptActions: View {
                         .accessibilityLabel("Improve transcript")
                         .disabled(model.recordingsMove != nil || model.isTranscribing(item))
                         .help("Run the correction model on this transcript")
+                } else if model.notes.correctionFailureMessage(item.id) == nil {
+                    // Preset bez modelu korekty: okno Improve pozwala wybrać model albo transkrybować od nowa.
+                    Button("Improve") { state.modelsSheet = true }
+                        .buttonStyle(.pill).help("Improve or redo the transcript with another model")
                 }
                 Button { copy() } label: {
                     if compact { Image(systemName: "doc.on.doc") } else { Label("Copy", systemImage: "doc.on.doc") }
