@@ -60,7 +60,9 @@ public enum AudioRetention {
 
     /// Kasuje audio sesji z `plan`. Zwraca nazwy sesji, z których usunięto audio, i błędy.
     /// Znacznik zapisujemy PRZED kasowaniem: nieudane kasowanie ponowi następny przebieg (sesja wciąż ma `*.caf`).
-    public static func apply(sessions: URL, days: Int?, now: Date = Date(), skip: Set<String>) -> (purged: [String], errors: [String]) {
+    /// `speakersPin` = bieżący pin modelu diaryzacji (`DiarizerManifest.pin`; YascribeNotes nie zna `YascribeLocalASR`).
+    public static func apply(sessions: URL, days: Int?, now: Date = Date(), skip: Set<String>,
+                             speakersPin: String) -> (purged: [String], errors: [String]) {
         guard let days else { return ([], []) }
         var purged: [String] = [], errors: [String] = []
         for session in plan(sessions: sessions, days: days, now: now, skip: skip).sessions {
@@ -68,6 +70,7 @@ public enum AudioRetention {
                 if AudioDeletion.read(session) == nil {
                     try JSONFile.save(AudioDeletion(afterDays: days, deletedAt: now), to: AudioDeletion.url(session))
                 }
+                try removeStaleSpeakers(session, pin: speakersPin)
                 for f in audioFiles(session) { try FileManager.default.removeItem(at: f) }
                 purged.append(session.lastPathComponent)
             } catch {
@@ -75,6 +78,19 @@ public enum AudioRetention {
             }
         }
         return (purged, errors)
+    }
+
+    /// TASK-22 R07: bez audio odcisk jest `nil` i `SpeakerDiarization.load` przyjąłby każdy plik, więc niezgodny `speakers.json`
+    /// usuwamy, póki audio jeszcze jest. Błąd usunięcia zostawia audio do następnej retencji.
+    static func removeStaleSpeakers(_ session: URL, pin: String) throws {
+        let fingerprint = SpeakerDiarization.audioFingerprint(session: session)
+        let ids = (try? FileManager.default.contentsOfDirectory(atPath: session.appendingPathComponent("runs").path)) ?? []
+        for id in ids where RunDirectory.isValid(runID: id) { // także `--run debug` z CLI
+            let run = RunDirectory(session: session, runID: id)
+            guard FileManager.default.fileExists(atPath: run.speakers.path),
+                  SpeakerDiarization.load(run: run, currentPin: pin, currentAudioFingerprint: fingerprint) == nil else { continue }
+            try FileManager.default.removeItem(at: run.speakers)
+        }
     }
 }
 

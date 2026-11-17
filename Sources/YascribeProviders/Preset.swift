@@ -163,8 +163,13 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var dictation: DictationSettings?
     /// Experimental: agenci CLI (Codex, Claude Code) na liście dostawców (TASK-86). Opcjonalne (E6): `nil` = wyłączone.
     public var experimentalAgentCLIs: Bool?
+    /// „Detect speakers” po transkrypcji (TASK-22 D7). Opcjonalne (E6): `nil` = włączone, gdy model jest pobrany.
+    public var detectSpeakers: Bool?
+    /// Domyślna czułość wykrywania mówców. Opcjonalne (E6): `nil` = `SpeakerSensitivity.defaultValue` (D3).
+    public var speakerSensitivity: SpeakerSensitivity?
 
     public static let defaultKeepAudioDays = 30
+    public var speakerSensitivityOrDefault: SpeakerSensitivity { speakerSensitivity ?? .defaultValue }
     public var agentCLIsEnabled: Bool { experimentalAgentCLIs == true }
 
     public var summaryThinkingEnabled: Bool { summaryThinking ?? true }

@@ -555,6 +555,14 @@ struct SessionRow: View {
     }
 
     @ViewBuilder private var statusView: some View {
+        if model.isDetectingSpeakers(item) {
+            StateLabel(.progress(nil), "Detecting speakers…")
+        } else {
+            sessionStatusView
+        }
+    }
+
+    @ViewBuilder private var sessionStatusView: some View {
         switch status {
         case .recording:
             StateLabel(.live, "Recording \(RecordingPanelView.clock(model.recording.elapsed))")

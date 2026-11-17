@@ -170,6 +170,8 @@ struct TranscriptTab: View {
     let item: SessionItem
     let onJump: (Utterance) -> Void
     private var busy: Bool { model.isTranscribing(item) }
+    /// Diaryzacja po transkrypcji trzyma `busy` (F01), ale wiersz mówi, co naprawdę trwa.
+    private var detecting: Bool { model.isDetectingSpeakers(item) }
     private var moving: Bool { model.recordingsMove != nil }
     /// Wznowienie w trakcie korekty dałoby drugą korektę tego samego przebiegu (F2).
     private var correcting: Bool { model.notes.isCorrecting(item.id) }
@@ -190,7 +192,11 @@ struct TranscriptTab: View {
             }
             // „Transcribe again…": stary transkrypt zostaje widoczny, dopóki nowy przebieg się nie zakwalifikuje (R23). Linia ogólna
             // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
-            if busy, item.transcript != nil, item.attemptNotPromoted == nil { StateLabel(.progress(nil), "Transcribing again…") }
+            if detecting {
+                StateLabel(.progress(nil), "Detecting speakers…")
+            } else if busy, item.transcript != nil, item.attemptNotPromoted == nil {
+                StateLabel(.progress(nil), "Transcribing again…")
+            }
             attemptBanner
             if item.transcript != nil, item.corrected != nil {
                 FieldMenu(label: "Version", value: state.useCorrected ? "Corrected" : "Original", width: 120) {
@@ -259,7 +265,7 @@ struct TranscriptTab: View {
             // Uwaga 7: lista rośnie z treścią (przewija strona), separator `line2` między wierszami.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !t.failedChunks.isEmpty {
-                    Button(busy ? "Transcribing…" : "Retry Failed Parts") { model.resume(item, runID: item.runID) }
+                    Button(busy && !detecting ? "Transcribing…" : "Retry Failed Parts") { model.resume(item, runID: item.runID) }
                         .buttonStyle(.pillSmall)
                         .disabled(busy || moving || correcting)
                         .help("Sends only the parts that failed; finished parts aren't paid for again")

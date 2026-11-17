@@ -131,6 +131,10 @@ final class AppModel {
         get { notes.transcribing }
         set { notes.transcribing = newValue }
     }
+    /// Wykrywanie mówców w toku (TASK-22 R05): bilet na sesję = sesja zajęta, wiersz „Detecting speakers…” i bramka zapisu.
+    private(set) var speakerTickets: [String: SpeakerDetectionTicket] = [:]
+    @ObservationIgnored private var speakerTasks: [String: Task<SpeakerDiarization, any Error>] = [:]
+    @ObservationIgnored private var speakerGeneration = 0
 
     let recording = RecordingController()
     /// Aktualizacje (Sparkle): bramka restartu i kontroler. Tworzone w `init` (bramka potrzebuje `self`).
@@ -196,6 +200,7 @@ final class AppModel {
         notes.isMoving = { [weak self] in self?.recordingsMove != nil }
         wireArchive()
         applyRetention()
+        SpeakerDiarizer.sweepStaleTemporaryFiles(now: Date()) // PCM po przerwanej diaryzacji (R06)
     }
 
     /// Indeks to dane pochodne: plik leży obok ustawień, a przenoszenie nagrań go nie kopiuje.
@@ -306,6 +311,7 @@ final class AppModel {
         var s = transcribing.union(notes.corrections.sessions).union(notes.titles.sessions)
         // Bilety generowania, także anulowanego: zadanie może jeszcze zapisać notatkę (TASK-25).
         s.formUnion(notes.generatingSessions)
+        s.formUnion(speakerTickets.keys)
         if let d = recording.directory { s.insert(d.lastPathComponent) }
         return s
     }
@@ -313,14 +319,15 @@ final class AppModel {
     /// Powód, dla którego teraz nie wolno zmienić lokalizacji; `nil` = wolno.
     var recordingsMoveBlocked: String? {
         let busy = !transcribing.isEmpty || !notes.corrections.sessions.isEmpty || !notes.titles.sessions.isEmpty
-            || notes.generation.values.contains(.generating)
+            || notes.generation.values.contains(.generating) || !speakerTickets.isEmpty
         return RecordingsMove.blocked(recording: recording.isRecording, busy: busy, moving: recordingsMove != nil)
     }
 
     /// Przy starcie i po zmianie „Keep audio”. Nie w trybie migawek i nie w trakcie przenoszenia.
     func applyRetention() {
         guard Snapshots.directory == nil, recordingsMove == nil else { return }
-        let r = AudioRetention.apply(sessions: sessionsDirectory, days: settings.audioRetentionDays, skip: busySessions)
+        let r = AudioRetention.apply(sessions: sessionsDirectory, days: settings.audioRetentionDays, skip: busySessions,
+                                     speakersPin: DiarizerManifest.pin)
         if !r.errors.isEmpty { lastError = "Couldn't delete old audio: " + r.errors.joined(separator: "\n") }
         if !r.purged.isEmpty { reloadSessions(); refreshRecordingsSize() }
     }
@@ -422,6 +429,9 @@ final class AppModel {
     func reloadSessions() {
         let fm = FileManager.default
         let dirs = (try? fm.contentsOfDirectory(at: sessionsDirectory, includingPropertiesForKeys: nil)) ?? []
+        // Etykiety z poprzedniego odczytu zostają do końca odczytu w tle — bez tego transkrypt i prompt chwilowo tracą litery.
+        let previousSpeakers = Dictionary(sessions.compactMap { item in item.runID.map { ("\(item.url.path)|\($0)", item.speakers) } },
+                                          uniquingKeysWith: { a, _ in a })
         sessions = dirs.compactMap { url -> SessionItem? in
             let sd = SessionDirectory(url: url)
             guard fm.fileExists(atPath: sd.journalURL.path) else { return nil }
@@ -436,6 +446,7 @@ final class AppModel {
             item.attemptNotPromoted = run.notPromoted
             item.corrected = CorrectedTranscript.load(session: url, runID: run.currentID)
             item.audioDeletedAfterDays = AudioDeletion.read(url)?.afterDays
+            item.speakers = run.currentID.flatMap { previousSpeakers["\(url.path)|\($0)"] ?? nil }
             item.notes = SessionNotes(myNotes: store.readMyNotes(), meta: store.readMeta(),
                                       summary: (try? store.readSummary()) ?? nil, problems: store.problems())
             return item
@@ -1134,16 +1145,111 @@ final class AppModel {
             // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
             await (c as? ReleasableClient)?.release()
             support?.endRun()
-            self.transcribing.remove(id)
             self.reloadSessions()
             // Łańcuch korekta → autotytuł tylko dla przebiegu, który został bieżącym i się kwalifikuje (R23); wyjątek: pierwsza
             // transkrypcja z luką. Próba z lukami albo pusta obok wcześniejszego transkryptu nie dostaje automatycznej obróbki.
-            if let finished, RunSelection.shouldPostProcess(session: sessionURL, runID: runID) {
+            var post = finished != nil && RunSelection.shouldPostProcess(session: sessionURL, runID: runID)
+            // TASK-22 D7: etykiety mówców przed notatką (notatka czyta `speakers.json` z dysku); błąd tylko w `lastError`.
+            // `transcribing` zdejmujemy dopiero po diaryzacji: do tego czasu bramki korekty, notatki i transkrypcji odmawiają (F01).
+            if let finished, post, await SpeakerDetectionDecision.shouldRun(
+                modelReady: DiarizerModelStore().status() == .ready, setting: self.settings.detectSpeakers,
+                themUtterances: finished.utterances.filter { $0.speaker == .them }.count,
+                hasSystemTrack: { await Task.detached { Self.hasSystemTrack(sessionURL) }.value }) {
+                await self.detectSpeakers(sessionURL: sessionURL, runID: runID, sensitivity: self.settings.speakerSensitivityOrDefault)
+                post = RunSelection.shouldPostProcess(session: sessionURL, runID: runID)
+            }
+            self.transcribing.remove(id)
+            if let finished, post {
                 await self.notes.afterTranscription(sessionURL: sessionURL, runID: runID, snapshot: snapshot, transcript: finished)
             }
             self.reloadSessions()
         }
         return true
+    }
+
+    // MARK: Mówcy (TASK-22 T5)
+
+    func isDetectingSpeakers(_ item: SessionItem) -> Bool { speakerTickets[item.id] != nil }
+
+    /// Tor `system` z klatkami i plikiem na dysku (retencja mogła skasować audio) — ten sam warunek co CLI `diarize`.
+    /// Czyta dziennik — wołać poza MainActor (F04).
+    nonisolated private static func hasSystemTrack(_ sessionURL: URL) -> Bool {
+        let session = SessionDirectory(url: sessionURL)
+        return FileManager.default.fileExists(atPath: session.trackURL("system").path)
+            && (try? session.summarize())?.tracks.contains { $0.id == "system" && ($0.frames ?? 0) > 0 } == true
+    }
+
+    private struct NoCallAudio: LocalizedError {
+        var errorDescription: String? { "This meeting has no call audio, so speakers can't be detected." }
+    }
+
+    /// Cała praca na dysku i modelu poza MainActor (F04): dziennik, diaryzacja, przeliczenie segmentów, odcisk audio.
+    nonisolated private static func diarization(sessionURL: URL, sensitivity: SpeakerSensitivity) async throws -> SpeakerDiarization {
+        guard hasSystemTrack(sessionURL) else { throw NoCallAudio() }
+        let session = SessionDirectory(url: sessionURL)
+        let summary = try session.summarize()
+        let segments = try await SpeakerDiarizer().run(systemTrack: session.trackURL("system"), sensitivity: sensitivity, progress: nil)
+        return SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
+                                            modelPin: DiarizerManifest.pin, sensitivity: sensitivity,
+                                            audioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL), createdAt: Date())
+    }
+
+    /// Diaryzacja toru `system` przebiegu → `runs/<id>/speakers.json` (przebieg jak CLI `diarize`, spec §4.2, R05).
+    /// Nowsza operacja tej sesji anuluje starszą; błąd albo anulowanie zostawia poprzedni plik nietknięty.
+    func detectSpeakers(sessionURL: URL, runID: String, sensitivity: SpeakerSensitivity) async {
+        guard !Task.isCancelled, let ticket = reserveSpeakerTicket(sessionURL: sessionURL, runID: runID) else { return }
+        await performSpeakerDetection(ticket, sessionURL: sessionURL, sensitivity: sensitivity)
+    }
+
+    /// Synchronicznie, przed pierwszym `await` i przed utworzeniem `Task`: sesja od razu chroniona przed retencją i przeniesieniem (F03).
+    private func reserveSpeakerTicket(sessionURL: URL, runID: String) -> SpeakerDetectionTicket? {
+        guard recordingsMove == nil else {
+            lastError = "Meetings are being moved to a new folder. Detect speakers when that finishes."
+            return nil
+        }
+        let id = sessionURL.lastPathComponent
+        speakerGeneration += 1
+        let ticket = SpeakerDetectionTicket(session: id, runID: runID, generation: speakerGeneration)
+        speakerTasks[id]?.cancel()
+        speakerTickets[id] = ticket
+        return ticket
+    }
+
+    private func performSpeakerDetection(_ ticket: SpeakerDetectionTicket, sessionURL: URL, sensitivity: SpeakerSensitivity) async {
+        let id = ticket.session
+        guard speakerTickets[id] == ticket else { return } // zastąpiony, zanim ruszył
+        let work = Task.detached { try await Self.diarization(sessionURL: sessionURL, sensitivity: sensitivity) }
+        speakerTasks[id] = work
+        // Wraca po faktycznym końcu pracy, także anulowanej — dopiero wtedy bilet schodzi (F02).
+        let result = await SpeakerDetectionWork.result(of: work)
+        do {
+            let diarization = try result.get()
+            // Bez `await` między bramką a zapisem: nowszy bilet nie wejdzie pomiędzy.
+            if SpeakerDetectionTicket.mayWrite(ticket, current: speakerTickets[id], cancelled: Task.isCancelled || work.isCancelled) {
+                try JSONFile.save(diarization, to: RunDirectory(session: sessionURL, runID: ticket.runID).speakers, createParents: false)
+            }
+        } catch {
+            // Anulowanie (nowsza operacja albo wywołujący) nie jest błędem dla użytkownika.
+            if !Task.isCancelled, !work.isCancelled, !(error is CancellationError) {
+                lastError = error is NoCallAudio ? error.localizedDescription : "Couldn't detect speakers: \(error.localizedDescription)"
+            }
+        }
+        // Tylko własny bilet: zastąpiona operacja nie zdejmuje ochrony z sesji, której używa nowsza.
+        if speakerTickets[id] == ticket {
+            speakerTickets[id] = nil
+            speakerTasks[id] = nil
+        }
+        reloadSessions()
+    }
+
+    /// Ręczne ponowne wykrycie z menu ⋯ Transcript (spec §4.3; przycisk w T6): bieżący przebieg, wybrana czułość.
+    /// Notatka nie generuje się sama od nowa. Brak modelu zgłasza `SpeakerDiarizer`, brak toru — praca (komunikat w `lastError`).
+    func detectSpeakersAgain(item: SessionItem, sensitivity: SpeakerSensitivity) {
+        guard let runID = item.runID else { lastError = "Transcribe this meeting first."; return }
+        // Zastąpiłaby automatyczną diaryzację, a notatka ruszyłaby bez etykiet (F01).
+        guard !notes.isTranscribing(item.id) else { lastError = "This recording is being transcribed. Try again when that finishes."; return }
+        guard let ticket = reserveSpeakerTicket(sessionURL: item.url, runID: runID) else { return }
+        Task { await performSpeakerDetection(ticket, sessionURL: item.url, sensitivity: sensitivity) }
     }
 
     static func sessionName(_ d: Date) -> String {
