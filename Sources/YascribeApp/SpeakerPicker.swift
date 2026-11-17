@@ -42,6 +42,7 @@ struct SpeakerPicker: View {
             if options.canClear { Divider(); Button("Use Speaker \(number)") { select(nil) }.buttonStyle(.plain) }
         }
         .padding(14).frame(width: 250, alignment: .leading)
+        .foregroundStyle(Color.mnText) // nie dziedziczy koloru mówcy z etykiety
     }
 
     private func section(_ title: String, names: [String]) -> some View {

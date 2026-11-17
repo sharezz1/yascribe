@@ -72,50 +72,62 @@ enum SpeakerMenuDecision {
     static func needsConfirmation(names: [String: String]?) -> Bool { !(names?.isEmpty ?? true) }
 }
 
-private final class SpeakerMenuState: ObservableObject {
+final class SpeakerMenuState: ObservableObject {
     @Published var confirmNames = false
     @Published var confirmDownload = false
     @Published var confirmLocalNames = false
 }
 
+/// Pozycje menu ⋯. Pytania są w `SpeakerMenuDialogs` na samym `Menu`: dialog podpięty pod pozycję menu się nie pokazuje.
 struct DetectSpeakersMenu: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var support: SpeakerModelSupport
+    @ObservedObject var state: SpeakerMenuState
     let item: SessionItem
-    @StateObject private var state = SpeakerMenuState()
 
     var body: some View {
-        Group {
-            if model.supportsCloudSpeakers(item) {
-                Button("Detect speakers again") {
-                    if SpeakerMenuDecision.needsConfirmation(names: item.speakers?.names) { state.confirmNames = true }
-                    else { model.detectSpeakersAgain(item: item) }
-                }
-            } else {
-                Button("Detect speakers on this Mac") {
-                    if SpeakerMenuDecision.needsConfirmation(names: item.speakers?.names) { state.confirmLocalNames = true }
-                    else { detectOnThisMac() }
-                }
+        if model.supportsCloudSpeakers(item) {
+            Button("Detect speakers again") {
+                if SpeakerMenuDecision.needsConfirmation(names: item.speakers?.names) { state.confirmNames = true }
+                else { model.detectSpeakersAgain(item: item) }
             }
-        }
-        .confirmationDialog("Names you gave will be removed.", isPresented: $state.confirmNames) {
-            Button("Detect speakers again", role: .destructive) { model.detectSpeakersAgain(item: item) }
-        }
-        .confirmationDialog("Names you gave will be removed.", isPresented: $state.confirmLocalNames) {
-            Button("Detect speakers on this Mac", role: .destructive) { detectOnThisMac() }
-        }
-        .confirmationDialog("Download the speaker model (22 MB)?", isPresented: $state.confirmDownload) {
-            Button("Download and detect speakers") {
-                Task {
-                    await support.download()
-                    if support.status == .ready { model.detectSpeakersOnThisMac(item: item) }
-                    else if let error = support.error { model.lastError = error }
-                }
+        } else {
+            Button("Detect speakers on this Mac") {
+                if SpeakerMenuDecision.needsConfirmation(names: item.speakers?.names) { state.confirmLocalNames = true }
+                else { SpeakerMenuDialogs.detectOnThisMac(model: model, support: support, state: state, item: item) }
             }
         }
     }
+}
 
-    private func detectOnThisMac() {
+struct SpeakerMenuDialogs: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @ObservedObject var support: SpeakerModelSupport
+    @ObservedObject var state: SpeakerMenuState
+    let item: SessionItem
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog("Names you gave will be removed.", isPresented: $state.confirmNames) {
+                Button("Detect speakers again", role: .destructive) { model.detectSpeakersAgain(item: item) }
+            }
+            .confirmationDialog("Names you gave will be removed.", isPresented: $state.confirmLocalNames) {
+                Button("Detect speakers on this Mac", role: .destructive) {
+                    Self.detectOnThisMac(model: model, support: support, state: state, item: item)
+                }
+            }
+            .confirmationDialog("Download the speaker model (22 MB)?", isPresented: $state.confirmDownload) {
+                Button("Download and detect speakers") {
+                    Task {
+                        await support.download()
+                        if support.status == .ready { model.detectSpeakersOnThisMac(item: item) }
+                        else if let error = support.error { model.lastError = error }
+                    }
+                }
+            }
+    }
+
+    @MainActor static func detectOnThisMac(model: AppModel, support: SpeakerModelSupport, state: SpeakerMenuState, item: SessionItem) {
         support.refresh()
         if support.status == .ready { model.detectSpeakersOnThisMac(item: item) } else { state.confirmDownload = true }
     }

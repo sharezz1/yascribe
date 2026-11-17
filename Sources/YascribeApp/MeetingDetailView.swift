@@ -20,6 +20,7 @@ struct MeetingDetailView: View {
     let bottomInset: CGFloat
     @StateObject private var playback = PlaybackState()
     @StateObject private var state: MeetingViewState
+    @StateObject private var speakerMenu = SpeakerMenuState()
 
     init(item: SessionItem, state: MeetingViewState = MeetingViewState(), presentsModelsSheet: Bool = true, bottomInset: CGFloat = 0) {
         self.item = item
@@ -138,7 +139,7 @@ struct MeetingDetailView: View {
                 Menu {
                     if (state.tab ?? defaultTab) == .transcript {
                         Button("Transcript options…") { state.modelsSheet = true }
-                        DetectSpeakersMenu(support: model.speakerModel, item: item)
+                        DetectSpeakersMenu(support: model.speakerModel, state: speakerMenu, item: item)
                     }
                     Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
                     Button("Show in Finder") { model.showInFinder(item) }
@@ -150,6 +151,7 @@ struct MeetingDetailView: View {
                 .menuStyle(.borderlessButton).menuIndicator(.hidden)
                 .fixedSize()
                 .help("More").accessibilityLabel("More")
+                .modifier(SpeakerMenuDialogs(support: model.speakerModel, state: speakerMenu, item: item))
             }
             HStack(spacing: 12) {
                 MetaLine([
