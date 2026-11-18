@@ -1288,7 +1288,7 @@ final class AppModel {
         } catch {
             // Anulowanie (nowsza operacja albo wywołujący) nie jest błędem dla użytkownika.
             if !Task.isCancelled, !work.isCancelled, !(error is CancellationError) {
-                lastError = error is NoCallAudio ? error.localizedDescription : "Couldn't detect speakers: \(error.localizedDescription)"
+                lastError = error is NoCallAudio ? error.localizedDescription : "Couldn't detect speakers: \(SpeakerDetectionError.text(error))"
             }
         }
         // Tylko własny bilet: zastąpiona operacja nie zdejmuje ochrony z sesji, której używa nowsza.

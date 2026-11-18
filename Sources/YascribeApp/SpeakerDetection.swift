@@ -29,3 +29,17 @@ struct SpeakerDetectionTicket: Equatable {
         !cancelled && ticket == current
     }
 }
+
+/// Tekst błędu wykrywania mówców: komunikat serwera, gdy go podał (np. ElevenLabs `quota_exceeded` przychodzi jako 401,
+/// więc samo „Invalid API key.” by kłamało); inaczej opis jak przy sprawdzaniu dostawcy.
+enum SpeakerDetectionError {
+    static func text(_ error: Error) -> String {
+        if case let .http(_, body)? = error as? ProviderError,
+           let json = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any] {
+            for field in ["detail", "error"] {
+                if let message = (json[field] as? [String: Any])?["message"] as? String, !message.isEmpty { return message }
+            }
+        }
+        return ProviderCheck.describe(error)
+    }
+}

@@ -108,3 +108,11 @@ private actor SpeakerWorkGate {
     #expect(await gate.starts == 2)
     #expect(model.speakerTickets[session.lastPathComponent] == nil)
 }
+
+@Test func speakerDetectionErrorShowsServerMessage() {
+    let quota = #"{"detail":{"status":"quota_exceeded","message":"This request exceeds your quota of 10000."}}"#
+    #expect(SpeakerDetectionError.text(ProviderError.http(401, quota)) == "This request exceeds your quota of 10000.")
+    #expect(SpeakerDetectionError.text(ProviderError.http(400, #"{"error":{"message":"Bad audio"}}"#)) == "Bad audio")
+    #expect(SpeakerDetectionError.text(ProviderError.http(401, "nope")) == "Invalid API key.")
+    #expect(SpeakerDetectionError.text(ProviderError.badResponse("x")) != "The operation couldn’t be completed. (YascribeProviders.ProviderError error 1.)")
+}
