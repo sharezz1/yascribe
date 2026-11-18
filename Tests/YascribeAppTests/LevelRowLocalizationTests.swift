@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import YascribeApp
 
-@MainActor @Test func levelRowTrackKindDoesNotDependOnDisplayedText() {
+@Test @MainActor func levelRowTrackKindDoesNotDependOnDisplayedText() {
     let microphone = LevelRow(kind: .microphone, detail: "Mikrofon: urządzenie", db: -20)
     let system = LevelRow(kind: .system, detail: "Microphone: device", db: -20)
     #expect(microphone.iconName == "mic")
