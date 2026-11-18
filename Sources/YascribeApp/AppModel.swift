@@ -49,6 +49,8 @@ struct SessionItem: Identifiable, Equatable {
     var attemptNotPromoted: RunSelection.Attempt?
     var speakers: SpeakerDiarization?
     var corrected: CorrectedTranscript?
+    /// Ręczne poprawki segmentów bieżącego przebiegu (`runs/<runID>/edits.json`, TASK-109).
+    var edits: TranscriptEdits?
     var notes = SessionNotes()
     /// Retencja usunęła audio po tylu dniach (`<sesja>/audio-deleted.json`); `nil` = audio nie było kasowane.
     /// Widok spotkania: „Audio deleted after N days”, bez odtwarzania i ponownej transkrypcji.
@@ -73,7 +75,15 @@ struct SessionItem: Identifiable, Equatable {
     var notesText: String? { notes.summary.map { speakerMarkers.resolved($0.markdown) } }
 
     /// Transkrypt do wyświetlenia i streszczenia: poprawiony, gdy jest i użytkownik go nie wyłączył.
+    /// Ręczne poprawki obowiązują w obu wersjach (TASK-109).
     func transcript(corrected useCorrected: Bool) -> Transcript? {
+        guard let base = uneditedTranscript(corrected: useCorrected) else { return nil }
+        // Korekta z inną liczbą wypowiedzi niż transkrypt (Retry Failed Parts po korekcie): indeksy nie pasują, bez poprawek.
+        guard let edits, base.utterances.count == transcript?.utterances.count else { return base }
+        return edits.apply(to: base)
+    }
+
+    func uneditedTranscript(corrected useCorrected: Bool) -> Transcript? {
         useCorrected ? (corrected?.transcript ?? transcript) : transcript
     }
 
@@ -465,6 +475,7 @@ final class AppModel {
             item.latestAttemptID = run.latestAttemptID
             item.attemptNotPromoted = run.notPromoted
             item.corrected = CorrectedTranscript.load(session: url, runID: run.currentID)
+            item.edits = run.currentID.flatMap { RunDirectory.isValid(runID: $0) ? TranscriptEdits.load(run: RunDirectory(session: url, runID: $0)) : nil }
             item.audioDeletedAfterDays = AudioDeletion.read(url)?.afterDays
             item.speakers = run.currentID.flatMap { previousSpeakers["\(url.path)|\($0)"] ?? nil }
             item.notes = SessionNotes(myNotes: store.readMyNotes(), meta: store.readMeta(),
@@ -1329,6 +1340,27 @@ final class AppModel {
         guard !notes.isTranscribing(item.id) else { lastError = "This recording is being transcribed. Try again when that finishes."; return }
         guard let ticket = reserveSpeakerTicket(sessionURL: item.url, runID: runID) else { return }
         Task { await performSpeakerDetection(ticket, sessionURL: item.url, cloud: cloud) }
+    }
+
+    /// Ręczna poprawka segmentu `index` (pozycja w `utterances`) w przebiegu `runID` (TASK-109). Plik czytany na nowo — nie
+    /// nadpisujemy poprawek zapisanych od ostatniego odczytu ani uszkodzonego pliku. `false` = nie zapisano (edytor zostaje otwarty).
+    @discardableResult
+    func editUtterance(_ item: SessionItem, runID: String, index: Int, corrected: Bool, text: String) -> Bool {
+        // Szkic z poprzedniego przebiegu nie trafia do nowego; podczas przenoszenia nagrań stary katalog zaraz zniknie.
+        guard recordingsMove == nil, item.runID == runID, RunDirectory.isValid(runID: runID),
+              let base = item.uneditedTranscript(corrected: corrected), base.utterances.indices.contains(index) else { return false }
+        let run = RunDirectory(session: item.url, runID: runID)
+        do {
+            let current = try TranscriptEdits.loadForEditing(run: run) ?? TranscriptEdits()
+            // Szkic startuje od tekstu po słowniku, więc „bez zmian” porównujemy z tym samym tekstem.
+            let original = Replacement.apply(base, rules: replacementRules).utterances[index].text
+            try current.setting(text, at: index, of: base.utterances[index], original: original).save(run: run)
+            reloadSessions()
+            return true
+        } catch {
+            lastError = "Couldn't save the edit: \(error.localizedDescription)"
+            return false
+        }
     }
 
     func renameSpeaker(item: SessionItem, key: String, name: String?) {
