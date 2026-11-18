@@ -285,7 +285,7 @@ struct UtteranceRow: View {
     static func color(number: Int) -> Color {
         let colors: [Color] = [Color(nsColor: .systemOrange), Color(nsColor: .systemBlue), Color(nsColor: .systemPurple), Color(nsColor: .systemBrown),
                                Color(nsColor: .systemPink), Color(nsColor: .systemTeal), .mnRec, Color(nsColor: .systemIndigo)]
-        return colors[(number - 1) % colors.count]
+        return colors[((number - 1) % colors.count + colors.count) % colors.count] // numer z linku bywa dowolny
     }
 
     private var speakerColor: Color {

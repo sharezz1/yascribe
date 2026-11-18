@@ -40,6 +40,8 @@ public struct NoteGenerator: Sendable {
     /// Edytowalne reguły podsumowania (Settings, TASK-96) i ślad, który trafia do `summary.json`. Mapa ich nie dostaje.
     public var rulesBody = SummaryPrompt.defaultBody
     public var promptTrace: PromptTrace?
+    /// `SpeakerDiarization.segmentsDigest` diaryzacji, z której pochodzą klucze mówców transkryptu; zapisywany przy mapie znaczników.
+    public var speakersDigest: String?
     /// Tryb ścisły zapisu (TASK-25): notatka nie odtworzy katalogu spotkania, którego już nie ma (np. po Koszu).
     /// Domyślnie wyłączony — inne klienty generatora zachowują się bez zmian.
     public let requiresExistingSession: Bool
@@ -94,9 +96,10 @@ public struct NoteGenerator: Sendable {
         guard !body.isEmpty else { throw NoteGenerationError.failed("\(model) returned an empty reply.") }
         // Liczby, których nie ma w materiale, to zwykle wymysł modelu: zapisujemy je przy notatce, widok pokazuje je jako ostrzeżenie.
         let unverified = NumberCheck.unverified(in: SpeakerMarkers.stripped(body), sources: NotePromptBuilder.transcriptLines(transcript) + [myNotes, context])
-        let summary = NoteSummary(title: title, markdown: body, templateID: template.id, model: model,
+        var summary = NoteSummary(title: title, markdown: body, templateID: template.id, model: model,
                                   context: context, generatedAt: now, condensedParts: condensedParts, prompt: promptTrace,
                                   unverifiedNumbers: unverified.isEmpty ? nil : unverified, speakers: speakerKeys)
+        if speakerKeys != nil { summary.speakersDigest = speakersDigest }
         do {
             // Nieczytelny stary summary.json został odłożony na bok przed zapisem — powiedz to użytkownikowi.
             if let problem = try store.writeSummary(summary, now: now) { onProblem(problem) }

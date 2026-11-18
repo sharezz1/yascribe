@@ -17,6 +17,8 @@ public struct NoteSummary: Codable, Equatable, Sendable {
     public var unverifiedNumbers: [String]?
     /// Znacznik `[[SN]]` → klucz mówcy z chwili generowania (`"1": "speaker_0"`); `nil` bez diaryzacji i w starych `summary.json`.
     public var speakers: [String: String]?
+    /// `SpeakerDiarization.segmentsDigest` z chwili generowania; inny (ponowne wykrycie) = znaczniki bez imion.
+    public var speakersDigest: String?
 
     public init(title: String?, markdown: String, templateID: String, model: String, context: String, generatedAt: Date,
                 condensedParts: Int? = nil, prompt: PromptTrace? = nil, unverifiedNumbers: [String]? = nil,

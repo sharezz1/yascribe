@@ -60,9 +60,13 @@ struct SessionItem: Identifiable, Equatable {
     /// Znaczniki `[[SN]]` notatki → bieżące nazwy mówców.
     /// shortcut: numeracja z surowego transkryptu, także gdy notatka powstała z poprawionego; zmienić, jeśli „Speaker N” w notatce
     /// rozjedzie się z transkryptem.
+    /// Inne wykrycie mówców niż przy generowaniu (skrót odcinków): te same klucze mogą znaczyć inne osoby, więc bez numeracji
+    /// — znaczniki zostają samym „Speaker N” z notatki.
     var speakerMarkers: SpeakerMarkers {
-        SpeakerMarkers(keys: notes.summary?.speakers, names: speakers?.names ?? [:],
-                       numbers: transcript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(speakers)) } ?? [:])
+        let current = speakers.map(\.segmentsDigest)
+        let sameDetection = current != nil && notes.summary?.speakersDigest == current
+        return SpeakerMarkers(keys: notes.summary?.speakers, names: speakers?.names ?? [:],
+                              numbers: sameDetection ? transcript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(speakers)) } ?? [:] : [:])
     }
 
     /// Treść notatki z nazwami mówców zamiast znaczników — do schowka i archiwum.

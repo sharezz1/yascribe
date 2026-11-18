@@ -61,3 +61,19 @@ private let two = SpeakerMarkers(keys: ["1": "a", "2": "b"], names: ["a": "Ala"]
     let site = (text.string as NSString).range(of: "site")
     #expect(text.attribute(.link, at: site.location, effectiveRange: nil) == nil)
 }
+
+@Test func speakerLinksWrittenByTheModelAreIgnored() {
+    var style = NoteStyle()
+    style.speakerColor = { n in #expect(n >= 1); return .systemRed }
+    let text = MarkdownBlocks.attributed(two.linked(MarkdownBlocks.group("[Ala](yascribe-speaker:0) and [Ola](yascribe-speaker:2)")), style: style)
+    var links = 0
+    text.enumerateAttribute(.link, in: NSRange(location: 0, length: text.length)) { value, _, _ in if value != nil { links += 1 } }
+    #expect(links == 0)
+}
+
+@Test func markersInTableCellsKeepTheSpeakerLink() {
+    let text = MarkdownBlocks.attributed(two.linked(MarkdownBlocks.group("| Owner | Task |\n|---|---|\n| [[S1]] | x |")))
+    let ala = (text.string as NSString).range(of: "Ala")
+    #expect(ala.location != NSNotFound)
+    #expect(text.attribute(.link, at: ala.location, effectiveRange: nil) as? URL == URL(string: "yascribe-speaker:1"))
+}

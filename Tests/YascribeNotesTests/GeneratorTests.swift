@@ -210,3 +210,16 @@ private func diarized(_ text: String, key: String, label: String) -> Transcript 
     let json = #"{"markdown":"x","templateID":"standard","model":"m","context":"","generatedAt":0}"#
     #expect(try JSONDecoder().decode(NoteSummary.self, from: Data(json.utf8)).speakers == nil)
 }
+
+@Test func generatorStoresTheDiarizationDigestWithTheSpeakerMap() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    var g = generator(ChatStub { _ in "# T\n\n- [[S1]] ok" })
+    g.speakersDigest = "digest"
+    let s = try await g.generate(session: session, template: .standard, transcript: diarized("Tak.", key: "a", label: "Ala"),
+                                 context: "", notesLanguage: .polish, now: now)
+    #expect(s.speakersDigest == "digest")
+    let plain = try await g.generate(session: session, template: .standard, transcript: transcript([utt("Tak.", .them)]),
+                                     context: "", notesLanguage: .polish, now: now)
+    #expect(plain.speakersDigest == nil)
+}

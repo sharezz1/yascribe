@@ -53,6 +53,14 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
         })
     }
 
+    /// Tożsamość wykrycia mówców (same odcinki, bez imion): ponowne wykrycie daje nowe odcinki pod tymi samymi kluczami
+    /// (`speaker_0`…), więc notatka porównuje ten skrót, zanim pokaże imię.
+    public var segmentsDigest: String {
+        var hasher = SHA256()
+        for s in segments { hasher.update(data: Data("\(s.speaker)\u{0}\(s.start)\u{0}\(s.end)\n".utf8)) }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     public static func audioFingerprint(session: URL) -> String? {
         let audio = session.appendingPathComponent("system.caf")
         guard let size = (try? FileManager.default.attributesOfItem(atPath: audio.path)[.size]) as? NSNumber,

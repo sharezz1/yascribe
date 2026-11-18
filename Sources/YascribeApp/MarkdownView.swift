@@ -13,7 +13,7 @@ struct MarkdownView: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var shown: [MarkdownBlock]?
         var speakerPicker: ((Int, @escaping () -> Void) -> AnyView)?
-        private var popover: NSPopover?
+        var popover: NSPopover?
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             guard let url = link as? URL, url.scheme == SpeakerMarkers.urlScheme,
@@ -56,6 +56,8 @@ struct MarkdownView: NSViewRepresentable {
         context.coordinator.speakerPicker = speakerPicker
         // Tylko przy zmianie treści — inaczej każde przerysowanie rodzica gubi zaznaczenie.
         guard context.coordinator.shown != blocks else { return }
+        // Nowa treść (zmiana imienia, nowa notatka): otwarty picker wskazywałby mówcę spod starego tekstu.
+        context.coordinator.popover?.close()
         context.coordinator.shown = blocks
         var style = NoteStyle()
         style.text = NSColor(Color.mnText)

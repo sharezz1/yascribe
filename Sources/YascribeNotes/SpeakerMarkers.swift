@@ -43,6 +43,8 @@ public struct SpeakerMarkers: Equatable, Sendable {
     public func linked(_ blocks: [MarkdownBlock]) -> [MarkdownBlock] {
         blocks.map { block in
             var block = block
+            // Link `yascribe-speaker:` napisany przez model w Markdownie nie jest mówcą — tylko te z rozwiązanych znaczników.
+            for run in block.text.runs where run.link?.scheme == Self.urlScheme { block.text[run.range].link = nil }
             let plain = String(block.text.characters)
             for match in plain.matches(of: Self.pattern).reversed() {
                 guard let marker = Int(match.output.1), let resolution = resolve(marker) else { continue }
