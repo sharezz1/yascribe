@@ -101,7 +101,7 @@ final class ArchiveModel {
     static func source(for item: SessionItem, notes: NotesModel, transcript: Transcript?) -> ArchiveIndex.Source {
         let myNotes = notes.pendingMyNotes(item.id) ?? NotesStore(session: item.url).readMyNotes()
         return ArchiveIndex.Source(sessionID: item.id, title: item.title, myNotes: myNotes,
-                                   summary: item.notes.summary?.markdown, transcript: transcript)
+                                   summary: item.notesText, transcript: transcript)
     }
 
     /// Zakres pytania: bieżący filtr listy, jawnie „All meetings" albo otwarte spotkanie (`nil` = żadne nie jest otwarte).

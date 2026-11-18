@@ -17,6 +17,8 @@ public struct NoteStyle {
     public var text: NSColor = .labelColor
     public var secondary: NSColor = .secondaryLabelColor
     public var marker: NSColor = .tertiaryLabelColor
+    /// Kolor mówcy po numerze „Speaker N” (jak w transkrypcie); `nil` = kolor tekstu.
+    public var speakerColor: ((Int) -> NSColor)? = nil
     public init() {}
 }
 
@@ -140,6 +142,14 @@ extension MarkdownBlocks {
                     if intent.contains(.emphasized) { f = NSFontManager.shared.convert(f, toHaveTrait: .italicFontMask) }
                     if block.length == bodyStart, intent.contains(.stronglyEmphasized) { leadingBoldEnd = bodyStart + (s as NSString).length }
                     var a = base; a[.font] = f
+                    // Tylko linki mówców (`SpeakerMarkers.linked`); linki napisane przez model zostają zwykłym tekstem.
+                    if let link = run.link, link.scheme == SpeakerMarkers.urlScheme {
+                        a[.link] = link
+                        a[.font] = NSFontManager.shared.convert(f, toHaveTrait: .boldFontMask)
+                        if let n = Int(link.absoluteString.dropFirst(SpeakerMarkers.urlScheme.count + 1)), let color = style.speakerColor?(n) {
+                            a[.foregroundColor] = color
+                        }
+                    }
                     block.append(NSAttributedString(string: s, attributes: a))
                 }
                 if b.kind == .bullet, let from = leadingBoldEnd {

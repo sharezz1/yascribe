@@ -93,8 +93,8 @@ struct MeetingDetailView: View {
             MeetingTabBar(selection: Binding(get: { state.tab ?? defaultTab }, set: { state.tab = $0 }))
                 .fixedSize(horizontal: true, vertical: false)
             Spacer(minLength: 0)
-            if (state.tab ?? defaultTab) == .summary, let summary = item.notes.summary {
-                SummaryActions(state: state, summary: summary, compact: compact)
+            if (state.tab ?? defaultTab) == .summary, item.notes.summary != nil {
+                SummaryActions(state: state, item: item, compact: compact)
                     .fixedSize().padding(.bottom, 9)
             } else if (state.tab ?? defaultTab) == .transcript {
                 TranscriptActions(state: state, item: item, compact: compact)
@@ -281,11 +281,15 @@ struct UtteranceRow: View {
 
     static func speakerNumbers(_ transcript: Transcript) -> [String: Int] { SpeakerLabels.numbers(for: transcript) }
 
-    private var speakerColor: Color {
-        // Bez .mnAccent: ten kolor ma „Me”.
+    /// Kolor „Speaker N” — ten sam w transkrypcie i w notatce. Bez .mnAccent: ten kolor ma „Me”.
+    static func color(number: Int) -> Color {
         let colors: [Color] = [Color(nsColor: .systemOrange), Color(nsColor: .systemBlue), Color(nsColor: .systemPurple), Color(nsColor: .systemBrown),
                                Color(nsColor: .systemPink), Color(nsColor: .systemTeal), .mnRec, Color(nsColor: .systemIndigo)]
-        return utterance.speaker == .me ? .mnAccent : speakerNumber.map { colors[($0 - 1) % colors.count] } ?? .mnText
+        return colors[(number - 1) % colors.count]
+    }
+
+    private var speakerColor: Color {
+        utterance.speaker == .me ? .mnAccent : speakerNumber.map(Self.color(number:)) ?? .mnText
     }
 
     var body: some View {

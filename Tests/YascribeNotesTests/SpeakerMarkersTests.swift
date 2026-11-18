@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import AppKit
 @testable import YascribeNotes
 
 private let two = SpeakerMarkers(keys: ["1": "a", "2": "b"], names: ["a": "Ala"], numbers: ["a": 1, "b": 2])
@@ -47,4 +48,16 @@ private let two = SpeakerMarkers(keys: ["1": "a", "2": "b"], names: ["a": "Ala"]
 
 @Test func speakerMarkersStripped() {
     #expect(SpeakerMarkers.stripped("[[S12]] said 12") == " said 12")
+}
+
+@Test func noteTextKeepsOnlySpeakerLinks() {
+    var style = NoteStyle()
+    style.speakerColor = { _ in .systemRed }
+    let blocks = two.linked(MarkdownBlocks.group("[[S1]] see [site](https://example.com)"))
+    let text = MarkdownBlocks.attributed(blocks, style: style)
+    let ala = (text.string as NSString).range(of: "Ala")
+    #expect(text.attribute(.link, at: ala.location, effectiveRange: nil) as? URL == URL(string: "yascribe-speaker:1"))
+    #expect(text.attribute(.foregroundColor, at: ala.location, effectiveRange: nil) as? NSColor == .systemRed)
+    let site = (text.string as NSString).range(of: "site")
+    #expect(text.attribute(.link, at: site.location, effectiveRange: nil) == nil)
 }

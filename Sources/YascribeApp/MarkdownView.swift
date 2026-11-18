@@ -7,8 +7,31 @@ import SwiftUI
 /// Typografia (macos.md §11.2) w `MarkdownBlocks.attributed`; kolory to tokeny DesignSystem (`NSColor(Color)` zostaje dynamiczny).
 struct MarkdownView: NSViewRepresentable {
     let blocks: [MarkdownBlock]
+    /// „Who is this?” dla klikniętego mówcy (N z linku `yascribe-speaker:N`); `close` zamyka popover. `nil` = imiona nieklikalne.
+    var speakerPicker: ((Int, @escaping () -> Void) -> AnyView)? = nil
 
-    final class Coordinator { var shown: [MarkdownBlock]? }
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var shown: [MarkdownBlock]?
+        var speakerPicker: ((Int, @escaping () -> Void) -> AnyView)?
+        private var popover: NSPopover?
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            guard let url = link as? URL, url.scheme == SpeakerMarkers.urlScheme,
+                  let number = Int(url.absoluteString.dropFirst(SpeakerMarkers.urlScheme.count + 1)), let speakerPicker,
+                  let lm = textView.layoutManager, let tc = textView.textContainer else { return false }
+            var range = NSRange()
+            _ = textView.textStorage?.attribute(.link, at: charIndex, effectiveRange: &range)
+            var rect = lm.boundingRect(forGlyphRange: lm.glyphRange(forCharacterRange: range, actualCharacterRange: nil), in: tc)
+            rect = rect.offsetBy(dx: textView.textContainerOrigin.x, dy: textView.textContainerOrigin.y)
+            popover?.close()
+            let p = NSPopover()
+            p.behavior = .transient
+            p.contentViewController = NSHostingController(rootView: speakerPicker(number) { [weak p] in p?.close() })
+            p.show(relativeTo: rect, of: textView, preferredEdge: .maxY)
+            popover = p
+            return true
+        }
+    }
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSTextView {
@@ -22,10 +45,13 @@ struct MarkdownView: NSViewRepresentable {
         v.textContainer?.widthTracksTextView = true
         v.isVerticallyResizable = false
         v.isHorizontallyResizable = false
+        v.delegate = context.coordinator
+        v.linkTextAttributes = [.cursor: NSCursor.pointingHand] // imię mówcy w jego kolorze, bez niebieskiego i podkreślenia
         return v
     }
 
     func updateNSView(_ v: NSTextView, context: Context) {
+        context.coordinator.speakerPicker = speakerPicker
         // Tylko przy zmianie treści — inaczej każde przerysowanie rodzica gubi zaznaczenie.
         guard context.coordinator.shown != blocks else { return }
         context.coordinator.shown = blocks
@@ -33,6 +59,7 @@ struct MarkdownView: NSViewRepresentable {
         style.text = NSColor(Color.mnText)
         style.secondary = NSColor(Color.mnText2)
         style.marker = NSColor(Color.mnText3)
+        style.speakerColor = { NSColor(UtteranceRow.color(number: $0)) }
         v.textStorage?.setAttributedString(MarkdownBlocks.attributed(blocks, style: style))
         v.invalidateIntrinsicContentSize() // nowa treść (Regenerate) → nowa wysokość
     }
