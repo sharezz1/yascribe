@@ -26,7 +26,9 @@ struct MarkdownView: NSViewRepresentable {
             popover?.close()
             let p = NSPopover()
             p.behavior = .transient
-            p.contentViewController = NSHostingController(rootView: speakerPicker(number) { [weak p] in p?.close() })
+            let host = NSHostingController(rootView: speakerPicker(number) { [weak p] in p?.close() })
+            host.sizingOptions = .preferredContentSize // inaczej NSPopover bierze domyślną, za wysoką ramkę
+            p.contentViewController = host
             p.show(relativeTo: rect, of: textView, preferredEdge: .maxY)
             popover = p
             return true
