@@ -78,9 +78,19 @@ struct SessionItem: Identifiable, Equatable {
     /// Ręczne poprawki obowiązują w obu wersjach (TASK-109).
     func transcript(corrected useCorrected: Bool) -> Transcript? {
         guard let base = uneditedTranscript(corrected: useCorrected) else { return nil }
-        // Korekta z inną liczbą wypowiedzi niż transkrypt (Retry Failed Parts po korekcie): indeksy nie pasują, bez poprawek.
-        guard let edits, base.utterances.count == transcript?.utterances.count else { return base }
+        guard let edits = edits(for: base) else { return base }
         return edits.apply(to: base)
+    }
+
+    /// Indeksy wypowiedzi z ręczną poprawką widoczną w tej wersji (etykieta „Edited”).
+    func editedIndices(corrected useCorrected: Bool) -> Set<Int> {
+        guard let base = uneditedTranscript(corrected: useCorrected), let edits = edits(for: base) else { return [] }
+        return Set(edits.edits.map(\.index).filter { edits.isEdited(index: $0, in: base) })
+    }
+
+    /// Korekta z inną liczbą wypowiedzi niż transkrypt (Retry Failed Parts po korekcie): indeksy nie pasują, bez poprawek.
+    private func edits(for base: Transcript) -> TranscriptEdits? {
+        base.utterances.count == transcript?.utterances.count ? edits : nil
     }
 
     func uneditedTranscript(corrected useCorrected: Bool) -> Transcript? {
