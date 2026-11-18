@@ -62,3 +62,10 @@ private func seg(_ speaker: String, _ start: Double, _ end: Double) -> SpeakerDi
     let d = try JSONDecoder().decode(SpeakerDiarization.self, from: Data(json.utf8))
     #expect(d.names == nil)
 }
+
+@Test func speakerNumbersFollowFirstUtterance() {
+    var lines = [line(9, 10), line(5, 6), line(1, 2, .me)]
+    lines[0].speakerKey = "a"
+    lines[1].speakerKey = "b"
+    #expect(SpeakerLabels.numbers(for: Transcript(utterances: lines, failedChunks: [])) == ["b": 1, "a": 2])
+}

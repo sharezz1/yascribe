@@ -266,3 +266,41 @@ extension VocabularyInPromptTests {
     let old = try ArchiveAsk.prompt(question: "Who?", history: [], evidence: [plain], labels: [:], maxChars: 10_000).prompt
     #expect(!old.system.contains(NotePromptBuilder.localSpeakerSentence))
 }
+
+private func keyed(_ text: String, at start: Double, key: String?, label: String?) -> Utterance {
+    var u = utt(text, .them, at: start)
+    u.speakerKey = key
+    u.speakerLabel = label
+    return u
+}
+
+@Test func noteLinesUseMarkersOnlyWhenAsked() {
+    let t = transcript([utt("hi", .me, at: 0), keyed("yes", at: 5, key: "b", label: "Ala"), keyed("no", at: 7, key: nil, label: nil)])
+    #expect(NotePromptBuilder.transcriptLines(t, markers: true) == ["[0:00] Me: hi", "[0:05] [[S1]]: yes", "[0:07] Them: no"])
+    #expect(NotePromptBuilder.transcriptLines(t) == ["[0:00] Me: hi", "[0:05] Ala: yes", "[0:07] Them: no"])
+}
+
+@Test func legendListsEveryKeyEvenWithTheSameName() {
+    let t = transcript([keyed("a", at: 1, key: "x", label: "Ala"), keyed("b", at: 2, key: "y", label: "Ala"), keyed("c", at: 3, key: "z", label: "Speaker 3")])
+    #expect(NotePromptBuilder.speakerLegend(t) == "Speakers: [[S1]] = Ala; [[S2]] = Ala; [[S3]] = Speaker 3.")
+    #expect(NotePromptBuilder.speakerLegend(transcript([utt("a", .them, at: 1)])) == nil)
+}
+
+@Test func buildPutsMarkerSentenceAndLegendOnlyForDiarizedTranscripts() throws {
+    let t = transcript([keyed("yes", at: 5, key: "b", label: "Ala")])
+    let p = try #require(build(t))
+    #expect(p.user.contains("[0:05] [[S1]]: yes"))
+    #expect(p.system.contains(NotePromptBuilder.markerSentence))
+    #expect(p.system.contains("Speakers: [[S1]] = Ala."))
+    #expect(!p.system.contains(NotePromptBuilder.speakerSentence))
+    let plain = try #require(build(transcript([utt("yes", .them, at: 5)])))
+    #expect(!plain.system.contains(NotePromptBuilder.markerSentence))
+    #expect(!plain.system.contains("[["))
+}
+
+@Test func mapKeepsMarkers() {
+    let map = NotePromptBuilder.mapPrompt(part: ["[0:01] [[S1]]: x"], index: 1, count: 1, notesLanguage: nil)
+    #expect(map.system.contains(NotePromptBuilder.markerSentence))
+    #expect(map.system.contains("Keep speaker markers like [[S1]] exactly"))
+    #expect(!map.system.contains("Speakers: "))
+}

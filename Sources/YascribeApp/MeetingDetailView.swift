@@ -279,15 +279,7 @@ struct UtteranceRow: View {
     @Environment(AppModel.self) private var model
     @StateObject private var picker = SpeakerPickerPresentation()
 
-    static func speakerNumbers(_ transcript: Transcript) -> [String: Int] {
-        var numbers: [String: Int] = [:]
-        for index in transcript.utterances.indices.sorted(by: {
-            transcript.utterances[$0].start == transcript.utterances[$1].start ? $0 < $1 : transcript.utterances[$0].start < transcript.utterances[$1].start
-        }) {
-            if let key = transcript.utterances[index].speakerKey, numbers[key] == nil { numbers[key] = numbers.count + 1 }
-        }
-        return numbers
-    }
+    static func speakerNumbers(_ transcript: Transcript) -> [String: Int] { SpeakerLabels.numbers(for: transcript) }
 
     private var speakerColor: Color {
         // Bez .mnAccent: ten kolor ma „Me”.

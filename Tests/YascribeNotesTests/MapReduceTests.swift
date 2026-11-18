@@ -588,7 +588,10 @@ private func waitForFirstCall(_ stub: ChatStub) async throws {
 
 @Test func labeledMapBudgetReservesTheSpeakerInstructions() {
     let extra = NotePromptBuilder.speakerSentence.count + 2
-    #expect(NotePromptBuilder.mapSystemChars(vocabulary: nil, hasSpeakerLabels: true) == NotePromptBuilder.mapSystemChars(vocabulary: nil) + extra)
+    // Mapa notatki dostaje znaczniki: rezerwa liczona dla dłuższego wariantu (zdanie o znacznikach + reguła ich zachowania).
+    let markerExtra = NotePromptBuilder.markerSentence.count + 2 + "\n- Keep speaker markers like [[S1]] exactly as written.".count
+    #expect(markerExtra >= extra)
+    #expect(NotePromptBuilder.mapSystemChars(vocabulary: nil, hasSpeakerLabels: true) == NotePromptBuilder.mapSystemChars(vocabulary: nil) + markerExtra)
     let lines = ["[0:00] Them A: hello"]
     let labeled = NotePromptBuilder.prompt(template: .standard, lines: lines, myNotes: "", context: "", notesLanguage: nil, condensed: true)
     let plain = NotePromptBuilder.prompt(template: .standard, lines: ["[0:00] Them: hello"], myNotes: "", context: "", notesLanguage: nil, condensed: true)
