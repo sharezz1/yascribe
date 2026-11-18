@@ -60,7 +60,7 @@ final class NotesModel {
     /// nie zależą od podpięcia, którego test nie sprawdzi (`AppModel` nie da się zbudować w teście).
     var transcribing: Set<String> = []
     func isTranscribing(_ id: String) -> Bool { transcribing.contains(id) }
-    private static let movingMessage = "Meetings are being moved to a new folder. Try again when that finishes."
+    private static var movingMessage: String { String(localized: "Meetings are being moved to a new folder. Try again when that finishes.") }
 
     /// Trwające generowanie (klucz: id sesji); token odróżnia przebieg anulowany od nowego na tej samej sesji.
     private var generationRuns: [String: (token: UUID, task: Task<Void, Never>)] = [:]
@@ -126,7 +126,7 @@ final class NotesModel {
     private func reportStaleOverride(_ role: Role, for item: SessionItem) {
         guard overrides(for: item).isStale(role, knownProviders: knownProviderIDs()),
               staleReported.insert("\(item.id)/\(role.rawValue)").inserted else { return } // raz na uruchomienie, nie przy każdym przebiegu
-        report("The model you chose for this meeting is no longer available. Using the preset's.")
+        report(String(localized: "The model you chose for this meeting is no longer available. Using the preset's."))
     }
 
     /// Zapisuje wybór modelu przy sesji (`nil` = wróć do presetu). Niczego nie uruchamia; trwające przebiegi zostają przy modelu z chwili startu.
@@ -139,7 +139,7 @@ final class NotesModel {
             if let note = try store(item.url).updateMeta({ $0.setOverride(role, value) }) { report(note) }
             return true
         } catch {
-            report("Couldn't save the model choice: \(error)")
+            report(String(localized: "Couldn't save the model choice: \(String(describing: error))"))
             return false
         }
     }
@@ -147,14 +147,23 @@ final class NotesModel {
     /// Zapis szkicu przed uruchomieniem; odmowa bez zapisu, gdy model pusty albo dostawca zniknął w trakcie otwartego okna.
     func saveDraft(_ role: Role, _ draft: ModelDraft, item: SessionItem) -> Bool {
         guard case .custom(let o) = draft else { return setOverride(role, nil, item: item) }
-        guard !o.model.trimmingCharacters(in: .whitespaces).isEmpty else { report("Choose a model first."); return false }
-        guard knownProviderIDs().contains(o.providerID) else { report("That provider is no longer available."); return false }
+        guard !o.model.trimmingCharacters(in: .whitespaces).isEmpty else { report(String(localized: "Choose a model first.")); return false }
+        guard knownProviderIDs().contains(o.providerID) else { report(String(localized: "That provider is no longer available.")); return false }
         return setOverride(role, o, item: item)
     }
 
     func isCorrecting(_ id: String) -> Bool { corrections.isActive(id) }
     func isTitling(_ id: String) -> Bool { titles.isActive(id) }
-    func correctionFailureMessage(_ id: String) -> String? { correctionFailure[id] }
+    func correctionFailureMessage(_ id: String) -> String? {
+        correctionFailure[id].map { reason in
+            switch reason {
+            case "Correction was cancelled.": String(localized: "Correction was cancelled.")
+            case "The model didn't finish correcting this part in time.": String(localized: "The model didn't finish correcting this part in time.")
+            case "The model's answer didn't match the numbered lines.": String(localized: "The model's answer didn't match the numbered lines.")
+            default: reason
+            }
+        }
+    }
 
     /// „Improve transcript"/Retry: preset nagrania ma model korekty, jest transkrypt i nic nie trwa, a korekta
     /// albo padła (całkiem lub z częścią partii: „N parts kept as heard”), albo jej nie ma (np. aplikacja zamknięta w trakcie).
@@ -214,7 +223,7 @@ final class NotesModel {
         let ticket = reserved ?? corrections.start(session: id, runID: runID)
         guard !assignment.model.isEmpty, let client = clientFor(assignment.providerID) else {
             if corrections.finish(ticket).ownsMessage {
-                correctionFailure[id] = "Couldn't reach the correction provider. Check Settings."
+                correctionFailure[id] = String(localized: "Couldn't reach the correction provider. Check Settings.")
             }
             onChange()
             return transcript
@@ -242,7 +251,7 @@ final class NotesModel {
         let outcome = corrections.finish(ticket)
         defer { onChange() }
         if result.failedCompletely {
-            if outcome.ownsMessage { correctionFailure[id] = result.firstError ?? "The correction didn't go through." }
+            if outcome.ownsMessage { correctionFailure[id] = result.firstError ?? String(localized: "The correction didn't go through.") }
             return transcript
         }
         if result.batches > 0, outcome.mayPublish {
@@ -251,7 +260,7 @@ final class NotesModel {
             // nie tworzy rodziców, więc usunięcie w trakcie korekty kończy się porażką zapisu, nie nową sesją.
             guard FileManager.default.fileExists(atPath: sessionURL.path) else { return transcript }
             // „Improve again" nadpisuje `corrected.json`: poprzednia korekta idzie najpierw do `corrections/` (porównanie modeli i poleceń).
-            if let error = CorrectionHistory.archive(run: run) { report("Couldn't keep the previous correction: \(error)") }
+            if let error = CorrectionHistory.archive(run: run) { report(String(localized: "Couldn't keep the previous correction: \(String(describing: error))")) }
             let saved = (try? JSONFile.save(result, to: run.corrected, createParents: false)) != nil
             // Polecenie, które poszło do modelu, obok wyniku (też tylko po zapisie): bez niego nie wiadomo, którą wersją promptu poprawiono.
             if saved {
@@ -260,7 +269,7 @@ final class NotesModel {
             // Ślad do odbioru §8.4 tylko po zapisanej korekcie (R18): stary ślad obok nowego `corrected.json` kłamałby.
             if let error = VocabularyTrace.update(promptLines: used?.promptLines, at: run.url.appendingPathComponent("vocabulary.txt"),
                                                   correctionSaved: saved) {
-                report("Couldn't save the vocabulary trace: \(error)")
+                report(String(localized: "Couldn't save the vocabulary trace: \(String(describing: error))"))
             }
             return result.transcript
         }
@@ -282,16 +291,16 @@ final class NotesModel {
         guard state(id) != .generating else { return false }
         // Jeden lokalny serwer obsługuje żądania po kolei: czekanie za korektą liczyłoby się do limitu części („didn't answer").
         guard !isCorrecting(id) else { return false }
-        guard !isTranscribing(id) else { return refuse("This meeting is being transcribed.") }
-        guard let source = item.transcript(corrected: useCorrected) else { return refuse("This meeting has no transcript yet.") }
+        guard !isTranscribing(id) else { return refuse(String(localized: "This meeting is being transcribed.")) }
+        guard let source = item.transcript(corrected: useCorrected) else { return refuse(String(localized: "This meeting has no transcript yet.")) }
         let info = presetsInfo()
         let choice: SummaryChoice? = switch draft {
         case nil: summaryChoice(for: item)
         case .preset?: presetSummaryChoice(for: item)
         case .custom(let o)?: SummaryModel.resolve(frozen: presetFor(item.url), override: o, defaultPresetID: info.defaultID, presets: info.presets)
         }
-        guard let choice else { return refuse("No preset has a summary model. Choose one in Presets.") }
-        guard let client = clientFor(choice.assignment.providerID) else { return refuse("Couldn't reach the summary provider. Check Settings.") }
+        guard let choice else { return refuse(String(localized: "No preset has a summary model. Choose one in Presets.")) }
+        guard let client = clientFor(choice.assignment.providerID) else { return refuse(String(localized: "Couldn't reach the summary provider. Check Settings.")) }
         if let draft {
             guard saveDraft(.summary, draft, item: item) else { return false }
         } else {
@@ -334,7 +343,7 @@ final class NotesModel {
             } catch is CancellationError {
                 self.finishGeneration(id, token, .idle) // anulowane: bez baneru błędu, żadnej notatki na dysku
             } catch NoteGenerationError.nothingToSummarize {
-                self.finishGeneration(id, token, .failed("Nothing to summarize: the transcript has no usable text."))
+                self.finishGeneration(id, token, .failed(String(localized: "Nothing to summarize: the transcript has no usable text.")))
             } catch NoteGenerationError.failed(let message) {
                 self.finishGeneration(id, token, .failed(message))
             } catch {
@@ -483,13 +492,13 @@ final class NotesModel {
     /// Tryb ścisły: katalog spotkania, którego już nie ma, nie powstaje od nowa.
     private func writePending(_ id: String) -> String? {
         guard let p = pendingSaves[id] else { return nil }
-        guard !isMoving() else { return "Your notes weren't saved: \(Self.movingMessage)" }
+        guard !isMoving() else { return String(localized: "Your notes weren't saved: \(Self.movingMessage)") }
         do {
             if let note = try store(p.session).writeMyNotes(p.text) { report(note) }
             pendingSaves[id] = nil
             return nil
         } catch {
-            return "Couldn't save your notes: \(error.localizedDescription)"
+            return String(localized: "Couldn't save your notes: \(error.localizedDescription)")
         }
     }
 
@@ -499,7 +508,7 @@ final class NotesModel {
         do {
             if let note = try store(item.url).updateMeta({ $0.manualTitle = t.isEmpty ? nil : t }) { report(note) }
         } catch {
-            report("Couldn't save the title: \(error)")
+            report(String(localized: "Couldn't save the title: \(String(describing: error))"))
         }
         onChange()
     }
@@ -510,7 +519,7 @@ final class NotesModel {
         do {
             if let note = try store(item.url).updateMeta({ $0.folderID = folderID }) { report(note) }
         } catch {
-            report("Couldn't save the folder: \(error)")
+            report(String(localized: "Couldn't save the folder: \(String(describing: error))"))
         }
         onChange()
     }

@@ -15,6 +15,7 @@ public enum ModelStatus: Equatable, Sendable {
 public struct ModelStoreError: Error, LocalizedError, Equatable, Sendable {
     public var message: String
     public var errorDescription: String? { message }
+    public var displayMessage: String? = nil
 }
 
 /// Magazyn jednego wariantu lokalnego modelu (domyślnie Parakeet v3): stan względem manifestu, odcisk, pobranie i usunięcie. FluidAudio tylko tutaj (domyślny
@@ -111,9 +112,9 @@ public struct ModelStore: Sendable {
         try await downloader(modelDirectory, force, progress)
         switch status() {
         case .ready: return
-        case .missing: throw ModelStoreError(message: "The model download finished but no model files were found.")
+        case .missing: throw ModelStoreError(message: "The model download finished but no model files were found.", displayMessage: String(localized: "The model download finished but no model files were found."))
         case .invalid(let reason), .unknownVariant(let reason):
-            throw ModelStoreError(message: "The downloaded model differs from the version this build expects (\(reason)).")
+            throw ModelStoreError(message: "The downloaded model differs from the version this build expects (\(reason)).", displayMessage: String(localized: "The downloaded model differs from the version this build expects (\(ModelStatus.displayReason(reason)))."))
         }
     }
 
@@ -171,5 +172,22 @@ private final class LockedMapper: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return mapper.map(phase)
+    }
+}
+
+
+extension ModelStatus {
+    public static func displayReason(_ reason: String) -> String {
+        let patterns = [#"^found (.*) instead of (.*)$"#, #"^(.*) is missing$"#, #"^(.*) has ([0-9]+) bytes, expected ([0-9]+)$"#]
+        for (index, pattern) in patterns.enumerated() {
+            guard let regex = try? NSRegularExpression(pattern: pattern), let match = regex.firstMatch(in: reason, range: NSRange(reason.startIndex..., in: reason)) else { continue }
+            let parts = (1..<match.numberOfRanges).map { Range(match.range(at: $0), in: reason).map { String(reason[$0]) } ?? "" }
+            switch index {
+            case 0: return String(localized: "found \(parts[0]) instead of \(parts[1])")
+            case 1: return String(localized: "\(parts[0]) is missing")
+            default: return String(localized: "\(parts[0]) has \(parts[1]) bytes, expected \(parts[2])")
+            }
+        }
+        return reason
     }
 }

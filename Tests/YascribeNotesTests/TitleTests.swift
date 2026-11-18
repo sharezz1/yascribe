@@ -151,3 +151,11 @@ import Testing
     #expect(NoteTitle.parse("# Notes on churn\nbody").title == "Notes on churn")
     #expect(NoteTitle.parse("# Summary:\nbody").title == "Summary:")
 }
+
+@Test func explicitUntitledMeetingIsUserContent() {
+    let meta = NoteMeta(manualTitle: NoteTitle.untitled)
+    #expect(NoteTitle.sourceTitle(meta: NoteMeta(), noteTitle: nil) == nil)
+    #expect(NoteTitle.sourceTitle(meta: meta, noteTitle: nil) == NoteTitle.untitled)
+    #expect(NoteTitle.fieldText(meta: meta, noteTitle: nil) == NoteTitle.untitled)
+    #expect(!NoteTitle.isEdit(NoteTitle.untitled, meta: meta, noteTitle: nil))
+}

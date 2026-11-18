@@ -21,9 +21,9 @@ struct ModelPicker: View {
     private var visible: [ModelInfo] { ModelCatalog.visible(all, role: role, query: state.query) }
     private var kindName: String {
         switch role {
-        case .asr: "transcription"
-        case .embedding: "embedding"
-        case .correction, .summary: "text"
+        case .asr: String(localized: "transcription")
+        case .embedding: String(localized: "embedding")
+        case .correction, .summary: String(localized: "text")
         }
     }
     /// Wpisany identyfikator, którego nie ma na liście.
@@ -43,7 +43,7 @@ struct ModelPicker: View {
                 if showProvider, let name = model.providers.providers.first(where: { $0.id == providerID })?.roleLabel {
                     Text("\(name)  ·").foregroundStyle(.mnText2).fixedSize()
                 }
-                Text(selection.isEmpty ? "Choose model" : selection).lineLimit(1).truncationMode(.middle)
+                Text(selection.isEmpty ? String(localized: "Choose model") : selection).lineLimit(1).truncationMode(.middle)
                     .foregroundStyle(selection.isEmpty ? .mnText2 : .mnText)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.mnText2)

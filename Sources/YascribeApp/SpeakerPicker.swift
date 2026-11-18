@@ -35,8 +35,8 @@ struct SpeakerPicker: View {
             if let name = options.typed { Button("Use \(name)") { select(name) }.buttonStyle(.plain) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    if !options.attendees.isEmpty { section("In this meeting", names: options.attendees) }
-                    if !options.known.isEmpty { section("Recent", names: options.known) }
+                    if !options.attendees.isEmpty { section(String(localized: "In this meeting"), names: options.attendees) }
+                    if !options.known.isEmpty { section(String(localized: "Recent"), names: options.known) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.frame(maxHeight: 240)
             if options.canClear { Divider(); Button("Use Speaker \(number)") { select(nil) }.buttonStyle(.plain) }

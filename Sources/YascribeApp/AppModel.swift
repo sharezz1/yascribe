@@ -16,6 +16,17 @@ enum Section: String, CaseIterable, Identifiable {
     case meetings = "Meetings", tasks = "Tasks", dictation = "Dictation", dictionary = "Dictionary"
     case presets = "Presets", templates = "Templates", settings = "Settings"
     var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .meetings: String(localized: "Meetings")
+        case .tasks: String(localized: "Tasks")
+        case .dictation: String(localized: "Dictation")
+        case .dictionary: String(localized: "Dictionary")
+        case .presets: String(localized: "Presets")
+        case .templates: String(localized: "Templates")
+        case .settings: String(localized: "Settings")
+        }
+    }
     var symbol: String {
         switch self {
         case .meetings: "waveform"
@@ -56,6 +67,7 @@ struct SessionItem: Identifiable, Equatable {
 
     /// Ręczny > auto > tytuł z notatki > „Untitled meeting".
     var title: String { NoteTitle.display(meta: notes.meta, noteTitle: notes.summary?.title) }
+    var displayTitle: String { NoteTitle.sourceTitle(meta: notes.meta, noteTitle: notes.summary?.title) ?? String(localized: "Untitled meeting") }
 
     /// Znaczniki `[[SN]]` notatki → bieżące nazwy mówców.
     /// shortcut: numeracja z surowego transkryptu, także gdy notatka powstała z poprawionego; zmienić, jeśli „Speaker N” w notatce
@@ -340,7 +352,7 @@ final class AppModel {
     var recordingsMoveBlocked: String? {
         let busy = !transcribing.isEmpty || !notes.corrections.sessions.isEmpty || !notes.titles.sessions.isEmpty
             || notes.generation.values.contains(.generating) || !speakerTickets.isEmpty
-        return RecordingsMove.blocked(recording: recording.isRecording, busy: busy, moving: recordingsMove != nil)
+        return RecordingsMove.blocked(recording: recording.isRecording, busy: busy, moving: recordingsMove != nil).map(localizedProviderMessage)
     }
 
     /// Przy starcie i po zmianie „Keep audio”. Nie w trybie migawek i nie w trakcie przenoszenia.
@@ -385,7 +397,7 @@ final class AppModel {
         recordingsMoveResult = nil
         let old = sessionsDirectory
         if let reason = recordingsMoveBlocked ?? RecordingsMove.destinationRefusal(from: old, to: new) {
-            recordingsMoveResult = (false, reason)
+            recordingsMoveResult = (false, localizedProviderMessage(reason))
             return
         }
         notes.flushPendingSaves() // autozapis My notes przed kopią, nie w trakcie (R3)
@@ -408,7 +420,7 @@ final class AppModel {
                 })
                 outcome = leftovers.isEmpty
                     ? (true, nil)
-                    : (true, "Couldn't remove these from the old folder: \(leftovers.joined(separator: ", ")). The copies in the new folder are complete.")
+                    : (true, String(localized: "Couldn't remove these from the old folder: \(leftovers.joined(separator: ", ")). The copies in the new folder are complete."))
             } catch {
                 outcome = (false, "\(error)")
             }
@@ -429,7 +441,7 @@ final class AppModel {
             try JSONFile.save(settings, to: paths.settings)
             try JSONFile.save(probeCache, to: paths.probeCache)
         } catch {
-            lastError = "Couldn't save your settings: \(error)"
+            lastError = String(localized: "Couldn't save your settings: \(error.localizedDescription)")
         }
     }
 
@@ -440,7 +452,7 @@ final class AppModel {
             prompts = new
             return nil
         } catch {
-            return "Couldn't save your prompts: \(error)"
+            return String(localized: "Couldn't save your prompts: \(error.localizedDescription)")
         }
     }
 
@@ -566,7 +578,7 @@ final class AppModel {
             case .success(let c):
                 return LocalASRVariant(model: model) == nil ? LegacyLocalASRClient(inner: c, legacyModel: model) : c
             case .failure(let refusal):
-                lastError = refusal.message
+                lastError = refusal.displayMessage
                 return nil
             }
         case .failure(let problem):
@@ -592,7 +604,7 @@ final class AppModel {
             } else if !ready.isEmpty {
                 providerChecks[id] = .limited(ready.map { $0.store.variant.displayName }.joined(separator: ", ") + " only")
             } else {
-                providerChecks[id] = RunGate.check(status: localASR("")!.status).map { .failed($0.message) } ?? .verified(models: 1)
+                providerChecks[id] = RunGate.check(status: localASR("")!.status).map { .failed($0.displayMessage) } ?? .verified(models: 1)
             }
         case .success(let (p, key)):
             providerChecks[id] = await p.verify(key: key)
@@ -624,14 +636,14 @@ final class AppModel {
             Task { await verifyProvider(p.id) } // Verified albo powód przy dostawcy
             return nil
         } catch {
-            return "Couldn't store the key in Keychain: \(error)"
+            return String(localized: "Couldn't store the key in Keychain: \(error.localizedDescription)")
         }
     }
 
     /// Poprawka klucza już zapisanego dostawcy (formularz „Save & verify" po błędzie): zapis i ponowna weryfikacja.
     /// `nil` = zapisano; tekst = błąd pęku kluczy. Pusty klucz (Ollama) tylko weryfikuje ponownie.
     func replaceKey(_ id: UUID, key: String) -> String? {
-        do { if !key.isEmpty { try secrets.set(id, key) } } catch { return "Couldn't store the key in Keychain: \(error)" }
+        do { if !key.isEmpty { try secrets.set(id, key) } } catch { return String(localized: "Couldn't store the key in Keychain: \(error.localizedDescription)") }
         Task { await verifyProvider(id) }
         return nil
     }
@@ -690,7 +702,7 @@ final class AppModel {
             modelLists[k] = list
             if modelNames.record(list) { try? JSONFile.save(modelNames, to: paths.modelNames) }
         } catch {
-            lastError = "Couldn't load models: \(error)"
+            lastError = String(localized: "Couldn't load models: \(error.localizedDescription)")
         }
     }
 
@@ -759,20 +771,20 @@ final class AppModel {
     private func announceUpdatePostponed() {
         guard let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) && !$0.isSheet }) else { return }
         let alert = NSAlert()
-        alert.messageText = "Update ready"
-        alert.informativeText = "Yascribe will install the update and restart as soon as you stop recording. The recording is not interrupted."
-        alert.addButton(withTitle: "OK")
+        alert.messageText = String(localized: "Update ready")
+        alert.informativeText = String(localized: "Yascribe will install the update and restart as soon as you stop recording. The recording is not interrupted.")
+        alert.addButton(withTitle: String(localized: "OK"))
         alert.beginSheetModal(for: window)
     }
 
     /// Nowe nagranie nie startuje od pierwszego kliknięcia „Install Update” do końca cyklu (także podczas odroczonego restartu).
     func canBeginRecording() -> Bool {
         guard updateGate.canStartRecording else {
-            lastError = "Update in progress."
+            lastError = String(localized: "Update in progress.")
             return false
         }
         guard DictationGate.canStartMeeting(dictationBusy: dictation.engine.isBusy) else {
-            lastError = "Finish dictating first."
+            lastError = String(localized: "Finish dictating first.")
             return false
         }
         return true
@@ -781,6 +793,10 @@ final class AppModel {
     /// Zakończenie aplikacji (⌘Q, pasek menu, restart Sparkle): z nagraniem w toku pyta, najpierw zatrzymuje je, potem pozwala wyjść.
     /// ponytail: transkrypcja nie startuje przed wyjściem; wznawia się ręcznie po następnym uruchomieniu.
     enum TerminationDecision { case now, cancel, afterRecording, afterDictation }
+
+    var canRestartForLanguage: Bool {
+        updateGate.shouldTerminate() && recording.directory == nil && !dictation.engine.isBusy && updateGate.phase == .idle
+    }
 
     /// `afterRecording`: zgoda jest, ale rejestrator jeszcze finalizuje pliki (`stop()` mógł wrócić od razu, gdy
     /// finalizacja zaczęła się wcześniej na wątku audio); wyjście dopiero po `recordingFinished()`.
@@ -797,18 +813,18 @@ final class AppModel {
         let alert = NSAlert()
         NSApp.activate()
         if recording.isRecording {
-            alert.messageText = "Stop recording and quit?"
-            alert.informativeText = "The recording is saved. Transcribe it the next time you open Yascribe."
-            alert.addButton(withTitle: "Stop and Quit")
-            alert.addButton(withTitle: "Cancel")
+            alert.messageText = String(localized: "Stop recording and quit?")
+            alert.informativeText = String(localized: "The recording is saved. Transcribe it the next time you open Yascribe.")
+            alert.addButton(withTitle: String(localized: "Stop and Quit"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
             guard alert.runModal() == .alertFirstButtonReturn else { return .cancel }
             quitApproved = true
             recording.stop()
             return recording.isRecording ? .afterRecording : .now
         }
-        alert.messageText = "Meetings are being moved"
-        alert.informativeText = "Quit when the move to the new folder finishes."
-        alert.addButton(withTitle: "OK")
+        alert.messageText = String(localized: "Meetings are being moved")
+        alert.informativeText = String(localized: "Quit when the move to the new folder finishes.")
+        alert.addButton(withTitle: String(localized: "OK"))
         alert.runModal()
         return .cancel
     }
@@ -839,16 +855,16 @@ final class AppModel {
         // Jedyna droga do `recording.start`: menu, skróty, pigułka, pasek menu, Coming up i oferty przechodzą tędy.
         guard canBeginRecording() else { return false }
         guard !recording.isRecording else {
-            lastError = "A recording is already in progress."
+            lastError = String(localized: "A recording is already in progress.")
             return false
         }
         guard recordingsMove == nil else {
-            lastError = "Meetings are being moved to a new folder. Record when that finishes."
+            lastError = String(localized: "Meetings are being moved to a new folder. Record when that finishes.")
             return false
         }
         // ChatGPT #2: preset — z językiem — ustalony PRZED startem i zamrożony na całą sesję.
         guard let preset = activePreset, (try? preset.validate()) != nil else {
-            lastError = "Choose a preset with a language before recording."
+            lastError = String(localized: "Choose a preset with a language before recording.")
             if !background { section = .presets }
             return false
         }
@@ -862,19 +878,19 @@ final class AppModel {
             }
             // Nagranie trwa mimo błędu zapisu — ten przebieg i tak dostaje `preset` z domknięcia.
             do { try JSONFile.save(preset, to: dir.appendingPathComponent("preset.json")) } catch {
-                lastError = "Recording, but couldn't save its preset: \(error). After a restart it will use the active preset."
+                lastError = String(localized: "Recording, but couldn't save its preset: \(String(describing: error)). After a restart it will use the active preset.")
             }
             if let event {
                 do {
                     if let note = try NotesStore(session: dir).updateMeta({ $0.calendarEvent = event.link() }) { lastError = note }
-                } catch { lastError = "Recording, but couldn't link the calendar event: \(error)" }
+                } catch { lastError = String(localized: "Recording, but couldn't link the calendar event: \(String(describing: error))") }
             }
             if recording.isRecording { recording.showPanel(model: self) }
             reloadSessions()
             openSession(dir.lastPathComponent) // notatki pisze się w trakcie spotkania
             return recording.isRecording
         } catch {
-            lastError = "Couldn't start recording: \(error)"
+            lastError = String(localized: "Couldn't start recording: \(String(describing: error))")
             return false
         }
     }
@@ -920,15 +936,15 @@ final class AppModel {
     /// Potwierdzenie przed usunięciem z listy (menu kontekstowe wiersza); szczegóły mają własny dialog.
     func requestDelete(_ item: SessionItem) {
         if let reason = deleteBlocker(item) {
-            lastError = "Couldn't delete the meeting: \(reason)"
+            lastError = String(localized: "Couldn't delete the meeting: \(reason)")
             return
         }
         let alert = NSAlert()
-        alert.messageText = "Move “\(item.title)” to the Trash?"
-        alert.informativeText = "The meeting folder, with its recordings and notes, goes to the Trash. You can put it back from there."
+        alert.messageText = String(localized: "Move “\(item.displayTitle)” to the Trash?")
+        alert.informativeText = String(localized: "The meeting folder, with its recordings and notes, goes to the Trash. You can put it back from there.")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Move to Trash")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Move to Trash"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         deleteSession(item.id)
     }
@@ -938,10 +954,10 @@ final class AppModel {
     func deleteSession(_ id: String) {
         pendingDelete = nil
         guard let item = sessions.first(where: { $0.id == id }) else { return }
-        if let reason = deleteBlocker(item) { lastError = "Couldn't delete the meeting: \(reason)"; return }
-        if let problem = notes.flushPendingSaves(for: id) { lastError = "Couldn't delete the meeting: \(problem)"; return }
+        if let reason = deleteBlocker(item) { lastError = String(localized: "Couldn't delete the meeting: \(reason)"); return }
+        if let problem = notes.flushPendingSaves(for: id) { lastError = String(localized: "Couldn't delete the meeting: \(problem)"); return }
         // Stan mógł się zmienić w trakcie zapisu — druga ocena tuż przed przeniesieniem.
-        if let reason = deleteBlocker(item) { lastError = "Couldn't delete the meeting: \(reason)"; return }
+        if let reason = deleteBlocker(item) { lastError = String(localized: "Couldn't delete the meeting: \(reason)"); return }
         do {
             switch try trashDestination() {
             case .systemTrash:
@@ -952,7 +968,7 @@ final class AppModel {
             if selectedSessionID == id { selectedSessionID = nil }
             archive.forget(id)
         } catch {
-            lastError = "Couldn't move the meeting to the Trash: \(error.localizedDescription)"
+            lastError = String(localized: "Couldn't move the meeting to the Trash: \(error.localizedDescription)")
         }
         reloadSessions()
     }
@@ -981,9 +997,9 @@ final class AppModel {
 
     var filterLabel: String {
         switch meetingFilter {
-        case .all: "All folders"
-        case .unfiled: "No folder"
-        case .folder(let id): folders.folder(id)?.name ?? "No folder"
+        case .all: String(localized: "All folders")
+        case .unfiled: String(localized: "No folder")
+        case .folder(let id): folders.folder(id)?.name ?? String(localized: "No folder")
         }
     }
 
@@ -992,7 +1008,7 @@ final class AppModel {
 
     private func saveFolders() -> String? {
         do { try JSONFile.save(folders, to: paths.folders); return nil }
-        catch { return "Couldn't save the folders: \(error.localizedDescription)" }
+        catch { return String(localized: "Couldn't save the folders: \(error.localizedDescription)") }
     }
 
     /// `nil` = utworzono; tekst = powód odmowy (pusta, za długa, powtórzona nazwa).
@@ -1025,8 +1041,8 @@ final class AppModel {
     }
 
     func promptNewFolder(assignTo item: SessionItem? = nil) {
-        guard let name = Self.promptForName(title: "New Folder", message: "Meetings stay where they are on disk; the folder only groups them.",
-                                           confirm: "Create") else { return }
+        guard let name = Self.promptForName(title: String(localized: "New Folder"), message: String(localized: "Meetings stay where they are on disk; the folder only groups them."),
+                                           confirm: String(localized: "Create")) else { return }
         if let error = createFolder(name) {
             lastError = error
         } else if let item, let folder = folders.folders.last {
@@ -1036,7 +1052,7 @@ final class AppModel {
 
     func promptRenameFolder(_ id: String) {
         guard let current = folders.folder(id) else { return }
-        guard let name = Self.promptForName(title: "Rename Folder", message: nil, confirm: "Rename", initial: current.name) else { return }
+        guard let name = Self.promptForName(title: String(localized: "Rename Folder"), message: nil, confirm: String(localized: "Rename"), initial: current.name) else { return }
         if let error = renameFolder(id, to: name) { lastError = error }
     }
 
@@ -1044,11 +1060,11 @@ final class AppModel {
     func confirmDeleteFolder(_ id: String) {
         guard let folder = folders.folder(id) else { return }
         let alert = NSAlert()
-        alert.messageText = "Delete the folder “\(folder.name)”?"
-        alert.informativeText = "Its meetings are kept; they just move to “No folder”."
+        alert.messageText = String(localized: "Delete the folder “\(folder.name)”?")
+        alert.informativeText = String(localized: "Its meetings are kept; they just move to “No folder”.")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Delete Folder")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Delete Folder"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         if let error = deleteFolder(id) { lastError = error }
     }
@@ -1059,10 +1075,10 @@ final class AppModel {
         alert.messageText = title
         if let message { alert.informativeText = message }
         alert.addButton(withTitle: confirm)
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: String(localized: "Cancel"))
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
         field.stringValue = initial
-        field.placeholderString = "Folder name"
+        field.placeholderString = String(localized: "Folder name")
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return nil }
@@ -1082,7 +1098,7 @@ final class AppModel {
     @discardableResult
     func transcribe(sessionURL: URL, preset: Preset) -> Bool {
         guard var asr = preset.asr, let provider = provider(asr.providerID) else {
-            lastError = "The preset's speech-to-text provider is missing."
+            lastError = String(localized: "The preset's speech-to-text provider is missing.")
             return false
         }
         // Migawka ma nieść model, który naprawdę ruszy (nieznany = v3), a nie wpisany identyfikator.
@@ -1099,7 +1115,7 @@ final class AppModel {
             return run(sessionURL: sessionURL, runID: RunDirectory.nextRunID(latest: RunDirectory.latestRunID(in: sessionURL), now: Date()),
                        snapshot: snapshot, client: c)
         } catch RunSnapshotError.chatShapeNotForMeetings {
-            lastError = "This model returns no word timings, so it can't be used for meetings."
+            lastError = String(localized: "This model returns no word timings, so it can't be used for meetings.")
         } catch {
             lastError = "\(error)"
         }
@@ -1120,12 +1136,12 @@ final class AppModel {
     func resume(_ item: SessionItem, runID: String?) {
         // F2: wznowienie z korektą w toku dałoby drugą korektę tego samego przebiegu (blokada także poza interfejsem, jak R3).
         guard !notes.isCorrecting(item.id) else {
-            lastError = "This transcript is being corrected. Try again when that finishes."
+            lastError = String(localized: "This transcript is being corrected. Try again when that finishes.")
             return
         }
         guard let runID,
               let input = try? JSONFile.load(RunInput?.self, from: RunDirectory(session: item.url, runID: runID).input, default: nil) else {
-            lastError = "Nothing to resume for this recording."
+            lastError = String(localized: "Nothing to resume for this recording.")
             return
         }
         if let p = provider(input.snapshot.providerID), p.api == .fluidAudio {
@@ -1136,7 +1152,7 @@ final class AppModel {
                 return
             }
             if let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p, currentFingerprint: fingerprint) {
-                lastError = refusal.message
+                lastError = refusal.displayMessage
                 return
             }
         }
@@ -1164,7 +1180,7 @@ final class AppModel {
                     }
                 }
             } catch {
-                self.lastError = "Transcription failed: \(error)"
+                self.lastError = String(localized: "Transcription failed: \(String(describing: error))")
             }
             // Zwolnienie modelu po przebiegu — także po błędzie (catch wyżej go połyka, więc ta linia zawsze się wykona). Notatka idzie dalej.
             await (c as? ReleasableClient)?.release()
@@ -1225,7 +1241,7 @@ final class AppModel {
     }
 
     private struct NoCallAudio: LocalizedError {
-        var errorDescription: String? { "This meeting has no call audio, so speakers can't be detected." }
+        var errorDescription: String? { String(localized: "This meeting has no call audio, so speakers can't be detected.") }
     }
 
     /// Cała praca na dysku i modelu poza MainActor (F04): dziennik, diaryzacja, przeliczenie segmentów, odcisk audio.
@@ -1262,7 +1278,7 @@ final class AppModel {
     /// Synchronicznie, przed pierwszym `await` i przed utworzeniem `Task`: sesja od razu chroniona przed retencją i przeniesieniem (F03).
     private func reserveSpeakerTicket(sessionURL: URL, runID: String) -> SpeakerDetectionTicket? {
         guard recordingsMove == nil else {
-            lastError = "Meetings are being moved to a new folder. Detect speakers when that finishes."
+            lastError = String(localized: "Meetings are being moved to a new folder. Detect speakers when that finishes.")
             return nil
         }
         let id = sessionURL.lastPathComponent
@@ -1303,7 +1319,7 @@ final class AppModel {
         } catch {
             // Anulowanie (nowsza operacja albo wywołujący) nie jest błędem dla użytkownika.
             if !Task.isCancelled, !work.isCancelled, !(error is CancellationError) {
-                lastError = error is NoCallAudio ? error.localizedDescription : "Couldn't detect speakers: \(SpeakerDetectionError.text(error))"
+                lastError = error is NoCallAudio ? error.localizedDescription : String(localized: "Couldn't detect speakers: \(SpeakerDetectionError.text(error))")
             }
         }
         // Tylko własny bilet: zastąpiona operacja nie zdejmuje ochrony z sesji, której używa nowsza.
@@ -1316,7 +1332,7 @@ final class AppModel {
 
     func detectSpeakersAgain(item: SessionItem) {
         guard let snapshot = item.runSnapshot, let cloud = cloudProvider(snapshot.providerID) else {
-            lastError = "Couldn't detect speakers: No API key."
+            lastError = String(localized: "Couldn't detect speakers: No API key.")
             return
         }
         startManualDetection(item: item, cloud: cloud)
@@ -1325,8 +1341,8 @@ final class AppModel {
     func detectSpeakersOnThisMac(item: SessionItem) { startManualDetection(item: item, cloud: nil) }
 
     private func startManualDetection(item: SessionItem, cloud: (Provider, String)?) {
-        guard let runID = item.runID else { lastError = "Transcribe this meeting first."; return }
-        guard !notes.isTranscribing(item.id) else { lastError = "This recording is being transcribed. Try again when that finishes."; return }
+        guard let runID = item.runID else { lastError = String(localized: "Transcribe this meeting first."); return }
+        guard !notes.isTranscribing(item.id) else { lastError = String(localized: "This recording is being transcribed. Try again when that finishes."); return }
         guard let ticket = reserveSpeakerTicket(sessionURL: item.url, runID: runID) else { return }
         Task { await performSpeakerDetection(ticket, sessionURL: item.url, cloud: cloud) }
     }
@@ -1344,7 +1360,7 @@ final class AppModel {
                 try people.save(root: paths.root)
             }
             reloadSessions()
-        } catch { lastError = "Couldn't rename speaker: \(error.localizedDescription)" }
+        } catch { lastError = String(localized: "Couldn't rename speaker: \(error.localizedDescription)") }
     }
 
     static func sessionName(_ d: Date) -> String {
@@ -1376,13 +1392,13 @@ enum TranscriptionStartGate {
         if transcribing { return "This recording is already being transcribed." }
         if moving { return "Meetings are being moved to a new folder. Transcribe when that finishes." }
         // Nowy przebieg w trakcie korekty: korekta starego tekstu nadpisałaby wynik albo poszłaby druga (F2, jak w `resume`).
-        if correcting { return "This transcript is being corrected. Try again when that finishes." }
+        if correcting { return String(localized: "This transcript is being corrected. Try again when that finishes.") }
         // Po przebiegu ruszyłaby autokorekta obok notatki (ten sam lokalny serwer), a notatka ze starego tekstu nadpisałaby nowe.
         if generating { return "Notes are being generated for this meeting. Try again when that finishes." }
         // Bez audio przebieg utworzyłby pusty `runs/<id>/` jako najnowszą próbę (wznowienie, retencja) bez szans na transkrypt.
         guard AudioRetention.audioFiles(sessionURL).isEmpty else { return nil }
-        let days = AudioDeletion.read(sessionURL).map { " after \($0.afterDays) days" } ?? ""
-        return "This meeting's audio was deleted\(days), so it can't be transcribed again."
+        if let deletion = AudioDeletion.read(sessionURL) { return String(format: NSLocalizedString("This meeting's audio was deleted after %lld days, so it can't be transcribed again.", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(deletion.afterDays)) }
+        return String(localized: "This meeting's audio was deleted, so it can't be transcribed again.")
     }
 }
 

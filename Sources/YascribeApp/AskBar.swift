@@ -19,7 +19,7 @@ struct AskBar: View {
     @FocusState private var focused: Bool
     init(state: AskBarState = AskBarState()) { self.state = state }
 
-    private var prompt: String { "Ask about " + (state.pane == .meetings ? model.archive.draftScopeLabel : model.archive.currentScopeLabel) }
+    private var prompt: String { String.localizedStringWithFormat(NSLocalizedString("Ask about %@", comment: ""), state.pane == .meetings ? model.archive.draftScopeLabel : model.archive.currentScopeLabel) }
 
     private var question: String { state.text.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var questionTooLong: Bool { question.count > ArchiveAsk.maxQuestionChars }
@@ -58,7 +58,7 @@ struct AskBar: View {
             .padding(10)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.mnLine, lineWidth: 1))
-            if questionTooLong { WarnLabel("Questions can be up to 1 000 characters.").font(.system(size: 11)) }
+            if questionTooLong { WarnLabel(String(localized: "Questions can be up to 1 000 characters.")).font(.system(size: 11)) }
             if let error = model.archive.persistenceError {
                 WarnLabel(error).font(.system(size: 11))
             }

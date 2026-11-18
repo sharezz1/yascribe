@@ -31,11 +31,11 @@ extension AppModel {
     }
 
     private func setCalendarEvent(_ link: CalendarLink?, for item: SessionItem) {
-        guard recordingsMove == nil else { lastError = "Meetings are being moved to a new folder. Try again when that finishes."; return }
+        guard recordingsMove == nil else { lastError = String(localized: "Meetings are being moved to a new folder. Try again when that finishes."); return }
         do {
             if let note = try NotesStore(session: item.url).updateMeta({ $0.calendarEvent = link }) { lastError = note }
         } catch {
-            lastError = "Couldn't save the calendar event: \(error)"
+            lastError = String(localized: "Couldn't save the calendar event: \(String(describing: error))")
         }
         reloadSessions()
     }

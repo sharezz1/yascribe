@@ -12,7 +12,7 @@ public struct SummaryChoice: Equatable, Sendable {
     public var thinking: Bool?
 
     /// „Using <model> from preset <nazwa>" tylko dla zastępstwa; model z presetu nagrania nie wymaga wyjaśnień.
-    public var label: String? { isFallback ? "Using \(assignment.model) from preset \(presetName)" : nil }
+    public var label: String? { isFallback ? String(localized: "Using \(assignment.model) from preset \(presetName)") : nil }
 }
 
 public enum SummaryModel {

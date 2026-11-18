@@ -55,7 +55,7 @@ struct TranscriptModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Improve", dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
+        EditorSheet(title: String(localized: "Improve"), dirty: false, error: ui.error, onCancel: onClose, footer: .closeOnly, idealHeight: nil) {
             VStack(alignment: .leading, spacing: 18) {
                 transcribeSection
                 Divider()
@@ -88,9 +88,9 @@ struct TranscriptModelsSheet: View {
 
     private var transcribeSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .asr, current: draft.asrProviderID)
-        return SheetSection(title: "Speech to text") {
-            SheetRow(label: "Provider") {
-                FieldMenu(label: "Provider", value: provider(draft.asrProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
+        return SheetSection(title: String(localized: "Speech to text")) {
+            SheetRow(label: String(localized: "Provider")) {
+                FieldMenu(label: String(localized: "Provider"), value: provider(draft.asrProviderID)?.roleLabel ?? String(localized: "None"), width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.asrProviderID }, set: { id in
                         guard id != draft.asrProviderID else { return }
                         draft.asrProviderID = id
@@ -102,23 +102,23 @@ struct TranscriptModelsSheet: View {
                 }
             }
             if let pid = draft.asrProviderID {
-                SheetRow(label: "Model") {
+                SheetRow(label: String(localized: "Model")) {
                     ModelPicker(providerID: pid, role: .asr, selection: $draft.asrModel, showProvider: false).frame(maxWidth: .infinity)
                     if provider(pid)?.isLocal == true { OnThisMacTag() }
                 }
                 if provider(pid)?.api == .fluidAudio, model.localASR(draft.asrModel) == nil {
                     SheetRow(label: "") {
-                        WarnLabel("Unknown on-device model — uses Parakeet TDT v3")
+                        WarnLabel(String(localized: "Unknown on-device model — uses Parakeet TDT v3"))
                         Spacer(minLength: 0)
                         Button("Choose Parakeet TDT v3") { draft.asrModel = LocalASRModels.parakeetV3 }.buttonStyle(.pillSmall)
                     }
                 }
             }
-            SheetRow(label: "Language") {
-                FieldMenu(label: "Language", value: languageName(draft.language), width: nil, flexible: true) {
+            SheetRow(label: String(localized: "Language")) {
+                FieldMenu(label: String(localized: "Language"), value: languageName(draft.language), width: nil, flexible: true) {
                     Picker("Language", selection: $draft.language) {
                         Text("Choose…").tag(LanguageChoice.unset)
-                        ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(LanguageChoice.code(l.code)) }
+                        ForEach(LanguageCode.selectable, id: \.code) { l in Text(languageDisplayName(l.code)).tag(LanguageChoice.code(l.code)) }
                         Divider()
                         Text("Auto (mixed languages)").tag(LanguageChoice.auto)
                     }
@@ -126,7 +126,7 @@ struct TranscriptModelsSheet: View {
                 }
             }
             if draft.language == .auto {
-                WarnLabel("Lower quality, risk of invented text. Use Auto only for meetings that mix languages.")
+                WarnLabel(String(localized: "Lower quality, risk of invented text. Use Auto only for meetings that mix languages."))
             }
         }
     }
@@ -134,13 +134,13 @@ struct TranscriptModelsSheet: View {
     /// Dwa przyciski na dole: „Improve" poprawia obecny transkrypt, „Transcribe + improve" robi nową transkrypcję i potem poprawę.
     private var actionRow: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SheetNote("Improve keeps the current transcription. Transcribe + improve replaces it with a new one, then improves it.")
+            SheetNote(String(localized: "Improve keeps the current transcription. Transcribe + improve replaces it with a new one, then improves it."))
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button("Improve") { improve() }.buttonStyle(.pill).disabled(correctReason != nil)
-                    .help(correctReason ?? "Improve the current transcript with the model above")
+                    .help(correctReason ?? String(localized: "Improve the current transcript with the model above"))
                 Button("Transcribe + improve") { transcribe() }.buttonStyle(.pillPrimary).disabled(transcribeReason != nil)
-                    .help(transcribeReason ?? "Transcribe again, then improve the result")
+                    .help(transcribeReason ?? String(localized: "Transcribe again, then improve the result"))
             }
             if let r = transcribeReason ?? correctReason {
                 Text(r).font(.subheadline).foregroundStyle(.mnText2).frame(maxWidth: .infinity, alignment: .trailing)
@@ -167,9 +167,9 @@ struct TranscriptModelsSheet: View {
 
     private var correctSection: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .correction, current: draft.correctProviderID)
-        return SheetSection(title: "Text improvement") {
-            SheetRow(label: "Provider") {
-                FieldMenu(label: "Provider", value: provider(draft.correctProviderID)?.roleLabel ?? "None", width: nil, flexible: true) {
+        return SheetSection(title: String(localized: "Text improvement")) {
+            SheetRow(label: String(localized: "Provider")) {
+                FieldMenu(label: String(localized: "Provider"), value: provider(draft.correctProviderID)?.roleLabel ?? String(localized: "None"), width: nil, flexible: true) {
                     Picker("Provider", selection: Binding(get: { draft.correctProviderID }, set: { id in
                         guard id != draft.correctProviderID else { return }
                         draft.correctProviderID = id
@@ -181,11 +181,11 @@ struct TranscriptModelsSheet: View {
                 }
             }
             if let pid = draft.correctProviderID {
-                SheetRow(label: "Model") {
+                SheetRow(label: String(localized: "Model")) {
                     ModelPicker(providerID: pid, role: .correction, selection: $draft.correctModel, showProvider: false).frame(maxWidth: .infinity)
                     if provider(pid)?.isLocal == true { OnThisMacTag() }
                 }
-                if let note = AgentPrivacy.caption(provider(pid)) { SheetNote(note) }
+                if let note = agentPrivacyCaption(provider(pid)) { SheetNote(note) }
             }
             if hasCorrectionOverride || stale {
                 SheetRow(label: "") {
@@ -197,7 +197,7 @@ struct TranscriptModelsSheet: View {
                 }
             }
             SheetNote(correctCaption)
-            if model.notes.isCorrecting(item.id) { StateLabel(.progress(nil), "Improving the transcript…") }
+            if model.notes.isCorrecting(item.id) { StateLabel(.progress(nil), String(localized: "Improving the transcript…")) }
         }
     }
 

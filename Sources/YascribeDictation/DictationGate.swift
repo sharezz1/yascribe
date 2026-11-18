@@ -1,11 +1,13 @@
+import Foundation
+
 /// Powód odmowy startu dyktowania.
 public enum DictationRefusal: Error, Equatable, Sendable {
     case recordingMeeting, busy
 
     public var message: String {
         switch self {
-        case .recordingMeeting: "Recording a meeting."
-        case .busy: "Dictation in progress."
+        case .recordingMeeting: String(localized: "Recording a meeting.")
+        case .busy: String(localized: "Dictation in progress.")
         }
     }
 }

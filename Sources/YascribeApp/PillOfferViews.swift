@@ -11,10 +11,15 @@ struct PillOfferView: View {
 
     private var kind: (icon: String, label: String) {
         switch offer.source {
-        case .calendar: ("calendar", "Calendar")
-        case .call: ("phone", "Call")
-        case .calendarAndCall: ("calendar", "Calendar + call")
+        case .calendar: ("calendar", String(localized: "Calendar"))
+        case .call: ("phone", String(localized: "Call"))
+        case .calendarAndCall: ("calendar", String(localized: "Calendar + call"))
         }
+    }
+
+    private var displayTitle: String {
+        guard offer.source == .call, offer.event == nil, let app = offer.app else { return offer.title }
+        return String(localized: "Call in \(OfferDetector.appName(app))")
     }
 
     var body: some View {
@@ -22,14 +27,14 @@ struct PillOfferView: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: kind.icon).font(.system(size: 14)).foregroundStyle(.mnText2).frame(width: 18).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(offer.title).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2)
+                    Text(displayTitle).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2)
                     Text(kind.label).font(.callout).foregroundStyle(.mnText2).lineLimit(1)
                 }
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 0)
             }
             // Język spotkania jest jawny (W§): wybór presetu w ofercie to ten sam `activePresetID` co na stronie Meetings.
-            FieldMenu(label: "Preset", value: model.activePreset.map(AppModel.label) ?? "No preset", prefix: "Preset", width: 292) {
+            FieldMenu(label: String(localized: "Preset"), value: model.activePreset.map(AppModel.label) ?? String(localized: "No preset"), prefix: String(localized: "Preset"), width: 292) {
                 ForEach(model.presets.presets) { p in
                     Button(AppModel.label(p)) { model.activePresetID = p.id }
                 }

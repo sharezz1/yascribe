@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Audio was deleted after %lld days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Dźwięk usunięto po %lld dniu</string>
+			<key>few</key>
+			<string>Dźwięk usunięto po %lld dniach</string>
+			<key>many</key>
+			<string>Dźwięk usunięto po %lld dniach</string>
+			<key>other</key>
+			<string>Dźwięk usunięto po %lld dniach</string>
+		</dict>
+	</dict>
+	<key>%lld terms</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld termin</string>
+			<key>few</key>
+			<string>%lld terminy</string>
+			<key>many</key>
+			<string>%lld terminów</string>
+			<key>other</key>
+			<string>%lld terminów</string>
+		</dict>
+	</dict>
+	<key>%lld aliases</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld alias</string>
+			<key>few</key>
+			<string>%lld aliasy</string>
+			<key>many</key>
+			<string>%lld aliasów</string>
+			<key>other</key>
+			<string>%lld aliasów</string>
+		</dict>
+	</dict>
+	<key>%lld risky left off</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld ryzykowny wyłączony</string>
+			<key>few</key>
+			<string>%lld ryzykowne wyłączone</string>
+			<key>many</key>
+			<string>%lld ryzykownych wyłączonych</string>
+			<key>other</key>
+			<string>%lld ryzykownych wyłączonych</string>
+		</dict>
+	</dict>
+	<key>%lld conflicts</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld konflikt</string>
+			<key>few</key>
+			<string>%lld konflikty</string>
+			<key>many</key>
+			<string>%lld konfliktów</string>
+			<key>other</key>
+			<string>%lld konfliktów</string>
+		</dict>
+	</dict>
+	<key>%lld rejected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld odrzucony</string>
+			<key>few</key>
+			<string>%lld odrzucone</string>
+			<key>many</key>
+			<string>%lld odrzuconych</string>
+			<key>other</key>
+			<string>%lld odrzuconych</string>
+		</dict>
+	</dict>
+	<key>%lld terms do not fit the correction prompt</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld termin nie mieści się w poleceniu korekty</string>
+			<key>few</key>
+			<string>%lld terminy nie mieszczą się w poleceniu korekty</string>
+			<key>many</key>
+			<string>%lld terminów nie mieści się w poleceniu korekty</string>
+			<key>other</key>
+			<string>%lld terminów nie mieści się w poleceniu korekty</string>
+		</dict>
+	</dict>
+	<key>%lld entries were skipped: text can’t start with # or contain tabs or line breaks.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Pominięto %lld wpis: tekst nie może zaczynać się od # ani zawierać tabulatorów lub znaków nowego wiersza.</string>
+			<key>few</key>
+			<string>Pominięto %lld wpisy: tekst nie może zaczynać się od # ani zawierać tabulatorów lub znaków nowego wiersza.</string>
+			<key>many</key>
+			<string>Pominięto %lld wpisów: tekst nie może zaczynać się od # ani zawierać tabulatorów lub znaków nowego wiersza.</string>
+			<key>other</key>
+			<string>Pominięto %lld wpisów: tekst nie może zaczynać się od # ani zawierać tabulatorów lub znaków nowego wiersza.</string>
+		</dict>
+	</dict>
+	<key>%lld meetings</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld spotkanie</string>
+			<key>few</key>
+			<string>%lld spotkania</string>
+			<key>many</key>
+			<string>%lld spotkań</string>
+			<key>other</key>
+			<string>%lld spotkań</string>
+		</dict>
+	</dict>
+	<key>%lld meetings (from)</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld spotkania</string>
+			<key>few</key>
+			<string>%lld spotkań</string>
+			<key>many</key>
+			<string>%lld spotkań</string>
+			<key>other</key>
+			<string>%lld spotkań</string>
+		</dict>
+	</dict>
+	<key>%lld days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld dzień</string>
+			<key>few</key>
+			<string>%lld dni</string>
+			<key>many</key>
+			<string>%lld dni</string>
+			<key>other</key>
+			<string>%lld dni</string>
+		</dict>
+	</dict>
+	<key>Partial — %lld gaps</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Częściowo — %lld luka</string>
+			<key>few</key>
+			<string>Częściowo — %lld luki</string>
+			<key>many</key>
+			<string>Częściowo — %lld luk</string>
+			<key>other</key>
+			<string>Częściowo — %lld luk</string>
+		</dict>
+	</dict>
+	<key>Audio deleted after %lld days</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Dźwięk usunięto po %lld dniu</string>
+			<key>few</key>
+			<string>Dźwięk usunięto po %lld dniach</string>
+			<key>many</key>
+			<string>Dźwięk usunięto po %lld dniach</string>
+			<key>other</key>
+			<string>Dźwięk usunięto po %lld dniach</string>
+		</dict>
+	</dict>
+	<key>This meeting's audio was deleted after %lld days.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniu.</string>
+			<key>few</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniach.</string>
+			<key>many</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniach.</string>
+			<key>other</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniach.</string>
+		</dict>
+	</dict>
+	<key>This meeting's audio was deleted after %lld days, so it can't be transcribed again.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniu, więc nie można go ponownie transkrybować.</string>
+			<key>few</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniach, więc nie można go ponownie transkrybować.</string>
+			<key>many</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniach, więc nie można go ponownie transkrybować.</string>
+			<key>other</key>
+			<string>Dźwięk tego spotkania usunięto po %lld dniach, więc nie można go ponownie transkrybować.</string>
+		</dict>
+	</dict>
+	<key>%lld terms added</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld dodany termin</string>
+			<key>few</key>
+			<string>%lld dodane terminy</string>
+			<key>many</key>
+			<string>%lld dodanych terminów</string>
+			<key>other</key>
+			<string>%lld dodanych terminów</string>
+		</dict>
+	</dict>
+	<key>%lld aliases added</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld dodany alias</string>
+			<key>few</key>
+			<string>%lld dodane aliasy</string>
+			<key>many</key>
+			<string>%lld dodanych aliasów</string>
+			<key>other</key>
+			<string>%lld dodanych aliasów</string>
+		</dict>
+	</dict>
+	<key>%lld risky, left off</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld ryzykowny, wyłączony</string>
+			<key>few</key>
+			<string>%lld ryzykowne, wyłączone</string>
+			<key>many</key>
+			<string>%lld ryzykownych, wyłączonych</string>
+			<key>other</key>
+			<string>%lld ryzykownych, wyłączonych</string>
+		</dict>
+	</dict>
+	<key>%lld parts couldn't be transcribed.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Nie udało się transkrybować %lld części.</string>
+			<key>few</key>
+			<string>Nie udało się transkrybować %lld części.</string>
+			<key>many</key>
+			<string>Nie udało się transkrybować %lld części.</string>
+			<key>other</key>
+			<string>Nie udało się transkrybować %lld części.</string>
+		</dict>
+	</dict>
+	<key>%lld saved chats were unreadable and skipped. The other chats are not affected.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Nie udało się odczytać %lld zapisanej rozmowy, więc została pominięta. Pozostałe rozmowy są dostępne.</string>
+			<key>few</key>
+			<string>Nie udało się odczytać %lld zapisanych rozmów, więc zostały pominięte. Pozostałe rozmowy są dostępne.</string>
+			<key>many</key>
+			<string>Nie udało się odczytać %lld zapisanych rozmów, więc zostały pominięte. Pozostałe rozmowy są dostępne.</string>
+			<key>other</key>
+			<string>Nie udało się odczytać %lld zapisanych rozmów, więc zostały pominięte. Pozostałe rozmowy są dostępne.</string>
+		</dict>
+	</dict>
+	<key>%lld days (elapsed)</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld dnia</string>
+			<key>few</key>
+			<string>%lld dni</string>
+			<key>many</key>
+			<string>%lld dni</string>
+			<key>other</key>
+			<string>%lld dni</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

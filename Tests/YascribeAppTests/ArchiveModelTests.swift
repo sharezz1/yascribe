@@ -948,3 +948,22 @@ private func followUpWire() -> Wire {
     #expect(!prompt.contains("Earlier conversation") && !prompt.contains("Outside the folder"))
     #expect(reopened.last?.answer?.sources.map(\.sessionID) == ["m1"])
 }
+
+@Test @MainActor func archiveDisplayLanguageDoesNotChangeModelRequest() async throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let pl = try #require(Bundle(path: root.appendingPathComponent("Resources/pl.lproj").path))
+    let en = try #require(Bundle(path: root.appendingPathComponent("Resources/en.lproj").path))
+    let h = Harness()
+    h.useAutomaticScope()
+    h.addMeeting("m1", title: "Settings", notes: "Budget is 10")
+    await h.ask("What is the budget?")
+    let first = try #require(h.wire.chats.last?.user)
+    let turn = try #require(h.model.turns.last)
+    _ = ArchivePresentation.scope(turn.scopeLabel, ref: .all, bundle: pl)
+    h.model.newChat()
+    _ = ArchivePresentation.scope(turn.scopeLabel, ref: .all, bundle: en)
+    await h.ask("What is the budget?")
+    #expect(h.wire.chats.last?.user == first)
+    #expect(h.model.turns.last?.scopeLabel == "All meetings")
+    #expect(try h.store.load(h.model.currentChatID).turns.last?.scopeLabel == "All meetings")
+}

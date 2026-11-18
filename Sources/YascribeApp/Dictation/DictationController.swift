@@ -193,7 +193,7 @@ struct HotkeySettingsGate {
         // wyświetlamy alertu — transkrypcja zgłasza powód i silnik przechodzi w `.failed` z „Retry".
         let errorBefore = model.lastError
         guard let client = model.transcriptionClient(for: asr.providerID, model: asr.model) else {
-            let reason = model.lastError ?? "Couldn't start transcription."
+            let reason = model.lastError ?? String(localized: "Couldn't start transcription.")
             model.lastError = errorBefore
             return (DictationPipelineInput(pcm: pcm, language: language, asrModel: asr.model,
                                            transcriber: UnavailableTranscriber(provider: provider, reason: reason), shape: shape,
@@ -239,7 +239,8 @@ struct HotkeySettingsGate {
             let aside = url.deletingLastPathComponent().appendingPathComponent("\(name).corrupt-\(stamp)")
             let moved = (try? FileManager.default.moveItem(at: url, to: aside)) != nil
             historyLocked = !moved
-            errors.append("Couldn't read \(name) (\(moved ? "moved to \(aside.lastPathComponent)" : "couldn't move it aside")): \(error)")
+            let detail = moved ? String(localized: "moved to \(aside.lastPathComponent)") : String(localized: "couldn't move it aside")
+            errors.append(String(localized: "Couldn't read \(name) (\(detail)): \(error.localizedDescription)"))
         }
     }
 
@@ -266,11 +267,11 @@ struct HotkeySettingsGate {
     private func saveHistory() {
         let name = model.paths.dictationHistory.lastPathComponent
         guard !historyLocked else {
-            model.lastError = "Couldn't save dictation history: \(name) couldn't be read, so it is left untouched."
+            model.lastError = String(localized: "Couldn't save dictation history: \(name) couldn't be read, so it is left untouched.")
             return
         }
         do { try JSONFile.save(history, to: model.paths.dictationHistory) } catch {
-            model.lastError = "Couldn't save dictation history: \(error)"
+            model.lastError = String(localized: "Couldn't save dictation history: \(error.localizedDescription)")
         }
     }
 }

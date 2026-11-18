@@ -1,10 +1,11 @@
+import Foundation
 import YascribeProviders
 
 /// Teksty wiersza i stanu pustego w sekcji Dictation (czysta logika widoku).
 public enum DictationPresentation {
-    public static let correctionFailedNote = "Correction failed — original text used"
-    public static let copiedOnlyNote = "Copied only"
-    public static let fnHint = "If pressing 🌐/Fn opens the emoji picker or system dictation, set System Settings → Keyboard → “Press 🌐 key to” to “Do Nothing”."
+    public static let correctionFailedNote = String(localized: "Correction failed — original text used")
+    public static let copiedOnlyNote = String(localized: "Copied only")
+    public static let fnHint = String(localized: "If pressing 🌐/Fn opens the emoji picker or system dictation, set System Settings → Keyboard → “Press 🌐 key to” to “Do Nothing”.")
 
     /// Uwagi pod tekstem wpisu: nieudana korekta, tekst tylko w schowku.
     public static func notes(for e: DictationEntry) -> [String] {
@@ -25,6 +26,9 @@ public enum DictationPresentation {
 
     /// Stan pusty: „Hold Fn and speak…” / „Press Fn and speak…” (tryb przełączania).
     public static func emptyHint(hotkey: DictationHotkey, mode: DictationTriggerMode) -> String {
-        "\(mode == .hold ? "Hold" : "Press") \(HotkeyCapture.label(hotkey)) and speak. Your dictations will show up here."
+        let key = HotkeyCapture.label(hotkey)
+        return mode == .hold
+            ? String(localized: "Hold \(key) and speak. Your dictations will show up here.")
+            : String(localized: "Press \(key) and speak. Your dictations will show up here.")
     }
 }

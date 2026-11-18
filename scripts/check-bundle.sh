@@ -15,6 +15,22 @@ plutil -lint "$PLIST" >/dev/null
 for key in CFBundleIdentifier LSMinimumSystemVersion NSMicrophoneUsageDescription NSAudioCaptureUsageDescription NSCalendarsFullAccessUsageDescription; do
     plutil -extract "$key" raw "$PLIST" >/dev/null 2>&1 || { echo "check-bundle: brak klucza $key w Info.plist" >&2; exit 1; }
 done
+for lang in en pl; do
+    table="$APP/Contents/Resources/$lang.lproj/Localizable.strings"
+    [ -s "$table" ] || { echo "check-bundle: brak tabeli $table" >&2; exit 1; }
+    plural_table="$APP/Contents/Resources/$lang.lproj/Localizable.stringsdict"
+    [ -s "$plural_table" ] || { echo "check-bundle: brak tabeli $plural_table" >&2; exit 1; }
+    plutil -extract CFBundleLocalizations json "$PLIST" | grep -q "\"$lang\"" || { echo "check-bundle: brak języka $lang" >&2; exit 1; }
+done
+PL_INFO="$APP/Contents/Resources/pl.lproj/InfoPlist.strings"
+[ -s "$PL_INFO" ] || { echo "check-bundle: brak $PL_INFO" >&2; exit 1; }
+for key in NSMicrophoneUsageDescription NSAudioCaptureUsageDescription NSCalendarsFullAccessUsageDescription; do
+    value="$(plutil -extract "$key" raw "$PL_INFO")"
+    [ -n "$(printf '%s' "$value" | tr -d '[:space:]')" ] || { echo "check-bundle: pusty opis $key" >&2; exit 1; }
+done
+while IFS= read -r -d '' file; do
+    plutil -lint "$file" >/dev/null || { echo "check-bundle: błędny plik $file" >&2; exit 1; }
+done < <(find "$APP/Contents/Resources" \( -name '*.strings' -o -name '*.stringsdict' \) -print0)
 # Sparkle (T5): framework osadzony, rpath, brak XPC (bez sandboxa), podpis od środka, klucze aktualizacji, numer builda.
 FW="$APP/Contents/Frameworks/Sparkle.framework"
 [ -d "$FW" ] || { echo "check-bundle: brak $FW" >&2; exit 1; }

@@ -14,6 +14,7 @@ public enum DiarizerModelStatus: Equatable, Sendable {
 public struct DiarizerModelStoreError: Error, LocalizedError, Equatable, Sendable {
     public var message: String
     public var errorDescription: String? { message }
+    public var displayMessage: String? = nil
 }
 
 /// Blokada `flock` na `<katalog>/.lock`, współdzielona między aplikacją i CLI; zwalnia się przy zwolnieniu obiektu.
@@ -57,22 +58,22 @@ public struct DiarizerModelStore: Sendable {
 
     /// Blokada współdzielona na czas ładowania i przebiegu; `download`/`remove` w tym czasie dostają błąd.
     public func lockForUse() throws -> DiarizerModelLock {
-        try lock(LOCK_SH, busy: "The speaker model is being downloaded or removed. Try again when it finishes.")
+        try lock(LOCK_SH, busy: "The speaker model is being downloaded or removed. Try again when it finishes.", displayBusy: String(localized: "The speaker model is being downloaded or removed. Try again when it finishes."))
     }
 
-    private func lock(_ operation: Int32, busy: String) throws -> DiarizerModelLock {
+    private func lock(_ operation: Int32, busy: String, displayBusy: String) throws -> DiarizerModelLock {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let fd = open(lockURL.path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
-        guard fd >= 0 else { throw DiarizerModelStoreError(message: "Cannot open \(lockURL.path): \(String(cString: strerror(errno)))") }
+        guard fd >= 0 else { throw DiarizerModelStoreError(message: "Cannot open \(lockURL.path): \(String(cString: strerror(errno)))", displayMessage: String(localized: "Cannot open \(lockURL.path): \(String(cString: strerror(errno)))")) }
         guard flock(fd, operation | LOCK_NB) == 0 else {
             close(fd)
-            throw DiarizerModelStoreError(message: busy)
+            throw DiarizerModelStoreError(message: busy, displayMessage: displayBusy)
         }
         return DiarizerModelLock(fd: fd)
     }
 
     private func lockExclusive() throws -> DiarizerModelLock {
-        try lock(LOCK_EX, busy: "The speaker model is in use (download or speaker detection in progress). Try again when it finishes.")
+        try lock(LOCK_EX, busy: "The speaker model is in use (download or speaker detection in progress). Try again when it finishes.", displayBusy: String(localized: "The speaker model is in use (download or speaker detection in progress). Try again when it finishes."))
     }
 
     /// Pobranie wyłącznie po akcji użytkownika. Pliki o właściwym rozmiarze zostają; postęp: (bajty gotowe, bajty razem).
@@ -99,10 +100,10 @@ public struct DiarizerModelStore: Sendable {
         try? fm.removeItem(at: part)
         try fm.moveItem(at: temporary, to: part)
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard code == 200 else { throw DiarizerModelStoreError(message: "Downloading \(file) failed (HTTP \(code)).") }
+        guard code == 200 else { throw DiarizerModelStoreError(message: "Downloading \(file) failed (HTTP \(code)).", displayMessage: String(localized: "Downloading \(file) failed (HTTP \(code)).")) }
         let actual = Self.size(of: part) ?? 0
         guard actual == size else {
-            throw DiarizerModelStoreError(message: "Downloaded \(file) has \(actual) bytes, expected \(size).")
+            throw DiarizerModelStoreError(message: "Downloaded \(file) has \(actual) bytes, expected \(size).", displayMessage: String(localized: "Downloaded \(file) has \(actual) bytes, expected \(size)."))
         }
         if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
         try fm.moveItem(at: part, to: target)
@@ -122,7 +123,7 @@ public struct DiarizerModelStore: Sendable {
 
     /// Ładowanie bez sieci: brak kompletu → błąd. FBank zawsze na CPU (jak w FluidAudio), reszta na `computeUnits`.
     public func loadModels(computeUnits: MLComputeUnits = .all) throws -> OfflineDiarizerModels {
-        let notReady = DiarizerModelStoreError(message: "The speaker model is not downloaded. Download it in Settings.")
+        let notReady = DiarizerModelStoreError(message: "The speaker model is not downloaded. Download it in Settings.", displayMessage: String(localized: "The speaker model is not downloaded. Download it in Settings."))
         guard status() == .ready else { throw notReady }
         let lock = try lockForUse()
         defer { withExtendedLifetime(lock) {} }
@@ -148,7 +149,7 @@ public struct DiarizerModelStore: Sendable {
         guard let tensors = root?["tensors"] as? [String: Any], let psi = tensors["psi"] as? [String: Any],
               let base64 = psi["data_base64"] as? String, let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters),
               data.count >= MemoryLayout<Float>.size
-        else { throw DiarizerModelStoreError(message: "The speaker model's PLDA parameters are unreadable.") }
+        else { throw DiarizerModelStoreError(message: "The speaker model's PLDA parameters are unreadable.", displayMessage: String(localized: "The speaker model's PLDA parameters are unreadable.")) }
         var floats = [Float](repeating: 0, count: data.count / MemoryLayout<Float>.size)
         _ = floats.withUnsafeMutableBytes { data.copyBytes(to: $0) }
         return floats.map(Double.init)

@@ -1,3 +1,4 @@
+import Foundation
 import AppKit
 import ApplicationServices
 import Carbon.HIToolbox
@@ -6,12 +7,12 @@ import YascribeDictation
 /// Wstawia tekst dyktowania: schowek + syntetyczne Cmd-V, a w razie wątpliwości tylko schowek.
 /// Bezpieczna jako `@unchecked Sendable`: jedyny stan (PID aplikacji docelowej) jest pod `lock`.
 final class TextInserter: TextInserting, @unchecked Sendable {
-    static let passwordMessage = "A password field is focused."
-    static let secureInputMessage = "Secure input is on (another app). Nothing was pasted."
-    static let secureInputCopiedMessage = "Secure input is on (another app). The text was copied. Paste it with ⌘V."
-    static let accessibilityMessage = "Allow Accessibility to paste automatically."
-    static let appChangedMessage = "The active app changed. Text copied."
-    static let noTextFieldMessage = "No text field is focused. Text copied."
+    static let passwordMessage = String(localized: "A password field is focused.")
+    static let secureInputMessage = String(localized: "Secure input is on (another app). Nothing was pasted.")
+    static let secureInputCopiedMessage = String(localized: "Secure input is on (another app). The text was copied. Paste it with ⌘V.")
+    static let accessibilityMessage = String(localized: "Allow Accessibility to paste automatically.")
+    static let appChangedMessage = String(localized: "The active app changed. Text copied.")
+    static let noTextFieldMessage = String(localized: "No text field is focused. Text copied.")
     /// Konwencja menedżerów schowka (nspasteboard.org): wpis tymczasowy / poufny nie trafia do historii schowka.
     static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     static let concealedType = "org.nspasteboard.ConcealedType"

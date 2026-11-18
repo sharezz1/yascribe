@@ -35,7 +35,7 @@ public actor SpeakerDiarizer {
                               progress: (@Sendable (Double) -> Void)?) async throws -> [(speaker: String, start: Double, end: Double)] {
         // Sprawdzenie przed blokadą: brak modelu nie tworzy katalogu magazynu.
         guard store.status() == .ready else {
-            throw DiarizerModelStoreError(message: "The speaker model is not downloaded. Download it in Settings.")
+            throw DiarizerModelStoreError(message: "The speaker model is not downloaded. Download it in Settings.", displayMessage: String(localized: "The speaker model is not downloaded. Download it in Settings."))
         }
         let lock = try store.lockForUse()
         defer { withExtendedLifetime(lock) {} }
@@ -45,7 +45,7 @@ public actor SpeakerDiarizer {
         let free = (try? temporary.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? 0
         guard Self.hasRoomForPCM(trackSeconds: seconds, freeBytes: free) else {
-            throw DiarizerModelStoreError(message: "Not enough free disk space to detect speakers in this recording.")
+            throw DiarizerModelStoreError(message: "Not enough free disk space to detect speakers in this recording.", displayMessage: String(localized: "Not enough free disk space to detect speakers in this recording."))
         }
         let models = try self.models ?? store.loadModels()
         self.models = models

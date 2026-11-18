@@ -1,10 +1,11 @@
 import Foundation
 
 /// Model nie odpowiedział w wyznaczonym czasie.
-public struct DeadlineExceeded: Error, CustomStringConvertible, Equatable, Sendable {
+public struct DeadlineExceeded: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
     public let seconds: Double
     public init(seconds: Double) { self.seconds = seconds }
     public var description: String { "The model didn't answer within \(Int(seconds)) s." }
+    public var errorDescription: String? { String(localized: "The model didn't answer within \(Int(seconds)) s.") }
 }
 
 /// Całkowity limit czasu operacji. `URLRequest.timeoutInterval` mierzy bezczynność łącza, a nie czas całości: dostawca,

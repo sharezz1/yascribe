@@ -38,7 +38,7 @@ public enum DictationPhase: Equatable, Sendable {
 /// Sesja dyktowania: mikrofon → potok → wstawienie → historia. Audio tylko w pamięci, nigdy na dysku.
 /// Obserwowana jest tylko `phase` (UI widzi też przejścia wewnętrzne: auto-stop, powrót do `.idle`, awarię mikrofonu).
 @MainActor @Observable public final class DictationEngine {
-    public static let missingModelMessage = "Choose a dictation model in Settings."
+    public static let missingModelMessage = String(localized: "Choose a dictation model in Settings.")
 
     struct Retained {
         var input: DictationPipelineInput

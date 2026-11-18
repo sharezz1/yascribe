@@ -4,9 +4,9 @@ import Foundation
 /// `nil` = wolno, tekst = powód odmowy pokazywany użytkownikowi.
 public enum DeleteMeeting {
     public static func blocker(recording: Bool, busy: Bool, moving: Bool) -> String? {
-        if moving { return "Meetings are being moved to a new folder. Delete this one when that finishes." }
-        if recording { return "This meeting is being recorded. Stop the recording before deleting it." }
-        if busy { return "This meeting is still being processed. Delete it when that finishes." }
+        if moving { return String(localized: "Meetings are being moved to a new folder. Delete this one when that finishes.") }
+        if recording { return String(localized: "This meeting is being recorded. Stop the recording before deleting it.") }
+        if busy { return String(localized: "This meeting is still being processed. Delete it when that finishes.") }
         return nil
     }
 }
@@ -29,7 +29,7 @@ public enum MeetingTrash {
         public var errorDescription: String? {
             switch self {
             case .invalidTestDirectory(let path):
-                "The test Trash folder “\(path)” must be an existing folder inside the app's data folder."
+                String(localized: "The test Trash folder “\(path)” must be an existing folder inside the app's data folder.")
             }
         }
     }

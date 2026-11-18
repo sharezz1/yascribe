@@ -7,6 +7,13 @@ import SwiftUI
 enum MeetingTab: String, CaseIterable, Identifiable {
     case summary = "Summary", myNotes = "My notes", transcript = "Transcript"
     var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .summary: String(localized: "Summary")
+        case .myNotes: String(localized: "My notes")
+        case .transcript: String(localized: "Transcript")
+        }
+    }
 }
 
 final class MeetingViewState: ObservableObject {
@@ -40,7 +47,7 @@ struct MeetingTabBar: View {
             ForEach(MeetingTab.allCases) { tab in
                 let selected = tab == selection
                 Button { selection = tab } label: {
-                    Text(tab.rawValue)
+                    Text(tab.title)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(selected ? Color.mnText : Color.mnText2)
                         .frame(height: 28)
@@ -81,7 +88,7 @@ struct ErrorLine: View {
 private struct ContextEditor: View {
     @Binding var text: String
     var body: some View {
-        GrowingTextView(text: $text, minHeight: 36, accessibilityLabel: "Context for the model")
+        GrowingTextView(text: $text, minHeight: 36, accessibilityLabel: String(localized: "Context for the model"))
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text("Who's there, what it's about — for the model").font(.system(size: 13)).foregroundStyle(.mnText2).allowsHitTesting(false)
@@ -104,14 +111,14 @@ struct MyNotesTab: View {
     var body: some View {
         if model.recordingsMove != nil {
             // R3: tylko do odczytu. `GrowingTextView` to NSTextView — `.disabled` nie blokuje w nim pisania.
-            Text(state.myNotes.isEmpty ? "No notes." : state.myNotes)
+            Text(state.myNotes.isEmpty ? String(localized: "No notes.") : state.myNotes)
                 .font(.system(size: 14)).lineSpacing(8)
                 .foregroundStyle(state.myNotes.isEmpty ? Color.mnText2 : Color.mnText)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
         } else {
             GrowingTextView(text: Binding(get: { state.myNotes }, set: { state.myNotes = $0; model.notes.saveMyNotes($0, for: item) }),
-                            fontSize: 14, lineSpacing: 8, minHeight: 240, accessibilityLabel: "My notes")
+                            fontSize: 14, lineSpacing: 8, minHeight: 240, accessibilityLabel: String(localized: "My notes"))
                 .overlay(alignment: .topLeading) {
                     if state.myNotes.isEmpty {
                         Text("Write notes…").font(.system(size: 14)).foregroundStyle(.mnText2).allowsHitTesting(false)
@@ -194,19 +201,19 @@ struct TranscriptTab: View {
                     .help(modelName ?? "")
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
-                ErrorLine(message: "Correction failed: \(why)", retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
+                ErrorLine(message: String(localized: "Correction failed: \(why)"), retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
                     .disabled(moving)
             }
             // „Transcribe again…": stary transkrypt zostaje widoczny, dopóki nowy przebieg się nie zakwalifikuje (R23). Linia ogólna
             // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
             if detecting {
-                StateLabel(.progress(nil), "Detecting speakers…")
+                StateLabel(.progress(nil), String(localized: "Detecting speakers…"))
             } else if busy, item.transcript != nil, item.attemptNotPromoted == nil {
-                StateLabel(.progress(nil), "Transcribing again…")
+                StateLabel(.progress(nil), String(localized: "Transcribing again…"))
             }
             attemptBanner
             if item.transcript != nil, item.corrected != nil {
-                FieldMenu(label: "Version", value: state.useCorrected ? "Corrected" : "Original", width: 120) {
+                FieldMenu(label: String(localized: "Version"), value: state.useCorrected ? String(localized: "Corrected") : String(localized: "Original"), width: 120) {
                     Picker("Version", selection: $state.useCorrected) {
                         Text("Corrected").tag(true)
                         Text("Original").tag(false)
@@ -250,9 +257,9 @@ struct TranscriptTab: View {
 
     private static func why(_ r: RunSelection.Reason) -> String {
         switch r {
-        case .unfinished: "It stopped before the end (failed, cancelled or the app was closed)."
-        case .gaps(let n): "\(n) part\(n == 1 ? "" : "s") couldn't be transcribed."
-        case .empty: "No speech was recognized."
+        case .unfinished: String(localized: "It stopped before the end (failed, cancelled or the app was closed).")
+        case .gaps(let n): String(format: NSLocalizedString("%lld parts couldn't be transcribed.", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(n))
+        case .empty: String(localized: "No speech was recognized.")
         }
     }
 
@@ -303,7 +310,7 @@ struct TranscriptTab: View {
                 Label("No transcript yet", systemImage: "text.alignleft")
             } actions: {
                 if busy {
-                    StateLabel(.progress(nil), "Transcribing…")
+                    StateLabel(.progress(nil), String(localized: "Transcribing…"))
                 } else {
                     // Preset zamrożony przy nagraniu, nie bieżący (spec §1.5); Resume bierze migawkę z input.json przebiegu.
                     Group {
@@ -385,7 +392,7 @@ struct SummaryTab: View {
     }
     /// Powód, dla którego „Generate notes" jest nieaktywne: brak transkryptu to coś innego niż transkrypt bez treści.
     private var disabledReason: String {
-        item.transcript == nil ? "Transcript isn't ready yet." : "Nothing to summarize: the transcript has no usable text."
+        item.transcript == nil ? String(localized: "Transcript isn't ready yet.") : String(localized: "Nothing to summarize: the transcript has no usable text.")
     }
 
     /// Uwaga 7 (b-summary0.png, b-meeting.png): bez karty — ten sam pasek we wnęce przed i po generowaniu, pod nim
@@ -404,7 +411,7 @@ struct SummaryTab: View {
                 !t.failedChunks.isEmpty || t.utterances.contains(where: { $0.excludedFromNotes })
             } ?? false) {
                 HStack {
-                    WarnLabel("The transcript may be incomplete or contain excluded content.")
+                    WarnLabel(String(localized: "The transcript may be incomplete or contain excluded content."))
                     Button("View transcript") { state.tab = .transcript }.buttonStyle(.link)
                 }
             }
@@ -456,7 +463,7 @@ struct SummaryTab: View {
         let kind = corrected ? "corrected" : "original"
         let details = [
             item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) },
-            model.runLanguage(item).language?.englishName,
+            model.runLanguage(item).language.map { languageDisplayName($0) },
         ].compactMap { $0 }
         return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
     }
@@ -512,9 +519,9 @@ struct SummaryTab: View {
 
     /// Popup szablonu: pole 130 × 28, promień 7 (makieta: `.field`). Menu zostaje systemowe.
     private var templateMenu: some View {
-        FieldMenu(label: "Template", value: template.name, width: 130) {
+        FieldMenu(label: String(localized: "Template"), value: template.displayName(), width: 130) {
             ForEach(model.notes.templates.all()) { t in
-                Button(t.name) { state.templateID = t.id }
+                Button(t.displayName()) { state.templateID = t.id }
             }
             Divider()
             Button("Manage templates…") { model.section = .templates }

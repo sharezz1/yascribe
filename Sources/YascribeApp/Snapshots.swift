@@ -10,7 +10,7 @@ import SwiftUI
 
 /// Tryb migawek (macos.md §9): `YASCRIBE_SNAPSHOT_DIR=<katalog>` renderuje ekrany do PNG i kończy proces.
 /// Dowód w raporcie: „migawka" (ten plik), nie „zrzut na żywo".
-enum SnapshotError: Error { case noBitmap, noPNG }
+enum SnapshotError: Error { case noBitmap, noPNG, wrongLanguage }
 
 @MainActor
 enum Snapshots {
@@ -145,6 +145,12 @@ enum Snapshots {
 
     static func runAll(model: AppModel) {
         do {
+            let expected = ProcessInfo.processInfo.environment["YASCRIBE_SNAPSHOT_LANGUAGE"]
+            let labels = ["pl": "Ustawienia", "en": "Settings"]
+            guard let expected, let label = labels[expected],
+                  Bundle.main.localizedString(forKey: "Settings", value: nil, table: nil) == label else {
+                throw SnapshotError.wrongLanguage
+            }
             try seed(model)
             for dark in [false, true] {
                 try archiveSnapshots(model: model, dark: dark)
@@ -444,9 +450,9 @@ enum Snapshots {
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Preset: Polish · PL").font(.caption).foregroundStyle(.secondary)
-                        LevelRow(title: "System audio", db: -22)
-                        LevelRow(title: "Microphone: MacBook Air Microphone", db: -41, emphasized: true)
-                        LevelRow(title: "Microphone: silent", db: -160, emphasized: true)
+                        LevelRow(kind: .system, db: -22)
+                        LevelRow(kind: .microphone, detail: "MacBook Air Microphone", db: -41, emphasized: true)
+                        LevelRow(kind: .microphone, detail: "silent", db: -160, emphasized: true)
                     }
                     .padding(12)
                 }

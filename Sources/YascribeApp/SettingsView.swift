@@ -143,11 +143,11 @@ struct SettingsView: View {
             ScrollViewReader { proxy in
             ScrollPage(640) {
                 VStack(alignment: .leading, spacing: 0) {
-                    PageTitle("Settings").padding(.bottom, 4)
+                    PageTitle(String(localized: "Settings")).padding(.bottom, 4)
                     // Model Yascribe (Parakeet) nie jest dostawcą: własna karta na górze, nad listą Providers (F20 P3).
-                    SectionHeader("Yascribe models")
+                    SectionHeader(String(localized: "Yascribe models"))
                     ForEach(model.localASRModels, id: \.store.variant) { ModelCardSection(support: $0) }
-                    SectionHeader("Providers")
+                    SectionHeader(String(localized: "Providers"))
                     Card {
                         let rows = ProviderListRow.rows(for: model.providers.providers, agents: model.settings.agentCLIsEnabled)
                         ForEach(Array(rows.enumerated()), id: \.element.id) { i, row in
@@ -166,12 +166,12 @@ struct SettingsView: View {
                     archiveSearch
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Speech-to-text, correction and summary models are chosen in each preset.")
-                        link("Open Presets") { model.section = .presets }
+                        link(String(localized: "Open Presets")) { model.section = .presets }
                     }
                     .font(.system(size: 12)).foregroundStyle(.mnText2).padding(.top, 14).padding(.leading, 2)
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text("Microphone and system audio access:")
-                        link("Check Permissions…") { model.showSetup = true }
+                        link(String(localized: "Check Permissions…")) { model.showSetup = true }
                     }
                     .font(.system(size: 12)).foregroundStyle(.mnText2).padding(.top, 6).padding(.leading, 2)
                 }
@@ -215,10 +215,10 @@ struct SettingsView: View {
 
     /// Zapis przyciskiem Save. Lista idzie do polecenia dla modelu i do filtra po korekcie.
     @ViewBuilder private var correctionSection: some View {
-        SectionHeader("Correction")
+        SectionHeader(String(localized: "Correction"))
         Card {
-            FormRow(label: "Filler sounds",
-                    caption: "Removes sounds like “yyy” and “mhm” from corrected transcripts: the model is asked to drop them and the app removes any that remain. The original transcript is kept.") {
+            FormRow(label: String(localized: "Filler sounds"),
+                    caption: String(localized: "Removes sounds like “yyy” and “mhm” from corrected transcripts: the model is asked to drop them and the app removes any that remain. The original transcript is kept.")) {
                 Toggle("Filler sounds", isOn: Binding(
                     get: { draft.removeFillers },
                     set: { draft.removeFillers = $0 }))
@@ -226,7 +226,7 @@ struct SettingsView: View {
             }
             if draft.removeFillers {
                 RowDivider()
-                FormRow(label: "Words", caption: "Separate with commas.") {
+                FormRow(label: String(localized: "Words"), caption: String(localized: "Separate with commas.")) {
                     HStack(spacing: 8) {
                         TextField("yyy, eee, mhm", text: $draft.fillers).textFieldStyle(.roundedBorder)
                         Button("Reset") { draft.fillers = FillerWords.format(FillerWords.defaults) }
@@ -235,7 +235,7 @@ struct SettingsView: View {
                 }
             }
             RowDivider()
-            promptRow(.correction, caption: "The base instruction for the correction model. The line format, language, filler and dictionary lines are added after it, and the length checks always apply.")
+            promptRow(.correction, caption: String(localized: "The base instruction for the correction model. The line format, language, filler and dictionary lines are added after it, and the length checks always apply."))
             promptNotice(.correction)
         }
     }
@@ -250,7 +250,7 @@ struct SettingsView: View {
         let mode = Binding<Bool>(get: { custom }, set: { wantsCustom in
             if wantsCustom { if !custom { draft.openPromptEditor(kind) } } else { draft.useDefaultPrompt(kind) }
         })
-        return FormRow(label: "Prompt", caption: caption + (local ? " Long prompts leave less room for the transcript in a local model's context window." : "")) {
+        return FormRow(label: String(localized: "Prompt"), caption: caption + (local ? String(localized: " Long prompts leave less room for the transcript in a local model's context window.") : "")) {
             HStack(spacing: 10) {
                 Picker("Prompt", selection: mode) {
                     Text("Default").tag(false)
@@ -287,8 +287,8 @@ struct SettingsView: View {
 
     /// Experimental (TASK-86): zapis od razu, jak lista dostawców — bez Save.
     private var agentCLIsRow: some View {
-        FormRow(label: "Agent apps",
-                caption: "Experimental. Adds Codex and Claude Code as correction and summary providers. They run on this Mac with your sign-in in that app and send the transcript to OpenAI or Anthropic.") {
+        FormRow(label: String(localized: "Agent apps"),
+                caption: String(localized: "Experimental. Adds Codex and Claude Code as correction and summary providers. They run on this Mac with your sign-in in that app and send the transcript to OpenAI or Anthropic.")) {
             Toggle("Agent apps", isOn: Binding(
                 get: { model.settings.agentCLIsEnabled },
                 set: { model.settings.experimentalAgentCLIs = $0 ? true : nil; model.save() }))
@@ -300,17 +300,17 @@ struct SettingsView: View {
 
     /// Zapis przyciskiem Save. Korekta nigdy nie myśli — to nie jest ustawienie.
     @ViewBuilder private var summarySection: some View {
-        SectionHeader("Summary")
+        SectionHeader(String(localized: "Summary"))
         Card {
-            FormRow(label: "Thinking",
-                    caption: "Lets API models reason before writing the notes. Off is faster and avoids timeouts; on may help with long or complex meetings. Local models always run without thinking, and corrections never think.") {
+            FormRow(label: String(localized: "Thinking"),
+                    caption: String(localized: "Lets API models reason before writing the notes. Off is faster and avoids timeouts; on may help with long or complex meetings. Local models always run without thinking, and corrections never think.")) {
                 Toggle("Thinking", isOn: Binding(
                     get: { draft.summaryThinking },
                     set: { draft.summaryThinking = $0 }))
                     .labelsHidden().toggleStyle(.switch)
             }
             RowDivider()
-            promptRow(.summary, caption: "The rules the summary model follows. The title line, notes language and the template structure are added after them.")
+            promptRow(.summary, caption: String(localized: "The rules the summary model follows. The title line, notes language and the template structure are added after them."))
             promptNotice(.summary)
         }
     }
@@ -327,15 +327,15 @@ struct SettingsView: View {
     private var askCandidates: [Provider] { model.providers.providers.filter { $0.supports(.summary) } }
 
     @ViewBuilder private var archiveSearch: some View {
-        SectionHeader("Archive search")
+        SectionHeader(String(localized: "Archive search"))
         Card {
             if candidates.isEmpty {
                 Text("Set up OpenRouter, Ollama or a custom endpoint above to choose an embedding model.")
                     .foregroundStyle(.mnText2).padding(.horizontal, 16).padding(.vertical, 12)
             } else {
                 if EmbeddingChoice.showsProviderRow(candidates: candidates) {
-                    FormRow(label: "Provider") {
-                        FieldMenu(label: "Provider", value: embeddingProvider?.name ?? "Choose…", width: 180) {
+                    FormRow(label: String(localized: "Provider")) {
+                        FieldMenu(label: String(localized: "Provider"), value: embeddingProvider?.name ?? String(localized: "Choose…"), width: 180) {
                             Picker("Provider", selection: Binding(
                                 get: { embeddingProvider?.id },
                                 set: { draft.embedding = EmbeddingChoice.select(provider: $0, current: draft.embedding) })) {
@@ -348,7 +348,7 @@ struct SettingsView: View {
                     if embeddingProvider != nil { RowDivider() }
                 }
                 if let p = embeddingProvider {
-                    FormRow(label: "Embedding model") {
+                    FormRow(label: String(localized: "Embedding model")) {
                         ModelPicker(providerID: p.id, role: .embedding, selection: Binding(
                             get: { draft.embedding?.providerID == p.id ? draft.embedding?.model ?? "" : "" },
                             set: { m in
@@ -360,8 +360,8 @@ struct SettingsView: View {
                 }
             }
             RowDivider()
-            FormRow(label: "Ask provider") {
-                FieldMenu(label: "Ask provider", value: askCandidates.first(where: { $0.id == draft.askModel?.providerID })?.name ?? "Choose…", width: 180) {
+            FormRow(label: String(localized: "Ask provider")) {
+                FieldMenu(label: String(localized: "Ask provider"), value: askCandidates.first(where: { $0.id == draft.askModel?.providerID })?.name ?? String(localized: "Choose…"), width: 180) {
                     Picker("Ask provider", selection: Binding<UUID?>(
                         get: { draft.askModel?.providerID },
                         set: { id in
@@ -375,7 +375,7 @@ struct SettingsView: View {
             }
             if let p = askCandidates.first(where: { $0.id == draft.askModel?.providerID }) {
                 RowDivider()
-                FormRow(label: "Ask model") {
+                FormRow(label: String(localized: "Ask model")) {
                     ModelPicker(providerID: p.id, role: .summary, selection: Binding(
                         get: { draft.askModel?.model ?? "" },
                         set: { draft.askModel?.model = $0 }))
@@ -387,7 +387,7 @@ struct SettingsView: View {
     /// Dolny pasek zapisuje lub odrzuca wspólny szkic.
     private var footer: some View {
         HStack(spacing: 8) {
-            if draft.saved && !isDirty { StateLabel(.ok, "Saved") }
+            if draft.saved && !isDirty { StateLabel(.ok, String(localized: "Saved")) }
             Spacer()
             Button("Cancel") { draft.load(model.settings); draft.loadPrompts(model.prompts) }.buttonStyle(.pill).disabled(!isDirty)
             Button("Save") { save() }.buttonStyle(.pillPrimary).keyboardShortcut("s", modifiers: .command).disabled(!isDirty || promptsInvalid)
@@ -469,14 +469,14 @@ private struct ProviderRowView: View {
         switch row {
         case .preset(let p, _): p.name
         case .custom(let p): p.name
-        case .addCustom: ProviderPreset.custom.name
+        case .addCustom: String(localized: "Custom endpoint")
         }
     }
     private var subtitle: String {
         switch row {
-        case .preset(let p, _): p.role
-        case .custom(let p): ProviderPreset.displayAddress(p.baseURL) + (preset.map { " · " + $0.role } ?? "")
-        case .addCustom: ProviderPreset.custom.role
+        case .preset(let p, _): localizedProviderRole(p)
+        case .custom(let p): ProviderPreset.displayAddress(p.baseURL) + (preset.map { " · " + localizedProviderRole($0) } ?? "")
+        case .addCustom: localizedProviderRole(.custom)
         }
     }
     private var key: KeyStatus? { provider.map { p in KeyStatus.of({ try p.storedKey(in: model.secrets) }) } }
@@ -484,7 +484,7 @@ private struct ProviderRowView: View {
         // „On this Mac": stan modelu opisuje karta poniżej, więc bez czerwonej linii i bez Retry (nic do ponowienia przez sieć).
         guard let p = provider, p.api != .fluidAudio, !model.providerVerifying.contains(p.id),
               case .failed(let why)? = model.providerChecks[p.id] else { return nil }
-        return why
+        return localizedProviderMessage(why)
     }
 
     var body: some View {
@@ -501,7 +501,7 @@ private struct ProviderRowView: View {
                 if let failure { Text(failure).font(.system(size: 11)).foregroundStyle(.mnRec).lineLimit(2) }
                 if let p = provider, p.isLocal, p.api == .openAICompatible {
                     // Ustawione przez użytkownika i/lub wykryte przy „Test again" (ten sam komunikat, który widzi budżet).
-                    let parts = [p.contextTokens.map { "Context window: \($0) tokens" }, model.detectedContexts[p.id]].compactMap { $0 }
+                    let parts = [p.contextTokens.map { String(localized: "Context window: \($0) tokens") }, model.detectedContexts[p.id]].compactMap { $0 }
                     if !parts.isEmpty { Text(parts.joined(separator: " · ")).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(2) }
                 }
             }
@@ -549,15 +549,15 @@ private struct ProviderRowView: View {
 
     @ViewBuilder private func state(_ p: Provider) -> some View {
         if model.providerVerifying.contains(p.id) {
-            StateLabel(.progress(nil), "Verifying…")
+            StateLabel(.progress(nil), String(localized: "Verifying…"))
         } else {
             switch model.providerChecks[p.id] {
-            case .verified? where p.api == .fluidAudio: StateLabel(.ok, "Ready")
-            case .verified(let n)?: StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s")")
-            case .failed(let why)? where p.api == .fluidAudio: WarnLabel("Model not ready").help(why)
-            case .failed(let why)?: StateLabel(.bad, "Failed").help(why)
+            case .verified? where p.api == .fluidAudio: StateLabel(.ok, String(localized: "Ready"))
+            case .verified(let n)?: StateLabel(.ok, n == 1 ? String(localized: "Verified · 1 model") : String(localized: "Verified · \(n) models"))
+            case .failed(let why)? where p.api == .fluidAudio: WarnLabel(String(localized: "Model not ready")).help(why)
+            case .failed(let why)?: StateLabel(.bad, String(localized: "Failed")).help(localizedProviderMessage(why))
             case .limited(let why)?: WarnLabel(why)
-            case nil: StateLabel(.neutral, "Not verified")
+            case nil: StateLabel(.neutral, String(localized: "Not verified"))
             }
         }
     }
@@ -573,8 +573,8 @@ struct ProviderSetupSheet: View {
     private var preset: ProviderPreset { state.preset }
     private var editing: Bool { state.editing != nil }
     private var title: String {
-        if let p = state.editing { return showsKeyField ? "Edit key for \(p.name)" : "Edit \(p.name)" }
-        return preset == .custom ? "Set up custom endpoint" : "Set up \(preset.name)"
+        if let p = state.editing { return showsKeyField ? String(localized: "Edit key for \(p.name)") : String(localized: "Edit \(p.name)") }
+        return preset == .custom ? String(localized: "Set up custom endpoint") : String(localized: "Set up \(preset.name)")
     }
     /// „Paste your key first." dotyczy tylko `needsKey`; klucz opcjonalny (oMLX) ma pole, ale można je zostawić puste.
     private var needsKey: Bool { preset.needsKey }
@@ -595,14 +595,14 @@ struct ProviderSetupSheet: View {
                 ProviderLogo(preset: state.logo)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
-                    Text(preset.role).font(.system(size: 11)).foregroundStyle(.mnText2)
+                    Text(localizedProviderRole(preset)).font(.system(size: 11)).foregroundStyle(.mnText2)
                 }
             }
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
             ScrollView {
             VStack(alignment: .leading, spacing: 0) {
             if isAgent {
-                FormRow(label: "Program", labelWidth: 70) {
+                FormRow(label: String(localized: "Program"), labelWidth: 70) {
                     VStack(alignment: .leading, spacing: 6) {
                         TextField("/opt/homebrew/bin/codex", text: $state.url).textFieldStyle(.plain).fieldBox()
                         Text("Yascribe starts this app with its tools off. It uses your sign-in there (subscription or API key) and keeps no key itself. The transcript goes to \((state.editing?.kind ?? preset.kind)?.agentVendor ?? "the vendor"), under that vendor's terms.")
@@ -610,15 +610,15 @@ struct ProviderSetupSheet: View {
                     }
                 }
             } else if editableAddress {
-                FormRow(label: "Address", labelWidth: 70) { TextField("https://example.com/v1", text: $state.url).textFieldStyle(.plain).fieldBox() }
-                FormRow(label: "Name", labelWidth: 70) { TextField("Name", text: $state.name).textFieldStyle(.plain).fieldBox() }
+                FormRow(label: String(localized: "Address"), labelWidth: 70) { TextField("https://example.com/v1", text: $state.url).textFieldStyle(.plain).fieldBox() }
+                FormRow(label: String(localized: "Name"), labelWidth: 70) { TextField("Name", text: $state.name).textFieldStyle(.plain).fieldBox() }
             } else {
-                FormRow(label: "Address", labelWidth: 70) { Text(state.url).foregroundStyle(.mnText).textSelection(.enabled) }
+                FormRow(label: String(localized: "Address"), labelWidth: 70) { Text(state.url).foregroundStyle(.mnText).textSelection(.enabled) }
             }
             if showsKeyField {
-                FormRow(label: "API key", labelWidth: 70) {
+                FormRow(label: String(localized: "API key"), labelWidth: 70) {
                     VStack(alignment: .leading, spacing: 6) {
-                        SecureField(preset.keyOptional ? "Optional" : "Paste your key", text: $state.key).textFieldStyle(.plain).fieldBox()
+                        SecureField(preset.keyOptional ? String(localized: "Optional") : String(localized: "Paste your key"), text: $state.key).textFieldStyle(.plain).fieldBox()
                         if preset.keyOptional {
                             Text("Optional — only if you set a key in \(preset.name).").font(.system(size: 11)).foregroundStyle(.mnText2)
                         }
@@ -627,7 +627,7 @@ struct ProviderSetupSheet: View {
                 }
             }
             if showsContext {
-                FormRow(label: "Context", labelWidth: 70) {
+                FormRow(label: String(localized: "Context"), labelWidth: 70) {
                     VStack(alignment: .leading, spacing: 6) {
                         TextField("Context window (tokens) — default 4096", text: $state.context).textFieldStyle(.plain).fieldBox()
                         Text("Ollama uses 4096 unless you raise it (OLLAMA_CONTEXT_LENGTH or Ollama's Context length setting). Enter the server's value here.")
@@ -687,11 +687,11 @@ struct ProviderSetupSheet: View {
 
     @ViewBuilder private var resultLabel: some View {
         if state.testing {
-            StateLabel(.progress(nil), "Testing…")
+            StateLabel(.progress(nil), String(localized: "Testing…"))
         } else if let r = state.result {
             switch r {
-            case .verified(let n): StateLabel(.ok, "Verified · \(n) model\(n == 1 ? "" : "s") available")
-            case .failed(let why): StateLabel(.bad, why).wrapping()
+            case .verified(let n): StateLabel(.ok, n == 1 ? String(localized: "Verified · 1 model available") : String(localized: "Verified · \(n) models available"))
+            case .failed(let why): StateLabel(.bad, localizedProviderMessage(why)).wrapping()
             case .limited(let why): WarnLabel(why)
             }
         } else if let n = state.note {
@@ -707,13 +707,18 @@ struct ProviderSetupSheet: View {
     private func agentPath() -> URL? {
         switch AgentCLI.binaryURL(from: state.url) {
         case .success(let url): return url
-        case .failure(let e): state.error = ProviderCheck.describe(e); return nil
+        case .failure(let e):
+            let path = (state.url.trimmingCharacters(in: .whitespaces) as NSString).expandingTildeInPath
+            state.error = path.hasPrefix("/") ? String(localized: "No program at \(path).")
+                : String(localized: "Enter the full path, e.g. /opt/homebrew/bin/codex.")
+            _ = e
+            return nil
         }
     }
 
     private func address() -> URL? {
         guard let u = URL(string: state.url.trimmingCharacters(in: .whitespaces)), ["http", "https"].contains(u.scheme), u.host() != nil else {
-            state.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
+            state.error = String(localized: "Enter a full address, e.g. https://openrouter.ai/api/v1.")
             return nil
         }
         return u
@@ -722,7 +727,7 @@ struct ProviderSetupSheet: View {
     private func test() async {
         state.error = nil; state.result = nil; state.note = nil
         let key = trimmedKey()
-        if needsKey && key.isEmpty && !editing { state.error = "Paste your key first."; return }
+        if needsKey && key.isEmpty && !editing { state.error = String(localized: "Paste your key first."); return }
         guard let url = isAgent ? agentPath() : state.editing?.baseURL ?? address() else { return }
         let kind = state.editing?.kind ?? preset.kind
         state.testing = true
@@ -750,9 +755,9 @@ struct ProviderSetupSheet: View {
     private func save() {
         state.error = nil
         let key = trimmedKey()
-        if needsKey && key.isEmpty { state.error = "Paste your key first."; return }
+        if needsKey && key.isEmpty { state.error = String(localized: "Paste your key first."); return }
         guard case .success(let context) = contextTokens() else {
-            state.error = "Context window: enter a number from \(ContextBudget.userRange.lowerBound) to \(ContextBudget.userRange.upperBound), or leave it empty for \(ContextBudget.defaultTokens)."
+            state.error = String(localized: "Context window: enter a number from \(ContextBudget.userRange.lowerBound) to \(ContextBudget.userRange.upperBound), or leave it empty for \(ContextBudget.defaultTokens).")
             return
         }
         if isAgent {
@@ -784,5 +789,46 @@ extension View {
         padding(.horizontal, 10).frame(height: 28)
             .background(.mnField, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
+    }
+}
+
+private func localizedProviderRole(_ preset: ProviderPreset) -> String {
+    switch preset.id {
+    case "openrouter": String(localized: "Transcription, correction and summary · hundreds of models")
+    case "elevenlabs": String(localized: "Scribe v2 transcription · direct API")
+    case "mistral": String(localized: "Speaker detection · direct API")
+    case "ollama": String(localized: "Runs on this Mac · correction and summary only, no transcription")
+    case "llamacpp", "omlx": String(localized: "Runs on this Mac · correction and summary")
+    case "on-this-mac": String(localized: "Speech-to-text on this Mac · no network")
+    case "codex-cli": String(localized: "On this Mac · sends the transcript to OpenAI")
+    case "claude-cli": String(localized: "On this Mac · sends the transcript to Anthropic")
+    case "custom": String(localized: "Any OpenAI-compatible API · address and key")
+    default: preset.role
+    }
+}
+
+func localizedProviderMessage(_ message: String) -> String {
+    switch message {
+    case "Invalid API key.": String(localized: "Invalid API key.")
+    case "Not allowed: check the key's permissions and your provider's guardrails.": String(localized: "Not allowed: check the key's permissions and your provider's guardrails.")
+    case "Wrong address: the server has no model list at this URL.": String(localized: "Wrong address: the server has no model list at this URL.")
+    case "Rate limited. Try again in a moment.": String(localized: "Rate limited. Try again in a moment.")
+    case "The answer wasn't a model list. Is this an OpenAI-compatible address?": String(localized: "The answer wasn't a model list. Is this an OpenAI-compatible address?")
+    case "No API key.": String(localized: "No API key.")
+    case "Can't connect. Is the server running and the address correct?": String(localized: "Can't connect. Is the server running and the address correct?")
+    case "The server didn't answer in time.": String(localized: "The server didn't answer in time.")
+    case "Meetings are being moved.": String(localized: "Meetings are being moved.")
+    case "Can't change the location while recording.": String(localized: "Can't change the location while recording.")
+    case "Can't change the location while a meeting is being transcribed or summarized.": String(localized: "Can't change the location while a meeting is being transcribed or summarized.")
+    case "That's already the recordings folder.": String(localized: "That's already the recordings folder.")
+    case "Choose a folder outside the current recordings folder.": String(localized: "Choose a folder outside the current recordings folder.")
+    case "Choose a folder that doesn't contain the current recordings folder.": String(localized: "Choose a folder that doesn't contain the current recordings folder.")
+    case "That's a file, not a folder.": String(localized: "That's a file, not a folder.")
+    case "Choose an empty folder.": String(localized: "Choose an empty folder.")
+    case "Claude Code isn't signed in. Run `claude` in Terminal and sign in.": String(localized: "Claude Code isn't signed in. Run `claude` in Terminal and sign in.")
+    case "Codex isn't signed in. Run `codex login` in Terminal.": String(localized: "Codex isn't signed in. Run `codex login` in Terminal.")
+    case "The reply was cut off before the end.": String(localized: "The reply was cut off before the end.")
+    case "The server cut off the start of the input: the Context window setting is higher than what it really uses.": String(localized: "The server cut off the start of the input: the Context window setting is higher than what it really uses.")
+    default: message
     }
 }

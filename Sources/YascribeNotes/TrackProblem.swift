@@ -29,65 +29,65 @@ public struct TrackProblem: Equatable, Sendable {
         guard t.permissionDenied == nil, t.failure?.hasPrefix("stalled") == true, t.frames == 0,
               tracks.contains(where: { $0.id != t.id && $0.failure == nil && ($0.frames ?? 0) > 0 }) else { return nil }
         let system = t.id == SessionSummary.timelineTrackID
-        let name = system ? "System audio" : "Microphone"
-        let lower = system ? "system audio" : "the microphone"
+        let name = system ? String(localized: "System audio") : String(localized: "Microphone")
+        let lower = system ? String(localized: "system audio") : String(localized: "the microphone")
         // Tory na tym samym urządzeniu Bluetooth: tryb rozmowy potrafi zablokować dźwięk systemowy (faza 2.0.2, sesja 08f6).
         let other = tracks.first { $0.id != t.id && ($0.frames ?? 0) > 0 }
         let sameHeadset = other.map { DeviceUID.same(t.deviceUIDs.last ?? "", $0.deviceUIDs.last ?? "") } ?? false
         let headset = sameHeadset
-            ? " Both tracks were on the same headset; in call mode it can block system audio. Use the Mac's microphone or speakers."
+            ? String(localized: " Both tracks were on the same headset; in call mode it can block system audio. Use the Mac's microphone or speakers.")
             : ""
-        return TrackProblem(trackID: t.id, isWarning: false, name: name, line: "\(name) captured nothing.",
-                            detail: "\(name) never received any sound, which is what happens when nothing is playing on this Mac. "
-                                + "The other track was recorded normally. If you expected \(lower), check System Settings → "
-                                + "Privacy & Security.\(headset)")
+        return TrackProblem(trackID: t.id, isWarning: false, name: name, line: String(localized: "\(name) captured nothing."),
+                            detail: String(localized: "\(name) never received any sound, which is what happens when nothing is playing on this Mac. ")
+                                + String(localized: "The other track was recorded normally. If you expected \(lower), check System Settings → ")
+                                + String(localized: "Privacy & Security.\(headset)"))
     }
 
     static func classify(_ t: SessionSummary.Track, transcript: Transcript?) -> TrackProblem? {
         let system = t.id == SessionSummary.timelineTrackID
-        let name = system ? "System audio" : "Microphone"
-        let lower = system ? "system audio" : "the microphone"
-        let total = t.frames.flatMap { f in t.sampleRate > 0 ? " Recorded \(clock(Double(f) / t.sampleRate)) in total." : nil } ?? ""
+        let name = system ? String(localized: "System audio") : String(localized: "Microphone")
+        let lower = system ? String(localized: "system audio") : String(localized: "the microphone")
+        let total = t.frames.flatMap { f in t.sampleRate > 0 ? String(localized: " Recorded \(clock(Double(f) / t.sampleRate)) in total.") : nil } ?? ""
         if let p = t.permissionDenied {
-            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: "\(name) wasn't allowed — this track is empty.",
-                                detail: "macOS didn't let Yascribe record \(lower) (\(p)). Allow it in System Settings → "
-                                    + "Privacy & Security, then record again.")
+            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: String(localized: "\(name) wasn't allowed — this track is empty."),
+                                detail: String(localized: "macOS didn't let Yascribe record \(lower) (\(p)). Allow it in System Settings → ")
+                                    + String(localized: "Privacy & Security, then record again."))
         }
         guard let reason = t.failure else { return wrongSpeed(t, name: name) }
         guard reason.hasPrefix("allZeros") else {
-            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: "\(name) had a problem: \(reason).",
-                                detail: "The \(lower) track reported “\(reason)” while recording. What it captured is kept.\(total)")
+            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: String(localized: "\(name) had a problem: \(reason)."),
+                                detail: String(localized: "The \(lower) track reported “\(reason)” while recording. What it captured is kept.\(total)"))
         }
         let seconds = Int(reason.dropFirst("allZeros".count).dropLast()) ?? 60
-        let window = seconds == 60 ? "first minute" : "first \(seconds) seconds"
-        let who = system ? "the other side (Them)" : "you (Me)"
+        let window = seconds == 60 ? String(localized: "first minute") : String(localized: "first \(seconds) seconds")
+        let who = system ? String(localized: "the other side (Them)") : String(localized: "you (Me)")
         // `track.audible` (od 1.5b): dźwięk przyszedł po zerach — wiadomo od razu, bez transkryptu.
         if let frame = t.audibleFrame, t.sampleRate > 0 {
             let at = clock((t.offsetSeconds ?? 0) + Double(frame) / t.sampleRate)
             return TrackProblem(trackID: t.id, isWarning: false, name: name,
-                                line: "\(name) was silent for the \(window); recording continued.",
-                                detail: "For the \(window), \(lower) carried only digital silence, so Yascribe flagged it — "
-                                    + "that's also how a missing permission looks. Sound started at \(at). Nothing is missing.\(total)")
+                                line: String(localized: "\(name) was silent for the \(window); recording continued."),
+                                detail: String(localized: "For the \(window), \(lower) carried only digital silence, so Yascribe flagged it — ")
+                                    + String(localized: "that's also how a missing permission looks. Sound started at \(at). Nothing is missing.\(total)"))
         }
         // Stare sesje (bez `track.audible`): dowodem jest transkrypt.
         let heard = transcript.map { $0.utterances.contains { $0.speaker == (system ? .them : .me) } }
         switch heard {
         case true?:
             return TrackProblem(trackID: t.id, isWarning: false, name: name,
-                                line: "\(name) was silent for the \(window); recording continued.",
-                                detail: "For the \(window), \(lower) carried only digital silence, so Yascribe flagged it — "
-                                    + "that's also how a missing permission looks. Sound came later: the transcript has lines from "
-                                    + "\(who). Nothing is missing.\(total)")
+                                line: String(localized: "\(name) was silent for the \(window); recording continued."),
+                                detail: String(localized: "For the \(window), \(lower) carried only digital silence, so Yascribe flagged it — ")
+                                    + String(localized: "that's also how a missing permission looks. Sound came later: the transcript has lines from ")
+                                    + String(localized: "\(who). Nothing is missing.\(total)"))
         case false?:
-            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: "\(name) recorded only silence.",
-                                detail: "\(name) carried only digital silence from the start, and the transcript has no lines from "
-                                    + "\(who). Usually Yascribe isn't allowed to record \(lower) — check System Settings → "
-                                    + "Privacy & Security.\(total)")
+            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: String(localized: "\(name) recorded only silence."),
+                                detail: String(localized: "\(name) carried only digital silence from the start, and the transcript has no lines from ")
+                                    + String(localized: "\(who). Usually Yascribe isn't allowed to record \(lower) — check System Settings → ")
+                                    + String(localized: "Privacy & Security.\(total)"))
         case nil:
-            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: "\(name) was silent for the \(window).",
-                                detail: "For the \(window), \(lower) carried only digital silence — that's how a missing "
-                                    + "permission looks, but it can also be a quiet start. Recording continued; the transcript "
-                                    + "will show whether sound came later.\(total)")
+            return TrackProblem(trackID: t.id, isWarning: true, name: name, line: String(localized: "\(name) was silent for the \(window)."),
+                                detail: String(localized: "For the \(window), \(lower) carried only digital silence — that's how a missing ")
+                                    + String(localized: "permission looks, but it can also be a quiet start. Recording continued; the transcript ")
+                                    + String(localized: "will show whether sound came later.\(total)"))
         }
     }
 
@@ -95,11 +95,11 @@ public struct TrackProblem: Equatable, Sendable {
     /// albo spowolniona, a transkrypt może jej nie rozpoznać (sesja ec0b: 6 słów zamiast 1832). Neutralne wobec przyczyny.
     static func wrongSpeed(_ t: SessionSummary.Track, name: String) -> TrackProblem? {
         guard let ratio = t.rateMismatch else { return nil }
-        let devices = t.deviceUIDs.isEmpty ? "" : " Devices: \(t.deviceUIDs.joined(separator: ", "))."
-        return TrackProblem(trackID: t.id, isWarning: true, name: name, line: "\(name) was recorded at the wrong speed.",
-                            detail: "The track's clock ran at \(Int((ratio * 100).rounded()))% of the declared rate, so its audio is sped up or "
-                                + "slowed down and speech may be missing from the transcript. Bluetooth headphones switching modes can "
-                                + "cause this. Record again with the Mac's microphone or speakers if it matters.\(devices)")
+        let devices = t.deviceUIDs.isEmpty ? "" : String(localized: " Devices: \(t.deviceUIDs.joined(separator: ", ")).")
+        return TrackProblem(trackID: t.id, isWarning: true, name: name, line: String(localized: "\(name) was recorded at the wrong speed."),
+                            detail: String(localized: "The track's clock ran at \(Int((ratio * 100).rounded()))% of the declared rate, so its audio is sped up or ")
+                                + String(localized: "slowed down and speech may be missing from the transcript. Bluetooth headphones switching modes can ")
+                                + String(localized: "cause this. Record again with the Mac's microphone or speakers if it matters.\(devices)"))
     }
 
     static func clock(_ s: Double) -> String {
@@ -122,7 +122,7 @@ public struct MuteNote: Equatable, Sendable {
         let clock = SessionClock(summary: summary)
         return summary.tracks.flatMap { t -> [MuteNote] in
             guard t.sampleRate > 0 else { return [] }
-            let name = t.id == SessionSummary.timelineTrackID ? "System audio" : "Microphone"
+            let name = t.id == SessionSummary.timelineTrackID ? String(localized: "System audio") : String(localized: "Microphone")
             let at = { (f: Int) in clock.sessionSeconds(track: t.id, trackSeconds: Double(f) / t.sampleRate) }
             // Oś sesji zaczyna pierwsza próbka dźwięku systemowego, która potrafi przyjść długo po starcie mikrofonu
             // (odbiór 2026-10-19: 28 s). Okres zakończony przed zerem osi nie dotyczy niczego w transkrypcie — bez linii;
@@ -130,8 +130,8 @@ public struct MuteNote: Equatable, Sendable {
             return (t.mutes ?? []).compactMap { m in
                 if let end = m.endFrame, at(end) <= 0 { return nil }
                 let start = max(0, at(m.frameIndex))
-                let line = m.endFrame.map { "\(name) muted \(TrackProblem.clock(start))–\(TrackProblem.clock(at($0)))" }
-                    ?? "\(name) muted from \(TrackProblem.clock(start)) to the end"
+                let line = m.endFrame.map { String(localized: "\(name) muted \(TrackProblem.clock(start))–\(TrackProblem.clock(at($0)))") }
+                    ?? String(localized: "\(name) muted from \(TrackProblem.clock(start)) to the end")
                 return MuteNote(trackID: t.id, start: start, line: line)
             }
         }

@@ -83,9 +83,9 @@ public struct ProvidersFile: Codable, Equatable, Sendable {
     /// („No API key for <nazwa>…") wskazywały jednego dostawcę.
     public func nameError(_ name: String) -> String? {
         let n = name.trimmingCharacters(in: .whitespaces)
-        if n.isEmpty { return "Give the provider a name." }
+        if n.isEmpty { return String(localized: "Give the provider a name.") }
         if providers.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(n) == .orderedSame }) {
-            return "A provider named “\(n)” already exists."
+            return String(localized: "A provider named “\(n)” already exists.")
         }
         return nil
     }

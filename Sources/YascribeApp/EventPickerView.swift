@@ -22,12 +22,12 @@ struct EventPickerChip: View {
             state.rows = model.pickableEvents(for: item)
             state.open = true
         } label: {
-            Label(linked?.title ?? "Link event", systemImage: "calendar")
+            Label(linked?.title ?? String(localized: "Link event"), systemImage: "calendar")
                 .font(.callout).foregroundStyle(.mnText2).lineLimit(1)
         }
         .buttonStyle(.plain)
         .help("Select calendar event")
-        .accessibilityLabel(linked.map { "Calendar event: \($0.title). Change" } ?? "Link a calendar event")
+        .accessibilityLabel(linked.map { String(localized: "Calendar event: \($0.title). Change") } ?? String(localized: "Link a calendar event"))
         .popover(isPresented: $state.open, arrowEdge: .bottom) {
             EventPickerContent(state: state, item: item,
                                onPick: { model.link($0, to: item); state.open = false },
@@ -53,14 +53,14 @@ struct EventPickerContent: View {
                 .padding(.top, 2).padding(.bottom, 10)
             Divider()
             if !state.ready {
-                row("Connect Apple Calendar in Settings", icon: "calendar.badge.plus", action: onSettings)
+                row(String(localized: "Connect Apple Calendar in Settings"), icon: "calendar.badge.plus", action: onSettings)
             } else if state.rows.isEmpty {
                 Text("No events found that day").font(.callout).foregroundStyle(.mnText2).padding(.vertical, 10)
             } else {
                 ScrollView { VStack(alignment: .leading, spacing: 0) { ForEach(state.rows, id: \.event.id) { eventRow($0) } } }
                     .frame(maxHeight: 280)
             }
-            if linked != nil { Divider(); row("Unlink", icon: "xmark", action: onUnlink) }
+            if linked != nil { Divider(); row(String(localized: "Unlink"), icon: "xmark", action: onUnlink) }
         }
         .padding(14)
         .frame(width: 340, alignment: .leading)

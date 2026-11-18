@@ -91,7 +91,7 @@ public enum PromptStore {
         do {
             return (try JSONFile.load(PromptOverrides.self, from: url, default: PromptOverrides()), nil)
         } catch {
-            return (PromptOverrides(), "Couldn't read your custom prompts (\(error.localizedDescription)). The defaults are in use; saving will keep the old file as \(url.lastPathComponent).bak.")
+            return (PromptOverrides(), String(localized: "Couldn't read your custom prompts (\(error.localizedDescription)). The defaults are in use; saving will keep the old file as \(url.lastPathComponent).bak."))
         }
     }
 

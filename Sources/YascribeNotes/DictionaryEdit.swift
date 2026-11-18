@@ -22,18 +22,18 @@ public enum DictionaryEdit {
             UserDictionary.key(a.trimmingCharacters(in: .whitespacesAndNewlines)) == UserDictionary.key(b.trimmingCharacters(in: .whitespacesAndNewlines))
         }
         switch e {
-        case .emptyTerm: return (.term, "Give the term a name.")
-        case .duplicateTerm(let t): return (.term, "“\(t)” is already in the dictionary.")
+        case .emptyTerm: return (.term, String(localized: "Give the term a name."))
+        case .duplicateTerm(let t): return (.term, String(localized: "“\(t)” is already in the dictionary."))
         case .invalidCharacters(let t):
-            return (same(t, draftTerm) ? .term : .alias, "Can’t start with # or contain tabs or line breaks.")
-        case .aliasTaken(let a, let by): return (.alias, "“\(a)” already belongs to “\(by)”.")
+            return (same(t, draftTerm) ? .term : .alias, String(localized: "Can’t start with # or contain tabs or line breaks."))
+        case .aliasTaken(let a, let by): return (.alias, String(localized: "“\(a)” already belongs to “\(by)”."))
         case .aliasIsTerm(let a, let owner):
-            return same(a, draftTerm) ? (.term, "“\(a)” is already an alias of “\(owner)”.") : (.alias, "“\(a)” is already a term, so it can’t be an alias.")
-        case .invalidInflection: return (.alias, "Endings need at least 3 characters and a final letter or digit.")
+            return same(a, draftTerm) ? (.term, String(localized: "“\(a)” is already an alias of “\(owner)”.")) : (.alias, String(localized: "“\(a)” is already a term, so it can’t be an alias."))
+        case .invalidInflection: return (.alias, String(localized: "Endings need at least 3 characters and a final letter or digit."))
         case .inflectionAmbiguous(let a, let t):
-            return same(t, draftTerm) ? (.term, "“\(t)” would clash with the alias “\(a)”, which matches endings.")
-                : (.alias, "“\(a)” with endings would clash with the term “\(t)”.")
-        case .emptyAlias: return (.alias, "Type an alias first.")
+            return same(t, draftTerm) ? (.term, String(localized: "“\(t)” would clash with the alias “\(a)”, which matches endings."))
+                : (.alias, String(localized: "“\(a)” with endings would clash with the term “\(t)”."))
+        case .emptyAlias: return (.alias, String(localized: "Type an alias first."))
         }
     }
 }

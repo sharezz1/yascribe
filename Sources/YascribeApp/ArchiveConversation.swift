@@ -38,6 +38,82 @@ struct ArchiveScopeRef: Codable, Equatable, Sendable {
     }
 }
 
+enum ArchivePresentation {
+    static func format(_ key: String, _ arguments: CVarArg..., bundle: Bundle = .main) -> String {
+        String(format: bundle.localizedString(forKey: key, value: nil, table: nil), arguments: arguments)
+    }
+
+    static func scope(_ label: String, ref: ArchiveScopeRef?, bundle: Bundle = .main) -> String {
+        guard let ref else { return label }
+        switch ref.kind {
+        case .all: return bundle.localizedString(forKey: "All meetings", value: nil, table: nil)
+        case .unfiled: return bundle.localizedString(forKey: "No folder", value: nil, table: nil)
+        case .folder: return label
+        case .meeting:
+            let prefix = "This meeting: "
+            guard label.hasPrefix(prefix) else { return label }
+            return format("This meeting: %@", String(label.dropFirst(prefix.count)), bundle: bundle)
+        }
+    }
+
+    static func message(_ text: String, scopeLabel: String? = nil, scope: ArchiveScopeRef? = nil, bundle: Bundle = .main) -> String {
+        if let scopeLabel, let scope {
+            let displayedScope = self.scope(scopeLabel, ref: scope, bundle: bundle)
+            if text == "No meetings with transcripts or notes in \(scopeLabel)." {
+                return format("No meetings with transcripts or notes in %@.", displayedScope, bundle: bundle)
+            }
+            if text == "I couldn't find a supported answer in \(scopeLabel)." {
+                return format("I couldn't find a supported answer in %@.", displayedScope, bundle: bundle)
+            }
+        }
+        let known = [
+            "Choose an embedding model in Settings → Archive search to ask about your meetings.",
+            "Choose an Ask model in Settings → Archive search to ask about your meetings.",
+            "A meeting or the Ask model changed while answering. Ask again.",
+            "The embedding model changed. Ask again.", "The Ask model changed. Ask again.",
+            "This chat's folder or meeting no longer exists. Start a new chat.",
+            "This chat is full. Start a new chat.", "This answer was interrupted when Yascribe closed. Ask again.",
+            "Meetings are being moved to a new folder. Ask again when that finishes.",
+            "Open a meeting first, or choose All meetings.", "No provider is available.",
+            "This provider is no longer available.", "This provider no longer exists.", "Checking your settings…", "Preparing the index…",
+            "Searching your meetings…", "Answering…",
+            "The embedding model returned vectors of a different size than the archive index uses.",
+            "The embedding model returned an unusable vector.",
+            "The model's Context window is too small to answer from your meetings.",
+            "the chats folder is a symbolic link", "the chat file is a symbolic link", "invalid chat content",
+            "the chat is too large", "unexpected file name", "symbolic link", "file too large",
+            "id does not match the file name", "invalid content"
+        ]
+        if known.contains(text) { return bundle.localizedString(forKey: text, value: nil, table: nil) }
+        for (prefix, key) in [("Couldn't search with ", "Couldn't search with %@: %@"),
+                              ("Couldn't get an answer from ", "Couldn't get an answer from %@: %@"),
+                              ("Couldn't index your meetings with ", "Couldn't index your meetings with %@: %@")] {
+            if text.hasPrefix(prefix), let range = text.range(of: ": ", range: text.index(text.startIndex, offsetBy: prefix.count)..<text.endIndex) {
+                let provider = String(text[text.index(text.startIndex, offsetBy: prefix.count)..<range.lowerBound])
+                let reason = String(text[range.upperBound...])
+                return format(key, provider, message(reason, bundle: bundle), bundle: bundle)
+            }
+        }
+        let keyPrefix = "Couldn't read the API key for "
+        let keySeparator = " from Keychain: "
+        if text.hasPrefix(keyPrefix), let range = text.range(of: keySeparator) {
+            let provider = String(text[text.index(text.startIndex, offsetBy: keyPrefix.count)..<range.lowerBound])
+            return format("Couldn't read the API key for %@ from Keychain: %@", provider, String(text[range.upperBound...]), bundle: bundle)
+        }
+        let missingPrefix = "No API key for "
+        let missingSuffix = ". Remove the provider and add it again with a key."
+        if text.hasPrefix(missingPrefix), text.hasSuffix(missingSuffix) {
+            return format("No API key for %@. Remove the provider and add it again with a key.",
+                          String(text.dropFirst(missingPrefix.count).dropLast(missingSuffix.count)), bundle: bundle)
+        }
+        let speechSuffix = " does only speech-to-text."
+        if text.hasSuffix(speechSuffix) {
+            return format("%@ does only speech-to-text.", String(text.dropLast(speechSuffix.count)), bundle: bundle)
+        }
+        return text
+    }
+}
+
 /// Jedna zapisana rozmowa (`chats/<UUID>.json`). Bez wektorów, kluczy i ustawień dostawcy: tylko pytania, odpowiedzi,
 /// źródła (puste wektory) i odciski spotkań z przypisów, które pilnują świeżości kontekstu po restarcie.
 struct ArchiveConversation: Codable, Equatable {

@@ -31,8 +31,8 @@ struct MeetingsView: View {
 
     private static func dayTitle(_ day: Date) -> String {
         let cal = Calendar.current
-        if cal.isDateInToday(day) { return "Today" }
-        if cal.isDateInYesterday(day) { return "Yesterday" }
+        if cal.isDateInToday(day) { return String(localized: "Today") }
+        if cal.isDateInYesterday(day) { return String(localized: "Yesterday") }
         return day.formatted(.dateTime.weekday(.wide).month(.wide).day())
     }
 
@@ -157,7 +157,7 @@ struct OverviewPanel: View {
         VStack(alignment: .leading, spacing: 18) {
             if let item {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(item.title).font(.system(size: 16, weight: .medium))
+                    Text(item.displayTitle).font(.system(size: 16, weight: .medium))
                     Text(item.startedAt.formatted(date: .abbreviated, time: .shortened))
                         .font(.system(size: 12)).foregroundStyle(.mnText2)
                 }
@@ -204,11 +204,11 @@ struct ComingUpHeader: View {
                 } else {
                     Circle().fill(.mnRecDot).frame(width: 7, height: 7)
                 }
-                Text(recording ? "Stop" : "Record")
+                Text(recording ? String(localized: "Stop") : String(localized: "Record"))
             }
         }
         .buttonStyle(PillButtonStyle(kind: primary ? .primary : .secondary))
-        .help(recording ? "Stop recording" : "Record now, without a calendar event")
+        .help(recording ? String(localized: "Stop recording") : String(localized: "Record now, without a calendar event"))
     }
 
     var body: some View {
@@ -227,7 +227,7 @@ struct ComingUpHeader: View {
             .padding(.bottom, model.activePreset?.isAutoLanguage == true ? 6 : 18)
             // Auto = ryzyko zmyślonej angielszczyzny (W§2): ostrzeżenie widoczne przed startem, ikona + słowo.
             if model.activePreset?.isAutoLanguage == true {
-                WarnLabel("Auto language: the preset has no fixed language").font(.system(size: 11)).padding(.bottom, 14)
+                WarnLabel(String(localized: "Auto language: the preset has no fixed language")).font(.system(size: 11)).padding(.bottom, 14)
             }
             if showUpcoming, let next = up.next {
                 NextMeetingCard(event: next, now: now, recording: recording).padding(.bottom, 8)
@@ -238,18 +238,18 @@ struct ComingUpHeader: View {
                 Color.clear.frame(height: 22)
             } else if showUpcoming {
                 HStack(spacing: 12) {
-                    Text(!connected ? "See your meetings here and start recording from them."
-                         : up.later.isEmpty ? "No more meetings today." : Self.laterLine(up.later))
+                    Text(!connected ? String(localized: "See your meetings here and start recording from them.")
+                         : up.later.isEmpty ? String(localized: "No more meetings today.") : Self.laterLine(up.later))
                         .foregroundStyle(.mnText2).monospacedDigit().lineLimit(1).truncationMode(.tail)
                     Spacer(minLength: 8)
                     if connected {
-                        LinkButton("Open Calendar") {
+                        LinkButton(String(localized: "Open Calendar")) {
                             if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.iCal") {
                                 NSWorkspace.shared.openApplication(at: app, configuration: .init())
                             }
                         }
                     } else {
-                        LinkButton("Connect Apple Calendar…") { model.section = .settings }
+                        LinkButton(String(localized: "Connect Apple Calendar…")) { model.section = .settings }
                             .help("Settings → Integrations")
                     }
                 }
@@ -263,9 +263,10 @@ struct ComingUpHeader: View {
 
     /// „Later today: 11:30 Forecast review · 14:00 Dentist (in person) · …”
     static func laterLine(_ events: [CalendarEventInfo]) -> String {
-        "Later today: " + events.map {
-            $0.start.formatted(date: .omitted, time: .shortened) + " " + $0.title + (ComingUp.appName($0) == nil ? " (in person)" : "")
+        let list = events.map {
+            $0.start.formatted(date: .omitted, time: .shortened) + " " + $0.title + (ComingUp.appName($0) == nil ? String(localized: " (in person)") : "")
         }.joined(separator: " · ")
+        return String(localized: "Later today: \(list)")
     }
 }
 
@@ -294,8 +295,8 @@ struct NextMeetingCard: View {
     private var details: String {
         var parts = [event.start.formatted(date: .omitted, time: .shortened) + " – " + event.end.formatted(date: .omitted, time: .shortened)]
         let n = event.attendees.count
-        if n > 0 { parts.append(n == 1 ? "1 attendee" : "\(n) attendees") }
-        parts.append("notes titled and linked to this event")
+        if n > 0 { parts.append(n == 1 ? String(localized: "1 attendee") : String(localized: "\(n) attendees")) }
+        parts.append(String(localized: "notes titled and linked to this event"))
         return parts.joined(separator: " · ")
     }
 
@@ -329,7 +330,7 @@ struct NextMeetingCard: View {
                     }
                     .buttonStyle(PillButtonStyle(kind: recording ? .secondary : .primary, large: true))
                     .disabled(recording)
-                    .help(recording ? "A recording is already in progress" : "Record “\(event.title)”: the note gets its title and is linked to this event")
+                    .help(recording ? String(localized: "A recording is already in progress") : String(localized: "Record “\(event.title)”: the note gets its title and is linked to this event"))
                 }
             }
             .padding(16)
@@ -343,7 +344,7 @@ struct FolderChip: View {
     let item: SessionItem
 
     var body: some View {
-        FieldMenu(label: "Folder", value: model.folderName(of: item) ?? "No folder", prefix: "Folder", width: nil) {
+        FieldMenu(label: String(localized: "Folder"), value: model.folderName(of: item) ?? String(localized: "No folder"), prefix: String(localized: "Folder"), width: nil) {
             MeetingFolderOptions(item: item)
         }
         .disabled(model.recordingsMove != nil)
@@ -379,7 +380,7 @@ struct SessionFolderMenu: View {
         Menu {
             MeetingFolderOptions(item: item)
         } label: {
-            Label(model.folderName(of: item) ?? (model.folders.folders.isEmpty ? "Create folder" : "Add to folder"),
+            Label(model.folderName(of: item) ?? (model.folders.folders.isEmpty ? String(localized: "Create folder") : String(localized: "Add to folder")),
                   systemImage: "folder")
                 .font(.system(size: 11))
                 .foregroundStyle(.mnText2)
@@ -391,8 +392,8 @@ struct SessionFolderMenu: View {
         }
         .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
         .disabled(model.recordingsMove != nil)
-        .accessibilityLabel("Folder for \(item.title)")
-        .accessibilityValue(model.folderName(of: item) ?? "No folder")
+        .accessibilityLabel("Folder for \(item.displayTitle)")
+        .accessibilityValue(model.folderName(of: item) ?? String(localized: "No folder"))
         .help("Choose or create a folder for this meeting")
     }
 }
@@ -495,7 +496,7 @@ struct SessionRow: View {
         if lang.isAuto {
             parts.append("Auto")
         } else if let l = lang.language {
-            parts.append(Locale(identifier: "en").localizedString(forLanguageCode: l.rawValue) ?? l.rawValue.uppercased())
+            parts.append(languageDisplayName(l))
         }
         return parts.joined(separator: " · ")
     }
@@ -505,7 +506,7 @@ struct SessionRow: View {
             Button { model.selectedSessionID = item.id } label: {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
+                        Text(item.displayTitle).font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
                             .lineLimit(1).truncationMode(.tail)
                         Text(meta).font(.system(size: 11)).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1)
                         // ChatGPT #16: brak „Oni" albo „Ja" widoczny na liście, nie tylko w dzienniku. Poprawka 6: tylko
@@ -542,7 +543,7 @@ struct SessionRow: View {
                     .contentShape(Rectangle())
             }
             .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
-            .accessibilityLabel("Actions for \(item.title)")
+            .accessibilityLabel("Actions for \(item.displayTitle)")
             .help("Meeting actions")
         }
         .padding(.vertical, 9).padding(.horizontal, 4)
@@ -556,7 +557,7 @@ struct SessionRow: View {
 
     @ViewBuilder private var statusView: some View {
         if model.isDetectingSpeakers(item) {
-            StateLabel(.progress(nil), "Detecting speakers…")
+            StateLabel(.progress(nil), String(localized: "Detecting speakers…"))
         } else {
             sessionStatusView
         }
@@ -569,25 +570,25 @@ struct SessionRow: View {
         case .transcribing(let p):
             StateLabel(.progress(p), "Transcribing \(Int(p * 100))%")
         case .correcting:
-            StateLabel(.progress(nil), "Correcting…")
+            StateLabel(.progress(nil), String(localized: "Correcting…"))
         case .correctionFailed:
-            StateLabel(.bad, "Correction failed").help(model.notes.correctionFailureMessage(item.id) ?? "")
+            StateLabel(.bad, String(localized: "Correction failed")).help(model.notes.correctionFailureMessage(item.id) ?? "")
         case .titling:
-            StateLabel(.progress(nil), "Naming…")
+            StateLabel(.progress(nil), String(localized: "Naming…"))
         case .recovered:
-            WarnLabel("Recovered").help("The app stopped during this recording; the audio was kept")
+            WarnLabel(String(localized: "Recovered")).help("The app stopped during this recording; the audio was kept")
         case .partial(let gaps):
-            WarnLabel("Partial — \(gaps) gaps")
+            WarnLabel(String(format: NSLocalizedString("Partial — %lld gaps", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(gaps)))
         case .interrupted:
-            WarnLabel("Interrupted")
+            WarnLabel(String(localized: "Interrupted"))
         case .notesReady:
-            StateLabel(.ok, "Notes ready")
+            StateLabel(.ok, String(localized: "Notes ready"))
         case .flagged(let n):
             WarnLabel("\(n) language flags")
         case .transcriptReady:
-            StateLabel(.neutral, "Transcript ready")
+            StateLabel(.neutral, String(localized: "Transcript ready"))
         case .notTranscribed:
-            StateLabel(.neutral, "Not transcribed")
+            StateLabel(.neutral, String(localized: "Not transcribed"))
         }
     }
 }

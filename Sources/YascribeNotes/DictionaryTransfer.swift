@@ -33,6 +33,15 @@ public struct DictionaryImportReport: Equatable, Sendable {
         self.rejected = rejected
     }
 
+    public var displaySummary: String {
+        let terms = String(format: NSLocalizedString("%lld terms", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(termsAdded))
+        let aliases = String(format: NSLocalizedString("%lld aliases", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(aliasesAdded))
+        let risky = String(format: NSLocalizedString("%lld risky left off", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(riskyLeftOff))
+        let conflicts = String(format: NSLocalizedString("%lld conflicts", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(conflicts.count))
+        let rejected = String(format: NSLocalizedString("%lld rejected", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(rejected))
+        return [terms, aliases, risky, conflicts, rejected].joined(separator: ", ")
+    }
+
     public var summary: String {
         "\(termsAdded) terms, \(aliasesAdded) aliases, \(riskyLeftOff) risky left off, \(conflicts.count) conflicts, \(rejected) rejected"
     }

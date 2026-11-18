@@ -109,19 +109,22 @@ public enum NoteTitle {
     }
 
     /// Ręczny > kalendarz > auto > tytuł z notatki > „Untitled meeting". Tytuł z notatki nie nadpisuje istniejącego.
-    public static func display(meta: NoteMeta, noteTitle: String?) -> String {
+    public static func sourceTitle(meta: NoteMeta, noteTitle: String?) -> String? {
         for c in [meta.manualTitle, meta.calendarEvent?.title, meta.autoTitle, noteTitle] {
             if let c, !c.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return c }
         }
-        return untitled
+        return nil
+    }
+
+    public static func display(meta: NoteMeta, noteTitle: String?) -> String {
+        sourceTitle(meta: meta, noteTitle: noteTitle) ?? untitled
     }
 
     /// Tekst pola tytułu w widoku spotkania: tytuł z `display` w kolorze tekstu; tylko „Untitled meeting" zostaje
     /// placeholderem (puste pole). Liczone przy każdym odświeżeniu, nie kopiowane raz przy otwarciu (odbiór 2026-10-16,
     /// błąd 4: autotytuł zapisany w trakcie oglądania spotkania nie trafiał do pola).
     public static func fieldText(meta: NoteMeta, noteTitle: String?) -> String {
-        let t = display(meta: meta, noteTitle: noteTitle)
-        return t == untitled ? "" : t
+        sourceTitle(meta: meta, noteTitle: noteTitle) ?? ""
     }
 
     /// Bufor edycji pola po zmianie tekstu: `nil`, gdy tekst jest dokładnie bieżącym tytułem (pole znów śledzi

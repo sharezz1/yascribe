@@ -39,7 +39,7 @@ public enum SystemAudioCheck {
         let fmt = engine.mainMixerNode.outputFormat(forBus: 0)
         engine.connect(player, to: engine.mainMixerNode, format: fmt)
         guard let tone = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(fmt.sampleRate * 0.3)) else {
-            return .failed("tone buffer")
+            return .failed(String(localized: "tone buffer"))
         }
         tone.frameLength = tone.frameCapacity
         for c in 0..<Int(fmt.channelCount) {
