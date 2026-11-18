@@ -31,24 +31,24 @@ public enum NotePromptBuilder {
     public static func build(template: Template, transcript: Transcript, myNotes: String, context: String,
                              notesLanguage: LanguageCode?, condensed: Bool = false,
                              vocabulary: PromptVocabulary? = nil, rulesBody: String = SummaryPrompt.defaultBody) -> NotePrompt? {
-        let lines = transcriptLines(transcript)
+        let lines = transcriptLines(transcript, markers: true)
         guard !lines.isEmpty else { return nil }
         return prompt(template: template, lines: lines, myNotes: myNotes, context: context, notesLanguage: notesLanguage,
-                      condensed: condensed, vocabulary: vocabulary, rulesBody: rulesBody)
+                      condensed: condensed, vocabulary: vocabulary, rulesBody: rulesBody, speakerLegend: speakerLegend(transcript))
     }
 
     /// Ten sam prompt z gotowych linii `[m:ss] Me|Them: …` (reduce dostaje wyjście mapy, nie `Transcript`); bez bramki „pusto".
     /// `vocabulary` (F21): linie Termów i uczestników w `system`, po regułach i zdaniu o języku, przed „Structure"; w `user` ich nie ma.
     static func prompt(template: Template, lines: [String], myNotes: String, context: String, notesLanguage: LanguageCode?,
                        condensed: Bool = false, vocabulary: PromptVocabulary? = nil,
-                       rulesBody: String = SummaryPrompt.defaultBody) -> NotePrompt {
+                       rulesBody: String = SummaryPrompt.defaultBody, speakerLegend: String? = nil) -> NotePrompt {
         let language = notesLanguage.map { "Write the notes in \($0.englishName)." }
             ?? "Write the notes in the language that predominates in the transcript."
         let system = """
         You write meeting notes from the transcript of a two-channel recording. "Me" is the user's microphone, "Them" is \
         everyone else on the call.
 
-        \(hasSpeakerLabels(lines) ? speakerSentence + "\n\n" : "")Rules:
+        \(speakerIntro(lines, legend: speakerLegend))Rules:
         \(rulesBody.trimmingCharacters(in: .whitespacesAndNewlines))
         - Output Markdown. The FIRST line must be the title, written as "# <short descriptive title>". Nothing may \
         come before it. \(NoteTitle.rule)
@@ -86,9 +86,9 @@ public enum NotePromptBuilder {
         "[m:ss] Them: text" (after the first hour "[h:mm:ss] Me: text"); "Me" is the user's microphone, "Them" is \
         everyone else on the call.
 
-        \(hasSpeakerLabels(part) ? speakerSentence + "\n\n" : "")Rules:
+        \(speakerIntro(part, legend: nil))Rules:
         - Reply with condensed lines in the same format: each line starts with its [m:ss] or [h:mm:ss] and its speaker, in \
-        the same order. You may merge consecutive lines of the same speaker into one, keeping the first timestamp.
+        the same order. You may merge consecutive lines of the same speaker into one, keeping the first timestamp.\(hasMarkers(part) ? "\n- Keep speaker markers like [[S1]] exactly as written." : "")
         - Keep names, numbers, dates, decisions and tasks exactly as spoken. Drop filler and repetition.
         - Do not interpret, do not add anything that is not in the input, do not translate.
         - Keep the result to at most 40% of the input length.
@@ -100,10 +100,32 @@ public enum NotePromptBuilder {
     /// Długość promptu systemowego mapy z zapasem na numer części — do liczenia `pairedInputChars` przed podziałem. Liczona z prawdziwego
     /// `mapPrompt`: `DictionaryPrompt.maxChars` nie obejmuje stałych nagłówków linii, więc koszt linii słownika trzeba mierzyć, nie szacować.
     static func mapSystemChars(vocabulary: PromptVocabulary?, hasSpeakerLabels: Bool = false) -> Int {
-        mapPrompt(part: hasSpeakerLabels ? ["[0:00] Speaker 1: x"] : [], index: 99_999, count: 99_999, notesLanguage: nil, vocabulary: vocabulary).system.count
+        mapPrompt(part: hasSpeakerLabels ? ["[0:00] [[S1]]: x"] : [], index: 99_999, count: 99_999, notesLanguage: nil, vocabulary: vocabulary).system.count
     }
 
     static let speakerSentence = "\"Speaker 1\", \"Speaker 2\"… and names identify voices on the call, detected automatically; one label can cover two people and one person can get two labels; use names exactly as given and never guess a name for a \"Speaker N\" label."
+    static let markerSentence = "Markers like [[S1]], [[S2]]… identify voices on the call, detected automatically; one marker can cover two people and one person can get two markers. Whenever the notes refer to a person who has a marker, write the marker exactly as given instead of a name or \"Speaker N\", preferably as the subject (\"[[S1]] said…\"). Never put a marker in the title."
+
+    /// Zdanie o mówcach (i legenda) przed „Rules:”: znaczniki mają pierwszeństwo przed etykietami.
+    static func speakerIntro(_ lines: [String], legend: String?) -> String {
+        if hasMarkers(lines) { return markerSentence + (legend.map { "\n" + $0 } ?? "") + "\n\n" }
+        return hasSpeakerLabels(lines) ? speakerSentence + "\n\n" : ""
+    }
+
+    static func hasMarkers(_ lines: [String]) -> Bool {
+        lines.contains { TranscriptSplitter.prefix(of: $0).contains("[[S") }
+    }
+
+    /// `Speakers: [[S1]] = Ala; [[S2]] = Speaker 2.` — `nil`, gdy żadna wypowiedź nie ma klucza mówcy.
+    public static func speakerLegend(_ t: Transcript) -> String? {
+        let numbers = SpeakerLabels.numbers(for: t)
+        guard !numbers.isEmpty else { return nil }
+        var labels: [String: String] = [:]
+        for u in t.utterances { if let key = u.speakerKey, labels[key] == nil { labels[key] = u.speakerLabel } }
+        let entries = numbers.sorted { $0.value < $1.value }.map { "[[S\($0.value)]] = \(labels[$0.key] ?? "Speaker \($0.value)")" }
+        return "Speakers: " + entries.joined(separator: "; ") + "."
+    }
+
     static let localSpeakerSentence = "Speaker labels are local to each meeting, do not connect people across meetings, and can merge or split people."
 
     static func hasSpeakerLabels(_ lines: [String]) -> Bool {
@@ -114,11 +136,16 @@ public enum NotePromptBuilder {
     }
 
     /// `[m:ss] Me|Them: tekst` — bez wypowiedzi pustych i oznaczonych strażnikiem języka.
-    public static func transcriptLines(_ t: Transcript) -> [String] {
-        t.utterances
+    /// `markers`: wypowiedź z kluczem mówcy dostaje `[[SN]]` zamiast etykiety (tylko prompty notatki).
+    public static func transcriptLines(_ t: Transcript, markers: Bool = false) -> [String] {
+        let numbers = markers ? SpeakerLabels.numbers(for: t) : [:]
+        return t.utterances
             .filter { !$0.excludedFromNotes && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.start < $1.start }
-            .map { "[\(clock($0.start))] \($0.speaker == .me ? "Me" : ($0.speakerLabel ?? "Them")): \($0.text)" }
+            .map { u in
+                let marker = u.speakerKey.flatMap { numbers[$0] }.map { "[[S\($0)]]" }
+                return "[\(clock(u.start))] \(u.speaker == .me ? "Me" : (marker ?? u.speakerLabel ?? "Them")): \(u.text)"
+            }
     }
 
     static func clock(_ seconds: Double) -> String {

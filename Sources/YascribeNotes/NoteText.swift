@@ -17,6 +17,8 @@ public struct NoteStyle {
     public var text: NSColor = .labelColor
     public var secondary: NSColor = .secondaryLabelColor
     public var marker: NSColor = .tertiaryLabelColor
+    /// Kolor mówcy po numerze „Speaker N” (jak w transkrypcie); `nil` = kolor tekstu.
+    public var speakerColor: ((Int) -> NSColor)? = nil
     public init() {}
 }
 
@@ -109,7 +111,7 @@ extension MarkdownBlocks {
                     let s = String(b.text[run.range].characters).replacingOccurrences(of: "\n", with: "\u{2028}")
                     var f = font
                     if isHeaderRow { f = NSFontManager.shared.convert(f, toHaveTrait: .boldFontMask) }
-                    customBody?.append(NSAttributedString(string: s, attributes: attrs(f)))
+                    customBody?.append(NSAttributedString(string: s, attributes: speaker(attrs(f), link: run.link, font: f, style: style)))
                 }
             }
             if case .heading? = next { p.paragraphSpacing = 0 }
@@ -140,7 +142,7 @@ extension MarkdownBlocks {
                     if intent.contains(.emphasized) { f = NSFontManager.shared.convert(f, toHaveTrait: .italicFontMask) }
                     if block.length == bodyStart, intent.contains(.stronglyEmphasized) { leadingBoldEnd = bodyStart + (s as NSString).length }
                     var a = base; a[.font] = f
-                    block.append(NSAttributedString(string: s, attributes: a))
+                    block.append(NSAttributedString(string: s, attributes: speaker(a, link: run.link, font: f, style: style)))
                 }
                 if b.kind == .bullet, let from = leadingBoldEnd {
                     let r = (block.string as NSString).range(of: " — ", range: NSRange(location: from, length: block.length - from))
@@ -153,5 +155,18 @@ extension MarkdownBlocks {
             out.append(block)
         }
         return out
+    }
+
+    /// Tylko linki mówców (`SpeakerMarkers.linked`, N ≥ 1): link, pogrubienie, kolor mówcy. Linki napisane przez model
+    /// zostają zwykłym tekstem.
+    private static func speaker(_ attributes: [NSAttributedString.Key: Any], link: URL?, font: NSFont,
+                                style: NoteStyle) -> [NSAttributedString.Key: Any] {
+        guard let link, link.scheme == SpeakerMarkers.urlScheme,
+              let n = Int(link.absoluteString.dropFirst(SpeakerMarkers.urlScheme.count + 1)), n >= 1 else { return attributes }
+        var a = attributes
+        a[.link] = link
+        a[.font] = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
+        if let color = style.speakerColor?(n) { a[.foregroundColor] = color }
+        return a
     }
 }

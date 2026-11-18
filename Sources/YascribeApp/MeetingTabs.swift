@@ -341,12 +341,12 @@ struct TranscriptTab: View {
 
 struct SummaryActions: View {
     @ObservedObject var state: MeetingViewState
-    let summary: NoteSummary
+    let item: SessionItem
     let compact: Bool
 
     var body: some View {
         HStack(spacing: 8) {
-            Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(summary.markdown, forType: .string) } label: {
+            Button { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(item.notesText ?? "", forType: .string) } label: {
                 if compact { Image(systemName: "doc.on.doc") } else { Label("Copy", systemImage: "doc.on.doc") }
             }.buttonStyle(.pill).help("Copy the notes").accessibilityLabel("Copy")
             Button("Improve…") { state.modelsSheet = true }
@@ -414,7 +414,7 @@ struct SummaryTab: View {
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
             if let s = item.notes.summary {
-                MarkdownView(blocks: MarkdownBlocks.group(s.markdown)).padding(.top, 8)
+                MarkdownView(blocks: item.speakerMarkers.linked(MarkdownBlocks.group(s.markdown)), speakerPicker: speakerPicker).padding(.top, 8)
             } else if gen != .generating, hasText {
                 emptyState
             }
@@ -470,7 +470,7 @@ struct SummaryTab: View {
                     Spacer(minLength: 0)
                     Button("Improve") { state.modelsSheet = true }
                         .buttonStyle(.pill).layoutPriority(2).help("Change the template, context or model and regenerate")
-                    Button { copy(s.markdown) } label: { Label("Copy", systemImage: "doc.on.doc") }
+                    Button { copy(item.notesText ?? s.markdown) } label: { Label("Copy", systemImage: "doc.on.doc") }
                         .buttonStyle(.pill)
                         .layoutPriority(2)
                         .help("Copy the notes")
@@ -523,6 +523,17 @@ struct SummaryTab: View {
 
     @ViewBuilder private var errorView: some View {
         if case .failed(let message) = gen { ErrorLine(message: message) { run() }.disabled(moving || correcting || transcribing) }
+    }
+
+    /// Ten sam „Who is this?” co w transkrypcie; zmiana imienia od razu przerysowuje notatkę (bloki zawierają nazwy).
+    private func speakerPicker(_ number: Int, close: @escaping () -> Void) -> AnyView {
+        guard let key = item.speakerMarkers.numbers.first(where: { $0.value == number })?.key else { return AnyView(EmptyView()) }
+        return AnyView(SpeakerPicker(attendees: item.notes.meta.calendarEvent?.attendees ?? [],
+                                     known: KnownPeople.load(root: model.paths.root).names,
+                                     currentName: item.speakers?.names?[key], number: number) { name in
+            model.renameSpeaker(item: item, key: key, name: name)
+            close()
+        })
     }
 
     private func run() {

@@ -36,9 +36,12 @@ extension CLI {
         let session = FileManager.default.temporaryDirectory.appendingPathComponent("note-cli-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: session) }
-        let summary = try await generator.generate(session: session, template: .standard, transcript: transcript, context: "",
+        var summary = try await generator.generate(session: session, template: .standard, transcript: transcript, context: "",
                                                    notesLanguage: try LanguageCode(langRaw), budget: budget, vocabulary: vocabulary,
                                                    onProblem: { FileHandle.standardError.write(Data("problem: \($0)\n".utf8)) })
+        // Plik do czytania przez człowieka: znaczniki mówców zamienione na bieżące nazwy.
+        summary.markdown = SpeakerMarkers(keys: summary.speakers, names: speakers?.names ?? [:],
+                                          numbers: SpeakerLabels.numbers(for: transcript)).resolved(summary.markdown)
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]; enc.dateEncodingStrategy = .iso8601
         try enc.encode(summary).write(to: URL(fileURLWithPath: outPath))
         print("model \(summary.model) znaków \(summary.markdown.count) części \(summary.condensedParts.map(String.init) ?? "-")")

@@ -530,6 +530,13 @@ enum Snapshots {
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                     }
                 }
+                // Notatka ze znacznikami mówców: imię i „Speaker N” w kolorach transkryptu, bez podkreślenia linku.
+                let speakerNote = SpeakerMarkers(keys: ["1": "first", "2": "second"], names: ["second": "Ala"], numbers: ["first": 1, "second": 2])
+                    .linked(MarkdownBlocks.group("## Decisions\n- [[S2]] will send the forecast by Friday.\n- [[S1]] asked about the budget; [[S2]] agreed."))
+                try render("summary-speaker-names", size: CGSize(width: 700, height: 170), dark: dark, model: model) {
+                    MarkdownView(blocks: speakerNote).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(30).contentBackground()
+                }
                 try render("preset-on-this-mac-rows", size: CGSize(width: 700, height: 190), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach([("missing", ModelStatus.missing, ModelActivity.idle), ("downloading", .missing, .downloading(0.41)),

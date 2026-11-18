@@ -57,6 +57,21 @@ struct SessionItem: Identifiable, Equatable {
     /// Ręczny > auto > tytuł z notatki > „Untitled meeting".
     var title: String { NoteTitle.display(meta: notes.meta, noteTitle: notes.summary?.title) }
 
+    /// Znaczniki `[[SN]]` notatki → bieżące nazwy mówców.
+    /// shortcut: numeracja z surowego transkryptu, także gdy notatka powstała z poprawionego; zmienić, jeśli „Speaker N” w notatce
+    /// rozjedzie się z transkryptem.
+    /// Inne wykrycie mówców niż przy generowaniu (skrót odcinków): te same klucze mogą znaczyć inne osoby, więc bez numeracji
+    /// — znaczniki zostają samym „Speaker N” z notatki.
+    var speakerMarkers: SpeakerMarkers {
+        let current = speakers.map(\.segmentsDigest)
+        let sameDetection = current != nil && notes.summary?.speakersDigest == current
+        return SpeakerMarkers(keys: notes.summary?.speakers, names: speakers?.names ?? [:],
+                              numbers: sameDetection ? transcript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(speakers)) } ?? [:] : [:])
+    }
+
+    /// Treść notatki z nazwami mówców zamiast znaczników — do schowka i archiwum.
+    var notesText: String? { notes.summary.map { speakerMarkers.resolved($0.markdown) } }
+
     /// Transkrypt do wyświetlenia i streszczenia: poprawiony, gdy jest i użytkownik go nie wyłączył.
     func transcript(corrected useCorrected: Bool) -> Transcript? {
         useCorrected ? (corrected?.transcript ?? transcript) : transcript
@@ -895,7 +910,7 @@ final class AppModel {
     func canDelete(_ item: SessionItem) -> Bool { deleteBlocker(item) == nil }
 
     func copyNotes(_ item: SessionItem) {
-        guard let md = item.notes.summary?.markdown else { return }
+        guard let md = item.notesText else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(md, forType: .string)
     }

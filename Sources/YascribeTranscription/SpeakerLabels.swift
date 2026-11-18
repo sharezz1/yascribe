@@ -5,14 +5,24 @@ public enum SpeakerLabels {
 
     public static func labels(for t: Transcript, diarization: SpeakerDiarization?) -> [String?] {
         let keys = speakerKeys(for: t, diarization: diarization)
-        var numbered: [String: String] = [:]
+        let numbered = numbers(keys: keys, in: t)
+        return keys.map { $0.flatMap { key in diarization?.names?[key] ?? numbered[key].map { "Speaker \($0)" } } }
+    }
+
+    /// Klucz mówcy → N z „Speaker N” (kolejność pierwszej wypowiedzi) dla transkryptu po `withSpeakerLabels`.
+    public static func numbers(for t: Transcript) -> [String: Int] {
+        numbers(keys: t.utterances.map(\.speakerKey), in: t)
+    }
+
+    private static func numbers(keys: [String?], in t: Transcript) -> [String: Int] {
+        var numbered: [String: Int] = [:]
         for index in t.utterances.indices.sorted(by: {
             t.utterances[$0].start == t.utterances[$1].start ? $0 < $1 : t.utterances[$0].start < t.utterances[$1].start
         }) {
             guard let key = keys[index], numbered[key] == nil else { continue }
-            numbered[key] = "Speaker \(numbered.count + 1)"
+            numbered[key] = numbered.count + 1
         }
-        return keys.map { $0.flatMap { diarization?.names?[$0] ?? numbered[$0] } }
+        return numbered
     }
 
     static func speakerKeys(for t: Transcript, diarization: SpeakerDiarization?) -> [String?] {

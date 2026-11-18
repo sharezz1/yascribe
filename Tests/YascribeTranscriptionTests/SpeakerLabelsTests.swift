@@ -62,3 +62,20 @@ private func seg(_ speaker: String, _ start: Double, _ end: Double) -> SpeakerDi
     let d = try JSONDecoder().decode(SpeakerDiarization.self, from: Data(json.utf8))
     #expect(d.names == nil)
 }
+
+@Test func speakerNumbersFollowFirstUtterance() {
+    var lines = [line(9, 10), line(5, 6), line(1, 2, .me)]
+    lines[0].speakerKey = "a"
+    lines[1].speakerKey = "b"
+    #expect(SpeakerLabels.numbers(for: Transcript(utterances: lines, failedChunks: [])) == ["b": 1, "a": 2])
+}
+
+@Test func segmentsDigestIgnoresNamesButNotSegments() {
+    var d = SpeakerDiarization(version: 1, modelPin: "p", sensitivity: nil, fa: nil, fb: nil, threshold: nil, minClusterSeconds: nil,
+                               audioFingerprint: nil, createdAt: nil, segments: [seg("speaker_0", 0, 10)])
+    let before = d.segmentsDigest
+    d.names = ["speaker_0": "Ala"]
+    #expect(d.segmentsDigest == before)
+    d.segments = [seg("speaker_0", 0, 11)]
+    #expect(d.segmentsDigest != before)
+}
