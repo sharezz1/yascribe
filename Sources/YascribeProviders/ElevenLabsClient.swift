@@ -117,3 +117,29 @@ public struct ElevenLabsClient: TranscriptionClient {
         }
     }
 }
+
+extension ElevenLabsClient: DiarizationClient {
+    public static func diarizationRequest(baseURL: URL, key: String?, m4a: Data, model: String, language: LanguageCode?,
+                                          boundary: String = "Yascribe-\(UUID().uuidString)") -> URLRequest {
+        var r = URLRequest(url: baseURL.appendingPathComponent("speech-to-text"))
+        r.httpMethod = "POST"
+        r.timeoutInterval = 600
+        if let key { r.setValue(key, forHTTPHeaderField: "xi-api-key") }
+        r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var fields = [("model_id", model), ("diarize", "true"), ("timestamps_granularity", "word"), ("tag_audio_events", "false")]
+        if let language { fields.append(("language_code", language.rawValue)) }
+        var body = Data()
+        func add(_ s: String) { body.append(Data(s.utf8)) }
+        for (name, value) in fields { add("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n") }
+        add("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n")
+        body.append(m4a)
+        add("\r\n--\(boundary)--\r\n")
+        r.httpBody = body
+        return r
+    }
+    public func diarize(m4a: Data, model: String, language: LanguageCode?) async throws -> [DiarizedWord] {
+        let request = Self.diarizationRequest(baseURL: provider.baseURL, key: key, m4a: m4a, model: model, language: language)
+        let (data, response) = try await http.send(request)
+        return try parseDiarizedWords(checkedBody(data, response, key: key), speakerKey: "speaker_id", filterType: true)
+    }
+}

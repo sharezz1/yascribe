@@ -9,7 +9,7 @@ public struct SpeakerLabelCounts: Equatable, Sendable {
     public var unlabeled: Int
 
     public init(transcript: Transcript, diarization: SpeakerDiarization) {
-        let labels = SpeakerLabels.labels(for: transcript, diarization: diarization)
+        let labels = SpeakerLabels.speakerKeys(for: transcript, diarization: diarization)
         let them = zip(transcript.utterances, labels).filter { $0.0.speaker == .them }
         self.letters = Set(them.compactMap(\.1)).count
         self.them = them.count

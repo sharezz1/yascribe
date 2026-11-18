@@ -314,3 +314,17 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         return units.isEmpty ? (nil, false) : (units, true)
     }
 }
+
+extension OpenAICompatibleClient: DiarizationClient {
+    public static func diarizationRequest(provider: Provider, key: String?, m4a: Data, model: String, language: LanguageCode?) throws -> URLRequest {
+        var body: [String: Any] = ["model": model, "input_audio": ["data": m4a.base64EncodedString(), "format": "m4a"],
+                                   "response_format": "verbose_json", "timestamp_granularities": ["word"], "diarize": true]
+        if let language { body["language"] = language.rawValue }
+        return try OpenAICompatibleClient(provider: provider, key: key).request("audio/transcriptions", body: body, timeout: 600)
+    }
+    public func diarize(m4a: Data, model: String, language: LanguageCode?) async throws -> [DiarizedWord] {
+        let request = try Self.diarizationRequest(provider: provider, key: key, m4a: m4a, model: model, language: language)
+        let (data, response) = try await http.send(request)
+        return try parseDiarizedWords(checkedBody(data, response, key: key), speakerKey: "speaker_label", filterType: false)
+    }
+}

@@ -4,6 +4,18 @@ public enum SpeakerLabels {
     public static let nearestRadius = 1.0
 
     public static func labels(for t: Transcript, diarization: SpeakerDiarization?) -> [String?] {
+        let keys = speakerKeys(for: t, diarization: diarization)
+        var numbered: [String: String] = [:]
+        for index in t.utterances.indices.sorted(by: {
+            t.utterances[$0].start == t.utterances[$1].start ? $0 < $1 : t.utterances[$0].start < t.utterances[$1].start
+        }) {
+            guard let key = keys[index], numbered[key] == nil else { continue }
+            numbered[key] = "Speaker \(numbered.count + 1)"
+        }
+        return keys.map { $0.flatMap { diarization?.names?[$0] ?? numbered[$0] } }
+    }
+
+    static func speakerKeys(for t: Transcript, diarization: SpeakerDiarization?) -> [String?] {
         guard let diarization else { return Array(repeating: nil, count: t.utterances.count) }
         var totals: [String: Double] = [:]
         var first: [String: Double] = [:]
@@ -35,22 +47,16 @@ public enum SpeakerLabels {
                 assigned[index] = nearest.first?.speaker
             }
         }
-        var names: [String: String] = [:]
-        for index in t.utterances.indices.sorted(by: {
-            t.utterances[$0].start == t.utterances[$1].start ? $0 < $1 : t.utterances[$0].start < t.utterances[$1].start
-        }) {
-            guard let speaker = assigned[index], names[speaker] == nil else { continue }
-            let n = names.count
-            names[speaker] = n < 26 ? String(UnicodeScalar(65 + n)!) : String(n + 1)
-        }
-        return assigned.map { $0.flatMap { names[$0] } }
+        return assigned
     }
 }
 
 public extension Transcript {
     func withSpeakerLabels(_ diarization: SpeakerDiarization?) -> Transcript {
         var result = self
+        let keys = SpeakerLabels.speakerKeys(for: self, diarization: diarization)
         for (index, label) in SpeakerLabels.labels(for: self, diarization: diarization).enumerated() {
+            result.utterances[index].speakerKey = keys[index]
             result.utterances[index].speakerLabel = label
         }
         return result

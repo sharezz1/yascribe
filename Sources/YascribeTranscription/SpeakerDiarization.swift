@@ -22,12 +22,23 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
     public var audioFingerprint: String?
     public var createdAt: Date?
     public var segments: [Segment]
+    public var names: [String: String]? = nil
 
     public init(version: Int, modelPin: String, sensitivity: SpeakerSensitivity?, fa: Double?, fb: Double?,
                 threshold: Double?, minClusterSeconds: Double?, audioFingerprint: String?, createdAt: Date?, segments: [Segment]) {
         self.version = version; self.modelPin = modelPin; self.sensitivity = sensitivity
         self.fa = fa; self.fb = fb; self.threshold = threshold; self.minClusterSeconds = minClusterSeconds
         self.audioFingerprint = audioFingerprint; self.createdAt = createdAt; self.segments = segments
+    }
+
+    public func renamed(_ speaker: String, to name: String?) -> SpeakerDiarization? {
+        guard segments.contains(where: { $0.speaker == speaker }) else { return nil }
+        var result = self
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var names = self.names ?? [:]
+        names[speaker] = trimmed.isEmpty ? nil : trimmed
+        result.names = names.isEmpty ? nil : names
+        return result
     }
 
     public static func fromTrack(segments: [(speaker: String, start: Double, end: Double)], clock: SessionClock,
@@ -53,7 +64,7 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
         return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
-    public static func knownPins(localPin: String) -> Set<String> { [localPin, MistralDiarization.pin] }
+    public static func knownPins(localPin: String) -> Set<String> { Set([localPin, MistralDiarization.pin]).union(SpeakerCapability.pins) }
 
     public static func load(run: RunDirectory, acceptedPins: Set<String>, currentAudioFingerprint: String?) -> SpeakerDiarization? {
         guard let value = try? JSONFile.load(SpeakerDiarization?.self, from: run.speakers, default: nil),

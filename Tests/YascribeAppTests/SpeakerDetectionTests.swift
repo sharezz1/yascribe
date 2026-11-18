@@ -4,23 +4,20 @@ import YascribeProviders
 import YascribeTranscription
 @testable import YascribeApp
 
-@Test func speakerDetectionRunsOnlyWithModelSettingTrackAndThem() async {
-    func run(_ ready: Bool, _ setting: Bool?, _ track: Bool, _ them: Int) async -> Bool {
-        await SpeakerDetectionDecision.shouldRun(ready: ready, setting: setting, themUtterances: them, hasSystemTrack: { track })
+@Test func speakerDetectionRunsOnlyWithCapableModelTrackAndThem() async {
+    func run(_ capable: Bool, _ track: Bool, _ them: Int) async -> Bool {
+        await SpeakerDetectionDecision.shouldRun(capable: capable, themUtterances: them, hasSystemTrack: { track })
     }
-    #expect(await run(true, nil, true, 3))
-    #expect(await run(true, true, true, 1))
-    #expect(await !run(false, true, true, 3))
-    #expect(await !run(true, false, true, 3))
-    #expect(await !run(true, nil, false, 3))
-    #expect(await !run(true, nil, true, 0))
+    #expect(await run(true, true, 1))
+    #expect(await !run(false, true, 1))
+    #expect(await !run(true, false, 1))
+    #expect(await !run(true, true, 0))
 }
 
-/// F04: dziennik (tor `system`) czytany dopiero po tanich warunkach.
 @Test func speakerDetectionReadsJournalOnlyAfterCheapChecks() async {
     var reads = 0
-    for (ready, setting, them) in [(false, true, 3), (true, false, 3), (true, nil, 0)] as [(Bool, Bool?, Int)] {
-        _ = await SpeakerDetectionDecision.shouldRun(ready: ready, setting: setting, themUtterances: them,
+    for (capable, them) in [(false, 3), (true, 0)] {
+        _ = await SpeakerDetectionDecision.shouldRun(capable: capable, themUtterances: them,
                                                      hasSystemTrack: { reads += 1; return true })
     }
     #expect(reads == 0)
@@ -69,23 +66,13 @@ private func cancellableWork() -> Task<Bool, any Error> {
     #expect(work.isCancelled)
 }
 
-@Test func mistralResolverSkipsProvidersWithoutKeys() throws {
-    let secrets = InMemorySecretStore()
-    let first = Provider(name: "First", baseURL: MistralDiarizationClient.baseURL, kind: .mistral)
-    let second = Provider(name: "Second", baseURL: MistralDiarizationClient.baseURL, kind: .mistral)
-    try secrets.set(second.id, "test-key")
-    let result = MistralSource.provider(providers: [first, second], secrets: secrets)
-    #expect(result?.0.id == second.id)
-    #expect(result?.1 == "test-key")
-    #expect(MistralSource.provider(providers: [first], secrets: secrets) == nil)
-}
-
-@Test func speakerSourceSettingsRoundTrip() throws {
-    var settings = GlobalSettings()
-    #expect(settings.speakerSourceOrDefault == .local)
-    settings.speakerSource = .mistral
-    let decoded = try JSONDecoder().decode(GlobalSettings.self, from: JSONEncoder().encode(settings))
-    #expect(decoded.speakerSourceOrDefault == .mistral)
+@Test func oldSettingsWithSpeakerFieldsDecode() throws {
+    let json = Data(#"{"speakerSource":"mistral","detectSpeakers":true,"speakerSensitivity":"high"}"#.utf8)
+    let settings = try JSONDecoder().decode(GlobalSettings.self, from: json)
+    let encoded = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
+    #expect(!encoded.contains("speakerSource"))
+    #expect(!encoded.contains("detectSpeakers"))
+    #expect(!encoded.contains("speakerSensitivity"))
 }
 
 private actor SpeakerWorkGate {
@@ -120,4 +107,12 @@ private actor SpeakerWorkGate {
     await b.value
     #expect(await gate.starts == 2)
     #expect(model.speakerTickets[session.lastPathComponent] == nil)
+}
+
+@Test func speakerDetectionErrorShowsServerMessage() {
+    let quota = #"{"detail":{"status":"quota_exceeded","message":"This request exceeds your quota of 10000."}}"#
+    #expect(SpeakerDetectionError.text(ProviderError.http(401, quota)) == "This request exceeds your quota of 10000.")
+    #expect(SpeakerDetectionError.text(ProviderError.http(400, #"{"error":{"message":"Bad audio"}}"#)) == "Bad audio")
+    #expect(SpeakerDetectionError.text(ProviderError.http(401, "nope")) == "Invalid API key.")
+    #expect(SpeakerDetectionError.text(ProviderError.badResponse("x")) != "The operation couldn’t be completed. (YascribeProviders.ProviderError error 1.)")
 }

@@ -30,7 +30,7 @@ struct CLI {
                                                                   liczy Termy i Aliasy w transkrypcie (surowym i poprawionym) przed i po Replacement (faza 2.1, odbiór §8.1)
       correct <katalog przebiegu> <baseURL> <model> --language pl --out <plik.json> [--vocabulary <vocabulary.txt>] [--context 16384] [--timeout 300]
                                                                   korekta transkryptu z przebiegu bez zapisu do przebiegu (klucz: YASCRIBE_API_KEY)
-      diarize <katalog sesji> [--run ID] [--sensitivity low|medium|high] [--download] [--mistral]
+      diarize <katalog sesji> [--run ID] [--sensitivity low|medium|high] [--download] [--mistral] [--cloud]
                                                                   mówcy z toru system przebiegu → speakers.json (domyślnie najnowszy przebieg, czułość medium);
                                                                   brak modelu = błąd, pobranie tylko z --download (≈22 MB do Models/speaker-diarization)
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
@@ -39,7 +39,7 @@ struct CLI {
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
     static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary", "--out", "--only", "--source", "--thinking", "--context", "--timeout", "--sensitivity"]
-    static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output", "--download", "--mistral"])
+    static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output", "--download", "--mistral", "--cloud"])
 
     static func main() async {
         var args = Array(CommandLine.arguments.dropFirst())

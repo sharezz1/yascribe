@@ -510,33 +510,22 @@ enum Snapshots {
                     }
                     .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                 }
-                // TASK-22 T6: karta „Speaker detection" — brak modelu, pobieranie, gotowy (stany wymyślone) i wiersze z „Them A".
-                let speakerScenes: [(String, DiarizerModelStatus, Double?)] = [("missing", .missing, nil), ("downloading", .missing, 0.41), ("ready", .ready, nil)]
-                for (name, status, progress) in speakerScenes {
-                    try render("speaker-card-\(name)", size: CGSize(width: 700, height: 370), dark: dark, model: model) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            SectionHeader("Yascribe models")
-                            SpeakerModelCardContent(status: status, progress: progress, detect: .constant(true), sensitivity: .constant(.medium), source: .constant(.local))
-                        }
-                        .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
-                    }
-                }
-                try render("speaker-card-mistral", size: CGSize(width: 700, height: 300), dark: dark, model: model) {
-                    SpeakerModelCardContent(status: .missing, progress: nil, detect: .constant(true), sensitivity: .constant(.medium), source: .constant(.mistral), providerName: "Mistral")
-                        .padding(30).contentBackground()
-                }
                 // Etykiety nadaje odczyt z `speakers.json`, więc wiersze renderujemy wprost: „Me", „Them", „Them A", „Them AA".
                 if var t = try? JSONDecoder().decode(Transcript.self, from: Data(sampleTranscript.utf8)) {
-                    t.utterances[0].speakerLabel = "A"
-                    t.utterances.append(t.utterances[2])
-                    t.utterances[2].speakerLabel = "AA"
-                    t.utterances[3].speakerLabel = nil
+                    t.utterances[0].speakerLabel = "Speaker 1"
+                    t.utterances[0].speakerKey = "first"
+                    t.utterances[2].speakerLabel = "Ala"
+                    t.utterances[2].speakerKey = "second"
                     try render("transcript-speaker-rows", size: CGSize(width: 760, height: 230), dark: dark, model: model) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(Array(t.utterances.enumerated()), id: \.offset) { i, u in
-                                if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
-                                UtteranceRow(utterance: u, isAuto: false) {}
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(Array(t.utterances.enumerated()), id: \.offset) { i, u in
+                                    if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
+                                    UtteranceRow(utterance: u, isAuto: false, item: model.sessions.first!, speakerNumber: UtteranceRow.speakerNumbers(t)[u.speakerKey ?? ""]) {}
+                                }
                             }
+                            SpeakerPicker(attendees: [.init(name: "Ala"), .init(email: "ola@example.com")], known: ["Piotr"], currentName: "Ala", number: 2) { _ in }
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
                         }
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                     }

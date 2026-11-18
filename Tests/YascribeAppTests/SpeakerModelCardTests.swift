@@ -13,10 +13,10 @@ private func utterance(_ speaker: Speaker, label: String? = nil) -> Utterance {
 /// Kolumna mówcy i kopiowanie mają ten sam tekst (§4.4); „Me" nie dostaje etykiety.
 @Test func speakerColumnNameFollowsLabel() {
     #expect(utterance(.them).speakerName == "Them")
-    #expect(utterance(.them, label: "A").speakerName == "Them A")
-    #expect(utterance(.them, label: "AA").speakerName == "Them AA")
+    #expect(utterance(.them, label: "A").speakerName == "A")
+    #expect(utterance(.them, label: "AA").speakerName == "AA")
     #expect(utterance(.me, label: "A").speakerName == "Me")
-    #expect(TranscriptActions.copyLine(utterance(.them, label: "A")) == "[0:00:00] Them A: x")
+    #expect(TranscriptActions.copyLine(utterance(.them, label: "A")) == "[0:00:00] A: x")
 }
 
 @Test func speakerModelCardTitleAndAction() {

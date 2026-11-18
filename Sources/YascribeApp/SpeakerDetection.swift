@@ -3,10 +3,10 @@ import YascribeProviders
 
 /// „Czy diaryzować po transkrypcji” (TASK-22 D7), wydzielone z `AppModel.run`, bo `AppModel` nie da się zbudować w teście.
 enum SpeakerDetectionDecision {
-    /// `setting == nil` = włączone (domyślnie po pobraniu modelu). Brak modelu, toru `system` albo wypowiedzi „them” = nie.
+    /// Brak obsługi mówców, toru `system` albo wypowiedzi „them” = nie.
     /// `hasSystemTrack` czyta dziennik, więc woła się go dopiero po tanich warunkach (F04).
-    nonisolated(nonsending) static func shouldRun(ready: Bool, setting: Bool?, themUtterances: Int, hasSystemTrack: () async -> Bool) async -> Bool {
-        guard ready, setting != false, themUtterances > 0 else { return false }
+    nonisolated(nonsending) static func shouldRun(capable: Bool, themUtterances: Int, hasSystemTrack: () async -> Bool) async -> Bool {
+        guard capable, themUtterances > 0 else { return false }
         return await hasSystemTrack()
     }
 }
@@ -30,18 +30,16 @@ struct SpeakerDetectionTicket: Equatable {
     }
 }
 
-
-enum MistralSource {
-    static func provider(providers: [Provider], secrets: any SecretStore) -> (Provider, String)? {
-        for provider in providers where provider.api == .mistral {
-            let stored = try? secrets.get(provider.id)
-            #if DEBUG
-            let key = stored.flatMap { $0.isEmpty ? nil : $0 } ?? ProcessInfo.processInfo.environment["YASCRIBE_MISTRAL_KEY"]
-            #else
-            let key = stored
-            #endif
-            if let key, !key.isEmpty { return (provider, key) }
+/// Tekst błędu wykrywania mówców: komunikat serwera, gdy go podał (np. ElevenLabs `quota_exceeded` przychodzi jako 401,
+/// więc samo „Invalid API key.” by kłamało); inaczej opis jak przy sprawdzaniu dostawcy.
+enum SpeakerDetectionError {
+    static func text(_ error: Error) -> String {
+        if case let .http(_, body)? = error as? ProviderError,
+           let json = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any] {
+            for field in ["detail", "error"] {
+                if let message = (json[field] as? [String: Any])?["message"] as? String, !message.isEmpty { return message }
+            }
         }
-        return nil
+        return ProviderCheck.describe(error)
     }
 }

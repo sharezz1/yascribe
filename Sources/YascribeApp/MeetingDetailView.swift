@@ -20,6 +20,7 @@ struct MeetingDetailView: View {
     let bottomInset: CGFloat
     @StateObject private var playback = PlaybackState()
     @StateObject private var state: MeetingViewState
+    @StateObject private var speakerMenu = SpeakerMenuState()
 
     init(item: SessionItem, state: MeetingViewState = MeetingViewState(), presentsModelsSheet: Bool = true, bottomInset: CGFloat = 0) {
         self.item = item
@@ -138,7 +139,7 @@ struct MeetingDetailView: View {
                 Menu {
                     if (state.tab ?? defaultTab) == .transcript {
                         Button("Transcript options…") { state.modelsSheet = true }
-                        DetectSpeakersMenu(support: model.speakerModel, item: item)
+                        DetectSpeakersMenu(support: model.speakerModel, state: speakerMenu, item: item)
                     }
                     Button("Copy notes") { model.copyNotes(item) }.disabled(item.notes.summary == nil)
                     Button("Show in Finder") { model.showInFinder(item) }
@@ -150,6 +151,7 @@ struct MeetingDetailView: View {
                 .menuStyle(.borderlessButton).menuIndicator(.hidden)
                 .fixedSize()
                 .help("More").accessibilityLabel("More")
+                .modifier(SpeakerMenuDialogs(support: model.speakerModel, state: speakerMenu, item: item))
             }
             HStack(spacing: 12) {
                 MetaLine([
@@ -263,7 +265,7 @@ struct PlayRecordingButton: View {
 
 extension Utterance {
     /// Kolumna mówcy i kopiowanie: „Me", „Them" albo „Them A" po wykryciu mówców (TASK-22 §4.4).
-    var speakerName: String { speaker == .me ? "Me" : "Them" + (speakerLabel.map { " " + $0 } ?? "") }
+    var speakerName: String { speaker == .me ? "Me" : speakerLabel ?? "Them" }
 }
 
 /// Wiersz transkryptu (b-transcript.png): czas (cyfry stałej szerokości, klik = odtwarzanie), mówca, tekst;
@@ -271,7 +273,28 @@ extension Utterance {
 struct UtteranceRow: View {
     let utterance: Utterance
     let isAuto: Bool
+    var item: SessionItem? = nil
+    var speakerNumber: Int? = nil
     let onJump: () -> Void
+    @Environment(AppModel.self) private var model
+    @StateObject private var picker = SpeakerPickerPresentation()
+
+    static func speakerNumbers(_ transcript: Transcript) -> [String: Int] {
+        var numbers: [String: Int] = [:]
+        for index in transcript.utterances.indices.sorted(by: {
+            transcript.utterances[$0].start == transcript.utterances[$1].start ? $0 < $1 : transcript.utterances[$0].start < transcript.utterances[$1].start
+        }) {
+            if let key = transcript.utterances[index].speakerKey, numbers[key] == nil { numbers[key] = numbers.count + 1 }
+        }
+        return numbers
+    }
+
+    private var speakerColor: Color {
+        // Bez .mnAccent: ten kolor ma „Me”.
+        let colors: [Color] = [Color(nsColor: .systemOrange), Color(nsColor: .systemBlue), Color(nsColor: .systemPurple), Color(nsColor: .systemBrown),
+                               Color(nsColor: .systemPink), Color(nsColor: .systemTeal), .mnRec, Color(nsColor: .systemIndigo)]
+        return utterance.speaker == .me ? .mnAccent : speakerNumber.map { colors[($0 - 1) % colors.count] } ?? .mnText
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
@@ -281,10 +304,26 @@ struct UtteranceRow: View {
                 .frame(width: 72, alignment: .leading)
                 .help("Play from here")
                 .accessibilityLabel("Play from \(MeetingDetailView.time(utterance.start))")
-            Text(utterance.speakerName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.mnText)
-                .frame(width: 70, alignment: .leading)
+            Group {
+                if utterance.speaker == .them, let key = utterance.speakerKey, let item, let number = speakerNumber {
+                    Button(utterance.speakerName) { picker.isPresented = true }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Speaker \(number), rename")
+                        .popover(isPresented: $picker.isPresented) {
+                            SpeakerPicker(attendees: item.notes.meta.calendarEvent?.attendees ?? [],
+                                          known: KnownPeople.load(root: model.paths.root).names,
+                                          currentName: item.speakers?.names?[key], number: number) { name in
+                                model.renameSpeaker(item: item, key: key, name: name)
+                                picker.isPresented = false
+                            }
+                        }
+                } else {
+                    Text(utterance.speakerName)
+                }
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(speakerColor)
+            .frame(width: 90, alignment: .leading)
             VStack(alignment: .leading, spacing: 6) {
                 Text(utterance.text).font(.system(size: 13)).lineSpacing(4)
                     .foregroundStyle(utterance.excludedFromNotes ? Color.mnText2 : Color.mnText)
@@ -307,3 +346,5 @@ struct UtteranceRow: View {
         .padding(.vertical, 11)
     }
 }
+
+private final class SpeakerPickerPresentation: ObservableObject { @Published var isPresented = false }
