@@ -165,3 +165,48 @@ private final class ProblemLog: @unchecked Sendable {
     }
     #expect(try NotesStore(session: session).readSummary() == nil)
 }
+
+private func diarized(_ text: String, key: String, label: String) -> Transcript {
+    var u = utt(text, .them)
+    u.speakerKey = key
+    u.speakerLabel = label
+    return transcript([u])
+}
+
+@Test func generatorStoresSpeakerMapAndResolvesTheTitle() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "# Rozmowa z [[S1]]\n\n- [[S1]] said 25" }
+    let s = try await generator(stub).generate(session: session, template: .standard, transcript: diarized("Mamy 25 osób.", key: "a", label: "Ala"),
+                                               context: "", notesLanguage: .polish, now: now)
+    #expect(s.speakers == ["1": "a"])
+    #expect(s.title == "Rozmowa z Ala")
+    #expect(s.markdown.contains("[[S1]] said 25"))
+    #expect(s.unverifiedNumbers == nil)
+    #expect(try #require(stub.calls.last).system.contains("Speakers: [[S1]] = Ala."))
+    #expect(try NotesStore(session: session).readSummary()?.speakers == ["1": "a"])
+}
+
+@Test func generatorDoesNotTreatMarkersAsNumbers() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "# T\n\n- [[S12]] ok" }
+    let s = try await generator(stub).generate(session: session, template: .standard, transcript: diarized("Tak.", key: "a", label: "Ala"),
+                                               context: "", notesLanguage: .polish, now: now)
+    #expect(s.unverifiedNumbers == nil)
+}
+
+@Test func generatorWithoutDiarizationStoresNoSpeakerMap() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let stub = ChatStub { _ in "# T\n\n- ok" }
+    let s = try await generator(stub).generate(session: session, template: .standard, transcript: transcript([utt("Tak.", .them)]),
+                                               context: "", notesLanguage: .polish, now: now)
+    #expect(s.speakers == nil)
+    #expect(!(try #require(stub.calls.last)).user.contains("[["))
+}
+
+@Test func oldSummaryWithoutSpeakersDecodes() throws {
+    let json = #"{"markdown":"x","templateID":"standard","model":"m","context":"","generatedAt":0}"#
+    #expect(try JSONDecoder().decode(NoteSummary.self, from: Data(json.utf8)).speakers == nil)
+}

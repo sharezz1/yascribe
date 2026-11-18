@@ -19,7 +19,7 @@ import YascribeProviders
         threshold: nil, minClusterSeconds: nil, audioFingerprint: nil, createdAt: nil,
         segments: [.init(speaker: "voice", start: 0, end: 10)])
     try JSONFile.save(speakers, to: run.speakers)
-    let stub = ChatStub { _ in "# Title\nbody" }
+    let stub = ChatStub { _ in "# Title\n[[S1]] spoke" }
     for source in ["raw", "corrected"] {
         let output = session.appendingPathComponent("\(source).json")
         try await CLI.note([run.url.path, "https://example.com/v1", "model", "--language", "pl", "--out", output.path,
@@ -28,5 +28,8 @@ import YascribeProviders
         #expect(call.user.contains("[[S1]]: \(source) words"))
         #expect(call.system.contains("Speakers: [[S1]] = Speaker 1."))
         #expect(call.system.contains("detected automatically"))
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        let written = try decoder.decode(NoteSummary.self, from: Data(contentsOf: output))
+        #expect(written.markdown == "Speaker 1 spoke")
     }
 }

@@ -72,10 +72,11 @@ public struct NoteGenerator: Sendable {
             throw NoteGenerationError.nothingToSummarize
         }
         var condensedParts: Int?
+        let legend = NotePromptBuilder.speakerLegend(transcript)
         if let budget, prompt.chars > budget.promptChars(replyTokens: ContextBudget.noteReplyTokens) {
-            let reduced = try await reducePrompt(template: template, lines: NotePromptBuilder.transcriptLines(transcript),
+            let reduced = try await reducePrompt(template: template, lines: NotePromptBuilder.transcriptLines(transcript, markers: true),
                                                  myNotes: myNotes, context: context, notesLanguage: notesLanguage,
-                                                 vocabulary: vocabulary, budget: budget, progress: progress)
+                                                 vocabulary: vocabulary, speakerLegend: legend, budget: budget, progress: progress)
             prompt = reduced.0
             condensedParts = reduced.1
         }
@@ -83,13 +84,19 @@ public struct NoteGenerator: Sendable {
         let reply = try await complete(prompt)
         // Odpowiedź mogła dojść w chwili anulowania: anulowane generowanie nie zostawia notatki na dysku.
         try Task.checkCancellation()
-        let (title, body) = NoteTitle.parse(reply)
+        let (rawTitle, body) = NoteTitle.parse(reply)
+        let numbers = SpeakerLabels.numbers(for: transcript)
+        let speakerKeys = numbers.isEmpty ? nil : Dictionary(uniqueKeysWithValues: numbers.map { (String($0.value), $0.key) })
+        var labels: [String: String] = [:]
+        for u in transcript.utterances { if let key = u.speakerKey, labels[key] == nil { labels[key] = u.speakerLabel } }
+        // Tytuł trafia na listę spotkań i do nazw plików: znaczniki zamienione na etykiety z chwili generowania.
+        let title = rawTitle.map { SpeakerMarkers(keys: speakerKeys, names: labels, numbers: numbers).resolved($0) }
         guard !body.isEmpty else { throw NoteGenerationError.failed("\(model) returned an empty reply.") }
         // Liczby, których nie ma w materiale, to zwykle wymysł modelu: zapisujemy je przy notatce, widok pokazuje je jako ostrzeżenie.
-        let unverified = NumberCheck.unverified(in: body, sources: NotePromptBuilder.transcriptLines(transcript) + [myNotes, context])
+        let unverified = NumberCheck.unverified(in: SpeakerMarkers.stripped(body), sources: NotePromptBuilder.transcriptLines(transcript) + [myNotes, context])
         let summary = NoteSummary(title: title, markdown: body, templateID: template.id, model: model,
                                   context: context, generatedAt: now, condensedParts: condensedParts, prompt: promptTrace,
-                                  unverifiedNumbers: unverified.isEmpty ? nil : unverified)
+                                  unverifiedNumbers: unverified.isEmpty ? nil : unverified, speakers: speakerKeys)
         do {
             // Nieczytelny stary summary.json został odłożony na bok przed zapisem — powiedz to użytkownikowi.
             if let problem = try store.writeSummary(summary, now: now) { onProblem(problem) }
@@ -120,13 +127,14 @@ public struct NoteGenerator: Sendable {
     /// wchodzi — ponowna kondensacja wyjść (do `maxMapLevels` poziomów); inaczej jawny błąd.
     /// Zwraca też liczbę części pierwszego przebiegu (znacznik „Long meeting" w notatce).
     private func reducePrompt(template: Template, lines: [String], myNotes: String, context: String, notesLanguage: LanguageCode?,
-                              vocabulary: PromptVocabulary?, budget: ContextBudget,
+                              vocabulary: PromptVocabulary?, speakerLegend: String?, budget: ContextBudget,
                               progress: (@Sendable (NoteProgress) -> Void)?) async throws -> (NotePrompt, Int) {
         let limit = budget.promptChars(replyTokens: ContextBudget.noteReplyTokens)
         let hasSpeakerLabels = NotePromptBuilder.hasSpeakerLabels(lines)
         func reduce(_ lines: [String]) -> NotePrompt {
             NotePromptBuilder.prompt(template: template, lines: lines, myNotes: myNotes, context: context,
-                                     notesLanguage: notesLanguage, condensed: true, vocabulary: vocabulary, rulesBody: rulesBody)
+                                     notesLanguage: notesLanguage, condensed: true, vocabulary: vocabulary, rulesBody: rulesBody,
+                                     speakerLegend: speakerLegend)
         }
         guard limit > 0 else {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes." + customPromptHint)
@@ -138,7 +146,8 @@ public struct NoteGenerator: Sendable {
             throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes." + customPromptHint)
         }
         // My notes + kontekst + prompt szablonu same ponad budżetem — mapa niczego nie naprawi, więc nie marnujemy wywołań.
-        let room = limit - reduce(hasSpeakerLabels ? ["[0:00] Them A: x"] : []).chars + (hasSpeakerLabels ? "[0:00] Them A: x".count : 0) // miejsce na linie transkryptu w prompcie reduce
+        let sample = NotePromptBuilder.hasMarkers(lines) ? "[0:00] [[S1]]: x" : "[0:00] Them A: x"
+        let room = limit - reduce(hasSpeakerLabels ? [sample] : []).chars + (hasSpeakerLabels ? sample.count : 0) // miejsce na linie transkryptu w prompcie reduce
         guard room >= 0 else {
             throw NoteGenerationError.failed("Your notes and context are too long for this model's Context window." + customPromptHint)
         }

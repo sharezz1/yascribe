@@ -15,9 +15,13 @@ public struct NoteSummary: Codable, Equatable, Sendable {
     public var prompt: PromptTrace?
     /// Liczby z notatki, których nie ma w materiale (`NumberCheck`); `nil` = wszystkie znalezione albo starsze `summary.json`.
     public var unverifiedNumbers: [String]?
+    /// Znacznik `[[SN]]` → klucz mówcy z chwili generowania (`"1": "speaker_0"`); `nil` bez diaryzacji i w starych `summary.json`.
+    public var speakers: [String: String]?
 
     public init(title: String?, markdown: String, templateID: String, model: String, context: String, generatedAt: Date,
-                condensedParts: Int? = nil, prompt: PromptTrace? = nil, unverifiedNumbers: [String]? = nil) {
+                condensedParts: Int? = nil, prompt: PromptTrace? = nil, unverifiedNumbers: [String]? = nil,
+                speakers: [String: String]? = nil) {
+        self.speakers = speakers
         self.unverifiedNumbers = unverifiedNumbers
         self.prompt = prompt
         self.condensedParts = condensedParts

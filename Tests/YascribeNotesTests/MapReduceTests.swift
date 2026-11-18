@@ -617,3 +617,19 @@ private func waitForFirstCall(_ stub: ChatStub) async throws {
     #expect(isReduce(reduce) && reduce.system.contains(NotePromptBuilder.speakerSentence))
     #expect(reduce.system.count + reduce.user.count <= noteLimit)
 }
+
+@Test func markedMapAndReduceKeepMarkersAndLegendInsideBudget() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    var t = transcript([utt(words(15_000), .them, at: 0)])
+    t.utterances[0].speakerLabel = "Ala"
+    t.utterances[0].speakerKey = "a"
+    let stub = ChatStub { c in isMap(c) ? condense(c.user) : "# T\nbody" }
+    _ = try await run(stub, session: session, transcript: t)
+    let maps = stub.calls.filter(isMap)
+    #expect(!maps.isEmpty && maps.allSatisfy { $0.user.hasPrefix("[0:00] [[S1]]: ") && $0.system.contains(NotePromptBuilder.markerSentence) })
+    let reduce = try #require(stub.calls.last)
+    #expect(isReduce(reduce) && reduce.system.contains("Speakers: [[S1]] = Ala."))
+    #expect(reduce.user.contains("[[S1]]: "))
+    #expect(reduce.system.count + reduce.user.count <= noteLimit)
+}
