@@ -22,12 +22,12 @@ struct EventPickerChip: View {
             state.rows = model.pickableEvents(for: item)
             state.open = true
         } label: {
-            Label(linked?.title ?? "Link event", systemImage: "calendar")
+            Label(linked?.title ?? String(localized: "Link event"), systemImage: "calendar")
                 .font(.callout).foregroundStyle(.mnText2).lineLimit(1)
         }
         .buttonStyle(.plain)
         .help("Select calendar event")
-        .accessibilityLabel(linked.map { "Calendar event: \($0.title). Change" } ?? "Link a calendar event")
+        .accessibilityLabel(linked.map { String(localized: "Calendar event: \($0.title). Change") } ?? String(localized: "Link a calendar event"))
         .popover(isPresented: $state.open, arrowEdge: .bottom) {
             EventPickerContent(state: state, item: item,
                                onPick: { model.link($0, to: item); state.open = false },
@@ -53,14 +53,14 @@ struct EventPickerContent: View {
                 .padding(.top, 2).padding(.bottom, 10)
             Divider()
             if !state.ready {
-                row("Connect Apple Calendar in Settings", icon: "calendar.badge.plus", action: onSettings)
+                row(String(localized: "Connect Apple Calendar in Settings"), icon: "calendar.badge.plus", action: onSettings)
             } else if state.rows.isEmpty {
                 Text("No events found that day").font(.callout).foregroundStyle(.mnText2).padding(.vertical, 10)
             } else {
                 ScrollView { VStack(alignment: .leading, spacing: 0) { ForEach(state.rows, id: \.event.id) { eventRow($0) } } }
                     .frame(maxHeight: 280)
             }
-            if linked != nil { Divider(); row("Unlink", icon: "xmark", action: onUnlink) }
+            if linked != nil { Divider(); row(String(localized: "Unlink"), icon: "xmark", action: onUnlink) }
         }
         .padding(14)
         .frame(width: 340, alignment: .leading)
@@ -84,7 +84,14 @@ struct EventPickerContent: View {
             .padding(.vertical, 7).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(r.event.title), \(r.event.start.formatted(date: .omitted, time: .shortened))\(r.overlapsRecording ? ", during the recording" : "")\(isLinked(r.event) ? ", linked" : "")")
+        .accessibilityLabel(eventAccessibilityLabel(r))
+    }
+
+    private func eventAccessibilityLabel(_ r: Ranked) -> String {
+        var parts = [r.event.title, r.event.start.formatted(date: .omitted, time: .shortened)]
+        if r.overlapsRecording { parts.append(String(localized: "During the recording")) }
+        if isLinked(r.event) { parts.append(String(localized: "Linked")) }
+        return parts.joined(separator: ", ")
     }
 
     private func row(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -102,7 +109,8 @@ struct EventAttendeesLine: View {
     var body: some View {
         let names = (link?.attendees ?? []).compactMap { $0.name ?? $0.email }
         if !names.isEmpty {
-            Text("With " + names.prefix(3).joined(separator: ", ") + (names.count > 3 ? " +\(names.count - 3)" : ""))
+            let visible = names.prefix(3).joined(separator: ", ")
+            Text(names.count > 3 ? String(localized: "With \(visible) +\(names.count - 3)") : String(localized: "With \(visible)"))
                 .font(.callout).foregroundStyle(.mnText2).lineLimit(1)
         }
     }

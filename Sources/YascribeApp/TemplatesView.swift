@@ -16,9 +16,20 @@ final class TemplateEditorState: ObservableObject {
         let n = t.map { var n = $0; n.sections = n.effectiveSections; return n }
         draft = n; original = n; error = nil
     }
-    func startNew() {
-        draft = Template(name: "New template", sections: [TemplateSection(title: "", instruction: "")])
+    func startNew(bundle: Bundle = .main) {
+        draft = Template(name: String(localized: "New template", bundle: bundle), sections: [TemplateSection(title: "", instruction: "")])
         original = nil; error = nil
+    }
+    func duplicate(in file: TemplatesFile, bundle: Bundle = .main) {
+        guard let template = draft else { return }
+        var copy = template.duplicate()
+        copy.name = String(localized: "\(template.name) copy", bundle: bundle)
+        var n = 2
+        while file.containsName(copy.name) {
+            copy.name = String(localized: "\(template.name) copy \(n)", bundle: bundle)
+            n += 1
+        }
+        draft = copy; original = nil; error = nil
     }
     /// Zamyka okno bez zapisu; nowy, niezapisany szablon znika razem z oknem.
     func close() { draft = nil; original = nil; error = nil; confirmingDelete = false }
@@ -36,7 +47,7 @@ struct TemplatesView: View {
         ScrollPage(640) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    PageTitle("Templates")
+                    PageTitle(String(localized: "Templates"))
                     Spacer()
                     Button { state.startNew() } label: { Label("New template", systemImage: "plus") }
                         .buttonStyle(.pill)
@@ -46,7 +57,7 @@ struct TemplatesView: View {
                 Card {
                     ForEach(Array(model.notes.templates.all().enumerated()), id: \.element.id) { i, t in
                         if i > 0 { RowDivider() }
-                        Button { state.select(t) } label: { EditorListRow(title: t.name, subtitle: meta(t)) }
+                        Button { state.select(t) } label: { EditorListRow(title: t.displayName(), subtitle: meta(t)) }
                             .buttonStyle(.plain)
                     }
                 }
@@ -65,8 +76,8 @@ struct TemplatesView: View {
     /// „Built-in", „Built-in · edited" albo „Custom" — bez ikon (§11.6).
     private func meta(_ t: Template) -> String {
         let file = model.notes.templates
-        guard file.isBuiltin(id: t.id) else { return "Custom" }
-        return file.isEdited(id: t.id) ? "Built-in · edited" : "Built-in"
+        guard file.isBuiltin(id: t.id) else { return String(localized: "Custom") }
+        return file.isEdited(id: t.id) ? String(localized: "Built-in · edited") : String(localized: "Built-in")
     }
 
     /// Błąd zapisu zostawia okno otwarte z komunikatem; sukces je zamyka.
@@ -76,16 +87,19 @@ struct TemplatesView: View {
         do {
             try file.upsert(d)
         } catch TemplateError.nameTaken(let n) {
-            state.error = "A template named “\(n)” already exists."
+            state.error = String(localized: "A template named “\(n)” already exists.")
             return
         } catch TemplateError.missingName {
-            state.error = "Give the template a name."
+            state.error = String(localized: "Give the template a name.")
             return
         } catch TemplateError.noSections {
-            state.error = "Add at least one section with a title or instruction."
+            state.error = String(localized: "Add at least one section with a title or instruction.")
+            return
+        } catch TemplateError.builtinIsReadOnly {
+            state.error = String(localized: "This built-in template is read-only.")
             return
         } catch {
-            state.error = "\(error)"
+            state.error = String(describing: error)
             return
         }
         model.notes.templates = file
@@ -95,14 +109,7 @@ struct TemplatesView: View {
 
     /// Kopia zostaje otwarta w oknie jako nowy, niezapisany szablon.
     private func duplicate() {
-        guard let t = state.draft else { return }
-        var copy = t.duplicate()
-        var n = 2
-        let names = Set(model.notes.templates.all().map(\.name))
-        while names.contains(copy.name) { copy.name = "\(t.name) copy \(n)"; n += 1 }
-        state.draft = copy
-        state.original = nil
-        state.error = nil
+        state.duplicate(in: model.notes.templates)
     }
 
     /// Wbudowany: usuwa nadpisanie i wraca do domyślnej treści; okno zostaje otwarte.
@@ -115,7 +122,15 @@ struct TemplatesView: View {
 
     private func delete() {
         guard let t = state.original else { return }
-        do { try model.notes.templates.remove(id: t.id) } catch { state.error = "\(error)"; return }
+        do {
+            try model.notes.templates.remove(id: t.id)
+        } catch TemplateError.builtinCantBeRemoved {
+            state.error = String(localized: "Built-in templates can't be removed.")
+            return
+        } catch {
+            state.error = String(describing: error)
+            return
+        }
         state.error = model.saveTemplates()
         if state.error == nil { state.close() }
     }
@@ -141,7 +156,7 @@ struct TemplateSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: state.isNew ? "New template" : "Edit template", dirty: state.isDirty, error: state.error,
+        EditorSheet(title: state.isNew ? String(localized: "New template") : String(localized: "Edit template"), dirty: state.isDirty, error: state.error,
                     onCancel: { state.close() }, onSave: onSave) {
             if !state.isNew {
                 Button("Duplicate", action: onDuplicate).buttonStyle(.pill)
@@ -154,7 +169,7 @@ struct TemplateSheet: View {
         } content: {
             TemplateForm(state: state, meta: meta)
         }
-        .confirmationDialog("Delete “\(state.original?.name ?? "this template")”?", isPresented: $state.confirmingDelete) {
+        .confirmationDialog("Delete “\(state.original?.name ?? String(localized: "this template"))”?", isPresented: $state.confirmingDelete) {
             Button("Delete template", role: .destructive, action: onDelete)
         } message: {
             Text("Notes already generated with it keep their text.")
@@ -186,17 +201,17 @@ struct TemplateForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 12) {
-                EditorNameField(placeholder: "Name", text: draftName)
+                EditorNameField(placeholder: String(localized: "Name"), text: draftName)
                 if !state.isNew {
                     Text(meta).font(.system(size: 12)).foregroundStyle(.mnText2).lineLimit(1).fixedSize()
                 }
             }
-            SectionHeader("About this meeting type", note: "— optional")
-            GrowingField(placeholder: "Describe the kind of meeting and what matters in its notes.", text: about, weight: .regular, color: .mnText)
+            SectionHeader(String(localized: "About this meeting type"), note: String(localized: "— optional"))
+            GrowingField(placeholder: String(localized: "Describe the kind of meeting and what matters in its notes."), text: about, weight: .regular, color: .mnText)
                 .padding(.horizontal, 10).padding(.vertical, 10)
                 .background(.mnField, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.mnLine, lineWidth: 1))
-            SectionHeader("Sections") { Text("in this order").font(.system(size: 11)).foregroundStyle(.mnText2) }
+            SectionHeader(String(localized: "Sections")) { Text("in this order").font(.system(size: 11)).foregroundStyle(.mnText2) }
             if !sections.wrappedValue.isEmpty {
                 Card {
                     ForEach(sections) { $section in
@@ -259,15 +274,15 @@ private struct SectionRow: View {
             GripHandle()
                 .padding(.top, 5)
                 .draggable(section.id.uuidString) {
-                    Text(section.title.isEmpty ? "Section" : section.title).font(.system(size: 13, weight: .semibold))
+                    Text(section.title.isEmpty ? String(localized: "Section") : section.title).font(.system(size: 13, weight: .semibold))
                         .padding(.horizontal, 12).padding(.vertical, 8).background(.mnCard)
                 }
                 .help("Drag to reorder")
                 .accessibilityLabel("Reorder section")
             VStack(alignment: .leading, spacing: 2) {
-                GrowingField(placeholder: "Section title", text: $section.title, weight: .semibold, color: .mnText)
+                GrowingField(placeholder: String(localized: "Section title"), text: $section.title, weight: .semibold, color: .mnText)
                     .focused(focus, equals: FocusTarget(id: section.id, title: true))
-                GrowingField(placeholder: "What should this section contain?", text: $section.instruction, weight: .regular, color: .mnText2)
+                GrowingField(placeholder: String(localized: "What should this section contain?"), text: $section.instruction, weight: .regular, color: .mnText2)
                     .focused(focus, equals: FocusTarget(id: section.id, title: false))
             }
             Button(action: onDelete) {
@@ -319,5 +334,20 @@ private struct GrowingField: View {
             .font(.system(size: 13, weight: weight))
             .foregroundStyle(color)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension Template {
+    func displayName(bundle: Bundle = .main) -> String {
+        guard builtin, let original = Template.builtIns.first(where: { $0.id == id }), name == original.name else { return name }
+        let key: String
+        switch id {
+        case "standard": key = "Standard"
+        case "one-to-one": key = "1:1"
+        case "weekly-team": key = "Weekly team meeting"
+        case "discovery-call": key = "Customer: Discovery"
+        default: return name
+        }
+        return bundle.localizedString(forKey: key, value: key, table: nil)
     }
 }

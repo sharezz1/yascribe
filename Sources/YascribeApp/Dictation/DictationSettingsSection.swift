@@ -20,11 +20,11 @@ struct DictationSettingsSection: View {
     private var effectiveLanguage: LanguageCode? { s.language ?? model.activePreset?.language }
 
     var body: some View {
-        SectionHeader("Dictation")
+        SectionHeader(String(localized: "Dictation"))
         Card {
             shortcutRow
             RowDivider()
-            FormRow(label: "Mode") {
+            FormRow(label: String(localized: "Mode")) {
                 Picker("Mode", selection: Binding(get: { s.triggerModeOrDefault }, set: { m in update { $0.triggerMode = m } })) {
                     Text("Hold to talk").tag(DictationTriggerMode.hold)
                     Text("Press to toggle").tag(DictationTriggerMode.toggle)
@@ -36,12 +36,12 @@ struct DictationSettingsSection: View {
             RowDivider()
             languageRow
             RowDivider()
-            FormRow(label: "Correct dictation", caption: "Cleans up the text with a model before it is inserted. If it fails, the original text is used.") {
+            FormRow(label: String(localized: "Correct dictation"), caption: String(localized: "Cleans up the text with a model before it is inserted. If it fails, the original text is used.")) {
                 Toggle("Correct dictation", isOn: Binding(get: { s.correctionEnabled }, set: setCorrection)).labelsHidden().toggleStyle(.switch)
             }
             if s.correctionEnabled { correctionRows }
             RowDivider()
-            FormRow(label: "Floating button", caption: "Shows a small button on the main display to start and stop dictation.") {
+            FormRow(label: String(localized: "Floating button"), caption: String(localized: "Shows a small button on the main display to start and stop dictation.")) {
                 Toggle("Show floating button", isOn: Binding(get: { s.showLauncherOrDefault }, set: { on in update { $0.showLauncher = on } }))
                     .labelsHidden().toggleStyle(.switch)
             }
@@ -59,7 +59,7 @@ struct DictationSettingsSection: View {
     // MARK: Skrót
 
     private var shortcutRow: some View {
-        FormRow(label: "Shortcut", caption: ui.hotkeyMessage ?? (s.hotkeyOrDefault == .fn ? DictationPresentation.fnHint : nil),
+        FormRow(label: String(localized: "Shortcut"), caption: ui.hotkeyMessage ?? (s.hotkeyOrDefault == .fn ? DictationPresentation.fnHint : nil),
                 isError: ui.hotkeyMessage != nil) {
             HotkeyRecorder(hotkey: s.hotkeyOrDefault, message: $ui.hotkeyMessage,
                            onCapturing: { model.dictation.setCapturingHotkey($0) }) { h in update { $0.hotkey = h } }
@@ -72,8 +72,8 @@ struct DictationSettingsSection: View {
     @ViewBuilder private var modelRows: some View {
         let showProvider = asrProviders.count > 1 || s.asr == nil
         if showProvider {
-            FormRow(label: "Provider") {
-                FieldMenu(label: "Provider", value: asrProviders.first { $0.id == s.asr?.providerID }?.roleLabel ?? "Choose…", width: 180) {
+            FormRow(label: String(localized: "Provider")) {
+                FieldMenu(label: String(localized: "Provider"), value: asrProviders.first { $0.id == s.asr?.providerID }?.roleLabel ?? String(localized: "Choose…"), width: 180) {
                     Picker("Provider", selection: Binding(get: { s.asr?.providerID }, set: { id in
                         guard let id, id != s.asr?.providerID else { return }
                         update { $0.asr = RoleAssignment(providerID: id, model: LocalASRModels.modelWhenSelecting(model.provider(id))) }
@@ -86,7 +86,7 @@ struct DictationSettingsSection: View {
             if s.asr != nil { RowDivider() }
         }
         if let a = s.asr {
-            FormRow(label: "Model") {
+            FormRow(label: String(localized: "Model")) {
                 ModelPicker(providerID: a.providerID, role: .asr, selection: Binding(get: { s.asr?.model ?? "" }, set: setASRModel))
             }
             if let p = model.provider(a.providerID) {
@@ -133,13 +133,13 @@ struct DictationSettingsSection: View {
     private var languageRow: some View {
         let missing = s.language == nil && model.activePreset?.language == nil
         let caption: String? = missing
-            ? "Choose a language: the active preset has none (Auto), and dictation needs an explicit one."
-            : (s.language == nil ? "Uses the language of the active preset." : nil)
-        return FormRow(label: "Language", caption: caption, isError: missing) {
-            FieldMenu(label: "Language", value: s.language.map { $0.englishName } ?? "Same as active preset", width: 180) {
+            ? String(localized: "Choose a language: the active preset has none (Auto), and dictation needs an explicit one.")
+            : (s.language == nil ? String(localized: "Uses the language of the active preset.") : nil)
+        return FormRow(label: String(localized: "Language"), caption: caption, isError: missing) {
+            FieldMenu(label: String(localized: "Language"), value: s.language.map { languageDisplayName($0) } ?? String(localized: "Same as active preset"), width: 180) {
                 Picker("Language", selection: Binding(get: { s.language }, set: { l in update { $0.language = l } })) {
                     Text("Same as active preset").tag(LanguageCode?.none)
-                    ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(Optional(l.code)) }
+                    ForEach(LanguageCode.selectable, id: \.code) { l in Text(languageDisplayName(l.code)).tag(Optional(l.code)) }
                 }
                 .pickerStyle(.inline).labelsHidden()
             }
@@ -161,8 +161,8 @@ struct DictationSettingsSection: View {
         let current = s.correction?.model
         if correctionProviders.count > 1 || current == nil {
             RowDivider()
-            FormRow(label: "Correction provider") {
-                FieldMenu(label: "Correction provider", value: correctionProviders.first { $0.id == current?.providerID }?.roleLabel ?? "Choose…", width: 180) {
+            FormRow(label: String(localized: "Correction provider")) {
+                FieldMenu(label: String(localized: "Correction provider"), value: correctionProviders.first { $0.id == current?.providerID }?.roleLabel ?? String(localized: "Choose…"), width: 180) {
                     Picker("Correction provider", selection: Binding(get: { current?.providerID }, set: { id in
                         guard let id, id != current?.providerID else { return }
                         update { $0.correction = DictationCorrectionSettings(enabled: true, model: RoleAssignment(providerID: id, model: "")) }
@@ -175,8 +175,8 @@ struct DictationSettingsSection: View {
         }
         if let a = current {
             RowDivider()
-            FormRow(label: "Correction model",
-                    caption: a.model.isEmpty ? "Choose a model, or the original text is used." : nil, isError: a.model.isEmpty) {
+            FormRow(label: String(localized: "Correction model"),
+                    caption: a.model.isEmpty ? String(localized: "Choose a model, or the original text is used.") : nil, isError: a.model.isEmpty) {
                 ModelPicker(providerID: a.providerID, role: .correction, selection: Binding(get: { s.correction?.model?.model ?? "" }, set: { id in
                     update { d in
                         var c = d.correction ?? DictationCorrectionSettings(enabled: true)

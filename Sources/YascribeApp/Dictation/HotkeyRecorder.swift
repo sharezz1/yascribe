@@ -49,7 +49,7 @@ final class HotkeyField: NSView {
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
         setAccessibilityRole(.button)
-        setAccessibilityLabel("Dictation shortcut")
+        setAccessibilityLabel(String(localized: "Dictation shortcut"))
         refresh()
     }
 
@@ -141,7 +141,7 @@ final class HotkeyField: NSView {
     }
 
     private func refresh() {
-        label.stringValue = capture != nil ? "Press a key…" : HotkeyCapture.label(hotkey)
+        label.stringValue = capture != nil ? String(localized: "Press a key…") : HotkeyCapture.label(hotkey)
         label.textColor = capture != nil ? .secondaryLabelColor : .labelColor
         needsDisplay = true
     }

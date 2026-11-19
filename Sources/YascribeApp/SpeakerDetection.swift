@@ -1,5 +1,7 @@
 import Foundation
 import YascribeProviders
+import YascribeLocalASR
+import YascribeTranscription
 
 /// „Czy diaryzować po transkrypcji” (TASK-22 D7), wydzielone z `AppModel.run`, bo `AppModel` nie da się zbudować w teście.
 enum SpeakerDetectionDecision {
@@ -34,6 +36,8 @@ struct SpeakerDetectionTicket: Equatable {
 /// więc samo „Invalid API key.” by kłamało); inaczej opis jak przy sprawdzaniu dostawcy.
 enum SpeakerDetectionError {
     static func text(_ error: Error) -> String {
+        if let error = error as? DiarizerModelStoreError { return error.displayMessage ?? error.message }
+        if let error = error as? CloudDiarizationError { return error.displayMessage }
         if case let .http(_, body)? = error as? ProviderError,
            let json = try? JSONSerialization.jsonObject(with: Data(body.utf8)) as? [String: Any] {
             for field in ["detail", "error"] {

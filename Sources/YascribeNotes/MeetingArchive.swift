@@ -35,12 +35,22 @@ public enum MeetingArchive {
                               numbers: sameDetection ? rawTranscript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(speakers)) } ?? [:] : [:])
     }
 
-    /// Transkrypt do wyświetlenia: poprawiony, gdy jest i użytkownik go nie wyłączył; potem Replacement i etykiety mówców.
-    public static func displayTranscript(raw: Transcript?, corrected: CorrectedTranscript?, useCorrected: Bool,
-                                         rules: ReplacementRules, speakers: SpeakerDiarization?) -> Transcript? {
-        let source = useCorrected ? (corrected?.transcript ?? raw) : raw
-        guard let source else { return nil }
-        return Replacement.apply(source, rules: rules).withSpeakerLabels(speakers)
+    /// Wersja przed Replacement: poprawiona, gdy jest i użytkownik jej nie wyłączył; ręczne poprawki (`edits.json`,
+    /// TASK-109) w obu wersjach. Korekta z inną liczbą wypowiedzi niż surowy (Retry Failed Parts po korekcie): indeksy
+    /// nie pasują, więc bez poprawek.
+    public static func source(raw: Transcript?, corrected: CorrectedTranscript?, edits: TranscriptEdits?,
+                              useCorrected: Bool) -> Transcript? {
+        guard let base = useCorrected ? (corrected?.transcript ?? raw) : raw else { return nil }
+        guard let edits, base.utterances.count == raw?.utterances.count else { return base }
+        return edits.apply(to: base)
+    }
+
+    /// Transkrypt do wyświetlenia: `source`, potem Replacement i etykiety mówców.
+    public static func displayTranscript(raw: Transcript?, corrected: CorrectedTranscript?, edits: TranscriptEdits?,
+                                         useCorrected: Bool, rules: ReplacementRules,
+                                         speakers: SpeakerDiarization?) -> Transcript? {
+        source(raw: raw, corrected: corrected, edits: edits, useCorrected: useCorrected)
+            .map { Replacement.apply($0, rules: rules).withSpeakerLabels(speakers) }
     }
 
     /// `[H:MM:SS]` — ten sam zapis w transkrypcie, kopii i eksporcie MCP.
@@ -49,9 +59,9 @@ public enum MeetingArchive {
         return String(format: "%d:%02d:%02d", i / 3600, i / 60 % 60, i % 60)
     }
 
-    /// Linia transkryptu: wypowiedź albo linia wyciszenia toru.
+    /// Linia transkryptu: wypowiedź (z indeksem w `utterances` — klucz poprawek i odtwarzania) albo linia wyciszenia toru.
     public enum Line: Equatable, Sendable {
-        case utterance(Utterance)
+        case utterance(Int, Utterance)
         case mute(MuteNote)
     }
 
@@ -59,9 +69,9 @@ public enum MeetingArchive {
     public static func lines(_ t: Transcript, summary: SessionSummary?) -> [Line] {
         var mutes = MuteNote.of(summary: summary)[...]
         var out: [Line] = []
-        for u in t.utterances {
+        for (i, u) in t.utterances.enumerated() {
             while let m = mutes.first, m.start <= u.start { out.append(.mute(m)); mutes = mutes.dropFirst() }
-            out.append(.utterance(u))
+            out.append(.utterance(i, u))
         }
         return out + mutes.map(Line.mute)
     }
@@ -75,7 +85,7 @@ public enum MeetingArchive {
     public static func copyLines(_ t: Transcript, summary: SessionSummary?) -> [String] {
         lines(t, summary: summary).map { line in
             switch line {
-            case .utterance(let u): copyLine(u)
+            case .utterance(_, let u): copyLine(u)
             case .mute(let m): "[\(time(m.start))] \(m.line)"
             }
         }

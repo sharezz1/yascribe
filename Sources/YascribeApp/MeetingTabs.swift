@@ -7,6 +7,13 @@ import SwiftUI
 enum MeetingTab: String, CaseIterable, Identifiable {
     case summary = "Summary", myNotes = "My notes", transcript = "Transcript"
     var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .summary: String(localized: "Summary")
+        case .myNotes: String(localized: "My notes")
+        case .transcript: String(localized: "Transcript")
+        }
+    }
 }
 
 final class MeetingViewState: ObservableObject {
@@ -27,6 +34,19 @@ final class MeetingViewState: ObservableObject {
     /// Source notatki wybrany w oknie Summary; `nil` = jak „Version" w Transcript. Żyje do zamknięcia widoku spotkania.
     @Published var summaryUseCorrected: Bool?
     var summaryCorrected: Bool { summaryUseCorrected ?? useCorrected }
+    /// Jedyny otwarty edytor segmentu (TASK-109): przebieg i indeks z chwili otwarcia — szkic nie trafi do innego przebiegu.
+    @Published var segmentDraft: SegmentDraft?
+}
+
+/// `corrected` i `initial` z chwili otwarcia: przełączenie wersji w trakcie edycji nie zmienia celu zapisu.
+struct SegmentDraft: Equatable {
+    var runID: String
+    var index: Int
+    var speaker: Speaker
+    var start: Double
+    var corrected: Bool
+    var initial: String
+    var text: String
 }
 
 // MARK: Zakładki tekstowe (macos.md §11.5)
@@ -40,7 +60,7 @@ struct MeetingTabBar: View {
             ForEach(MeetingTab.allCases) { tab in
                 let selected = tab == selection
                 Button { selection = tab } label: {
-                    Text(tab.rawValue)
+                    Text(tab.title)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(selected ? Color.mnText : Color.mnText2)
                         .frame(height: 28)
@@ -81,7 +101,7 @@ struct ErrorLine: View {
 private struct ContextEditor: View {
     @Binding var text: String
     var body: some View {
-        GrowingTextView(text: $text, minHeight: 36, accessibilityLabel: "Context for the model")
+        GrowingTextView(text: $text, minHeight: 36, accessibilityLabel: String(localized: "Context for the model"))
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {
                     Text("Who's there, what it's about — for the model").font(.system(size: 13)).foregroundStyle(.mnText2).allowsHitTesting(false)
@@ -104,14 +124,14 @@ struct MyNotesTab: View {
     var body: some View {
         if model.recordingsMove != nil {
             // R3: tylko do odczytu. `GrowingTextView` to NSTextView — `.disabled` nie blokuje w nim pisania.
-            Text(state.myNotes.isEmpty ? "No notes." : state.myNotes)
+            Text(state.myNotes.isEmpty ? String(localized: "No notes.") : state.myNotes)
                 .font(.system(size: 14)).lineSpacing(8)
                 .foregroundStyle(state.myNotes.isEmpty ? Color.mnText2 : Color.mnText)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, minHeight: 240, alignment: .topLeading)
         } else {
             GrowingTextView(text: Binding(get: { state.myNotes }, set: { state.myNotes = $0; model.notes.saveMyNotes($0, for: item) }),
-                            fontSize: 14, lineSpacing: 8, minHeight: 240, accessibilityLabel: "My notes")
+                            fontSize: 14, lineSpacing: 8, minHeight: 240, accessibilityLabel: String(localized: "My notes"))
                 .overlay(alignment: .topLeading) {
                     if state.myNotes.isEmpty {
                         Text("Write notes…").font(.system(size: 14)).foregroundStyle(.mnText2).allowsHitTesting(false)
@@ -155,7 +175,8 @@ struct TranscriptActions: View {
         }
     }
 
-    /// Ten sam mówca co w kolumnie transkryptu (§4.4).
+    /// Kopia kanoniczna (angielskie „Me”/„Them” i linie wyciszenia), niezależna od języka interfejsu; kolumna pokazuje nazwy przetłumaczone.
+    /// Ten sam zapis co eksport MCP (`MeetingArchive`).
     static func copyLine(_ u: Utterance) -> String { MeetingArchive.copyLine(u) }
 
     private func copy() {
@@ -170,7 +191,8 @@ struct TranscriptTab: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: MeetingViewState
     let item: SessionItem
-    let onJump: (Utterance) -> Void
+    var playing: Int? = nil
+    let onJump: (Int, Utterance) -> Void
     private var busy: Bool { model.isTranscribing(item) }
     /// Diaryzacja po transkrypcji trzyma `busy` (F01), ale wiersz mówi, co naprawdę trwa.
     private var detecting: Bool { model.isDetectingSpeakers(item) }
@@ -186,30 +208,30 @@ struct TranscriptTab: View {
                 if p.isWarning { WarnLabel(p.line) } else { StateLabel(.neutral, p.line) }
             }
             if model.notes.isCorrecting(item.id) {
-                StateLabel(.progress(nil), "\(item.corrected == nil ? "After the meeting, we improve" : "Improving") the transcript\(modelName.map { " with \(model.modelDisplayName($0))" } ?? "")…")
+                StateLabel(.progress(nil), correctionProgress)
                     .help(modelName ?? "")
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
-                ErrorLine(message: "Correction failed: \(why)", retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
+                ErrorLine(message: String(localized: "Correction failed: \(why)"), retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
                     .disabled(moving)
             }
             // TASK-112: korekta tego spotkania podsunęła Aliasy do słownika (lista i Add w zakładce Dictionary).
             if item.corrected != nil, !correcting, suggestionCount > 0 {
                 HStack(spacing: 8) {
-                    StateLabel(.neutral, "\(suggestionCount) dictionary \(suggestionCount == 1 ? "suggestion" : "suggestions") from this meeting")
-                    LinkButton("Review") { model.section = .dictionary }
+                    StateLabel(.neutral, String.localizedStringWithFormat(NSLocalizedString("%lld dictionary suggestions from this meeting", comment: ""), Int64(suggestionCount)))
+                    LinkButton(String(localized: "Review")) { model.section = .dictionary }
                 }
             }
             // „Transcribe again…": stary transkrypt zostaje widoczny, dopóki nowy przebieg się nie zakwalifikuje (R23). Linia ogólna
             // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
             if detecting {
-                StateLabel(.progress(nil), "Detecting speakers…")
+                StateLabel(.progress(nil), String(localized: "Detecting speakers…"))
             } else if busy, item.transcript != nil, item.attemptNotPromoted == nil {
-                StateLabel(.progress(nil), "Transcribing again…")
+                StateLabel(.progress(nil), String(localized: "Transcribing again…"))
             }
             attemptBanner
             if item.transcript != nil, item.corrected != nil {
-                FieldMenu(label: "Version", value: state.useCorrected ? "Corrected" : "Original", width: 120) {
+                FieldMenu(label: String(localized: "Version"), value: state.useCorrected ? String(localized: "Corrected") : String(localized: "Original"), width: 120) {
                     Picker("Version", selection: $state.useCorrected) {
                         Text("Corrected").tag(true)
                         Text("Original").tag(false)
@@ -223,19 +245,32 @@ struct TranscriptTab: View {
         }
     }
 
+    private var correctionProgress: String {
+        let displayModel = modelName.map { model.modelDisplayName($0) }
+        return switch (item.corrected == nil, displayModel) {
+        case (true, let name?): String(localized: "After the meeting, we improve the transcript with \(name)…")
+        case (true, nil): String(localized: "After the meeting, we improve the transcript…")
+        case (false, let name?): String(localized: "Improving the transcript with \(name)…")
+        case (false, nil): String(localized: "Improving the transcript…")
+        }
+    }
+
     /// Baner R23: najnowsza próba nie jest bieżącym przebiegiem (trwa, padła, z lukami albo pusta).
     @ViewBuilder private var attemptBanner: some View {
         if let a = item.attemptNotPromoted {
-            let what = a.snapshot.map { "Transcription with \(runLabel($0))" } ?? "The new transcription"
-            let from = item.runSnapshot.map { "the transcript from \(runLabel($0))" } ?? "the previous transcript"
+            let from = item.runSnapshot.map { String(localized: "the transcript from \(runLabel($0))") }
+                ?? String(localized: "the previous transcript")
+            let run = a.snapshot.map(runLabel)
             // W toku także przy wznowieniu próby z lukami (na dysku wciąż `.gaps`); tuż po starcie nowej próby baner może do
             // pierwszego przeładowania nazywać model poprzedniej.
             if busy {
-                StateLabel(.progress(nil), "\(what) is in progress — showing \(from).").wrapping()
+                StateLabel(.progress(nil), run.map { String(localized: "Transcription with \($0) is in progress — showing \(from).") }
+                           ?? String(localized: "The new transcription is in progress — showing \(from).")).wrapping()
             } else {
                 // Jedna linia: krótkie „Resume" obok komunikatu (pełna etykieta z modelem ucinała się przy 900 pt).
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    WarnLabel("\(what) didn't finish — showing \(from).").help(Self.why(a.reason))
+                    WarnLabel(run.map { String(localized: "Transcription with \($0) didn't finish — showing \(from).") }
+                              ?? String(localized: "The new transcription didn't finish — showing \(from).")).help(Self.why(a.reason))
                     if a.snapshot != nil {
                         Button("Resume") { model.resume(item, runID: item.latestAttemptID) }
                             .buttonStyle(.pillSmall).fixedSize().disabled(moving || correcting)
@@ -248,20 +283,21 @@ struct TranscriptTab: View {
 
     /// „parakeet-tdt (EN)" — czytelna nazwa modelu i język przebiegu.
     private func runLabel(_ s: RunSnapshot) -> String {
-        "\(model.modelDisplayName(s.model)) (\(s.preset.isAutoLanguage ? "Auto" : s.language?.rawValue.uppercased() ?? "?"))"
+        "\(model.modelDisplayName(s.model)) (\(s.preset.isAutoLanguage ? String(localized: "Auto") : s.language?.rawValue.uppercased() ?? "?"))"
     }
 
     private static func why(_ r: RunSelection.Reason) -> String {
         switch r {
-        case .unfinished: "It stopped before the end (failed, cancelled or the app was closed)."
-        case .gaps(let n): "\(n) part\(n == 1 ? "" : "s") couldn't be transcribed."
-        case .empty: "No speech was recognized."
+        case .unfinished: String(localized: "It stopped before the end (failed, cancelled or the app was closed).")
+        case .gaps(let n): String(format: NSLocalizedString("%lld parts couldn't be transcribed.", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(n))
+        case .empty: String(localized: "No speech was recognized.")
         }
     }
 
     /// Wznowienie zawsze idzie do najnowszej próby; etykieta mówi, którą, gdy to nie bieżący przebieg.
     private var resumeLabel: String {
-        item.attemptNotPromoted?.snapshot.map { "Resume Transcription with \(runLabel($0))" } ?? "Resume Transcription"
+        item.attemptNotPromoted?.snapshot.map { String(localized: "Resume Transcription with \(runLabel($0))") }
+            ?? String(localized: "Resume Transcription")
     }
 
     // Nadpisanie per spotkanie (chip modelu) wygrywa z presetem, tak jak przy samej korekcie.
@@ -273,6 +309,7 @@ struct TranscriptTab: View {
     @ViewBuilder private var content: some View {
         if let t = shown {
             let numbers = UtteranceRow.speakerNumbers(t)
+            let edited = item.editedIndices(corrected: state.useCorrected)
             // Uwaga 7: lista rośnie z treścią (przewija strona), separator `line2` między wierszami.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !t.failedChunks.isEmpty {
@@ -286,7 +323,7 @@ struct TranscriptTab: View {
                 ForEach(Array(Self.lines(t, item: item).enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
-                    case .utterance(let u): UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: numbers[u.speakerKey ?? ""]) { onJump(u) }
+                    case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""], edited: edited.contains(index))
                     case .mute(let m): MuteRow(note: m)
                     }
                 }
@@ -306,7 +343,7 @@ struct TranscriptTab: View {
                 Label("No transcript yet", systemImage: "text.alignleft")
             } actions: {
                 if busy {
-                    StateLabel(.progress(nil), "Transcribing…")
+                    StateLabel(.progress(nil), String(localized: "Transcribing…"))
                 } else {
                     // Preset zamrożony przy nagraniu, nie bieżący (spec §1.5); Resume bierze migawkę z input.json przebiegu.
                     Group {
@@ -326,13 +363,50 @@ struct TranscriptTab: View {
         }
     }
 
-    enum Line { case utterance(Utterance), mute(MuteNote) }
+    private func row(_ index: Int, _ u: Utterance, number: Int?, edited: Bool) -> UtteranceRow {
+        // Jeden szkic naraz: otwarty edytor wyłącza pozostałe ołówki (niezapisany szkic nie znika).
+        var startEdit: (() -> Void)?
+        let corrected = state.useCorrected
+        // Szkic z poprzedniego przebiegu (nowy przebieg został bieżącym) nie blokuje ołówków — nowy go zastępuje.
+        let active = state.segmentDraft.map { $0.runID == item.runID } ?? false
+        if let runID = item.runID, !moving, !active, item.canEdit(corrected: corrected) {
+            startEdit = {
+                state.segmentDraft = SegmentDraft(runID: runID, index: index, speaker: u.speaker, start: u.start,
+                                                  corrected: corrected, initial: u.text, text: u.text)
+            }
+        }
+        let onSave: (() -> Void)? = moving ? nil : { save() }
+        return UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
+                            isEdited: edited, draft: draft(index), onStartEdit: startEdit, onSave: onSave,
+                            onCancel: { state.segmentDraft = nil }, onJump: { onJump(index, u) })
+    }
+
+    /// Szkic tylko w wierszu, dla którego go otwarto, i tylko w tym samym przebiegu.
+    private func draft(_ index: Int) -> Binding<String>? {
+        // Po przełączeniu na wersję z innymi indeksami edytor nie staje pod obcą wypowiedzią.
+        guard let d = state.segmentDraft, d.index == index, d.runID == item.runID,
+              d.corrected == state.useCorrected || item.canEdit(corrected: state.useCorrected) else { return nil }
+        return Binding(get: { state.segmentDraft?.text ?? "" }, set: { state.segmentDraft?.text = $0 })
+    }
+
+    /// Edytor zamyka się tylko po udanym zapisie (inaczej szkic zostaje, błąd w `lastError`).
+    private func save() {
+        guard let d = state.segmentDraft else { return }
+        let trimmed = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if trimmed(d.text) == trimmed(d.initial) || model.editUtterance(item, runID: d.runID, index: d.index, speaker: d.speaker, start: d.start,
+                                                                     corrected: d.corrected, text: d.text) {
+            state.segmentDraft = nil
+        }
+    }
+
+    /// Indeks wypowiedzi to pozycja w `utterances` (klucz poprawek i odtwarzania), nie pozycja linii z wyciszeniami.
+    enum Line { case utterance(Int, Utterance), mute(MuteNote) }
 
     /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12", macos.md §11.5) w kolejności czasu.
     static func lines(_ t: Transcript, item: SessionItem) -> [Line] {
         MeetingArchive.lines(t, summary: item.summary).map { line in
             switch line {
-            case .utterance(let u): .utterance(u)
+            case .utterance(let i, let u): .utterance(i, u)
             case .mute(let m): .mute(m)
             }
         }
@@ -387,7 +461,7 @@ struct SummaryTab: View {
     }
     /// Powód, dla którego „Generate notes" jest nieaktywne: brak transkryptu to coś innego niż transkrypt bez treści.
     private var disabledReason: String {
-        item.transcript == nil ? "Transcript isn't ready yet." : "Nothing to summarize: the transcript has no usable text."
+        item.transcript == nil ? String(localized: "Transcript isn't ready yet.") : String(localized: "Nothing to summarize: the transcript has no usable text.")
     }
 
     /// Uwaga 7 (b-summary0.png, b-meeting.png): bez karty — ten sam pasek we wnęce przed i po generowaniu, pod nim
@@ -406,12 +480,12 @@ struct SummaryTab: View {
                 !t.failedChunks.isEmpty || t.utterances.contains(where: { $0.excludedFromNotes })
             } ?? false) {
                 HStack {
-                    WarnLabel("The transcript may be incomplete or contain excluded content.")
+                    WarnLabel(String(localized: "The transcript may be incomplete or contain excluded content."))
                     Button("View transcript") { state.tab = .transcript }.buttonStyle(.link)
                 }
             }
             if let numbers = item.notes.summary?.unverifiedNumbers, !numbers.isEmpty {
-                WarnLabel("Not written as digits in the transcript: \(numbers.joined(separator: ", ")). Check these numbers in the notes.")
+                WarnLabel(String(localized: "Not written as digits in the transcript: \(numbers.joined(separator: ", ")). Check these numbers in the notes."))
             }
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
@@ -428,7 +502,7 @@ struct SummaryTab: View {
     /// Postęp generowania (krok z `NoteGenerator`) i „Cancel": podział długiego transkryptu może trwać kilka minut.
     private var generatingRow: some View {
         HStack(spacing: 10) {
-            StateLabel(.progress(nil), model.notes.progress[item.id]?.text ?? "Generating notes…")
+            StateLabel(.progress(nil), model.notes.progress[item.id]?.text ?? String(localized: "Generating notes…"))
             Button("Cancel") { model.notes.cancelGeneration(item.id) }
                 .buttonStyle(.pillSmall)
                 .help("Stop generating the notes")
@@ -455,12 +529,16 @@ struct SummaryTab: View {
     }
 
     private var sourceLine: String {
-        let kind = corrected ? "corrected" : "original"
         let details = [
             item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) },
-            model.runLanguage(item).language?.englishName,
-        ].compactMap { $0 }
-        return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
+            model.runLanguage(item).language.map { languageDisplayName($0) },
+        ].compactMap { $0 }.joined(separator: ", ")
+        switch (corrected, details.isEmpty) {
+        case (true, true): return String(localized: "Uses the corrected transcript.")
+        case (false, true): return String(localized: "Uses the original transcript.")
+        case (true, false): return String(localized: "Uses the corrected transcript (\(details)).")
+        case (false, false): return String(localized: "Uses the original transcript (\(details)).")
+        }
     }
 
     /// Jedna linia bez wnęki: przed notatką szablon · kontekst · opcje · „Generate notes"; po notatce tylko „Improve" + Copy.
@@ -514,9 +592,9 @@ struct SummaryTab: View {
 
     /// Popup szablonu: pole 130 × 28, promień 7 (makieta: `.field`). Menu zostaje systemowe.
     private var templateMenu: some View {
-        FieldMenu(label: "Template", value: template.name, width: 130) {
+        FieldMenu(label: String(localized: "Template"), value: template.displayName(), width: 130) {
             ForEach(model.notes.templates.all()) { t in
-                Button(t.name) { state.templateID = t.id }
+                Button(t.displayName()) { state.templateID = t.id }
             }
             Divider()
             Button("Manage templates…") { model.section = .templates }
@@ -551,10 +629,17 @@ struct SummaryTab: View {
 /// Linia wyciszenia toru w transkrypcie: czas w kolumnie czasu, opis w `text2` (informacja, nie ostrzeżenie).
 private struct MuteRow: View {
     let note: MuteNote
+
+    private var text: String {
+        let name = note.trackID == "system" ? String(localized: "System audio") : String(localized: "Microphone")
+        if let end = note.endTime { return String(localized: "\(name) muted \(note.startTime)–\(end)") }
+        return String(localized: "\(name) muted from \(note.startTime) to the end")
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(MeetingDetailView.time(note.start)).monospacedDigit().frame(width: 72, alignment: .leading)
-            Label(note.line, systemImage: note.trackID == "system" ? "speaker.slash" : "mic.slash")
+            Label(text, systemImage: note.trackID == "system" ? "speaker.slash" : "mic.slash")
         }
         .font(.system(size: 13)).foregroundStyle(.mnText2)
         .padding(.vertical, 11)

@@ -144,13 +144,17 @@ public struct TemplatesFile: Codable, Equatable, Sendable {
     public func isBuiltin(id: String) -> Bool { Template.builtIns.contains { $0.id == id } }
     public func isEdited(id: String) -> Bool { overrides?.contains { $0.id == id } == true }
 
+    public func containsName(_ name: String, excluding id: String? = nil) -> Bool {
+        all().contains { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame }
+    }
+
     public mutating func upsert(_ t: Template) throws {
         let isBuiltinID = isBuiltin(id: t.id)
         guard isBuiltinID || !t.builtin else { throw TemplateError.builtinIsReadOnly } // nowych wbudowanych nie ma
         var t = t
         t.name = t.name.trimmingCharacters(in: .whitespaces)
         guard !t.name.isEmpty else { throw TemplateError.missingName }
-        guard !all().contains(where: { $0.id != t.id && $0.name.caseInsensitiveCompare(t.name) == .orderedSame }) else {
+        guard !containsName(t.name, excluding: t.id) else {
             throw TemplateError.nameTaken(t.name)
         }
         t.about = t.about?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty

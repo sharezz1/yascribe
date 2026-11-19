@@ -10,17 +10,17 @@ struct PromptEditorSheet: View {
 
     private var count: Int { draft.promptSheetText.trimmingCharacters(in: .whitespacesAndNewlines).count }
     private var tooLong: Bool { count > kind.maxChars }
-    private var title: String { kind == .correction ? "Correction prompt" : "Summary prompt" }
+    private var title: String { kind == .correction ? String(localized: "Correction prompt") : String(localized: "Summary prompt") }
     private var caption: String {
         let what = kind == .correction
-            ? "The base instruction for the correction model. The line format, language, filler and dictionary lines are added after it, and the length checks always apply."
-            : "The rules the summary model follows. The title line, notes language and the template structure are added after them."
-        return what + (localModel ? " Long prompts leave less room for the transcript in a local model's context window." : "")
+            ? String(localized: "The base instruction for the correction model. The line format, language, filler and dictionary lines are added after it, and the length checks always apply.")
+            : String(localized: "The rules the summary model follows. The title line, notes language and the template structure are added after them.")
+        return localModel ? what + " " + String(localized: "Long prompts leave less room for the transcript in a local model's context window.") : what
     }
 
     var body: some View {
         EditorSheet(title: title, dirty: draft.promptSheetChanged && !tooLong,
-                    error: tooLong ? "The prompt is too long: \(count) of \(kind.maxChars) characters." : nil,
+                    error: tooLong ? String(localized: "The prompt is too long: \(count) of \(kind.maxChars) characters.") : nil,
                     onCancel: { draft.editingPrompt = nil }, onSave: { draft.savePromptSheet() }, idealHeight: 560,
                     leading: {
                         Button("Reset to default") { draft.promptSheetText = kind.defaultBody }

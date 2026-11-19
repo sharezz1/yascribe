@@ -511,6 +511,18 @@ private func snapshot(_ url: URL) throws -> [String: String] {
     #expect(try call(server, "get_transcript", ["id": "jedna", "offset": 1]).text == "No lines at offset 1 (total 1)")
 }
 
+@Test func getTranscriptShowsManualEditsLikeTheApp() throws {
+    let paths = try dataDir()
+    defer { try? FileManager.default.removeItem(at: paths.root) }
+    try saveSettings(paths) { $0.agentAccess = true }
+    let session = try makeSession(paths, id: "edycja", raw: [utt("zle slowo", .them, at: 2)], corrected: [utt("złe słowo", .them, at: 2)])
+    try TranscriptEdits(edits: [.init(index: 0, speaker: .them, start: 2, text: "dobre słowo")])
+        .save(run: RunDirectory(session: session, runID: runID))
+    let server = MCPServer(paths: paths, version: "test")
+    #expect(try call(server, "get_transcript", ["id": "edycja"]).text.contains("Them: dobre słowo"))
+    #expect(try call(server, "get_transcript", ["id": "edycja", "version": "original"]).text.contains("Them: dobre słowo"))
+}
+
 // MARK: - get_meeting
 
 @Test func getMeetingRendersMarkdownWithResolvedSpeakersAndTruncates() throws {

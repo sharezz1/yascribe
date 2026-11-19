@@ -28,12 +28,12 @@ public enum MistralDiarizationError: LocalizedError, Equatable {
     case rejectedKey, rateLimit, server(String), invalidAnswer, cutShort, network
     public var errorDescription: String? {
         switch self {
-        case .rejectedKey: "Mistral rejected the API key."
-        case .rateLimit: "Mistral rate limit reached. Try again later."
-        case .server(let message): "Mistral: \(message)"
-        case .invalidAnswer: "Mistral returned an invalid answer."
-        case .cutShort: "Mistral cut the answer short."
-        case .network: "Can't connect to Mistral."
+        case .rejectedKey: String(localized: "Mistral rejected the API key.")
+        case .rateLimit: String(localized: "Mistral rate limit reached. Try again later.")
+        case .server(let message): String(localized: "Mistral: \(message)")
+        case .invalidAnswer: String(localized: "Mistral returned an invalid answer.")
+        case .cutShort: String(localized: "Mistral cut the answer short.")
+        case .network: String(localized: "Can't connect to Mistral.")
         }
     }
 }

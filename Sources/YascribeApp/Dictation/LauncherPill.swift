@@ -174,7 +174,7 @@ import YascribeRecording
         // `.borderless` bez `canBecomeKey`: klik nie zabiera klawiatury aplikacji docelowej; `.nonactivatingPanel` jej nie aktywuje.
         let p = NSPanel(contentRect: NSRect(origin: .zero, size: Self.size(.dot)),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        p.title = "Dictation"   // czyta go VoiceOver
+        p.title = String(localized: "Dictation")   // czyta go VoiceOver
         p.level = .floating
         p.isFloatingPanel = true
         p.hidesOnDeactivate = false
@@ -272,7 +272,7 @@ struct LauncherView: View {
                 Button { launcher.recordMeeting() } label: { Text("Record meeting").lineLimit(1).fixedSize() }
                     .buttonStyle(PillButtonStyle(kind: .secondary))
                     .disabled(busy)   // zabezpieczenie: w trakcie sesji status zastępuje pigułkę
-                    .help(busy ? "Finish dictating first." : "Start recording a meeting")
+                    .help(busy ? String(localized: "Finish dictating first.") : String(localized: "Start recording a meeting"))
                     .accessibilityLabel("Record meeting")
             }
             .padding(.horizontal, 8)

@@ -20,10 +20,10 @@ public enum FolderError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .emptyName: "Give the folder a name."
-        case .tooLong(let max): "A folder name can have at most \(max) characters."
-        case .duplicate(let name): "A folder named “\(name)” already exists."
-        case .notFound: "That folder no longer exists."
+        case .emptyName: String(localized: "Give the folder a name.")
+        case .tooLong(let max): String(localized: "A folder name can have at most \(max) characters.")
+        case .duplicate(let name): String(localized: "A folder named “\(name)” already exists.")
+        case .notFound: String(localized: "That folder no longer exists.")
         }
     }
 }

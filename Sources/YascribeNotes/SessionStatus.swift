@@ -46,9 +46,9 @@ public enum SessionStatus: Equatable, Sendable {
 /// „No transcript yet" (F6): nie zależy od transkryptu, bo po próbie bez transkryptu też trzeba móc wybrać inny model.
 public enum TranscribeAgain {
     public static func blocker(audioDeletedAfterDays: Int?, transcribing: Bool, moving: Bool) -> String? {
-        if let n = audioDeletedAfterDays { return "Audio was deleted after \(n) days" }
-        if transcribing { return "This recording is being transcribed" }
-        if moving { return "Meetings are being moved to a new folder" }
+        if let n = audioDeletedAfterDays { return String(format: NSLocalizedString("Audio was deleted after %lld days", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(n)) }
+        if transcribing { return String(localized: "This recording is being transcribed") }
+        if moving { return String(localized: "Meetings are being moved to a new folder") }
         return nil
     }
 }

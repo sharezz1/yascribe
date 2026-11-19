@@ -1,3 +1,4 @@
+import Foundation
 import YascribeSessionFormat
 
 /// Podpowiedź pod wierszem „System audio" w pigułce. Informacja, nie błąd: cisza w poczekalni to zwykły stan,
@@ -5,6 +6,6 @@ import YascribeSessionFormat
 public enum PillHint {
     public static func systemStalled(stalled: Bool, micUID: String, outputUID: String, isBluetooth: Bool) -> String? {
         guard stalled, isBluetooth, DeviceUID.same(micUID, outputUID) else { return nil }
-        return "Headset in call mode may block system audio."
+        return String(localized: "Headset in call mode may block system audio.")
     }
 }

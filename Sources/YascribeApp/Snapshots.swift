@@ -10,7 +10,7 @@ import SwiftUI
 
 /// Tryb migawek (macos.md §9): `YASCRIBE_SNAPSHOT_DIR=<katalog>` renderuje ekrany do PNG i kończy proces.
 /// Dowód w raporcie: „migawka" (ten plik), nie „zrzut na żywo".
-enum SnapshotError: Error { case noBitmap, noPNG }
+enum SnapshotError: Error { case noBitmap, noPNG, wrongLanguage }
 
 @MainActor
 enum Snapshots {
@@ -111,10 +111,10 @@ enum Snapshots {
             ("answer", [first], nil),
             ("follow-up", [first, turn("Who will follow up?", .answered(answer))], nil),
             ("no-answer", [turn("What happened?", .noAnswer("I couldn't find a supported answer in All meetings."))], nil),
-            ("failure", [turn("What happened?", .failed("Couldn't get an answer from the provider.", opensSettings: false))], nil),
-            ("missing-model", [turn("What happened?", .failed("Choose an Ask model in Settings → Archive search.", opensSettings: true))], nil),
-            ("working", [turn("What happened?", .working("Answering…"))], nil),
-            ("consent", [turn("What happened?", .working("Waiting for your OK"))], (3, "Example provider", "example-model"))
+            ("failure", [turn("What happened?", .failed("Couldn't get an answer from OpenRouter: The reply was cut off before the end.", opensSettings: false))], nil),
+            ("missing-model", [turn("What happened?", .failed("Choose an Ask model in Settings → Archive search to ask about your meetings.", opensSettings: true))], nil),
+            ("working", [turn("What happened?", .working(String(localized: "Answering…")))], nil),
+            ("consent", [turn("What happened?", .working(String(localized: "Waiting for your OK")))], (3, "Example provider", "example-model"))
         ]
         for size in [CGSize(width: 960, height: 520), CGSize(width: 1400, height: 860)] {
             let suffix = Int(size.width)
@@ -145,6 +145,13 @@ enum Snapshots {
 
     static func runAll(model: AppModel) {
         do {
+            if let expected = ProcessInfo.processInfo.environment["YASCRIBE_SNAPSHOT_LANGUAGE"] {
+                let labels = ["pl": "Ustawienia", "en": "Settings"]
+                guard let label = labels[expected],
+                      Bundle.main.localizedString(forKey: "Settings", value: nil, table: nil) == label else {
+                    throw SnapshotError.wrongLanguage
+                }
+            }
             try seed(model)
             for dark in [false, true] {
                 try archiveSnapshots(model: model, dark: dark)
@@ -313,6 +320,21 @@ enum Snapshots {
                         var noAudio = picked; noAudio.audioDeletedAfterDays = 30
                         try render("models-transcript-no-audio", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: noAudio) {} }
                         try render("meeting-transcript-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: noAudio, state: transcriptView) }
+                        // TASK-109: poprawiony segment („Edited”), otwarty edytor i grający segment (⏸ i ołówek widoczne bez hovera).
+                        var edited = picked
+                        edited.edits = TranscriptEdits(edits: [.init(index: 1, speaker: t.utterances[1].speaker, start: t.utterances[1].start,
+                                                                     text: "Edited by hand. " + t.utterances[1].text)])
+                        try render("meeting-transcript-edited", size: CGSize(width: 900, height: 420), dark: dark, model: model) { MeetingDetailView(item: edited, state: transcriptView) }
+                        let editing = MeetingViewState(); editing.tab = .transcript
+                        editing.segmentDraft = SegmentDraft(runID: "snapshot-run", index: 0, speaker: t.utterances[0].speaker, start: t.utterances[0].start, corrected: true, initial: t.utterances[0].text, text: t.utterances[0].text)
+                        try render("meeting-transcript-editing", size: CGSize(width: 900, height: 480), dark: dark, model: model) { MeetingDetailView(item: edited, state: editing) }
+                        try render("transcript-segment-playing", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
+                            ScrollView { TranscriptTab(state: transcriptView, item: edited, playing: 0) { _, _ in }.padding(20) }
+                        }
+                        try render("transcript-segment-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
+                            var gone = edited; gone.audioDeletedAfterDays = 30
+                            return ScrollView { TranscriptTab(state: transcriptView, item: gone, playing: 0) { _, _ in }.padding(20) }
+                        }
                         // F6 (D13): pierwsza próba bez transkryptu — w stanie „No transcript yet" także „Transcribe again…".
                         var noTranscript = picked
                         noTranscript.transcript = nil; noTranscript.corrected = nil; noTranscript.latestAttemptID = "snapshot-run-2"
@@ -412,12 +434,12 @@ enum Snapshots {
                 let builtin = TemplateEditorState(); builtin.select(model.notes.templates.all().first)
                 builtin.draft?.sections?[2].instruction += " Keep it to one line."
                 try render("template-sheet-builtin", size: CGSize(width: 560, height: 560), dark: dark, model: model) {
-                    TemplateSheet(state: builtin, meta: "Built-in · edited", builtin: true, edited: true,
+                    TemplateSheet(state: builtin, meta: String(localized: "Built-in · edited"), builtin: true, edited: true,
                                   onSave: {}, onDuplicate: {}, onReset: {}, onDelete: {})
                 }
                 let custom = TemplateEditorState(); custom.startNew()
                 try render("template-sheet-new", size: CGSize(width: 560, height: 560), dark: dark, model: model) {
-                    TemplateSheet(state: custom, meta: "Custom", builtin: false, edited: false, onSave: {}, onDuplicate: {}, onReset: {}, onDelete: {})
+                    TemplateSheet(state: custom, meta: String(localized: "Custom"), builtin: false, edited: false, onSave: {}, onDuplicate: {}, onReset: {}, onDelete: {})
                 }
                 // Odbiór 2026-10-16: pigułka istnieje tylko podczas nagrywania — zwinięta i rozwinięta (kontroler z wymuszonym
                 // stanem; okno, cień i przesuwanie to odbiór na żywo), plus osobno wiersze poziomów torów.
@@ -448,10 +470,10 @@ enum Snapshots {
                 }
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Preset: Polish · PL").font(.caption).foregroundStyle(.secondary)
-                        LevelRow(title: "System audio", db: -22)
-                        LevelRow(title: "Microphone: MacBook Air Microphone", db: -41, emphasized: true)
-                        LevelRow(title: "Microphone: silent", db: -160, emphasized: true)
+                        Text("Preset: \("Polish") · \("PL")").font(.caption).foregroundStyle(.secondary)
+                        LevelRow(kind: .system, db: -22)
+                        LevelRow(kind: .microphone, detail: "MacBook Air Microphone", db: -41, emphasized: true)
+                        LevelRow(kind: .microphone, detail: String(localized: "silent"), db: -160, emphasized: true)
                     }
                     .padding(12)
                 }
@@ -485,11 +507,11 @@ enum Snapshots {
                 // Arkusz osobną migawką (b-add.png): ElevenLabs z wynikiem, błąd klucza, Custom z błędem adresu.
                 let sheetOK = ProviderSheetState(); sheetOK.setUp(.elevenLabs); sheetOK.result = .verified(models: 4)
                 try render("settings-sheet-verified", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetOK) }
-                let sheetBad = ProviderSheetState(); sheetBad.setUp(.elevenLabs); sheetBad.result = .failed("Key rejected (401). Check the key and try again.")
+                let sheetBad = ProviderSheetState(); sheetBad.setUp(.elevenLabs); sheetBad.result = .failed("Invalid API key.")
                 try render("settings-sheet-failed", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetBad) }
                 let sheetLimited = ProviderSheetState(); sheetLimited.setUp(.elevenLabs); sheetLimited.result = .limited("Key works for transcription only")
                 try render("settings-sheet-limited", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetLimited) }
-                let sheetCustom = ProviderSheetState(); sheetCustom.setUp(.custom); sheetCustom.error = "Enter a full address, e.g. https://openrouter.ai/api/v1."
+                let sheetCustom = ProviderSheetState(); sheetCustom.setUp(.custom); sheetCustom.error = String(localized: "Enter a full address, e.g. https://openrouter.ai/api/v1.")
                 try render("settings-sheet-custom", size: CGSize(width: 520, height: 400), dark: dark, model: model) { ProviderSetupSheet(state: sheetCustom) }
                 try render("settings", size: CGSize(width: 900, height: 700), dark: dark, model: model) { SettingsView() }
                 // F20 T7: karta modelu lokalnego ASR w czterech stanach. Statusy są wymyślone (nic nie czyta magazynu, nic nie pobiera).
@@ -500,7 +522,7 @@ enum Snapshots {
                 for (name, status, activity) in cardScenes {
                     try render("model-card-\(name)", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                         VStack(alignment: .leading, spacing: 0) {
-                            SectionHeader("Yascribe models")
+                            SectionHeader(String(localized: "Yascribe models"))
                             ModelCardContent(card: ModelCardState(status: status, activity: activity), location: cardFolder)
                         }
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
@@ -509,9 +531,9 @@ enum Snapshots {
                 // Błąd pobrania pod opisem i wiersze edytora presetu (ASR, „On this Mac"): brak modelu / pobieranie / gotowy.
                 try render("model-card-download-error", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 0) {
-                        SectionHeader("Yascribe models")
+                        SectionHeader(String(localized: "Yascribe models"))
                         ModelCardContent(card: ModelCardState(status: .missing, activity: .idle), location: cardFolder,
-                                         error: "The download didn't finish: The Internet connection appears to be offline.")
+                                         error: String(localized: "The download didn't finish: The Internet connection appears to be offline."))
                     }
                     .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                 }
@@ -682,7 +704,7 @@ enum Snapshots {
                 // R22/I4: 40 Aliasów — lista w arkuszu przewija się, Save/Cancel/Delete zostają na widoku; plus komunikat nieudanego zapisu.
                 let many = DictionaryViewState()
                 many.open(DictionaryTerm("Orbit", priority: .high, aliases: (1...40).map { DictionaryAlias("Orbis \($0)", risky: $0 % 7 == 0, enabled: $0 % 7 != 0) }))
-                many.saveError = "Couldn’t save the dictionary: The file couldn’t be saved because the disk is full."
+                many.saveError = String(localized: "Couldn’t save the dictionary: The file couldn’t be saved because the disk is full.")
                 try render("dictionary-edit-many-aliases", size: CGSize(width: 500, height: 700), dark: dark, model: model) { DictionaryTermSheet(state: many) }
                 let report = DictionaryImportReport(termsAdded: 166, aliasesAdded: 223, riskyLeftOff: 12, conflicts: [
                     .init(alias: "Dorna", keptBy: "Dorek", skippedFor: "Jarosław"), .init(alias: "on track", keptBy: "Ontrack", skippedFor: "Post Office")])
@@ -741,12 +763,12 @@ enum Snapshots {
 struct ComponentGallery: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageTitle("Settings")
-            SectionHeader("Correction", note: "— optional") { Toggle("", isOn: .constant(true)).toggleStyle(.switch).labelsHidden() }
+            PageTitle(String(localized: "Settings"))
+            SectionHeader(String(localized: "Correction"), note: String(localized: "— optional")) { Toggle("", isOn: .constant(true)).toggleStyle(.switch).labelsHidden() }
             Card {
-                FormRow(label: "Language", caption: "✓ Language enforced") { Text("Polish") }
+                FormRow(label: String(localized: "Language"), caption: String(localized: "Language enforced")) { Text(languageDisplayName(.polish)) }
                 RowDivider()
-                FormRow(label: "Address", caption: "Enter a full address.", isError: true) { Text("openrouter.ai") }
+                FormRow(label: String(localized: "Address"), caption: String(localized: "Enter a full address."), isError: true) { Text("openrouter.ai") }
             }
             HStack(spacing: 8) {
                 Button("Record") {}.buttonStyle(.pillPrimary)
@@ -757,17 +779,17 @@ struct ComponentGallery: View {
             }
             .padding(.vertical, 16)
             HStack(spacing: 14) {
-                StateLabel(.ok, "Notes ready")
-                StateLabel(.bad, "Correction failed")
-                StateLabel(.live, "Recording 12:04")
+                StateLabel(.ok, String(localized: "Notes ready"))
+                StateLabel(.bad, String(localized: "Correction failed"))
+                StateLabel(.live, String(localized: "Recording \("12:04")"))
             }
             HStack(spacing: 14) {
-                StateLabel(.neutral, "Transcript ready")
-                StateLabel(.progress(0.41), "Transcribing 41%")
-                StateLabel(.progress(nil), "Correcting…")
+                StateLabel(.neutral, String(localized: "Transcript ready"))
+                StateLabel(.progress(0.41), String(localized: "Transcribing \(41)%"))
+                StateLabel(.progress(nil), String(localized: "Correcting…"))
             }
             .padding(.vertical, 10)
-            MetaLine(["Oct 15, 11:29", "42 min", "Preset Polish"])
+            MetaLine(["Oct 15, 11:29", "42 min", String(localized: "Preset \("Polish")")])
             Spacer()
         }
         .padding(24)

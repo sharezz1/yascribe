@@ -15,12 +15,12 @@ enum EditorSheetFooter: Equatable {
     var buttons: [FooterButton] {
         switch self {
         case .saveCancel:
-            [FooterButton(title: "Cancel", role: .cancel, shortcuts: [.escape]),
-             FooterButton(title: "Save", role: .save, shortcuts: [.commandReturn, .commandS])]
+            [FooterButton(title: String(localized: "Cancel"), role: .cancel, shortcuts: [.escape]),
+             FooterButton(title: String(localized: "Save"), role: .save, shortcuts: [.commandReturn, .commandS])]
         case .closeOnly:
-            [FooterButton(title: "Close", role: .close, shortcuts: [.escape])]
+            [FooterButton(title: String(localized: "Close"), role: .close, shortcuts: [.escape])]
         case .closeAction(let title):
-            [FooterButton(title: "Close", role: .close, shortcuts: [.escape]),
+            [FooterButton(title: String(localized: "Close"), role: .close, shortcuts: [.escape]),
              FooterButton(title: title, role: .save, shortcuts: [])]
         }
     }

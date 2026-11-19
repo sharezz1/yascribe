@@ -6,7 +6,7 @@ struct UpdatesSection: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        SectionHeader("Updates")
+        SectionHeader(String(localized: "Updates"))
         Card {
             UpdatesRow(updater: model.updater)
         }
@@ -17,7 +17,7 @@ private struct UpdatesRow: View {
     @ObservedObject var updater: UpdateController
 
     var body: some View {
-        FormRow(label: "Version", caption: "Yascribe checks for updates on its own and asks before installing. An update never interrupts a recording.") {
+        FormRow(label: String(localized: "Version"), caption: String(localized: "Yascribe checks for updates on its own and asks before installing. An update never interrupts a recording.")) {
             HStack(spacing: 8) {
                 Text(updater.currentVersion).foregroundStyle(.mnText)
                 Spacer(minLength: 8)

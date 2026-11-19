@@ -117,22 +117,22 @@ public enum RecordingsMove {
 
     /// Powód, dla którego teraz nie wolno przenosić; `nil` = wolno.
     public static func blocked(recording: Bool, busy: Bool, moving: Bool) -> String? {
-        if moving { return "Meetings are being moved." }
-        if recording { return "Can't change the location while recording." }
-        if busy { return "Can't change the location while a meeting is being transcribed or summarized." }
+        if moving { return String(localized: "Meetings are being moved.") }
+        if recording { return String(localized: "Can't change the location while recording.") }
+        if busy { return String(localized: "Can't change the location while a meeting is being transcribed or summarized.") }
         return nil
     }
 
     /// Powód odmowy dla folderu docelowego; `nil` = można przenieść.
     public static func destinationRefusal(from old: URL, to new: URL) -> String? {
         let o = resolved(old).pathComponents, n = resolved(new).pathComponents
-        if o == n { return "That's already the recordings folder." }
-        if n.starts(with: o) { return "Choose a folder outside the current recordings folder." }
-        if o.starts(with: n) { return "Choose a folder that doesn't contain the current recordings folder." }
+        if o == n { return String(localized: "That's already the recordings folder.") }
+        if n.starts(with: o) { return String(localized: "Choose a folder outside the current recordings folder.") }
+        if o.starts(with: n) { return String(localized: "Choose a folder that doesn't contain the current recordings folder.") }
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: new.path, isDirectory: &isDir) {
-            if !isDir.boolValue { return "That's a file, not a folder." }
-            if !topLevel(new).isEmpty { return "Choose an empty folder." }
+            if !isDir.boolValue { return String(localized: "That's a file, not a folder.") }
+            if !topLevel(new).isEmpty { return String(localized: "Choose an empty folder.") }
         }
         return nil
     }
@@ -147,16 +147,16 @@ public enum RecordingsMove {
                            commit: @Sendable () async throws -> Void) async throws -> [String] {
         if let r = destinationRefusal(from: old, to: new) { throw Failure(reason: r) }
         let fm = FileManager.default
-        let kept = "Nothing was deleted; meetings stay in \(old.path)."
+        let kept = String(localized: "Nothing was deleted; meetings stay in \(old.path).")
         let createdFolder = !fm.fileExists(atPath: new.path)
         do { try fm.createDirectory(at: new, withIntermediateDirectories: true) } catch {
-            throw Failure(reason: "Couldn't create \(new.path): \(error.localizedDescription). \(kept)")
+            throw Failure(reason: String(localized: "Couldn't create \(new.path): \(error.localizedDescription). \(kept)"))
         }
         var ours: [String] = []
         func fail(_ why: String) -> Failure {
             let left = removeOwnCopy(ours, in: new, removeFolder: createdFolder)
-            let tail = left.isEmpty ? "The partial copy was removed."
-                : "Couldn't remove the partial copy (\(left.joined(separator: ", "))) from \(new.path)."
+            let tail = left.isEmpty ? String(localized: "The partial copy was removed.")
+                : String(localized: "Couldn't remove the partial copy (\(left.joined(separator: ", "))) from \(new.path).")
             return Failure(reason: "\(why). \(kept) \(tail)")
         }
         let items = topLevel(old)
@@ -166,19 +166,19 @@ public enum RecordingsMove {
             // Własność ustalamy PRZED kopią: urwana kopia też jest nasza, a wpis, który już był, nie jest.
             if !fm.fileExists(atPath: target.path) { ours.append(name) }
             do { try copy(old.appendingPathComponent(name), target) } catch {
-                throw fail("Couldn't copy \(name): \(error.localizedDescription)")
+                throw fail(String(localized: "Couldn't copy \(name): \(error.localizedDescription)"))
             }
         }
         progress(Progress(phase: .verifying, done: 0, total: items.count))
         let source: [String: Int], copied: [String: Int]
         do { source = try listing(old, items); copied = try listing(new, items) } catch {
-            throw fail("Couldn't check the copy: \(error.localizedDescription)")
+            throw fail(String(localized: "Couldn't check the copy: \(error.localizedDescription)"))
         }
         if let bad = source.keys.sorted().first(where: { copied[$0] != source[$0] }) ?? copied.keys.sorted().first(where: { source[$0] == nil }) {
-            throw fail("The copy doesn't match the original (\(bad))")
+            throw fail(String(localized: "The copy doesn't match the original (\(bad))"))
         }
         do { try await commit() } catch {
-            throw fail("Couldn't switch to the new folder: \(error.localizedDescription)")
+            throw fail(String(localized: "Couldn't switch to the new folder: \(error.localizedDescription)"))
         }
         var leftovers: [String] = []
         for (i, name) in items.enumerated() {

@@ -20,6 +20,8 @@ struct MeetingRecord {
     let runID: String?
     let rawTranscript: Transcript?
     let corrected: CorrectedTranscript?
+    /// Ręczne poprawki segmentów (`runs/<runID>/edits.json`, TASK-109) — jak w UI, w obu wersjach.
+    let edits: TranscriptEdits?
     let speakers: SpeakerDiarization?
     let meta: NoteMeta
     let myNotes: String
@@ -40,7 +42,7 @@ struct MeetingRecord {
     }
 
     func displayTranscript(useCorrected: Bool, rules: ReplacementRules) -> Transcript? {
-        MeetingArchive.displayTranscript(raw: rawTranscript, corrected: corrected, useCorrected: useCorrected,
+        MeetingArchive.displayTranscript(raw: rawTranscript, corrected: corrected, edits: edits, useCorrected: useCorrected,
                                          rules: rules, speakers: speakers)
     }
 
@@ -92,6 +94,7 @@ enum MeetingLoader {
             startedAt: summary?.wallClock ?? .distantPast, runID: run.currentID,
             rawTranscript: run.transcript?.echoMarked(),
             corrected: CorrectedTranscript.load(session: url, runID: run.currentID),
+            edits: run.currentID.flatMap { RunDirectory.isValid(runID: $0) ? TranscriptEdits.load(run: RunDirectory(session: url, runID: $0)) : nil },
             speakers: speakers, meta: meta, myNotes: store.readMyNotes(),
             noteSummary: (try? store.readSummary()) ?? nil,
             folderName: folders.folder(meta.folderID)?.name)

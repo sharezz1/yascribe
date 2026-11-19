@@ -6,9 +6,33 @@ import YascribeTranscription
 import SwiftUI
 
 /// Odtwarzanie: odsłuch = ścieżka systemowa bit w bit (spec rdzenia §5); mikrofon osobno.
-final class PlaybackState: ObservableObject {
+/// TASK-109: segment gra od startu do końca; `playing` = indeks grającej wypowiedzi w `utterances`.
+@MainActor final class PlaybackState: ObservableObject {
     var player: AVAudioPlayer?
     var track: String?
+    @Published private(set) var playing: Int?
+    private var stopTask: Task<Void, Never>?
+
+    /// Nowe odtworzenie anuluje stop poprzedniego; wszystko na MainActor, więc anulowane zadanie nie zdąży zatrzymać następnego.
+    /// `seconds == nil` = gra do pauzy (menu Meeting).
+    func started(index: Int?, seconds: Double?) {
+        stopTask?.cancel()
+        playing = index
+        guard let seconds else { stopTask = nil; return }
+        stopTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled else { return }
+            self.player?.pause()
+            self.playing = nil
+        }
+    }
+
+    func stop() {
+        stopTask?.cancel()
+        stopTask = nil
+        player?.pause()
+        playing = nil
+    }
 }
 
 /// Widok spotkania (spec 1.5 §5.2): tytuł, chipy i zakładki My notes / Transcript / Summary.
@@ -56,7 +80,7 @@ struct MeetingDetailView: View {
                 } else {
                     switch state.tab ?? defaultTab {
                     case .myNotes: MyNotesTab(state: state, item: item)
-                    case .transcript: TranscriptTab(state: state, item: item) { play($0) }
+                    case .transcript: TranscriptTab(state: state, item: item, playing: playback.playing) { play($0, $1) }
                     case .summary: SummaryTab(state: state, item: item)
                     }
                 }
@@ -69,13 +93,13 @@ struct MeetingDetailView: View {
         }
         .background(Color.mnCard)
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
-        .focusedSceneValue(\.playRecording, isRecording ? nil : { togglePlayback() })
-        .navigationTitle(item.title)
+        .focusedSceneValue(\.playRecording, isRecording || item.audioDeletedAfterDays != nil ? nil : { togglePlayback() })
+        .navigationTitle(item.displayTitle)
         .onAppear {
             if isRecording, state.tab == nil { state.tab = .myNotes }
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
         }
-        .confirmationDialog("Move “\(item.title)” to the Trash?", isPresented: Binding(
+        .confirmationDialog("Move “\(item.displayTitle)” to the Trash?", isPresented: Binding(
             get: { model.pendingDelete == item.id }, set: { if !$0 { model.pendingDelete = nil } }), titleVisibility: .visible) {
             Button("Move to Trash", role: .destructive) { model.deleteSession(item.id) }
             Button("Cancel", role: .cancel) {}
@@ -157,10 +181,10 @@ struct MeetingDetailView: View {
                 MetaLine([
                     item.startedAt.formatted(date: .abbreviated, time: .shortened),
                     item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) } ?? "",
-                    model.presetFor(sessionURL: item.url).map { "Preset \($0.name)" } ?? "",
-                    item.audioDeletedAfterDays.map { "Audio deleted after \($0) days" } ?? "",
+                    model.presetFor(sessionURL: item.url).map { String(localized: "Preset \($0.name)") } ?? "",
+                    item.audioDeletedAfterDays.map { String(format: NSLocalizedString("Audio deleted after %lld days", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64($0)) } ?? "",
                 ])
-                if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
+                if model.notes.isTitling(item.id) { StateLabel(.progress(nil), String(localized: "Naming the meeting…")) }
                 ForEach(item.trackProblems, id: \.trackID) { problemButton($0) }
             }
             HStack(spacing: 12) {
@@ -169,7 +193,7 @@ struct MeetingDetailView: View {
                 EventAttendeesLine(link: item.notes.meta.calendarEvent)
             }
             // R3: na czas przenoszenia folderu nagrań spotkanie jest tylko do odczytu.
-            if model.recordingsMove != nil { StateLabel(.progress(nil), "Moving recordings…") }
+            if model.recordingsMove != nil { StateLabel(.progress(nil), String(localized: "Moving recordings…")) }
             if !item.notes.problems.isEmpty {
                 Label("\(item.notes.problems.joined(separator: ", ")) in this meeting's notes couldn't be read. They're kept aside before anything new is saved.",
                       systemImage: "exclamationmark.triangle")
@@ -207,33 +231,52 @@ struct MeetingDetailView: View {
 
     /// Odsłuch nagrania (ścieżka systemowa) od bieżącego miejsca albo pauza.
     private func togglePlayback() {
-        if playback.player?.isPlaying == true { playback.player?.pause() } else if playback.player != nil || load("system") { playback.player?.play() }
+        if playback.player?.isPlaying == true {
+            playback.stop()
+        } else if playback.player != nil || load("system"), playback.player?.play() == true {
+            playback.started(index: nil, seconds: nil)
+        }
     }
 
     /// ChatGPT #8: „Me" nie ma w pliku odsłuchu (to tap systemowy) — gramy tor mikrofonu,
-    /// przeliczając czas sesji na czas tej ścieżki.
-    private func play(_ u: Utterance) {
+    /// przeliczając czas sesji na czas tej ścieżki. TASK-109: gra tylko ten segment; klik grającego = pauza.
+    private func play(_ index: Int, _ u: Utterance) {
+        if playback.playing == index, playback.player?.isPlaying == true { playback.stop(); return }
         let aecOK = item.summary?.tracks.first { $0.id == "mic_aec" }.map { $0.failure == nil && $0.channels > 0 } ?? false
         let track = u.speaker == .them ? "system" : (aecOK ? "mic_aec" : "mic_raw")
         let offset = item.summary?.tracks.first { $0.id == track }?.offsetSeconds ?? 0
-        guard playback.track == track || load(track) else { return }
-        playback.player?.currentTime = max(0, u.start - offset)
-        playback.player?.play()
+        guard playback.track == track || load(track), let player = playback.player else { return }
+        let window = Self.segmentWindow(start: u.start, end: u.end, offset: offset, fileDuration: player.duration)
+        guard window.to > window.from else { return }
+        player.currentTime = window.from
+        guard player.play() else { return }
+        playback.started(index: index, seconds: window.to - window.from)
+    }
+
+    /// Okno segmentu na osi pliku toru: oba końce przesunięte o offset toru, przycięte do [0, długość pliku];
+    /// 0,5 s tylko dla segmentu bez długości (`end <= start`).
+    /// shortcut: stały offset toru, bez dryfu kotwic zegara z `Merger`; poprawić, jeśli koniec segmentu słyszalnie się rozjedzie.
+    static func segmentWindow(start: Double, end: Double, offset: Double, fileDuration: Double) -> (from: Double, to: Double) {
+        let from = min(max(0, start - offset), fileDuration)
+        let to = max(from, min((end > start ? end : start + 0.5) - offset, fileDuration)) // segment cały przed startem toru = puste okno
+        return (from, to)
     }
 
     /// Nieudane wczytanie nie zostaje zapamiętane jako wczytana ścieżka (check S15 #4).
+    /// Audio usunięte przez retencję to stan („Recording deleted” w wierszu), nie błąd.
     private func load(_ track: String) -> Bool {
-        if let n = item.audioDeletedAfterDays { model.lastError = "This meeting's audio was deleted after \(n) days."; return false }
+        guard item.audioDeletedAfterDays == nil else { return false }
         do {
             playback.player = try AVAudioPlayer(contentsOf: item.url.appendingPathComponent("\(track).caf"))
             playback.track = track
             return true
         } catch {
+            playback.stop()
             playback.player = nil
             playback.track = nil
             let ns = error as NSError
             let why = ns.domain == NSOSStatusErrorDomain ? OSStatusText.describe(ns.code) : error.localizedDescription
-            model.lastError = "Couldn't open the \(track) recording: \(why)"
+            model.lastError = String(localized: "Couldn't open the \(track) recording: \(why)")
             return false
         }
     }
@@ -262,14 +305,27 @@ struct PlayRecordingButton: View {
 
 /// Wiersz transkryptu (b-transcript.png): czas (cyfry stałej szerokości, klik = odtwarzanie), mówca, tekst;
 /// echo, obcy język i przybliżony czas jako linie stanu pod tekstem.
+/// TASK-109: na hover ▶/⏸ (gra ten segment) i ołówek (ręczna poprawka tekstu w edytorze pod spodem).
 struct UtteranceRow: View {
     let utterance: Utterance
     let isAuto: Bool
     var item: SessionItem? = nil
     var speakerNumber: Int? = nil
+    var isPlaying = false
+    var isEdited = false
+    /// Szkic poprawki, gdy ten wiersz jest edytowany.
+    var draft: Binding<String>? = nil
+    /// `nil` = edycja niedostępna (brak przebiegu, przenoszenie nagrań).
+    var onStartEdit: (() -> Void)? = nil
+    var onSave: (() -> Void)? = nil
+    var onCancel: () -> Void = {}
     let onJump: () -> Void
     @Environment(AppModel.self) private var model
-    @StateObject private var picker = SpeakerPickerPresentation()
+    @StateObject private var picker = RowPresentation()
+    @FocusState private var editorFocused: Bool
+
+    /// Audio usunięte przez retencję: odtwarzanie wyłączone z wyjaśnieniem zamiast błędu.
+    private var deletedHelp: String? { item?.audioDeletedAfterDays.map { "Recording deleted after \($0) days" } }
 
     static func speakerNumbers(_ transcript: Transcript) -> [String: Int] { SpeakerLabels.numbers(for: transcript) }
 
@@ -284,17 +340,25 @@ struct UtteranceRow: View {
         utterance.speaker == .me ? .mnAccent : speakerNumber.map(Self.color(number:)) ?? .mnText
     }
 
+    private var displaySpeakerName: String {
+        if utterance.speaker == .me { return String(localized: "Me") }
+        if let key = utterance.speakerKey, let name = item?.speakers?.names?[key] { return name }
+        if let number = speakerNumber { return String(localized: "Speaker \(number)") }
+        return String(localized: "Them")
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Button(MeetingDetailView.time(utterance.start), action: onJump)
                 .buttonStyle(.plain)
                 .font(.system(size: 13)).monospacedDigit().foregroundStyle(.mnText2)
                 .frame(width: 72, alignment: .leading)
-                .help("Play from here")
-                .accessibilityLabel("Play from \(MeetingDetailView.time(utterance.start))")
+                .disabled(deletedHelp != nil)
+                .help(deletedHelp ?? String(localized: "Play segment"))
+                .accessibilityLabel("Play segment from \(MeetingDetailView.time(utterance.start))")
             Group {
                 if utterance.speaker == .them, let key = utterance.speakerKey, let item, let number = speakerNumber {
-                    Button(utterance.speakerName) { picker.isPresented = true }
+                    Button(displaySpeakerName) { picker.isPresented = true }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Speaker \(number), rename")
                         .popover(isPresented: $picker.isPresented) {
@@ -306,33 +370,92 @@ struct UtteranceRow: View {
                             }
                         }
                 } else {
-                    Text(utterance.speakerName)
+                    Text(displaySpeakerName)
                 }
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(speakerColor)
             .frame(width: 90, alignment: .leading)
             VStack(alignment: .leading, spacing: 6) {
-                Text(utterance.text).font(.system(size: 13)).lineSpacing(4)
-                    .foregroundStyle(utterance.excludedFromNotes ? Color.mnText2 : Color.mnText)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let draft {
+                    editor(draft)
+                } else {
+                    Text(utterance.text).font(.system(size: 13)).lineSpacing(4)
+                        .foregroundStyle(utterance.excludedFromNotes ? Color.mnText2 : Color.mnText)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if let lang = utterance.languageMismatch {
                     // P11: widoczne, nie ukryte — i wyłączone z notatek.
-                    WarnLabel(isAuto ? "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes"
-                                     : "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes")
+                    WarnLabel(isAuto ? String(localized: "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes")
+                                     : String(localized: "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes"))
                 }
                 if utterance.echoOfThem == true {
-                    StateLabel(.neutral, "Echo of the other side — excluded from notes")
+                    StateLabel(.neutral, String(localized: "Echo of the other side — excluded from notes"))
                 }
                 if utterance.approximateTiming {
-                    StateLabel(.neutral, "Approximate timing")
+                    StateLabel(.neutral, String(localized: "Approximate timing"))
+                }
+                if isEdited, draft == nil {
+                    StateLabel(.neutral, String(localized: "Edited"))
                 }
             }
+            actions
         }
         .padding(.vertical, 11)
+        .contentShape(Rectangle())
+        .onHover { picker.hovering = $0 }
+        // Ikony są tylko na hover — VoiceOver i klawiatura dostają te same akcje nazwane na wierszu.
+        .accessibilityAction(named: isPlaying ? "Pause" : "Play segment") { if deletedHelp == nil { onJump() } }
+        .accessibilityActions { if let onStartEdit { Button("Edit transcript", action: onStartEdit) } }
+    }
+
+    /// Stała szerokość: pojawienie się ikon na hover nie przesuwa tekstu.
+    private var actions: some View {
+        HStack(spacing: 10) {
+            Button(action: onJump) { Image(systemName: isPlaying ? "pause.fill" : "play.fill") }
+                .disabled(deletedHelp != nil)
+                .help(deletedHelp ?? (isPlaying ? String(localized: "Pause") : String(localized: "Play segment")))
+                .accessibilityLabel(isPlaying ? "Pause" : "Play segment")
+            if let onStartEdit, draft == nil {
+                Button(action: onStartEdit) { Image(systemName: "pencil") }
+                    .help("Edit transcript")
+                    .accessibilityLabel("Edit transcript")
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 12)).foregroundStyle(.mnText2)
+        .frame(width: 44, alignment: .trailing)
+        .opacity(picker.hovering || isPlaying ? 1 : 0)
+        .allowsHitTesting(picker.hovering || isPlaying)
+    }
+
+    /// Esc = Cancel, ⌘↩ = Save; zwykły Return to nowa linia. Jeden edytor naraz (`MeetingViewState.segmentDraft`).
+    private func editor(_ text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextEditor(text: text)
+                .font(.system(size: 13)).lineSpacing(4)
+                .scrollContentBackground(.hidden)
+                .focused($editorFocused)
+                .padding(.horizontal, 4).padding(.vertical, 6)
+                .frame(minHeight: 64)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.mnCard))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.mnLine2, lineWidth: 1))
+                .accessibilityLabel("Segment text")
+                .onAppear { editorFocused = true }
+            HStack(spacing: 8) {
+                Button("Cancel", action: onCancel).buttonStyle(.pillSmall).keyboardShortcut(.cancelAction)
+                Button("Save") { onSave?() }.buttonStyle(.pillSmallPrimary)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(onSave == nil || text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Text("⌘↩ saves").font(.callout).foregroundStyle(.mnText2)
+            }
+        }
     }
 }
 
-private final class SpeakerPickerPresentation: ObservableObject { @Published var isPresented = false }
+private final class RowPresentation: ObservableObject {
+    @Published var isPresented = false
+    @Published var hovering = false
+}

@@ -12,7 +12,7 @@ struct RecordingsSection: View {
     private static let options = [7, 14, 30, 90, 0]
 
     var body: some View {
-        SectionHeader("Recordings") {
+        SectionHeader(String(localized: "Recordings")) {
             if let size = model.recordingsSize {
                 Text("\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) on disk")
                     .font(.system(size: 12)).foregroundStyle(.mnText2)
@@ -20,7 +20,7 @@ struct RecordingsSection: View {
         }
         .task { model.refreshRecordingsSize() }
         Card {
-            FormRow(label: "Location", caption: locationCaption.text, isError: locationCaption.isError) {
+            FormRow(label: String(localized: "Location"), caption: locationCaption.text, isError: locationCaption.isError) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(Self.abbreviated(model.sessionsDirectory.path))
@@ -30,21 +30,21 @@ struct RecordingsSection: View {
                         Button("Change…") { chooseFolder() }
                             .buttonStyle(.pillSmall)
                             .disabled(model.recordingsMoveBlocked != nil)
-                            .help(model.recordingsMoveBlocked ?? "Move all meetings to another folder")
+                            .help(model.recordingsMoveBlocked ?? String(localized: "Move all meetings to another folder"))
                         Button("Show in Finder") { showInFinder() }.buttonStyle(.pillSmall)
                     }
                     if let p = model.recordingsMove {
                         StateLabel(.progress(p.fraction), Self.progressText(p))
                     } else if let r = model.recordingsMoveResult {
                         // Pełny powód jest w podpisie (StateLabel ma jedną linię).
-                        StateLabel(r.moved ? .ok : .bad, r.moved ? "Meetings moved" : "Not moved")
+                        StateLabel(r.moved ? .ok : .bad, r.moved ? String(localized: "Meetings moved") : String(localized: "Not moved"))
                     }
                 }
             }
             RowDivider()
-            FormRow(label: "Keep audio",
-                    caption: "Only audio is deleted. Transcripts, notes and My notes stay. Audio is kept until its transcription has finished.") {
-                FieldMenu(label: "Keep audio", value: Self.label(model.settings.audioRetentionDays ?? 0), width: 140) {
+            FormRow(label: String(localized: "Keep audio"),
+                    caption: String(localized: "Only audio is deleted. Transcripts, notes and My notes stay. Audio is kept until its transcription has finished.")) {
+                FieldMenu(label: String(localized: "Keep audio"), value: Self.label(model.settings.audioRetentionDays ?? 0), width: 140) {
                     Picker("Keep audio", selection: Binding(
                         get: { model.settings.audioRetentionDays ?? 0 },
                         set: { model.requestKeepAudio(days: $0 == 0 ? nil : $0) })) {
@@ -71,7 +71,7 @@ struct RecordingsSection: View {
     private var keepAudioQuestion: String {
         guard let p = model.pendingKeepAudio else { return "" }
         let size = ByteCountFormatter.string(fromByteCount: p.bytes, countStyle: .file)
-        return "Delete \(size) of audio from \(p.meetings) \(p.meetings == 1 ? "meeting" : "meetings") older than \(p.days) days?"
+        return String(format: NSLocalizedString("Delete %@ of audio from %@ older than %@?", comment: ""), size, String(format: NSLocalizedString("%lld meetings (from)", value: "%lld meetings", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(p.meetings)), String(format: NSLocalizedString("%lld days (elapsed)", value: "%lld days", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(p.days)))
     }
 
     /// Błąd przenoszenia (czerwony) albo, gdy zmiana jest zablokowana, powód (`text2`).
@@ -81,13 +81,13 @@ struct RecordingsSection: View {
         return (nil, false)
     }
 
-    private static func label(_ days: Int) -> String { days == 0 ? "Forever" : "\(days) days" }
+    private static func label(_ days: Int) -> String { days == 0 ? String(localized: "Forever") : String(format: NSLocalizedString("%lld days", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(days)) }
 
     private static func progressText(_ p: RecordingsMove.Progress) -> String {
         switch p.phase {
-        case .copying: "Copying \(min(p.done + 1, p.total)) of \(p.total)…"
-        case .verifying: "Checking the copy…"
-        case .removing: "Removing from the old folder…"
+        case .copying: String(localized: "Copying \(min(p.done + 1, p.total)) of \(p.total)…")
+        case .verifying: String(localized: "Checking the copy…")
+        case .removing: String(localized: "Removing from the old folder…")
         }
     }
 
@@ -99,8 +99,8 @@ struct RecordingsSection: View {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Move Here"
-        panel.message = "Choose an empty folder. All meetings will be copied there, checked, and only then removed from the current folder."
+        panel.prompt = String(localized: "Move Here")
+        panel.message = String(localized: "Choose an empty folder. All meetings will be copied there, checked, and only then removed from the current folder.")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         model.changeRecordingsLocation(to: url)
     }

@@ -28,7 +28,7 @@ struct DictationView: View {
         ScrollPage(640) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
-                    PageTitle("Dictation")
+                    PageTitle(String(localized: "Dictation"))
                     Spacer()
                     if !dictation.history.entries.isEmpty {
                         Button("Clear all…") { ui.confirmingClear = true }.buttonStyle(.pill)
@@ -63,7 +63,11 @@ struct DictationView: View {
         let hotkey = settings.hotkeyOrDefault
         return VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("Shortcut: \(HotkeyCapture.label(hotkey)) · \(settings.triggerModeOrDefault == .hold ? "hold to talk" : "press to toggle").")
+                if settings.triggerModeOrDefault == .hold {
+                    Text("Shortcut: \(HotkeyCapture.label(hotkey)) · hold to talk.")
+                } else {
+                    Text("Shortcut: \(HotkeyCapture.label(hotkey)) · press to toggle.")
+                }
                 Button("Change in Settings") { model.scrollToDictationSettings = true; model.section = .settings }.buttonStyle(.plain).foregroundStyle(.mnAccent)
             }
             if hotkey == .fn { Text(DictationPresentation.fnHint) }
@@ -76,23 +80,23 @@ struct DictationView: View {
         let p = dictation.permissions
         VStack(alignment: .leading, spacing: 8) {
             if !p.inputMonitoring {
-                Banner(text: "Dictation needs Input Monitoring to hear its shortcut.") {
+                Banner(text: String(localized: "Dictation needs Input Monitoring to hear its shortcut.")) {
                     Button("Allow Input Monitoring") { dictation.requestInputMonitoring(); dictation.applySettings() }.buttonStyle(.pillSmall)
                     Button("Open System Settings") { open(Self.inputMonitoringPane) }.buttonStyle(.pillSmall)
                 }
             } else if !dictation.monitorRunning {
-                Banner(text: "The shortcut isn't listening. Another app may be blocking it.") {
+                Banner(text: String(localized: "The shortcut isn't listening. Another app may be blocking it.")) {
                     Button("Try Again") { dictation.applySettings() }.buttonStyle(.pillSmall)
                 }
             }
             if !p.accessibility {
-                Banner(text: "Without Accessibility access, dictated text is only copied to the clipboard.") {
+                Banner(text: String(localized: "Without Accessibility access, dictated text is only copied to the clipboard.")) {
                     Button("Allow Accessibility") { dictation.requestAccessibility() }.buttonStyle(.pillSmall)
                     Button("Open System Settings") { open(Self.accessibilityPane) }.buttonStyle(.pillSmall)
                 }
             }
             if !p.microphone {
-                Banner(text: "Dictation needs microphone access.") {
+                Banner(text: String(localized: "Dictation needs microphone access.")) {
                     Button("Check Permissions…") { model.showSetup = true }.buttonStyle(.pillSmall)
                 }
             }
@@ -169,7 +173,7 @@ private struct DictationRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityHint(expanded ? "Collapse" : "Expand")
+            .accessibilityHint(Text(expanded ? String(localized: "Collapse") : String(localized: "Expand")))
             DictationRowMenu {
                 Button("Copy") { model.dictation.copy(entry) }
                 if DictationPresentation.hasDistinctOriginal(entry) {

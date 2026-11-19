@@ -65,18 +65,18 @@ private func archiveSpeakers(names: [String: String]? = ["voice": "Anna"]) -> Sp
                                         model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
     let speakers = archiveSpeakers()
     let rules = ReplacementRules(UserDictionary())
-    let shown = MeetingArchive.displayTranscript(raw: raw, corrected: corrected, useCorrected: true,
+    let shown = MeetingArchive.displayTranscript(raw: raw, corrected: corrected, edits: nil, useCorrected: true,
                                                 rules: rules, speakers: speakers)
     #expect(shown?.utterances.map(\.text) == ["corrected words"])
     #expect(shown?.utterances.first?.speakerName == "Anna")
-    let original = MeetingArchive.displayTranscript(raw: raw, corrected: corrected, useCorrected: false,
+    let original = MeetingArchive.displayTranscript(raw: raw, corrected: corrected, edits: nil, useCorrected: false,
                                                    rules: rules, speakers: nil)
     #expect(original?.utterances.map(\.text) == ["raw words"])
     #expect(original?.utterances.first?.speakerName == "Them")
     // Brak poprawionego przy `useCorrected` = surowy, jak w UI.
-    #expect(MeetingArchive.displayTranscript(raw: raw, corrected: nil, useCorrected: true, rules: rules, speakers: nil)?
+    #expect(MeetingArchive.displayTranscript(raw: raw, corrected: nil, edits: nil, useCorrected: true, rules: rules, speakers: nil)?
         .utterances.map(\.text) == ["raw words"])
-    #expect(MeetingArchive.displayTranscript(raw: nil, corrected: nil, useCorrected: true, rules: rules, speakers: nil) == nil)
+    #expect(MeetingArchive.displayTranscript(raw: nil, corrected: nil, edits: nil, useCorrected: true, rules: rules, speakers: nil) == nil)
 }
 
 @Test func archiveSpeakerMarkersResolveOnlyWithTheSameDetection() {
@@ -93,4 +93,16 @@ private func archiveSpeakers(names: [String: String]? = ["voice": "Anna"]) -> Sp
     let stale = MeetingArchive.speakerMarkers(summary: summary, speakers: speakers,
                                               rawTranscript: transcript([utt("cześć", .them, at: 0)]))
     #expect(stale.resolved(summary.markdown) == "Speaker 1 mówi")
+}
+
+@Test func archiveSourceAppliesManualEditsInBothVersionsOnlyWhenIndicesMatch() {
+    let raw = transcript([utt("surowy", .them, at: 1), utt("drugi", .me, at: 5)])
+    let corrected = CorrectedTranscript(transcript: transcript([utt("poprawiony", .them, at: 1), utt("drugi", .me, at: 5)]),
+                                        model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
+    let edits = TranscriptEdits(edits: [.init(index: 0, speaker: .them, start: 1, text: "ręcznie")])
+    #expect(MeetingArchive.source(raw: raw, corrected: corrected, edits: edits, useCorrected: true)?.utterances[0].text == "ręcznie")
+    #expect(MeetingArchive.source(raw: raw, corrected: corrected, edits: edits, useCorrected: false)?.utterances[0].text == "ręcznie")
+    // Korekta z inną liczbą wypowiedzi: indeksy nie pasują, poprawka pominięta.
+    let shorter = CorrectedTranscript(transcript: transcript([utt("poprawiony", .them, at: 1)]), model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
+    #expect(MeetingArchive.source(raw: raw, corrected: shorter, edits: edits, useCorrected: true)?.utterances[0].text == "poprawiony")
 }

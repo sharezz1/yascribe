@@ -11,7 +11,7 @@ extension AppModel {
         if await calendarSource.requestAccess() {
             updateMeetings { $0.appleCalendarEnabled = true }
         } else {
-            lastError = "Allow calendar access in System Settings → Privacy & Security → Calendars."
+            lastError = String(localized: "Allow calendar access in System Settings → Privacy & Security → Calendars.")
         }
     }
 
@@ -21,7 +21,7 @@ extension AppModel {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
             updateMeetings { $0.launchAtLogin = on }
         } catch {
-            lastError = "Couldn't \(on ? "enable" : "disable") launch at login: \(error.localizedDescription)"
+            lastError = on ? String(localized: "Couldn't enable launch at login: \(error.localizedDescription)") : String(localized: "Couldn't disable launch at login: \(error.localizedDescription)")
         }
     }
 
@@ -72,7 +72,7 @@ struct MeetingSettingsSections: View {
     private static let defaults = MeetingTuning()
 
     var body: some View {
-        SectionHeader("Integrations")
+        SectionHeader(String(localized: "Integrations"))
         Card {
             appleCalendar
             ForEach(["Google Calendar", "Outlook", "Slack"], id: \.self) { name in
@@ -86,24 +86,24 @@ struct MeetingSettingsSections: View {
                 .disabled(true).opacity(0.55)
             }
         }
-        SectionHeader("Meeting detection")
+        SectionHeader(String(localized: "Meeting detection"))
         Card {
-            FormRow(label: "Detect calls") { toggle("Detect calls", Binding(get: { m.detectCallsOrDefault }, set: { v in model.updateMeetings { $0.detectCalls = v } })) }
+            FormRow(label: String(localized: "Detect calls")) { toggle("Detect calls", Binding(get: { m.detectCallsOrDefault }, set: { v in model.updateMeetings { $0.detectCalls = v } })) }
             RowDivider()
-            FormRow(label: "Start recording automatically", caption: "Starts only for calls in Teams, never for a calendar event alone.") {
+            FormRow(label: String(localized: "Start recording automatically"), caption: String(localized: "Starts only for calls in Teams, never for a calendar event alone.")) {
                 toggle("Start recording automatically", Binding(get: { m.autoStartOrDefault }, set: { v in model.updateMeetings { $0.autoStart = v } }))
             }
             RowDivider()
-            FormRow(label: "Launch at login", caption: "Without it, detection starts when you open Yascribe.") {
+            FormRow(label: String(localized: "Launch at login"), caption: String(localized: "Without it, detection starts when you open Yascribe.")) {
                 toggle("Launch at login", Binding(get: { m.launchAtLoginOrDefault }, set: { model.setLaunchAtLogin($0) }))
             }
             RowDivider()
             DisclosureGroup("Advanced", isExpanded: $state.advancedOpen) {
                 VStack(spacing: 0) {
-                    advancedRow("Start after", unit: "s", placeholder: Self.defaults.startSeconds, text: $state.startText) { v in model.updateMeetings { $0.startSeconds = v } }
-                    advancedRow("Release after", unit: "s", placeholder: Self.defaults.releaseSeconds, text: $state.releaseText) { v in model.updateMeetings { $0.releaseSeconds = v } }
-                    advancedRow("Silence after", unit: "s", placeholder: Self.defaults.silenceSeconds, text: $state.silenceText) { v in model.updateMeetings { $0.silenceSeconds = v } }
-                    FormRow(label: "Ignored apps", caption: "Bundle IDs, comma-separated. Empty uses the defaults.") {
+                    advancedRow(String(localized: "Start after"), unit: "s", placeholder: Self.defaults.startSeconds, text: $state.startText) { v in model.updateMeetings { $0.startSeconds = v } }
+                    advancedRow(String(localized: "Release after"), unit: "s", placeholder: Self.defaults.releaseSeconds, text: $state.releaseText) { v in model.updateMeetings { $0.releaseSeconds = v } }
+                    advancedRow(String(localized: "Silence after"), unit: "s", placeholder: Self.defaults.silenceSeconds, text: $state.silenceText) { v in model.updateMeetings { $0.silenceSeconds = v } }
+                    FormRow(label: String(localized: "Ignored apps"), caption: String(localized: "Bundle IDs, comma-separated. Empty uses the defaults.")) {
                         TextField(Self.defaults.ignoredApps.joined(separator: ", "), text: $state.ignoredText)
                             .textFieldStyle(.roundedBorder)
                             .onChange(of: state.ignoredText) {
@@ -127,15 +127,15 @@ struct MeetingSettingsSections: View {
 
     private var calendarStatus: StateLabel {
         switch state.authorization {
-        case .granted where m.appleCalendarOrDefault: StateLabel(.ok, "Connected")
-        case .denied: StateLabel(.bad, "Access denied")
-        default: StateLabel(.neutral, "Not connected")
+        case .granted where m.appleCalendarOrDefault: StateLabel(.ok, String(localized: "Connected"))
+        case .denied: StateLabel(.bad, String(localized: "Access denied"))
+        default: StateLabel(.neutral, String(localized: "Not connected"))
         }
     }
 
     @ViewBuilder private var appleCalendar: some View {
-        FormRow(label: "Apple Calendar",
-                caption: state.authorization == .denied ? "Allow access in System Settings → Privacy & Security → Calendars." : nil,
+        FormRow(label: String(localized: "Apple Calendar"),
+                caption: state.authorization == .denied ? String(localized: "Allow access in System Settings → Privacy & Security → Calendars.") : nil,
                 isError: state.authorization == .denied) {
             HStack(spacing: 10) {
                 toggle("Connect Apple Calendar", Binding(
@@ -152,7 +152,7 @@ struct MeetingSettingsSections: View {
         }
         if m.appleCalendarOrDefault, state.authorization == .granted {
             RowDivider()
-            FormRow(label: "Calendars", caption: model.monitor.state == .calendarSelectionStale ? "Selected calendars not found — re-select below." : nil) {
+            FormRow(label: String(localized: "Calendars"), caption: model.monitor.state == .calendarSelectionStale ? String(localized: "Selected calendars not found — re-select below.") : nil) {
                 VStack(alignment: .leading, spacing: 6) {
                     if state.calendars.isEmpty { Text("No calendars found").foregroundStyle(.mnText2) }
                     ForEach(state.calendars) { c in
@@ -175,7 +175,7 @@ struct MeetingSettingsSections: View {
 
     // MARK: Pomocnicze
 
-    private func toggle(_ title: String, _ isOn: Binding<Bool>) -> some View {
+    private func toggle(_ title: LocalizedStringKey, _ isOn: Binding<Bool>) -> some View {
         Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch)
     }
 

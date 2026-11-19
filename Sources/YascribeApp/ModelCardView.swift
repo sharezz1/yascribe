@@ -162,7 +162,7 @@ struct UnknownOnDeviceModelRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            WarnLabel("Unknown on-device model — uses Parakeet TDT v3")
+            WarnLabel(String(localized: "Unknown on-device model — uses Parakeet TDT v3"))
             Spacer(minLength: 0)
             Button("Choose Parakeet TDT v3", action: selectV3).buttonStyle(.pillSmall)
         }

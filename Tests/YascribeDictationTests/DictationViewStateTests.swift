@@ -14,10 +14,11 @@ private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
 
 @Test func groupingLabelsTodayAndYesterday() {
     let now = date(2026, 11, 3, 9)
-    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: now), now: now, calendar: calendar) == "Today")
-    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: date(2026, 11, 2)), now: now, calendar: calendar) == "Yesterday")
-    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: date(2026, 10, 26)), now: now, calendar: calendar) == "Monday, Oct 26")
-    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: date(2025, 12, 31)), now: now, calendar: calendar) == "Wednesday, Dec 31, 2025")
+    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: now), now: now, calendar: calendar, locale: Locale(identifier: "en_US")) == "Today")
+    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: date(2026, 11, 2)), now: now, calendar: calendar, locale: Locale(identifier: "en_US")) == "Yesterday")
+    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: date(2026, 10, 26)), now: now, calendar: calendar, locale: Locale(identifier: "en_US")) == "Monday, Oct 26")
+    #expect(DictationDayLabel.text(for: calendar.startOfDay(for: date(2025, 12, 31)), now: now, calendar: calendar, locale: Locale(identifier: "en_US")) == "Wednesday, Dec 31, 2025")
+    #expect(DictationDayLabel.text(for: date(2026, 10, 26), now: now, calendar: calendar, locale: Locale(identifier: "pl_PL")) == "poniedziałek, 26 paź")
 }
 
 @Test func rowNotes() {

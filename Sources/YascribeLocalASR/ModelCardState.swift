@@ -49,7 +49,7 @@ public struct ModelCardState: Equatable, Sendable {
         name = variant.displayName
         folder = variant.manifest.model
         size = Self.sizeText(variant.manifest.totalBytes)
-        meta = "Multilingual · \(size)"
+        meta = String(localized: "Multilingual · \(size)")
         note = nil
         primary = nil
         primaryLabel = nil
@@ -57,42 +57,42 @@ public struct ModelCardState: Equatable, Sendable {
         switch activity {
         case .downloading(let p):
             tone = .progress(p)
-            title = p.map { "Downloading \(Int(($0 * 100).rounded()))%" } ?? "Downloading…"
-            description = "Downloading \(size). The app stays usable meanwhile."
+            title = p.map { String(localized: "Downloading \(Int(($0 * 100).rounded()))%") } ?? String(localized: "Downloading…")
+            description = String(localized: "Downloading \(size). The app stays usable meanwhile.")
         case .preparing:
             tone = .progress(nil)
-            title = "Preparing…"
-            description = "Preparing model… the first run on this Mac can take up to a minute."
+            title = String(localized: "Preparing…")
+            description = String(localized: "Preparing model… the first run on this Mac can take up to a minute.")
         case .idle:
             switch status {
             case .missing:
                 tone = .neutral
-                title = "Not downloaded"
-                description = "Transcribes speech on this Mac, with no network. Nothing is downloaded until you click Download."
+                title = String(localized: "Not downloaded")
+                description = String(localized: "Transcribes speech on this Mac, with no network. Nothing is downloaded until you click Download.")
                 if variant == .parakeetV3 {
-                    note = "Copies saved by older FluidAudio versions (\(Self.legacyFolder)) can't be used and are left untouched."
+                    note = String(localized: "Copies saved by older FluidAudio versions (\(Self.legacyFolder)) can't be used and are left untouched.")
                 }
                 primary = .download
-                primaryLabel = "Download (\(size))"
-                roleWarning = "Model not downloaded"
+                primaryLabel = String(localized: "Download (\(size))")
+                roleWarning = String(localized: "Model not downloaded")
             case .ready:
                 tone = .ready
-                title = "Ready"
-                description = "Transcription runs on this Mac and needs no network."
+                title = String(localized: "Ready")
+                description = String(localized: "Transcription runs on this Mac and needs no network.")
                 primary = .remove
-                primaryLabel = "Remove…"
+                primaryLabel = String(localized: "Remove…")
             case .invalid(let reason):
                 tone = .warning
-                title = "Needs repair"
-                description = "The model files failed their check: \(reason)."
+                title = String(localized: "Needs repair")
+                description = String(localized: "The model files failed their check: \(ModelStatus.displayReason(reason)).")
                 primary = .downloadAgain
-                primaryLabel = "Download again"
-                roleWarning = "Model files failed the check"
+                primaryLabel = String(localized: "Download again")
+                roleWarning = String(localized: "Model files failed the check")
             case .unknownVariant(let reason):
                 tone = .warning
-                title = "Different variant"
-                description = "Another app stored a different variant of this model: \(reason). Yascribe leaves it untouched."
-                roleWarning = "Different model variant found"
+                title = String(localized: "Different variant")
+                description = String(localized: "Another app stored a different variant of this model: \(ModelStatus.displayReason(reason)). Yascribe leaves it untouched.")
+                roleWarning = String(localized: "Different model variant found")
             }
         }
     }

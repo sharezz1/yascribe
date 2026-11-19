@@ -10,6 +10,10 @@ import YascribeTranscription
 @MainActor
 @Observable
 final class ArchiveModel {
+    private let presentationBundle: Bundle
+
+    init(presentationBundle: Bundle = .main) { self.presentationBundle = presentationBundle }
+
     enum AskScope: Equatable { case list, all, meeting }
     enum TurnState: Equatable {
         case working(String), answered(ArchiveAsk.Answer), noAnswer(String), failed(String, opensSettings: Bool), cancelled
@@ -85,6 +89,8 @@ final class ArchiveModel {
     @ObservationIgnored private var index = ArchiveIndex(space: "")
     @ObservationIgnored private var indexLoaded = false
     private var operation: (token: UUID, turn: UUID, task: Task<Void, Never>)?
+    /// Trwa pytanie lub indeksowanie — restart języka czeka.
+    var isWorking: Bool { operation != nil }
     @ObservationIgnored private var awaitingConsent: Run?
     @ObservationIgnored private var writes: Task<Void, Never> = Task {}
     private var previewBusy = false
@@ -125,8 +131,13 @@ final class ArchiveModel {
     var draftScopeLabel: String { scopeLabel(for: captureScope?()) }
 
     private func scopeLabel(for ref: ArchiveScopeRef?) -> String {
-        guard let ref, let resolveSavedScope else { return resolveScope(scope)?.label ?? "This meeting" }
-        return resolveSavedScope(ref)?.label ?? "Scope no longer available"
+        guard let ref, let resolveSavedScope else { return resolveScope(scope)?.label ?? String(localized: "This meeting", bundle: presentationBundle) }
+        guard let label = resolveSavedScope(ref)?.label else { return String(localized: "Scope no longer available", bundle: presentationBundle) }
+        return ArchivePresentation.scope(label, ref: ref, bundle: presentationBundle)
+    }
+
+    func displayedMessage(_ message: String, for turn: Turn) -> String {
+        ArchivePresentation.message(message, scopeLabel: turn.scopeLabel, scope: currentScope, bundle: presentationBundle)
     }
 
     private static let scopeGoneMessage = "This chat's folder or meeting no longer exists. Start a new chat."
@@ -142,12 +153,12 @@ final class ArchiveModel {
     func ask(_ question: String) {
         let text = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        guard text.count <= ArchiveAsk.maxQuestionChars else { return report("Questions can be up to 1 000 characters.") }
-        guard turns.count < ArchiveConversation.maxTurns else { return report(Self.fullMessage) }
+        guard text.count <= ArchiveAsk.maxQuestionChars else { return report(String(localized: "Questions can be up to 1 000 characters.")) }
+        guard turns.count < ArchiveConversation.maxTurns else { return report(ArchivePresentation.message(Self.fullMessage)) }
         abort(.cancelled)
         let resolved = resolveForAsk()
         let turn = Turn(id: UUID(), question: text, scopeLabel: resolved?.label ?? "This meeting", scopeIDs: resolved?.ids ?? [],
-                        state: .working("Checking your settings…"))
+                        state: .working(String(localized: "Checking your settings…")))
         turns.append(turn)
         if currentChatTitle.isEmpty { currentChatTitle = ArchiveConversation.title(from: text) }
         saveChat()
@@ -191,7 +202,7 @@ final class ArchiveModel {
         guard let run = awaitingConsent else { return }
         awaitingConsent = nil
         consent = nil
-        setState(run.turnID, .working("Preparing the index…"))
+        setState(run.turnID, .working(String(localized: "Preparing the index…")))
         start(run, consented: true)
     }
 
@@ -223,7 +234,8 @@ final class ArchiveModel {
         let (chats, problems) = ArchiveConversationStore(directory: url).list()
         savedChats = chats
         persistenceError = problems == 0 ? nil
-            : "\(problems) saved chat\(problems == 1 ? " was" : "s were") unreadable and skipped. The other chats are not affected."
+            : (problems == 1 ? String(localized: "1 saved chat was unreadable and skipped. The other chats are not affected.")
+               : String(format: NSLocalizedString("%lld saved chats were unreadable and skipped. The other chats are not affected.", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(problems)))
     }
 
     /// Otwiera zapisaną rozmowę z jej zakresem i pozwala kontynuować. Trwająca operacja jest wcześniej unieważniona,
@@ -235,7 +247,7 @@ final class ArchiveModel {
         do {
             loaded = try ArchiveConversationStore(directory: url).load(id)
         } catch {
-            persistenceError = "Couldn't open this chat: \(error.localizedDescription)"
+            persistenceError = String.localizedStringWithFormat(NSLocalizedString("Couldn't open this chat: %@", comment: ""), ArchivePresentation.message(error.localizedDescription))
             report(persistenceError ?? "")
             return
         }
@@ -302,7 +314,7 @@ final class ArchiveModel {
             savedChats.removeAll { $0.id == summary.id }
             savedChats.insert(summary, at: 0)
         } catch {
-            persistenceError = "Couldn't save this chat: \(error.localizedDescription)"
+            persistenceError = String.localizedStringWithFormat(NSLocalizedString("Couldn't save this chat: %@", comment: ""), ArchivePresentation.message(error.localizedDescription))
             report(persistenceError ?? "")
         }
     }
@@ -342,6 +354,7 @@ final class ArchiveModel {
         abort(nil)
         resetChat(id: UUID())
         suppressSaves = true
+        chatScope = .all
         self.turns = turns
         self.consent = consent.map { (meetings: $0.0, provider: $0.1, model: $0.2) }
         previewBusy = consent == nil && turns.contains { if case .working = $0.state { true } else { false } }
@@ -384,7 +397,7 @@ final class ArchiveModel {
         if !toEmbed.isEmpty, firstBuild, !consented, !run.embedClient.provider.isLocal {
             consent = (toEmbed.count, run.embedClient.provider.name, run.embedAssignment.model)
             awaitingConsent = run
-            setState(run.turnID, .working("Waiting for your OK to index \(toEmbed.count) meetings…"))
+            setState(run.turnID, .working(String(format: NSLocalizedString("Waiting for your OK to index %@…", comment: ""), String(format: NSLocalizedString("%lld meetings", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(toEmbed.count)))))
             operation = nil
             return
         }
@@ -406,7 +419,7 @@ final class ArchiveModel {
 
         let emptyMessage = "No meetings with transcripts or notes in \(run.scopeLabel)."
         guard index.chunks.contains(where: { run.scopeIDs.contains($0.sessionID) }) else { return publishNoAnswer(emptyMessage, run, token) }
-        setState(run.turnID, .working("Searching your meetings…"))
+        setState(run.turnID, .working(String(localized: "Searching your meetings…")))
         let snapshot = index
         let queryText = (pairs.last.map { "\($0.question)\n" } ?? "") + run.question
         let vector = try await wrap("Couldn't search with", provider: run.embedClient.provider, model: run.embedAssignment.model) {
@@ -421,7 +434,7 @@ final class ArchiveModel {
         let budget = run.askProvider.isLocal
             ? ContextBudget.resolve(provider: run.askProvider, detected: await ContextProbe.detect(client: run.askClient, model: model)) : nil
         try check(token)
-        setState(run.turnID, .working("Answering…"))
+        setState(run.turnID, .working(String(localized: "Answering…")))
         let names = labels()
         let answer = try await wrap("Couldn't get an answer from", provider: run.askProvider, model: model, transport: limits.transport,
                                     maxTokens: limits.maxTokens) {
@@ -483,7 +496,7 @@ final class ArchiveModel {
             var vectors: [[Double]] = []
             if !source.pending.isEmpty {
                 done += 1
-                setState(run.turnID, .working("Indexing \(done) of \(total) meetings…"))
+                setState(run.turnID, .working(String(format: NSLocalizedString("Indexing %lld of %@…", comment: ""), Int64(done), String(format: NSLocalizedString("%lld meetings (from)", value: "%lld meetings", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(total)))))
                 vectors = try await wrap("Couldn't index your meetings with", provider: run.embedClient.provider,
                                          model: run.embedAssignment.model) {
                     try await ArchiveIndex.embed(source, client: run.embedClient, model: run.embedAssignment.model)
@@ -603,7 +616,7 @@ final class ArchiveModel {
             }
             return nil
         } catch {
-            return "Couldn't save the archive index: \(error.localizedDescription)"
+            return String.localizedStringWithFormat(NSLocalizedString("Couldn't save the archive index: %@", comment: ""), error.localizedDescription)
         }
     }
 }

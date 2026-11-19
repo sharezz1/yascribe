@@ -145,3 +145,56 @@ private func sample(id: UUID = UUID(), scope: ArchiveScopeRef? = .all) -> Archiv
     #expect(throws: (any Error).self) { try store.load(chat.id) }
     #expect(store.list().problems == 1)
 }
+
+@Test func archivePresentationKeepsStoredContentCanonical() throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let pl = try #require(Bundle(path: root.appendingPathComponent("Resources/pl.lproj").path))
+    let en = try #require(Bundle(path: root.appendingPathComponent("Resources/en.lproj").path))
+    let store = ArchiveConversationStore(directory: tempDir())
+    defer { try? FileManager.default.removeItem(at: store.directory) }
+    var chat = sample()
+    chat.turns[0].kind = .noAnswer
+    chat.turns[0].text = "No meetings with transcripts or notes in All meetings."
+    try store.save(chat)
+    let before = try Data(contentsOf: store.url(for: chat.id))
+    for bundle in [en, pl] {
+        let loaded = try store.load(chat.id)
+        let turn = loaded.turns[0]
+        let shown = ArchivePresentation.message(try #require(turn.text), scopeLabel: turn.scopeLabel, scope: loaded.scope, bundle: bundle)
+        #expect(shown == (bundle == pl ? "Brak spotkań z transkryptami lub notatkami w zakresie: wszystkie spotkania." : turn.text))
+        try store.save(loaded)
+        #expect(try Data(contentsOf: store.url(for: chat.id)) == before)
+    }
+    #expect(ArchivePresentation.scope("All meetings", ref: .folder("x"), bundle: pl) == "All meetings")
+    let meetingScope = ArchivePresentation.scope("This meeting: Settings", ref: .meeting("m"), bundle: pl)
+    #expect(ArchivePresentation.format("Ask about %@", meetingScope, bundle: pl) == "Zapytaj: to spotkanie – Settings")
+    #expect(ArchivePresentation.scope("No folder", ref: .unfiled, bundle: pl) == "bez folderu")
+    #expect(ArchivePresentation.scope("No folder", ref: .unfiled, bundle: en) == "No folder")
+    #expect(ArchivePresentation.message(try #require(chat.turns[0].text), scopeLabel: "All meetings", scope: nil, bundle: pl) == chat.turns[0].text)
+    #expect(ArchivePresentation.message("Unknown failure", bundle: pl) == "Unknown failure")
+    #expect(ArchivePresentation.message("This answer was interrupted when Yascribe closed. Ask again.", bundle: pl) == "Odpowiedź przerwano po zamknięciu Yascribe. Zadaj pytanie ponownie.")
+}
+
+@Test @MainActor func savedKeychainFailureWithSeparatorInProviderNameCanBeDisplayed() throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let pl = try #require(Bundle(url: root.appendingPathComponent("Resources/pl.lproj")))
+    let store = ArchiveConversationStore(directory: tempDir())
+    defer { try? FileManager.default.removeItem(at: store.directory) }
+    let provider = "from Keychain: Demo"
+    let message = "Couldn't read the API key for \(provider) from Keychain: Access denied"
+    let expected = "Nie udało się odczytać klucza API dostawcy \(provider) z pęku kluczy: Access denied"
+    #expect(ArchivePresentation.message(message, bundle: pl) == expected)
+
+    var chat = sample()
+    chat.turns[0].kind = .failed
+    chat.turns[0].text = message
+    chat.turns[0].sources = nil
+    try store.save(chat)
+    let archive = ArchiveModel(presentationBundle: pl)
+    archive.chatsURL = store.directory
+    archive.openChat(chat.id)
+    let turn = try #require(archive.turns.first)
+    #expect(turn.state == .failed(message, opensSettings: false))
+    guard case .failed(let stored, _) = turn.state else { return }
+    #expect(archive.displayedMessage(stored, for: turn) == expected)
+}
