@@ -409,7 +409,7 @@ struct UtteranceRow: View {
         .onHover { picker.hovering = $0 }
         // Ikony są tylko na hover — VoiceOver i klawiatura dostają te same akcje nazwane na wierszu.
         .accessibilityAction(named: isPlaying ? "Pause" : "Play segment") { if deletedHelp == nil { onJump() } }
-        .accessibilityAction(named: "Edit transcript") { onStartEdit?() }
+        .accessibilityActions { if let onStartEdit { Button("Edit transcript", action: onStartEdit) } }
     }
 
     /// Stała szerokość: pojawienie się ikon na hover nie przesuwa tekstu.

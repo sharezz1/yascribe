@@ -319,7 +319,7 @@ enum Snapshots {
                                                                      text: "Edited by hand. " + t.utterances[1].text)])
                         try render("meeting-transcript-edited", size: CGSize(width: 900, height: 420), dark: dark, model: model) { MeetingDetailView(item: edited, state: transcriptView) }
                         let editing = MeetingViewState(); editing.tab = .transcript
-                        editing.segmentDraft = SegmentDraft(runID: "snapshot-run", index: 0, corrected: true, initial: t.utterances[0].text, text: t.utterances[0].text)
+                        editing.segmentDraft = SegmentDraft(runID: "snapshot-run", index: 0, speaker: t.utterances[0].speaker, start: t.utterances[0].start, corrected: true, initial: t.utterances[0].text, text: t.utterances[0].text)
                         try render("meeting-transcript-editing", size: CGSize(width: 900, height: 480), dark: dark, model: model) { MeetingDetailView(item: edited, state: editing) }
                         try render("transcript-segment-playing", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
                             ScrollView { TranscriptTab(state: transcriptView, item: edited, playing: 0) { _, _ in }.padding(20) }

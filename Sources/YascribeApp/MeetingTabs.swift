@@ -35,6 +35,8 @@ final class MeetingViewState: ObservableObject {
 struct SegmentDraft: Equatable {
     var runID: String
     var index: Int
+    var speaker: Speaker
+    var start: Double
     var corrected: Bool
     var initial: String
     var text: String
@@ -348,8 +350,13 @@ struct TranscriptTab: View {
         // Jeden szkic naraz: otwarty edytor wyłącza pozostałe ołówki (niezapisany szkic nie znika).
         var startEdit: (() -> Void)?
         let corrected = state.useCorrected
-        if let runID = item.runID, !moving, state.segmentDraft == nil, item.canEdit(corrected: corrected) {
-            startEdit = { state.segmentDraft = SegmentDraft(runID: runID, index: index, corrected: corrected, initial: u.text, text: u.text) }
+        // Szkic z poprzedniego przebiegu (nowy przebieg został bieżącym) nie blokuje ołówków — nowy go zastępuje.
+        let active = state.segmentDraft.map { $0.runID == item.runID } ?? false
+        if let runID = item.runID, !moving, !active, item.canEdit(corrected: corrected) {
+            startEdit = {
+                state.segmentDraft = SegmentDraft(runID: runID, index: index, speaker: u.speaker, start: u.start,
+                                                  corrected: corrected, initial: u.text, text: u.text)
+            }
         }
         let onSave: (() -> Void)? = moving ? nil : { save() }
         return UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
@@ -359,7 +366,9 @@ struct TranscriptTab: View {
 
     /// Szkic tylko w wierszu, dla którego go otwarto, i tylko w tym samym przebiegu.
     private func draft(_ index: Int) -> Binding<String>? {
-        guard let d = state.segmentDraft, d.index == index, d.runID == item.runID else { return nil }
+        // Po przełączeniu na wersję z innymi indeksami edytor nie staje pod obcą wypowiedzią.
+        guard let d = state.segmentDraft, d.index == index, d.runID == item.runID,
+              d.corrected == state.useCorrected || item.canEdit(corrected: state.useCorrected) else { return nil }
         return Binding(get: { state.segmentDraft?.text ?? "" }, set: { state.segmentDraft?.text = $0 })
     }
 
@@ -367,7 +376,8 @@ struct TranscriptTab: View {
     private func save() {
         guard let d = state.segmentDraft else { return }
         let trimmed = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if trimmed(d.text) == trimmed(d.initial) || model.editUtterance(item, runID: d.runID, index: d.index, corrected: d.corrected, text: d.text) {
+        if trimmed(d.text) == trimmed(d.initial) || model.editUtterance(item, runID: d.runID, index: d.index, speaker: d.speaker, start: d.start,
+                                                                     corrected: d.corrected, text: d.text) {
             state.segmentDraft = nil
         }
     }

@@ -1415,10 +1415,16 @@ final class AppModel {
     /// Ręczna poprawka segmentu `index` (pozycja w `utterances`) w przebiegu `runID` (TASK-109). Plik czytany na nowo — nie
     /// nadpisujemy poprawek zapisanych od ostatniego odczytu ani uszkodzonego pliku. `false` = nie zapisano (edytor zostaje otwarty).
     @discardableResult
-    func editUtterance(_ item: SessionItem, runID: String, index: Int, corrected: Bool, text: String) -> Bool {
+    func editUtterance(_ item: SessionItem, runID: String, index: Int, speaker: Speaker, start: Double, corrected: Bool, text: String) -> Bool {
         // Szkic z poprzedniego przebiegu nie trafia do nowego; podczas przenoszenia nagrań stary katalog zaraz zniknie.
-        guard recordingsMove == nil, item.runID == runID, RunDirectory.isValid(runID: runID), item.canEdit(corrected: corrected),
-              let base = item.uneditedTranscript(corrected: corrected), base.utterances.indices.contains(index) else { return false }
+        guard recordingsMove == nil, RunDirectory.isValid(runID: runID) else { return false }
+        // Segment musi być tym samym, który otwarto (Retry Failed Parts przesuwa indeksy w tym samym przebiegu).
+        guard item.runID == runID, item.canEdit(corrected: corrected), let base = item.uneditedTranscript(corrected: corrected),
+              base.utterances.indices.contains(index), base.utterances[index].speaker == speaker,
+              abs(base.utterances[index].start - start) < 0.001 else {
+            lastError = "This segment changed while you were editing it. Copy your text, then open the editor again."
+            return false
+        }
         let run = RunDirectory(session: item.url, runID: runID)
         do {
             let current = try TranscriptEdits.loadForEditing(run: run) ?? TranscriptEdits()

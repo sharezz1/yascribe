@@ -20,6 +20,16 @@ private func item(session: URL) -> SessionItem {
     return i
 }
 
+/// Zapis jak z edytora: mówca i początek z wypowiedzi otwartej w szkicu (tu: z surowego transkryptu, gdy indeks istnieje).
+@MainActor private func save(_ model: AppModel, _ item: SessionItem, runID: String, index: Int, corrected: Bool, text: String,
+                              opened: Utterance? = nil) -> Bool {
+    let u = opened ?? item.transcript?.utterances[safe: index] ?? Utterance(speaker: .them, start: -1, end: 0, text: "", words: [],
+                                                                            approximateTiming: false, languageMismatch: nil)
+    return model.editUtterance(item, runID: runID, index: index, speaker: u.speaker, start: u.start, corrected: corrected, text: text)
+}
+
+private extension Array { subscript(safe i: Int) -> Element? { indices.contains(i) ? self[i] : nil } }
+
 @Suite @MainActor struct TranscriptEditsAppTests {
     @Test func editsApplyToBothVersionsButNotToMisalignedCorrection() {
         var i = item(session: URL(fileURLWithPath: "/nonexistent"))
@@ -48,30 +58,36 @@ private func item(session: URL) -> SessionItem {
         let stale = item(session: session)
 
         // Dwa zapisy z tej samej (starej) migawki: drugi nie kasuje pierwszego.
-        #expect(model.editUtterance(stale, runID: "run", index: 0, corrected: true, text: "Hello, Rokm."))
-        #expect(model.editUtterance(stale, runID: "run", index: 1, corrected: false, text: "hey"))
+        #expect(save(model, stale, runID: "run", index: 0, corrected: true, text: "Hello, Rokm."))
+        #expect(save(model, stale, runID: "run", index: 1, corrected: false, text: "hey"))
         #expect(TranscriptEdits.load(run: run)?.edits.map(\.text) == ["Hello, Rokm.", "hey"])
 
         // Szkic z innego przebiegu nie trafia do bieżącego.
         let other = RunDirectory(session: session, runID: "other")
         try FileManager.default.createDirectory(at: other.url, withIntermediateDirectories: true)
-        #expect(!model.editUtterance(stale, runID: "other", index: 0, corrected: true, text: "x"))
+        #expect(!save(model, stale, runID: "other", index: 0, corrected: true, text: "x"))
         #expect(!FileManager.default.fileExists(atPath: other.edits.path))
-        #expect(!model.editUtterance(stale, runID: "run", index: 5, corrected: true, text: "x"))
+        #expect(!save(model, stale, runID: "run", index: 5, corrected: true, text: "x"))
         // Korekta niezgodna z transkryptem: edycja tylko w Original, zapis w Corrected odmówiony.
         var misaligned = stale
         misaligned.corrected?.transcript.utterances.append(u(.them, 9, "extra"))
-        #expect(!model.editUtterance(misaligned, runID: "run", index: 1, corrected: true, text: "nope"))
+        #expect(!save(model, misaligned, runID: "run", index: 1, corrected: true, text: "nope"))
+        #expect(TranscriptEdits.load(run: run)?.edits.map(\.text) == ["Hello, Rokm.", "hey"])
+
+        // Segment otwarty w edytorze nie jest już pod tym indeksem (Retry Failed Parts): odmowa z komunikatem, plik bez zmian.
+        model.lastError = nil
+        #expect(!save(model, stale, runID: "run", index: 0, corrected: true, text: "moved", opened: stale.transcript!.utterances[1]))
+        #expect(model.lastError?.hasPrefix("This segment changed") == true)
         #expect(TranscriptEdits.load(run: run)?.edits.map(\.text) == ["Hello, Rokm.", "hey"])
 
         // Tekst równy widocznemu (po słowniku) usuwa poprawkę zamiast tworzyć pozorną.
         model.dictionary = UserDictionary(terms: [DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")])])
-        #expect(model.editUtterance(stale, runID: "run", index: 0, corrected: true, text: "Hello Nimbu."))
+        #expect(save(model, stale, runID: "run", index: 0, corrected: true, text: "Hello Nimbu."))
         #expect(TranscriptEdits.load(run: run)?.edits.map(\.index) == [1])
 
         // Uszkodzony plik: bez zapisu, bajty zostają, komunikat.
         try Data("{broken".utf8).write(to: run.edits)
-        #expect(!model.editUtterance(stale, runID: "run", index: 0, corrected: true, text: "y"))
+        #expect(!save(model, stale, runID: "run", index: 0, corrected: true, text: "y"))
         #expect(try Data(contentsOf: run.edits) == Data("{broken".utf8))
         #expect(model.lastError?.hasPrefix("Couldn't save the edit") == true)
     }
