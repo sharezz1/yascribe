@@ -164,8 +164,11 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var dictation: DictationSettings?
     /// Experimental: agenci CLI (Codex, Claude Code) na liście dostawców (TASK-86). Opcjonalne (E6): `nil` = wyłączone.
     public var experimentalAgentCLIs: Bool?
+    /// Zgoda na odczyt spotkań przez agentów przez serwer MCP (TASK-31). Opcjonalne (E6): `nil` = wyłączone.
+    public var agentAccess: Bool?
     public static let defaultKeepAudioDays = 30
     public var agentCLIsEnabled: Bool { experimentalAgentCLIs == true }
+    public var agentAccessEnabled: Bool { agentAccess ?? false }
 
     public var summaryThinkingEnabled: Bool { summaryThinking ?? true }
     public var removeFillersEnabled: Bool { removeFillers ?? true }
@@ -174,9 +177,10 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public init(embedding: RoleAssignment? = nil, defaultPresetID: UUID? = nil, recordingsPath: String? = nil,
                 keepAudioDays: Int? = nil, keepAudioForever: Bool? = nil, meetings: MeetingSettings? = nil,
                 summaryThinking: Bool? = nil, removeFillers: Bool? = nil, fillerWords: [String]? = nil,
-                askModel: RoleAssignment? = nil, dictation: DictationSettings? = nil) {
+                askModel: RoleAssignment? = nil, dictation: DictationSettings? = nil, agentAccess: Bool? = nil) {
         self.askModel = askModel
         self.dictation = dictation
+        self.agentAccess = agentAccess
         self.removeFillers = removeFillers
         self.fillerWords = fillerWords
         self.summaryThinking = summaryThinking
