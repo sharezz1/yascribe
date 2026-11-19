@@ -15,19 +15,17 @@ struct AgentAccessSettingsView: View {
     }
 
     var body: some View {
-        SectionHeader("Agent access (MCP)")
+        SectionHeader(String(localized: "Agent access (MCP)"))
         Card {
-            FormRow(label: "Agent access",
-                    caption: "Agents such as Claude Code or Codex can list meetings and read transcripts and notes through "
-                        + "Yascribe's MCP server. What they read is sent to that agent's model provider under its terms. "
-                        + "Read-only.") {
+            FormRow(label: String(localized: "Agent access"),
+                    caption: String(localized: "Agents such as Claude Code or Codex can list meetings and read transcripts and notes through Yascribe's MCP server. What they read is sent to that agent's model provider under its terms. Read-only.")) {
                 Toggle("Allow AI agents to read meetings", isOn: $agentAccess)
                     .labelsHidden().toggleStyle(.switch)
             }
             RowDivider()
-            FormRow(label: "Claude Code", caption: "Run this once in Terminal. The server only answers while Agent access is on.") {
+            FormRow(label: String(localized: "Claude Code"), caption: String(localized: "Run this once in Terminal. The server only answers while Agent access is on.")) {
                 HStack(spacing: 8) {
-                    Text(command)
+                    Text(verbatim: command)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.mnText)
                         .textSelection(.enabled)
@@ -42,7 +40,7 @@ struct AgentAccessSettingsView: View {
                 }
             }
             RowDivider()
-            FormRow(label: "Other agents") {
+            FormRow(label: String(localized: "Other agents")) {
                 Link("Setup for other agents",
                      destination: URL(string: "https://github.com/sharezz1/yascribe/blob/master/docs/readme/mcp.md")!)
                     .font(.system(size: 12, weight: .medium))

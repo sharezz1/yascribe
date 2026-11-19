@@ -452,7 +452,7 @@ struct SettingsView: View {
         do {
             try JSONFile.save(candidate, to: model.paths.settings)
         } catch {
-            model.lastError = "Couldn't save your settings: \(error)"
+            model.lastError = String(localized: "Couldn't save your settings: \(error.localizedDescription)")
             return
         }
         model.settings = candidate
