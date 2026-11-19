@@ -168,7 +168,10 @@ struct DictionaryView: View {
     }
 
     static func riskyMessage(_ s: AliasSuggestion) -> String {
-        "“\(s.alias)” is also an ordinary word. Every “\(SuggestionRow.aliasText(s))” in transcripts will become “\(s.term)”, even where it was right."
+        // Alias z odmianą podmienia rdzeń i zostawia końcówkę („kopem” → „KOPTem”).
+        let change = s.inflects ? "Every word starting with “\(s.alias)” in transcripts will start with “\(s.term)” instead"
+            : "Every “\(s.alias)” in transcripts will become “\(s.term)”"
+        return "“\(s.alias)” is also an ordinary word. \(change), even where it was right."
     }
 
     @ViewBuilder private var messages: some View {
