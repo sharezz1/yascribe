@@ -216,3 +216,15 @@ private extension ProviderCheck {
     let old = try JSONDecoder().decode(GlobalSettings.self, from: Data(#"{"keepAudioDays":14,"detectSpeakers":false,"speakerSensitivity":"high"}"#.utf8))
     #expect(old.keepAudioDays == 14)
 }
+
+// Sprawdzenie przy starcie: presety, serwery lokalne i agenci CLI tak; własny zdalny punkt końcowy nie,
+// bo zapytanie może obudzić płatny serwer (np. RunPod z zimnym startem).
+@Test func onlyPresetsLocalAndAgentsAreVerifiedOnLaunch() {
+    #expect(Provider(name: "OpenRouter", baseURL: URL(string: "https://openrouter.ai/api/v1")!).verifiesOnLaunch)
+    #expect(Provider(name: "ElevenLabs", baseURL: URL(string: "https://api.elevenlabs.io")!, kind: .elevenLabs).verifiesOnLaunch)
+    #expect(Provider(name: "oMLX", baseURL: URL(string: "http://localhost:8000/v1")!).verifiesOnLaunch)
+    #expect(Provider(name: "Claude Code", baseURL: URL(string: "file:///usr/local/bin/claude")!, kind: .claudeCLI).verifiesOnLaunch)
+    #expect(Provider(name: "Mistral", baseURL: URL(string: "https://api.mistral.ai/v1")!, kind: .mistral).verifiesOnLaunch)
+    #expect(!Provider(name: "Bielik", baseURL: URL(string: "https://api.runpod.ai/v2/abc/openai/v1")!).verifiesOnLaunch)
+    #expect(!Provider(name: "Tunnel", baseURL: URL(string: "http://127.0.0.1:9999/v1")!).verifiesOnLaunch) // tunel do zdalnego GPU
+}
