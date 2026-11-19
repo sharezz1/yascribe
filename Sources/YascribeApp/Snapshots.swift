@@ -313,6 +313,21 @@ enum Snapshots {
                         var noAudio = picked; noAudio.audioDeletedAfterDays = 30
                         try render("models-transcript-no-audio", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: noAudio) {} }
                         try render("meeting-transcript-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: noAudio, state: transcriptView) }
+                        // TASK-109: poprawiony segment („Edited”), otwarty edytor i grający segment (⏸ i ołówek widoczne bez hovera).
+                        var edited = picked
+                        edited.edits = TranscriptEdits(edits: [.init(index: 1, speaker: t.utterances[1].speaker, start: t.utterances[1].start,
+                                                                     text: "Edited by hand. " + t.utterances[1].text)])
+                        try render("meeting-transcript-edited", size: CGSize(width: 900, height: 420), dark: dark, model: model) { MeetingDetailView(item: edited, state: transcriptView) }
+                        let editing = MeetingViewState(); editing.tab = .transcript
+                        editing.segmentDraft = SegmentDraft(runID: "snapshot-run", index: 0, speaker: t.utterances[0].speaker, start: t.utterances[0].start, corrected: true, initial: t.utterances[0].text, text: t.utterances[0].text)
+                        try render("meeting-transcript-editing", size: CGSize(width: 900, height: 480), dark: dark, model: model) { MeetingDetailView(item: edited, state: editing) }
+                        try render("transcript-segment-playing", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
+                            ScrollView { TranscriptTab(state: transcriptView, item: edited, playing: 0) { _, _ in }.padding(20) }
+                        }
+                        try render("transcript-segment-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
+                            var gone = edited; gone.audioDeletedAfterDays = 30
+                            return ScrollView { TranscriptTab(state: transcriptView, item: gone, playing: 0) { _, _ in }.padding(20) }
+                        }
                         // F6 (D13): pierwsza próba bez transkryptu — w stanie „No transcript yet" także „Transcribe again…".
                         var noTranscript = picked
                         noTranscript.transcript = nil; noTranscript.corrected = nil; noTranscript.latestAttemptID = "snapshot-run-2"
