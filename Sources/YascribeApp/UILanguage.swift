@@ -58,7 +58,7 @@ final class LanguageRestart {
         let bundle = Bundle.main.bundleURL
         // Paczka: `open` bez -n aktywuje instancję uruchomioną w międzyczasie (np. z Docka) zamiast startować drugą.
         // Zmienne środowiska przekazujemy jawnie (tylko nietajne ścieżki/ustawienia deweloperskie).
-        let env = ["YASCRIBE_DATA_DIR", "YASCRIBE_MODEL_STORE", "YASCRIBE_AEC_H"].compactMap { key in
+        let env = ["YASCRIBE_DATA_DIR", "YASCRIBE_MODEL_STORE", "YASCRIBE_AEC_H", "YASCRIBE_TEST_TRASH_DIR"].compactMap { key in
             ProcessInfo.processInfo.environment[key].map { "\(key)=\($0)" }
         }
         let relaunch = bundle.pathExtension == "app"

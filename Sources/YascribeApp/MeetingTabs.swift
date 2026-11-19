@@ -162,7 +162,7 @@ struct TranscriptActions: View {
         }
     }
 
-    /// Ten sam mówca co w kolumnie transkryptu (§4.4).
+    /// Kopia kanoniczna (angielskie „Me”/„Them” i linie wyciszenia), niezależna od języka interfejsu; kolumna pokazuje nazwy przetłumaczone.
     static func copyLine(_ u: Utterance) -> String { "[\(MeetingDetailView.time(u.start))] \(u.speakerName): \(u.text)" }
 
     private func copy() {

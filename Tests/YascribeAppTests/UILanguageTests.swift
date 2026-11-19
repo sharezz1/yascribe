@@ -38,9 +38,9 @@ import YascribeUpdates
     let activity = RestartActivity()
     let gate = RestartGate(activity: activity)
     let directory = URL(fileURLWithPath: "/tmp/finalizing")
-    func canRestart(directory: URL? = nil, dictating: Bool = false, retryAudio: Bool = false) -> Bool {
+    func canRestart(directory: URL? = nil, dictating: Bool = false, retryAudio: Bool = false, background: Bool = false) -> Bool {
         AppModel.canRestartForLanguage(updateGate: gate, recordingDirectory: directory,
-                                      dictationBusy: dictating, dictationHasRetryAudio: retryAudio)
+                                      dictationBusy: dictating, dictationHasRetryAudio: retryAudio, backgroundWork: background)
     }
     var terminations = 0
     var launches = 0
@@ -57,6 +57,7 @@ import YascribeUpdates
     restart.request(ifIdle: canRestart(directory: directory), terminate: terminate)
     restart.request(ifIdle: canRestart(dictating: true), terminate: terminate)
     restart.request(ifIdle: canRestart(retryAudio: true), terminate: terminate)
+    restart.request(ifIdle: canRestart(background: true), terminate: terminate)
     gate.installationStarted()
     restart.request(ifIdle: canRestart(), terminate: terminate)
     gate.installationEnded()

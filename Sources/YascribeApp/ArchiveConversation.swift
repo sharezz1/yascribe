@@ -52,7 +52,10 @@ enum ArchivePresentation {
         case .meeting:
             let prefix = "This meeting: "
             guard label.hasPrefix(prefix) else { return label }
-            return format("This meeting: %@", String(label.dropFirst(prefix.count)), bundle: bundle)
+            let title = String(label.dropFirst(prefix.count))
+            // Zapis zostaje kanoniczny; brak tytułu pokazujemy w języku interfejsu.
+            let shown = title == NoteTitle.untitled ? bundle.localizedString(forKey: NoteTitle.untitled, value: nil, table: nil) : title
+            return format("This meeting: %@", shown, bundle: bundle)
         }
     }
 

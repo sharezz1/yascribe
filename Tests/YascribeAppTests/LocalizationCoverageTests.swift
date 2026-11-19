@@ -671,3 +671,20 @@ private func localizationProblems(root: URL, tables: LocalizationTables) throws 
     #expect(String(localized: "Appearance: \(name)", bundle: pl, locale: environment.locale) == "Wygląd: Settings")
     #expect(String(localized: "\(count) terms", bundle: pl, locale: environment.locale) == "22 terminy")
 }
+
+/// Teksty kanoniczne (zapis, CLI, cache sond, porównania): w procesie testów `Bundle.main` nie ma `pl.lproj`,
+/// więc test wyniku nie złapie przypadkowej lokalizacji. Pilnujemy źródła: literał musi mieć wystąpienie bez lookupu.
+@Test func canonicalLiteralsStayOutsideLocalization() throws {
+    let canonical: [(String, String)] = [
+        ("Sources/YascribeLocalASR/RunGate.swift", #"RunGateRefusal(message: "The on-device speech model failed its check: "#), // RunGate.check
+        ("Sources/YascribeTranscription/CloudDiarization.swift", #""Recording too long for speaker detection.""#), // opis kanoniczny
+        ("Sources/YascribeProviders/ProviderSetup.swift", #""The reply was cut off before the end.""#), // ProviderCheck.describe → ProbeResult
+        ("Sources/YascribeProviders/ProviderSetup.swift", #""Invalid API key.""#), // ProviderCheck.describe
+        ("Sources/YascribeNotes/NoteTitle.swift", #"static let untitled = "Untitled meeting""#), // AutoTitle.clean
+    ]
+    for (file, literal) in canonical {
+        let source = try String(contentsOf: localizationRoot.appendingPathComponent(file), encoding: .utf8)
+        let plain = source.split(separator: "\n").filter { $0.contains(literal) && !$0.contains("localized") && !$0.contains("Localized") }
+        #expect(!plain.isEmpty, "\(file): \(literal) is localized or gone")
+    }
+}

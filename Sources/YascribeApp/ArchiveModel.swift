@@ -89,6 +89,8 @@ final class ArchiveModel {
     @ObservationIgnored private var index = ArchiveIndex(space: "")
     @ObservationIgnored private var indexLoaded = false
     private var operation: (token: UUID, turn: UUID, task: Task<Void, Never>)?
+    /// Trwa pytanie lub indeksowanie — restart języka czeka.
+    var isWorking: Bool { operation != nil }
     @ObservationIgnored private var awaitingConsent: Run?
     @ObservationIgnored private var writes: Task<Void, Never> = Task {}
     private var previewBusy = false

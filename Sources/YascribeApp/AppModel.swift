@@ -363,11 +363,15 @@ final class AppModel {
         return s
     }
 
+    /// Przebiegi w tle na spotkaniach (transkrypcja, korekta, autotytuł, notatki, mówcy).
+    var sessionWorkRunning: Bool {
+        !transcribing.isEmpty || !notes.corrections.sessions.isEmpty || !notes.titles.sessions.isEmpty
+            || notes.generation.values.contains(.generating) || !speakerTickets.isEmpty
+    }
+
     /// Powód, dla którego teraz nie wolno zmienić lokalizacji; `nil` = wolno.
     var recordingsMoveBlocked: String? {
-        let busy = !transcribing.isEmpty || !notes.corrections.sessions.isEmpty || !notes.titles.sessions.isEmpty
-            || notes.generation.values.contains(.generating) || !speakerTickets.isEmpty
-        return RecordingsMove.blocked(recording: recording.isRecording, busy: busy, moving: recordingsMove != nil).map(localizedProviderMessage)
+        RecordingsMove.blocked(recording: recording.isRecording, busy: sessionWorkRunning, moving: recordingsMove != nil).map(localizedProviderMessage)
     }
 
     /// Przy starcie i po zmianie „Keep audio”. Nie w trybie migawek i nie w trakcie przenoszenia.
@@ -862,14 +866,17 @@ final class AppModel {
     enum TerminationDecision { case now, cancel, afterRecording, afterDictation }
 
     var canRestartForLanguage: Bool {
-        Self.canRestartForLanguage(updateGate: updateGate, recordingDirectory: recording.directory,
-                                   dictationBusy: dictation.engine.isBusy, dictationHasRetryAudio: dictation.engine.hasRetryAudio)
+        let downloading = localASRModels.contains { if case .idle = $0.phase { false } else { true } }
+        return Self.canRestartForLanguage(updateGate: updateGate, recordingDirectory: recording.directory,
+                                          dictationBusy: dictation.engine.isBusy, dictationHasRetryAudio: dictation.engine.hasRetryAudio,
+                                          backgroundWork: sessionWorkRunning || archive.isWorking || downloading)
     }
 
+    /// `backgroundWork`: przebiegi spotkań, pytanie do archiwum, pobieranie modelu — restart by je przerwał.
     static func canRestartForLanguage(updateGate: RestartGate, recordingDirectory: URL?,
-                                      dictationBusy: Bool, dictationHasRetryAudio: Bool) -> Bool {
+                                      dictationBusy: Bool, dictationHasRetryAudio: Bool, backgroundWork: Bool = false) -> Bool {
         updateGate.shouldTerminate() && recordingDirectory == nil && !dictationBusy
-            && !dictationHasRetryAudio && updateGate.phase == .idle
+            && !dictationHasRetryAudio && !backgroundWork && updateGate.phase == .idle
     }
 
     /// `afterRecording`: zgoda jest, ale rejestrator jeszcze finalizuje pliki (`stop()` mógł wrócić od razu, gdy
