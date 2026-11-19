@@ -345,12 +345,14 @@ enum MCPTools {
                         range: ClosedRange<Int>) throws -> Int {
         guard let raw = arguments[key], !(raw is NSNull) else { return value }
         guard let number = raw as? NSNumber, CFGetTypeID(raw as CFTypeRef) != CFBooleanGetTypeID(),
-              let int = Int(exactly: number.doubleValue) else { // 1e300 i ułamki odrzucone, bez cichego nasycenia
+              number.doubleValue == number.doubleValue.rounded() else {
             throw ToolFailure("`\(key)` must be an integer")
         }
-        guard range.contains(int) else {
+        // Zakres sprawdzany na Double przed konwersją: 1e300 to „poza zakresem", bez cichego nasycenia `intValue`.
+        let double = number.doubleValue
+        guard double >= Double(range.lowerBound), double <= Double(range.upperBound) else {
             throw ToolFailure("`\(key)` must be between \(range.lowerBound) and \(range.upperBound)")
         }
-        return int
+        return Int(number.int64Value)
     }
 }

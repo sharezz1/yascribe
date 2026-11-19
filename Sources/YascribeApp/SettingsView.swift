@@ -434,21 +434,29 @@ struct SettingsView: View {
             return
         }
         let words = FillerWords.parse(draft.fillers)
-        let previous = model.settings
-        model.settings.embedding = draft.embedding
-        model.settings.askModel = draft.askModel
-        model.settings.removeFillers = draft.removeFillers
-        model.settings.fillerWords = words == FillerWords.defaults ? nil : words
-        model.settings.summaryThinking = draft.summaryThinking
-        model.settings.agentAccess = draft.agentAccessValue
-        let dictationChanged = draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
+        // Kandydat najpierw do settings.json, dopiero potem do pamięci: błąd zapisu nic nie zmienia (ani `didSet` archiwum,
+        // ani przełącznik zgody MCP, który serwer czyta z pliku — TASK-31); szkic zostaje „dirty".
+        var candidate = model.settings
+        candidate.embedding = draft.embedding
+        candidate.askModel = draft.askModel
+        candidate.removeFillers = draft.removeFillers
+        candidate.fillerWords = words == FillerWords.defaults ? nil : words
+        candidate.summaryThinking = draft.summaryThinking
+        candidate.agentAccess = draft.agentAccessValue
+        let dictationChanged = draft.dictationForComparison != SettingsDraft.comparableDictation(candidate.dictationOrDefault)
         if dictationChanged {
             var dictation = draft.dictation
-            dictation.launcherOriginX = model.settings.dictationOrDefault.launcherOriginX
-            model.settings.dictation = dictation
+            dictation.launcherOriginX = candidate.dictationOrDefault.launcherOriginX
+            candidate.dictation = dictation
         }
-        // Błąd zapisu: ustawienia w pamięci wracają, szkic zostaje „dirty" — przełącznik zgody nie kłamie (TASK-31).
-        guard model.save() else { model.settings = previous; return }
+        do {
+            try JSONFile.save(candidate, to: model.paths.settings)
+        } catch {
+            model.lastError = "Couldn't save your settings: \(error)"
+            return
+        }
+        model.settings = candidate
+        model.save()
         if dictationChanged { model.dictation.applySettings() }
         draft.fillers = FillerWords.format(words)
         draft.loadPrompts(model.prompts)

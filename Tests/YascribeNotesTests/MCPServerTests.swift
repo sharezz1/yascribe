@@ -492,6 +492,7 @@ private func snapshot(_ url: URL) throws -> [String: String] {
     #expect(try call(server, "get_transcript", ["id": "s1", "offset": -1]).isError)
     #expect(try call(server, "get_transcript", ["id": "s1", "limit": 0]).isError)
     #expect(try call(server, "get_transcript", ["id": "s1", "limit": 2001]).isError)
+    #expect(try call(server, "get_transcript", ["id": "s1", "offset": 1e300]).text.contains("must be between"))
     try makeSession(paths, id: "bez-transkryptu")
     #expect(try call(server, "get_transcript", ["id": "bez-transkryptu"]).text == "No transcript yet")
 }
