@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import YascribeLocalASR
+@testable import YascribeLocalASR
 import YascribeTranscription
 import YascribeProviders
 
@@ -18,4 +18,13 @@ import YascribeProviders
     #expect(CloudDiarizationError.tooLong.errorDescription == "Recording too long for speaker detection.")
     do { _ = try SpeakerSensitivity.parse("bad"); Issue.record("Expected invalid sensitivity") }
     catch { #expect(error.localizedDescription == "--sensitivity bad: use low|medium|high") }
+}
+
+@Test func modelStoreDiagnosticsKeepTheOriginalCLIRepresentation() {
+    let message = "Missing \"config.json\"\nTry again."
+    let asr: any Error = ModelStoreError(message: message, displayMessage: "Brakuje pliku modelu.")
+    let diarizer: any Error = DiarizerModelStoreError(message: message, displayMessage: "Brakuje pliku modelu mówców.")
+    #expect("błąd: \(asr)\n" == "błąd: ModelStoreError(message: \"Missing \\\"config.json\\\"\\nTry again.\")\n")
+    #expect("błąd: \(diarizer)\n" == "błąd: DiarizerModelStoreError(message: \"Missing \\\"config.json\\\"\\nTry again.\")\n")
+    #expect(asr.localizedDescription == message && diarizer.localizedDescription == message)
 }

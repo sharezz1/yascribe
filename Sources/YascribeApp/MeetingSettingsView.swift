@@ -175,7 +175,7 @@ struct MeetingSettingsSections: View {
 
     // MARK: Pomocnicze
 
-    private func toggle(_ title: String, _ isOn: Binding<Bool>) -> some View {
+    private func toggle(_ title: LocalizedStringKey, _ isOn: Binding<Bool>) -> some View {
         Toggle(title, isOn: isOn).labelsHidden().toggleStyle(.switch)
     }
 

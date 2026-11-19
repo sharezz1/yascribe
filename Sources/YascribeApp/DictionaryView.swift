@@ -159,7 +159,7 @@ struct DictionaryView: View {
             state.notice = nil
         } else {
             state.error = nil
-            state.notice = "Added “\(SuggestionRow.aliasText(s))” to \(s.term)."
+            state.notice = String(localized: "Added “\(SuggestionRow.aliasText(s))” to \(s.term).")
         }
     }
 
@@ -317,8 +317,12 @@ private struct SuggestionRow: View {
     static func aliasText(_ s: AliasSuggestion) -> String { s.inflects ? s.alias + "*" : s.alias }
 
     private var detail: String {
-        let meetings = suggestion.sessions.count
-        return "\(suggestion.count)× in \(meetings) \(meetings == 1 ? "meeting" : "meetings") · seen as \(suggestion.forms.joined(separator: ", "))"
+        let locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")
+        let count = Int64(suggestion.sessions.count)
+        let fallback = count == 1 ? "%lld meeting" : "%lld meetings"
+        let format = NSLocalizedString("%lld meetings (in)", value: fallback, comment: "")
+        let meetings = String(format: format, locale: locale, count)
+        return String(localized: "\(suggestion.count)× in \(meetings). Seen as \(suggestion.forms.joined(separator: ", ")).")
     }
 
     var body: some View {

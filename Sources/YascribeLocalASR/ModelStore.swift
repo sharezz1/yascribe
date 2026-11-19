@@ -12,10 +12,11 @@ public enum ModelStatus: Equatable, Sendable {
     case unknownVariant(reason: String)
 }
 
-public struct ModelStoreError: Error, LocalizedError, Equatable, Sendable {
+public struct ModelStoreError: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
     public var message: String
     public var errorDescription: String? { message }
     public var displayMessage: String? = nil
+    public var description: String { "ModelStoreError(message: \(message.debugDescription))" }
 }
 
 /// Magazyn jednego wariantu lokalnego modelu (domyślnie Parakeet v3): stan względem manifestu, odcisk, pobranie i usunięcie. FluidAudio tylko tutaj (domyślny

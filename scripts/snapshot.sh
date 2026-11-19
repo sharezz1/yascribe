@@ -14,8 +14,12 @@ for language in pl en; do
         -AppleLanguages "($language)"
     find "$OUT/$language" -maxdepth 1 -name '*.png' -exec basename {} \; | LC_ALL=C sort > "$TMP/$language.txt"
     [ -s "$TMP/$language.txt" ] || { echo "snapshot.sh: brak migawek $language" >&2; exit 1; }
-    grep -q -- '-light.png$' "$TMP/$language.txt"
-    grep -q -- '-dark.png$' "$TMP/$language.txt"
+    sed -n 's/-light\.png$//p' "$TMP/$language.txt" | LC_ALL=C sort > "$TMP/$language-light.txt"
+    sed -n 's/-dark\.png$//p' "$TMP/$language.txt" | LC_ALL=C sort > "$TMP/$language-dark.txt"
+    [ -s "$TMP/$language-light.txt" ] && cmp "$TMP/$language-light.txt" "$TMP/$language-dark.txt" || {
+        echo "snapshot.sh: każdy ekran wymaga jasnej i ciemnej migawki ($language)" >&2
+        exit 1
+    }
 done
 cmp "$TMP/pl.txt" "$TMP/en.txt"
 cat "$TMP/pl.txt"

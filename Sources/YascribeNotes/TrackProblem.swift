@@ -115,14 +115,21 @@ public struct MuteNote: Equatable, Sendable {
     public var trackID: String
     /// Sekundy na osi sesji (jak `Utterance.start`) — do ułożenia linii między wypowiedziami.
     public var start: Double
-    public var line: String
+    var end: Double?
+    public var startTime: String { TrackProblem.clock(start) }
+    public var endTime: String? { end.map(TrackProblem.clock) }
+
+    public var line: String {
+        let name = trackID == SessionSummary.timelineTrackID ? "System audio" : "Microphone"
+        if let endTime { return "\(name) muted \(startTime)–\(endTime)" }
+        return "\(name) muted from \(startTime) to the end"
+    }
 
     public static func of(summary: SessionSummary?) -> [MuteNote] {
         guard let summary else { return [] }
         let clock = SessionClock(summary: summary)
         return summary.tracks.flatMap { t -> [MuteNote] in
             guard t.sampleRate > 0 else { return [] }
-            let name = t.id == SessionSummary.timelineTrackID ? String(localized: "System audio") : String(localized: "Microphone")
             let at = { (f: Int) in clock.sessionSeconds(track: t.id, trackSeconds: Double(f) / t.sampleRate) }
             // Oś sesji zaczyna pierwsza próbka dźwięku systemowego, która potrafi przyjść długo po starcie mikrofonu
             // (odbiór 2026-10-19: 28 s). Okres zakończony przed zerem osi nie dotyczy niczego w transkrypcie — bez linii;
@@ -130,9 +137,7 @@ public struct MuteNote: Equatable, Sendable {
             return (t.mutes ?? []).compactMap { m in
                 if let end = m.endFrame, at(end) <= 0 { return nil }
                 let start = max(0, at(m.frameIndex))
-                let line = m.endFrame.map { String(localized: "\(name) muted \(TrackProblem.clock(start))–\(TrackProblem.clock(at($0)))") }
-                    ?? String(localized: "\(name) muted from \(TrackProblem.clock(start)) to the end")
-                return MuteNote(trackID: t.id, start: start, line: line)
+                return MuteNote(trackID: t.id, start: start, end: m.endFrame.map(at))
             }
         }
         .sorted { $0.start < $1.start }

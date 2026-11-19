@@ -115,9 +115,9 @@ struct ArchiveChatView: View {
                         Text("[\(index + 1)] Meeting unavailable").foregroundStyle(.mnText2)
                     }
                 }
-            case .noAnswer(let message): Text(ArchivePresentation.message(message, scopeLabel: turn.scopeLabel, scope: model.archive.currentScope)).foregroundStyle(.mnText2)
+            case .noAnswer(let message): Text(model.archive.displayedMessage(message, for: turn)).foregroundStyle(.mnText2)
             case .failed(let message, let opensSettings):
-                WarnLabel(ArchivePresentation.message(message, scopeLabel: turn.scopeLabel, scope: model.archive.currentScope))
+                WarnLabel(model.archive.displayedMessage(message, for: turn))
                 if opensSettings { LinkButton(String(localized: "Open Settings")) { model.section = .settings } }
             case .cancelled: Text("Cancelled").foregroundStyle(.mnText2)
             }

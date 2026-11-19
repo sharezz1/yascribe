@@ -582,10 +582,17 @@ struct SummaryTab: View {
 /// Linia wyciszenia toru w transkrypcie: czas w kolumnie czasu, opis w `text2` (informacja, nie ostrzeżenie).
 private struct MuteRow: View {
     let note: MuteNote
+
+    private var text: String {
+        let name = note.trackID == "system" ? String(localized: "System audio") : String(localized: "Microphone")
+        if let end = note.endTime { return String(localized: "\(name) muted \(note.startTime)–\(end)") }
+        return String(localized: "\(name) muted from \(note.startTime) to the end")
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Text(MeetingDetailView.time(note.start)).monospacedDigit().frame(width: 72, alignment: .leading)
-            Label(note.line, systemImage: note.trackID == "system" ? "speaker.slash" : "mic.slash")
+            Label(text, systemImage: note.trackID == "system" ? "speaker.slash" : "mic.slash")
         }
         .font(.system(size: 13)).foregroundStyle(.mnText2)
         .padding(.vertical, 11)

@@ -16,9 +16,20 @@ final class TemplateEditorState: ObservableObject {
         let n = t.map { var n = $0; n.sections = n.effectiveSections; return n }
         draft = n; original = n; error = nil
     }
-    func startNew() {
-        draft = Template(name: String(localized: "New template"), sections: [TemplateSection(title: "", instruction: "")])
+    func startNew(bundle: Bundle = .main) {
+        draft = Template(name: String(localized: "New template", bundle: bundle), sections: [TemplateSection(title: "", instruction: "")])
         original = nil; error = nil
+    }
+    func duplicate(in file: TemplatesFile, bundle: Bundle = .main) {
+        guard let template = draft else { return }
+        var copy = template.duplicate()
+        copy.name = String(localized: "\(template.name) copy", bundle: bundle)
+        var n = 2
+        while file.containsName(copy.name) {
+            copy.name = String(localized: "\(template.name) copy \(n)", bundle: bundle)
+            n += 1
+        }
+        draft = copy; original = nil; error = nil
     }
     /// Zamyka okno bez zapisu; nowy, niezapisany szablon znika razem z oknem.
     func close() { draft = nil; original = nil; error = nil; confirmingDelete = false }
@@ -98,15 +109,7 @@ struct TemplatesView: View {
 
     /// Kopia zostaje otwarta w oknie jako nowy, niezapisany szablon.
     private func duplicate() {
-        guard let t = state.draft else { return }
-        var copy = t.duplicate()
-        copy.name = String(localized: "\(t.name) copy")
-        var n = 2
-        let names = Set(model.notes.templates.all().map(\.name))
-        while names.contains(copy.name) { copy.name = String(localized: "\(t.name) copy \(n)"); n += 1 }
-        state.draft = copy
-        state.original = nil
-        state.error = nil
+        state.duplicate(in: model.notes.templates)
     }
 
     /// Wbudowany: usuwa nadpisanie i wraca do domyślnej treści; okno zostaje otwarte.

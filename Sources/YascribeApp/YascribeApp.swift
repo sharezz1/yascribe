@@ -95,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 _ = Self.languageRestart.consume(ifIdle: false, launch: {})
                 return .terminateCancel
             }
-            guard case .now = model.terminationDecision() else {
+            guard case .now = model.terminationDecision(), model.notes.flushPendingSaves() else {
                 _ = Self.languageRestart.consume(ifIdle: false, launch: {})
                 return .terminateCancel
             }
@@ -176,6 +176,7 @@ enum AppAppearance: String, CaseIterable {
 struct ContentView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system
     @Environment(AppModel.self) private var model
+    @AppStorage("uiLanguage", store: .standard) private var languageChoice: UILanguage = .auto
     @StateObject private var language = LanguageSelection()
 
     var body: some View {
@@ -223,7 +224,7 @@ struct ContentView: View {
                                 case .pl: Text(verbatim: "Polski")
                                 case .en: Text(verbatim: "English")
                                 }
-                                if language.current == choice { Image(systemName: "checkmark") }
+                                if languageChoice == choice { Image(systemName: "checkmark") }
                             }
                         }
                     }

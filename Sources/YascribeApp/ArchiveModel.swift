@@ -10,6 +10,10 @@ import YascribeTranscription
 @MainActor
 @Observable
 final class ArchiveModel {
+    private let presentationBundle: Bundle
+
+    init(presentationBundle: Bundle = .main) { self.presentationBundle = presentationBundle }
+
     enum AskScope: Equatable { case list, all, meeting }
     enum TurnState: Equatable {
         case working(String), answered(ArchiveAsk.Answer), noAnswer(String), failed(String, opensSettings: Bool), cancelled
@@ -125,9 +129,13 @@ final class ArchiveModel {
     var draftScopeLabel: String { scopeLabel(for: captureScope?()) }
 
     private func scopeLabel(for ref: ArchiveScopeRef?) -> String {
-        guard let ref, let resolveSavedScope else { return resolveScope(scope)?.label ?? String(localized: "This meeting") }
-        guard let label = resolveSavedScope(ref)?.label else { return String(localized: "Scope no longer available") }
-        return ArchivePresentation.scope(label, ref: ref)
+        guard let ref, let resolveSavedScope else { return resolveScope(scope)?.label ?? String(localized: "This meeting", bundle: presentationBundle) }
+        guard let label = resolveSavedScope(ref)?.label else { return String(localized: "Scope no longer available", bundle: presentationBundle) }
+        return ArchivePresentation.scope(label, ref: ref, bundle: presentationBundle)
+    }
+
+    func displayedMessage(_ message: String, for turn: Turn) -> String {
+        ArchivePresentation.message(message, scopeLabel: turn.scopeLabel, scope: currentScope, bundle: presentationBundle)
     }
 
     private static let scopeGoneMessage = "This chat's folder or meeting no longer exists. Start a new chat."

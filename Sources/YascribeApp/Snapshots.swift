@@ -145,11 +145,12 @@ enum Snapshots {
 
     static func runAll(model: AppModel) {
         do {
-            let expected = ProcessInfo.processInfo.environment["YASCRIBE_SNAPSHOT_LANGUAGE"]
-            let labels = ["pl": "Ustawienia", "en": "Settings"]
-            guard let expected, let label = labels[expected],
-                  Bundle.main.localizedString(forKey: "Settings", value: nil, table: nil) == label else {
-                throw SnapshotError.wrongLanguage
+            if let expected = ProcessInfo.processInfo.environment["YASCRIBE_SNAPSHOT_LANGUAGE"] {
+                let labels = ["pl": "Ustawienia", "en": "Settings"]
+                guard let label = labels[expected],
+                      Bundle.main.localizedString(forKey: "Settings", value: nil, table: nil) == label else {
+                    throw SnapshotError.wrongLanguage
+                }
             }
             try seed(model)
             for dark in [false, true] {

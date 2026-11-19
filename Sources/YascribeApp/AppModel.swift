@@ -862,7 +862,14 @@ final class AppModel {
     enum TerminationDecision { case now, cancel, afterRecording, afterDictation }
 
     var canRestartForLanguage: Bool {
-        updateGate.shouldTerminate() && recording.directory == nil && !dictation.engine.isBusy && updateGate.phase == .idle
+        Self.canRestartForLanguage(updateGate: updateGate, recordingDirectory: recording.directory,
+                                   dictationBusy: dictation.engine.isBusy, dictationHasRetryAudio: dictation.engine.hasRetryAudio)
+    }
+
+    static func canRestartForLanguage(updateGate: RestartGate, recordingDirectory: URL?,
+                                      dictationBusy: Bool, dictationHasRetryAudio: Bool) -> Bool {
+        updateGate.shouldTerminate() && recordingDirectory == nil && !dictationBusy
+            && !dictationHasRetryAudio && updateGate.phase == .idle
     }
 
     /// `afterRecording`: zgoda jest, ale rejestrator jeszcze finalizuje pliki (`stop()` mógł wrócić od razu, gdy

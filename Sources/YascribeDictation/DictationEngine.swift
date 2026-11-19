@@ -82,8 +82,10 @@ public enum DictationPhase: Equatable, Sendable {
 
     public var isBusy: Bool { phase == .listening || phase == .processing }
 
+    public var hasRetryAudio: Bool { retained != nil }
+
     public var canRetry: Bool {
-        if case .failed = phase { return retained != nil }
+        if case .failed = phase { return hasRetryAudio }
         return false
     }
 

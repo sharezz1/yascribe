@@ -971,6 +971,9 @@
 "%lld meetings" = "%lld spotkań";
 
 "%lld meetings (from)" = "%lld spotkań";
+"%lld meetings (in)" = "%lld spotkaniach";
+"%lld× in %@. Seen as %@." = "%lld× w %@. Rozpoznano jako %@.";
+"Added “%@” to %@." = "Dodano alias „%@” do terminu „%@”.";
 
 
 "Partial — %lld gaps" = "Częściowo — %lld luk";
@@ -984,7 +987,7 @@
 "Index %@ with %@ · %@?" = "Indeksować %@ za pomocą %@ · %@?";
 "Waiting for your OK to index %@…" = "Oczekiwanie na zgodę na indeksowanie: %@…";
 "Indexing %lld of %@…" = "Indeksowanie: %lld z %@…";
-"Delete %@ of audio from %@ older than %@?" = "Usunąć %@ dźwięku z %@ po upływie %@?";
+"Delete %@ of audio from %@ older than %@?" = "Usunąć teraz %@ nagrań? Dotyczy to %@ sprzed ponad %@.";
 "This meeting's audio was deleted, so it can't be transcribed again." = "Dźwięk tego spotkania usunięto, więc nie można go ponownie transkrybować.";
 
 "%lld terms added" = "%lld dodanych terminów";

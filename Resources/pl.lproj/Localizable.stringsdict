@@ -202,6 +202,26 @@
 			<string>%lld spotkań</string>
 		</dict>
 	</dict>
+	<key>%lld meetings (in)</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld spotkaniu</string>
+			<key>few</key>
+			<string>%lld spotkaniach</string>
+			<key>many</key>
+			<string>%lld spotkaniach</string>
+			<key>other</key>
+			<string>%lld spotkaniach</string>
+		</dict>
+	</dict>
 	<key>%lld days</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>

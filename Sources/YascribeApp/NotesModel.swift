@@ -475,10 +475,19 @@ final class NotesModel {
         }
     }
 
-    /// Zapisuje od razu wszystko, co czeka na autozapis — przed przenoszeniem folderu nagrań.
-    func flushPendingSaves() {
-        for (id, task) in saveTasks { task.cancel(); if let error = writePending(id) { report(error) } }
-        saveTasks = [:]
+    /// Zapisuje od razu wszystko, co czeka na autozapis — przed przenoszeniem folderu nagrań albo restartem języka.
+    @discardableResult
+    func flushPendingSaves() -> Bool {
+        for task in saveTasks.values { task.cancel() }
+        saveTasks.removeAll()
+        var saved = true
+        for id in Array(pendingSaves.keys) {
+            if let error = writePending(id) {
+                report(error)
+                saved = false
+            }
+        }
+        return saved
     }
 
     /// Zapisuje najnowsze My notes tej sesji i zwraca powód, gdy się nie udało (`nil` = zapisane albo nic nie czekało).

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 
 private let localizationRoot = URL(fileURLWithPath: #filePath)
@@ -7,6 +8,7 @@ private let localizationRoot = URL(fileURLWithPath: #filePath)
 private struct SwiftLiteral {
     let spelling: String
     let parts: [String]
+    let specifiers: [String?]
     let line: Int
 }
 
@@ -88,6 +90,7 @@ private struct SwiftLiteralReader {
         index += quote.count
         let start = index
         var parts: [String] = []
+        var specifiers: [String?] = []
         var part = ""
         while let character = current, !at(delimiter) {
             if at(escape) {
@@ -98,6 +101,7 @@ private struct SwiftLiteralReader {
                     parts.append(part)
                     part = ""
                     let nested = tokens(untilClosingParen: true)
+                    specifiers.append(Self.specifier(for: nested))
                     interpolations.append(nested)
                 case "n": part += "\n"
                 case "r": part += "\r"
@@ -131,7 +135,23 @@ private struct SwiftLiteralReader {
             if parts[0].hasPrefix("\n") { parts[0].removeFirst() }
         }
         if at(delimiter) { index += delimiter.count }
-        return SwiftLiteral(spelling: spelling, parts: parts, line: startLine)
+        return SwiftLiteral(spelling: spelling, parts: parts, specifiers: specifiers, line: startLine)
+    }
+
+    private static func specifier(for expression: [SwiftToken]) -> String? {
+        let words = expression.map(\.text)
+        if expression.count == 1, expression[0].literal != nil { return "%@" }
+        if words.first == "count", words.count == 1 { return "%lld" }
+        if words.last == "count", words.dropLast().last == ".",
+           words.allSatisfy({ $0 == "." || $0.first?.isLetter == true || $0.first == "_" }) {
+            return "%lld"
+        }
+        guard words.dropFirst().first == "(", words.last == ")" else { return nil }
+        switch words.first {
+        case "Int", "Int64": return "%lld"
+        case "String": return "%@"
+        default: return nil
+        }
     }
 }
 
@@ -363,7 +383,11 @@ private enum LocalizationFormat {
     static func matches(_ literal: SwiftLiteral, keys: Set<String>) -> Bool {
         if literal.parts.count == 1 { return keys.contains(literal.parts[0]) }
         let parts = literal.parts.map { NSRegularExpression.escapedPattern(for: $0.replacingOccurrences(of: "%", with: "%%")) }
-        let pattern = "\\A" + parts.joined(separator: "(?:" + specification + ")") + "\\z"
+        var pattern = "\\A" + parts[0]
+        for (specifier, part) in zip(literal.specifiers, parts.dropFirst()) {
+            pattern += (specifier ?? "(?:" + specification + ")") + part
+        }
+        pattern += "\\z"
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
         return keys.contains { key in
             regex.firstMatch(in: key, range: NSRange(key.startIndex..<key.endIndex, in: key)) != nil
@@ -615,4 +639,35 @@ private func localizationProblems(root: URL, tables: LocalizationTables) throws 
     #expect(expected != LocalizationFormat.signature("%3$.1f %2$lld %1$@"))
     #expect(expected != LocalizationFormat.signature("%3$.1f%% %2$lld %1$@ %1$@"))
     #expect(expected != LocalizationFormat.signature("%@ / %@ / %.1f%%"))
+}
+
+@Test func localizationScannerRequiresKnownInterpolationTypes() throws {
+    let source = #"""
+        Text("Count: \(count)")
+        Text("Count: \(rows.count)")
+        String(localized: "Count: \(Int64(value))")
+        String(localized: "Count: \(Int(value))")
+        Text("Name: \(String(value))")
+        """#
+    let literals = scanLocalization(source, inApp: true).map(\.literal)
+    #expect(literals.count == 5)
+    for literal in literals.prefix(4) {
+        #expect(LocalizationFormat.matches(literal, keys: ["Count: %lld"]))
+        #expect(!LocalizationFormat.matches(literal, keys: ["Count: %@"]))
+    }
+    let name = try #require(literals.last)
+    #expect(LocalizationFormat.matches(name, keys: ["Name: %@"]))
+    #expect(!LocalizationFormat.matches(name, keys: ["Name: %lld"]))
+}
+
+@Test @MainActor func swiftUIAndFoundationLookUpStringAndIntInterpolations() throws {
+    let pl = try #require(Bundle(url: localizationRoot.appendingPathComponent("Resources/pl.lproj")))
+    let name: String = "Settings"
+    let count: Int = 22
+    var environment = EnvironmentValues()
+    environment.locale = Locale(identifier: "pl")
+    #expect(Text("Appearance: \(name)", bundle: pl)._resolveText(in: environment) == "Wygląd: Settings")
+    #expect(Text("\(count) terms", bundle: pl)._resolveText(in: environment) == "22 terminy")
+    #expect(String(localized: "Appearance: \(name)", bundle: pl, locale: environment.locale) == "Wygląd: Settings")
+    #expect(String(localized: "\(count) terms", bundle: pl, locale: environment.locale) == "22 terminy")
 }

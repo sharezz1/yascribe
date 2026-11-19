@@ -96,9 +96,12 @@ enum ArchivePresentation {
         }
         let keyPrefix = "Couldn't read the API key for "
         let keySeparator = " from Keychain: "
-        if text.hasPrefix(keyPrefix), let range = text.range(of: keySeparator) {
-            let provider = String(text[text.index(text.startIndex, offsetBy: keyPrefix.count)..<range.lowerBound])
-            return format("Couldn't read the API key for %@ from Keychain: %@", provider, String(text[range.upperBound...]), bundle: bundle)
+        if text.hasPrefix(keyPrefix) {
+            let details = text.dropFirst(keyPrefix.count)
+            if let range = details.range(of: keySeparator) {
+                return format("Couldn't read the API key for %@ from Keychain: %@",
+                              String(details[..<range.lowerBound]), String(details[range.upperBound...]), bundle: bundle)
+            }
         }
         let missingPrefix = "No API key for "
         let missingSuffix = ". Remove the provider and add it again with a key."

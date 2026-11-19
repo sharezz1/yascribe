@@ -11,10 +11,11 @@ public enum DiarizerModelStatus: Equatable, Sendable {
     case ready
 }
 
-public struct DiarizerModelStoreError: Error, LocalizedError, Equatable, Sendable {
+public struct DiarizerModelStoreError: Error, LocalizedError, CustomStringConvertible, Equatable, Sendable {
     public var message: String
     public var errorDescription: String? { message }
     public var displayMessage: String? = nil
+    public var description: String { "DiarizerModelStoreError(message: \(message.debugDescription))" }
 }
 
 /// Blokada `flock` na `<katalog>/.lock`, współdzielona między aplikacją i CLI; zwalnia się przy zwolnieniu obiektu.

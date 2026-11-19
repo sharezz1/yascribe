@@ -174,3 +174,27 @@ private func sample(id: UUID = UUID(), scope: ArchiveScopeRef? = .all) -> Archiv
     #expect(ArchivePresentation.message("Unknown failure", bundle: pl) == "Unknown failure")
     #expect(ArchivePresentation.message("This answer was interrupted when Yascribe closed. Ask again.", bundle: pl) == "Odpowiedź przerwano po zamknięciu Yascribe. Zadaj pytanie ponownie.")
 }
+
+@Test @MainActor func savedKeychainFailureWithSeparatorInProviderNameCanBeDisplayed() throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let pl = try #require(Bundle(url: root.appendingPathComponent("Resources/pl.lproj")))
+    let store = ArchiveConversationStore(directory: tempDir())
+    defer { try? FileManager.default.removeItem(at: store.directory) }
+    let provider = "from Keychain: Demo"
+    let message = "Couldn't read the API key for \(provider) from Keychain: Access denied"
+    let expected = "Nie udało się odczytać klucza API dostawcy \(provider) z pęku kluczy: Access denied"
+    #expect(ArchivePresentation.message(message, bundle: pl) == expected)
+
+    var chat = sample()
+    chat.turns[0].kind = .failed
+    chat.turns[0].text = message
+    chat.turns[0].sources = nil
+    try store.save(chat)
+    let archive = ArchiveModel(presentationBundle: pl)
+    archive.chatsURL = store.directory
+    archive.openChat(chat.id)
+    let turn = try #require(archive.turns.first)
+    #expect(turn.state == .failed(message, opensSettings: false))
+    guard case .failed(let stored, _) = turn.state else { return }
+    #expect(archive.displayedMessage(stored, for: turn) == expected)
+}
