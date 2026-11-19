@@ -36,7 +36,8 @@ import Testing
         let p = PlaybackState()
         p.started(index: 3, seconds: 0.05)
         #expect(p.playing == 3)
-        try await Task.sleep(for: .milliseconds(300))
+        // Pod obciążeniem (równoległe testy) MainActor bywa zajęty sekundami — czekamy z limitem, nie stałe 300 ms.
+        for _ in 0..<500 where p.playing != nil { try await Task.sleep(for: .milliseconds(20)) }
         #expect(p.playing == nil)
         p.started(index: 4, seconds: 5)
         p.stop()
