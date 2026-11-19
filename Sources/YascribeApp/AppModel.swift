@@ -154,6 +154,10 @@ final class AppModel {
     /// Odrzucone sugestie (`dictionary-dismissed.json`); zapis przez `dismissSuggestion`.
     private(set) var dismissedSuggestions = Set<String>()
     @ObservationIgnored private var suggestionsGeneration = 0
+    /// Wejście ostatniego przeliczenia: przeładowanie sesji bez zmiany transkryptów (tytuł, folder) nie liczy archiwum od nowa.
+    @ObservationIgnored private var suggestionsInput: SuggestionsInput?
+    @ObservationIgnored private var suggestionsWork: Task<[AliasSuggestion], Never>?
+    private struct SuggestionsInput: Equatable { var sources: [AliasSuggestions.Source]; var dictionary: UserDictionary; var fillers: [String] }
     /// Reguły skompilowane raz na wersję słownika. Obserwowane: zmiana słownika odświeża otwarte widoki transkryptu.
     private(set) var replacementRules = ReplacementRules(UserDictionary())
     /// Wynik Replacement (klucz: sesja i wariant transkryptu) razem ze źródłem, z którego powstał. Bez obserwacji, bo
@@ -551,27 +555,33 @@ final class AppModel {
 
     /// Przelicza sugestie Aliasów w tle na kopii sesji i słownika; wynik przyjmuje tylko najnowsze wywołanie.
     func refreshSuggestions() {
-        suggestionsGeneration += 1
-        let generation = suggestionsGeneration
         let sources = sessions.compactMap { item -> AliasSuggestions.Source? in
             guard let raw = item.transcript, let fixed = item.corrected else { return nil }
             return AliasSuggestions.Source(id: item.id, raw: raw, corrected: fixed)
         }
-        let dictionary = dictionary, dismissed = dismissedSuggestions, fillers = settings.fillerWords ?? FillerWords.defaults
-        guard !sources.isEmpty, !dictionary.terms.isEmpty else { aliasSuggestions = []; return }
+        let input = SuggestionsInput(sources: sources, dictionary: dictionary, fillers: settings.fillerWords ?? FillerWords.defaults)
+        guard input != suggestionsInput else { return }
+        suggestionsInput = input
+        suggestionsGeneration += 1
+        let generation = suggestionsGeneration
+        suggestionsWork?.cancel() // zastąpione przeliczenie przerywa się przy następnej sesji (`Task.isCancelled` w `find`)
+        guard !sources.isEmpty, !input.dictionary.terms.isEmpty else { suggestionsWork = nil; aliasSuggestions = []; return }
+        let work = Task.detached(priority: .utility) {
+            // Słownik systemowy przez główny wątek (SystemSpelling), więc tylko dla grup po progu i raz na słowo.
+            var common: [String: Bool] = [:]
+            return AliasSuggestions.find(in: input.sources, dictionary: input.dictionary, dismissed: [], fillerWords: input.fillers) { word in
+                if let known = common[word] { return known }
+                let known = !SystemSpelling.isMisspelled(word)
+                common[word] = known
+                return known
+            }
+        }
+        suggestionsWork = work
         Task {
-            let found = await Task.detached(priority: .utility) {
-                // Słownik systemowy przez główny wątek (SystemSpelling), więc tylko dla grup po progu i raz na słowo.
-                var common: [String: Bool] = [:]
-                return AliasSuggestions.find(in: sources, dictionary: dictionary, dismissed: dismissed, fillerWords: fillers) { word in
-                    if let known = common[word] { return known }
-                    let known = !SystemSpelling.isMisspelled(word)
-                    common[word] = known
-                    return known
-                }
-            }.value
+            let found = await work.value
             guard generation == suggestionsGeneration else { return }
-            aliasSuggestions = found
+            // Odrzucone filtrujemy przy publikacji, nie w tle: Ignore kliknięte w trakcie przeliczenia nie wraca.
+            aliasSuggestions = found.filter { !dismissedSuggestions.contains($0.id) }
         }
     }
 
@@ -581,7 +591,10 @@ final class AppModel {
         do { proposed = try AliasSuggestions.accept(s, in: dictionary) } catch {
             return DictionaryEdit.presentation(of: error, draftTerm: s.term).message
         }
-        return DictionaryEdit.commit(proposed, replacing: dictionary, set: { dictionary = $0 }, save: saveDictionary)
+        if let failure = DictionaryEdit.commit(proposed, replacing: dictionary, set: { dictionary = $0 }, save: saveDictionary) { return failure }
+        // Wiersz znika od razu, nie dopiero po przeliczeniu archiwum (drugi klik dopisywałby po cichu ten sam Alias).
+        aliasSuggestions.removeAll { $0.id == s.id }
+        return nil
     }
 
     /// Ignore: sugestia nie wraca; nieudany zapis cofa zbiór (pamięć nie rozchodzi się z dyskiem).
