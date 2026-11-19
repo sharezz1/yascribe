@@ -146,6 +146,8 @@ final class AppModel {
         didSet {
             replacementRules = ReplacementRules(dictionary)
             replaced = [:]
+            // Wiersze liczone dla poprzedniej wersji słownika: znikają od razu te, których Add już by nie przeszedł (usunięty Term, konflikt).
+            aliasSuggestions.removeAll { (try? AliasSuggestions.accept($0, in: dictionary)) == nil }
             refreshSuggestions()
         }
     }
@@ -154,10 +156,12 @@ final class AppModel {
     /// Odrzucone sugestie (`dictionary-dismissed.json`); zapis przez `dismissSuggestion`.
     private(set) var dismissedSuggestions = Set<String>()
     @ObservationIgnored private var suggestionsGeneration = 0
-    /// Wejście ostatniego przeliczenia: przeładowanie sesji bez zmiany transkryptów (tytuł, folder) nie liczy archiwum od nowa.
+    /// Odcisk wejścia ostatniego przeliczenia: przeładowanie sesji bez zmiany transkryptów (tytuł, folder) nie liczy archiwum od nowa.
+    /// shortcut: odcisk to id, przebieg, model i liczby/długości wypowiedzi (bez kopii tekstów); edycja o tej samej długości przeliczy się
+    /// dopiero przy następnej zmianie — skrót treści, gdyby to przeszkadzało.
     @ObservationIgnored private var suggestionsInput: SuggestionsInput?
     @ObservationIgnored private var suggestionsWork: Task<[AliasSuggestion], Never>?
-    private struct SuggestionsInput: Equatable { var sources: [AliasSuggestions.Source]; var dictionary: UserDictionary; var fillers: [String] }
+    private struct SuggestionsInput: Equatable { var sessions: [[String]]; var dictionary: UserDictionary; var fillers: [String] }
     /// Reguły skompilowane raz na wersję słownika. Obserwowane: zmiana słownika odświeża otwarte widoki transkryptu.
     private(set) var replacementRules = ReplacementRules(UserDictionary())
     /// Wynik Replacement (klucz: sesja i wariant transkryptu) razem ze źródłem, z którego powstał. Bez obserwacji, bo
@@ -559,17 +563,23 @@ final class AppModel {
             guard let raw = item.transcript, let fixed = item.corrected else { return nil }
             return AliasSuggestions.Source(id: item.id, raw: raw, corrected: fixed)
         }
-        let input = SuggestionsInput(sources: sources, dictionary: dictionary, fillers: settings.fillerWords ?? FillerWords.defaults)
+        let fillers = settings.fillerWords ?? FillerWords.defaults, dictionary = dictionary
+        func lengths(_ t: Transcript) -> String { t.utterances.map { String($0.text.utf8.count) }.joined(separator: ",") }
+        let fingerprint = sessions.compactMap { item -> [String]? in
+            guard let raw = item.transcript, let fixed = item.corrected else { return nil }
+            return [item.id, item.runID ?? "", fixed.model, lengths(raw), lengths(fixed.transcript)]
+        }
+        let input = SuggestionsInput(sessions: fingerprint, dictionary: dictionary, fillers: fillers)
         guard input != suggestionsInput else { return }
         suggestionsInput = input
         suggestionsGeneration += 1
         let generation = suggestionsGeneration
         suggestionsWork?.cancel() // zastąpione przeliczenie przerywa się przy następnej sesji (`Task.isCancelled` w `find`)
-        guard !sources.isEmpty, !input.dictionary.terms.isEmpty else { suggestionsWork = nil; aliasSuggestions = []; return }
+        guard !sources.isEmpty, !dictionary.terms.isEmpty else { suggestionsWork = nil; aliasSuggestions = []; return }
         let work = Task.detached(priority: .utility) {
             // Słownik systemowy przez główny wątek (SystemSpelling), więc tylko dla grup po progu i raz na słowo.
             var common: [String: Bool] = [:]
-            return AliasSuggestions.find(in: input.sources, dictionary: input.dictionary, dismissed: [], fillerWords: input.fillers) { word in
+            return AliasSuggestions.find(in: sources, dictionary: dictionary, dismissed: [], fillerWords: fillers) { word in
                 if let known = common[word] { return known }
                 let known = !SystemSpelling.isMisspelled(word)
                 common[word] = known
@@ -581,7 +591,7 @@ final class AppModel {
             let found = await work.value
             guard generation == suggestionsGeneration else { return }
             // Odrzucone filtrujemy przy publikacji, nie w tle: Ignore kliknięte w trakcie przeliczenia nie wraca.
-            aliasSuggestions = found.filter { !dismissedSuggestions.contains($0.id) }
+            aliasSuggestions = found.filter { !$0.isDismissed(in: dismissedSuggestions) }
         }
     }
 
