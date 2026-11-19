@@ -161,6 +161,8 @@ final class AppModel {
     /// dopiero przy następnej zmianie — skrót treści, gdyby to przeszkadzało.
     @ObservationIgnored private var suggestionsInput: SuggestionsInput?
     @ObservationIgnored private var suggestionsWork: Task<[AliasSuggestion], Never>?
+    /// Publikacja ostatniego przeliczenia (testy czekają na nią zamiast na czas).
+    @ObservationIgnored private(set) var suggestionsPublish: Task<Void, Never>?
     private struct SuggestionsInput: Equatable { var sessions: [[String]]; var dictionary: UserDictionary; var fillers: [String] }
     /// Reguły skompilowane raz na wersję słownika. Obserwowane: zmiana słownika odświeża otwarte widoki transkryptu.
     private(set) var replacementRules = ReplacementRules(UserDictionary())
@@ -587,7 +589,7 @@ final class AppModel {
             }
         }
         suggestionsWork = work
-        Task {
+        suggestionsPublish = Task {
             let found = await work.value
             guard generation == suggestionsGeneration else { return }
             // Odrzucone filtrujemy przy publikacji, nie w tle: Ignore kliknięte w trakcie przeliczenia nie wraca.
