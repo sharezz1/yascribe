@@ -97,12 +97,19 @@ enum MeetingLoader {
             folderName: folders.folder(meta.folderID)?.name)
     }
 
-    static func all(paths: YascribePaths, settings: GlobalSettings, folders: FoldersFile) -> [MeetingRecord] {
+    /// Lekki nagłówek do sortowania i filtra folderu: bez transkryptów, korekty i mówców (te tylko dla strony wyniku).
+    struct Header { let url: URL; let id: String; let startedAt: Date; let folderID: String? }
+
+    /// Spotkania od najnowszych (przy równej dacie `id` malejąco — stabilne strony).
+    static func headers(paths: YascribePaths, settings: GlobalSettings) -> [Header] {
         let directory = self.directory(paths, settings)
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         return names.compactMap { name in
-            url(id: name, in: directory).map { record(url: $0, folders: folders) }
-        }
+            url(id: name, in: directory).map { url in
+                Header(url: url, id: name, startedAt: (try? SessionDirectory(url: url).summarize())?.wallClock ?? .distantPast,
+                       folderID: NotesStore(session: url).readMeta().folderID)
+            }
+        }.sorted { $0.startedAt == $1.startedAt ? $0.id > $1.id : $0.startedAt > $1.startedAt }
     }
 }
 
@@ -201,18 +208,25 @@ enum MCPTools {
         }
 
         let rules = replacementRules(paths)
-        var records = MeetingLoader.all(paths: paths, settings: settings, folders: folders)
-        if let folderID { records = records.filter { $0.meta.folderID == folderID } }
-        if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            records = records.filter { record in
+        var headers = MeetingLoader.headers(paths: paths, settings: settings)
+        if let folderID { headers = headers.filter { $0.folderID == folderID } }
+        // Bez zapytania pełne spotkanie (transkrypt, korekta, mówcy) tylko dla strony wyniku.
+        // shortcut: wyszukiwanie składa każde spotkanie po kolei; indeks, gdy archiwum urośnie do sekund na zapytanie.
+        let total: Int
+        let page: [MeetingRecord]
+        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            total = headers.count
+            page = headers.dropFirst(min(offset, headers.count)).prefix(limit)
+                .map { MeetingLoader.record(url: $0.url, folders: folders) }
+        } else {
+            let matches = headers.map { MeetingLoader.record(url: $0.url, folders: folders) }.filter { record in
                 SessionSearch.matches(query, title: record.title, myNotes: record.myNotes,
                                       summary: record.noteSummary?.markdown,
                                       transcript: record.displayTranscript(useCorrected: true, rules: rules))
             }
+            total = matches.count
+            page = Array(matches.dropFirst(min(offset, matches.count)).prefix(limit))
         }
-        records.sort { $0.startedAt == $1.startedAt ? $0.id > $1.id : $0.startedAt > $1.startedAt }
-
-        let page = records.dropFirst(min(offset, records.count)).prefix(limit)
         let meetings: [[String: Any]] = page.map { record in
             [
                 "id": record.id,
@@ -226,8 +240,8 @@ enum MCPTools {
                 "overview": record.overview ?? NSNull(),
             ]
         }
-        let payload: [String: Any] = ["total": records.count, "offset": offset, "meetings": meetings]
-        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+        let payload: [String: Any] = ["total": total, "offset": offset, "meetings": meetings]
+        let data = try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys, .withoutEscapingSlashes])
         return String(data: data, encoding: .utf8) ?? "{}"
     }
 
@@ -259,7 +273,7 @@ enum MCPTools {
                 sections.append("## Transcript\n\(copy.joined(separator: "\n"))")
             }
         }
-        return (lines + [""] + sections).joined(separator: "\n\n")
+        return ([lines.joined(separator: "\n")] + sections).joined(separator: "\n\n")
     }
 
     static func getTranscript(_ arguments: [String: Any], paths: YascribePaths, settings: GlobalSettings,
@@ -282,7 +296,7 @@ enum MCPTools {
         let all = MeetingArchive.copyLines(transcript, summary: record.summary)
         guard !all.isEmpty else { return "Lines 0 of 0" }
         guard offset < all.count else { throw ToolFailure("No lines at offset \(offset) (total \(all.count))") }
-        let end = offset > all.count ? all.count : min(all.count, offset + limit)
+        let end = min(all.count, offset + limit) // offset < count, limit ≤ 2000: bez przepełnienia
         var out = "Lines \(offset + 1)–\(end) of \(all.count) · version: \(label)"
         out += "\n" + all[offset..<end].joined(separator: "\n")
         if end < all.count { out += "\nNext: offset \(end)" }
@@ -331,10 +345,9 @@ enum MCPTools {
                         range: ClosedRange<Int>) throws -> Int {
         guard let raw = arguments[key], !(raw is NSNull) else { return value }
         guard let number = raw as? NSNumber, CFGetTypeID(raw as CFTypeRef) != CFBooleanGetTypeID(),
-              number.doubleValue == number.doubleValue.rounded() else {
+              let int = Int(exactly: number.doubleValue) else { // 1e300 i ułamki odrzucone, bez cichego nasycenia
             throw ToolFailure("`\(key)` must be an integer")
         }
-        let int = number.intValue
         guard range.contains(int) else {
             throw ToolFailure("`\(key)` must be between \(range.lowerBound) and \(range.upperBound)")
         }

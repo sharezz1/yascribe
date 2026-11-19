@@ -434,6 +434,7 @@ struct SettingsView: View {
             return
         }
         let words = FillerWords.parse(draft.fillers)
+        let previous = model.settings
         model.settings.embedding = draft.embedding
         model.settings.askModel = draft.askModel
         model.settings.removeFillers = draft.removeFillers
@@ -446,7 +447,8 @@ struct SettingsView: View {
             dictation.launcherOriginX = model.settings.dictationOrDefault.launcherOriginX
             model.settings.dictation = dictation
         }
-        guard model.save() else { return }
+        // Błąd zapisu: ustawienia w pamięci wracają, szkic zostaje „dirty" — przełącznik zgody nie kłamie (TASK-31).
+        guard model.save() else { model.settings = previous; return }
         if dictationChanged { model.dictation.applySettings() }
         draft.fillers = FillerWords.format(words)
         draft.loadPrompts(model.prompts)

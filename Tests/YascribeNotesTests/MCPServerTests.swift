@@ -451,6 +451,7 @@ private func snapshot(_ url: URL) throws -> [String: String] {
     #expect(local["total"] as? Int == 1)
     #expect((local["meetings"] as? [[String: Any]])?.first?["id"] as? String == "w-domyslnym")
     #expect(try call(server, "get_meeting", ["id": "dowiazanie"]).isError)
+    #expect(try call(server, "get_transcript", ["id": "dowiazanie"]).isError)
 }
 
 // MARK: - get_transcript

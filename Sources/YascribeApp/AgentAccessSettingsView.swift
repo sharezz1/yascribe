@@ -44,7 +44,7 @@ struct AgentAccessSettingsView: View {
             RowDivider()
             FormRow(label: "Other agents") {
                 Link("Setup for other agents",
-                     destination: URL(string: "https://github.com/sharezz1/yascribe/blob/main/docs/readme/mcp.md")!)
+                     destination: URL(string: "https://github.com/sharezz1/yascribe/blob/master/docs/readme/mcp.md")!)
                     .font(.system(size: 12, weight: .medium))
             }
         }
