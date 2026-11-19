@@ -148,7 +148,7 @@ final class ArchiveModel {
         abort(.cancelled)
         let resolved = resolveForAsk()
         let turn = Turn(id: UUID(), question: text, scopeLabel: resolved?.label ?? "This meeting", scopeIDs: resolved?.ids ?? [],
-                        state: .working("Checking your settings…"))
+                        state: .working(String(localized: "Checking your settings…")))
         turns.append(turn)
         if currentChatTitle.isEmpty { currentChatTitle = ArchiveConversation.title(from: text) }
         saveChat()
@@ -192,7 +192,7 @@ final class ArchiveModel {
         guard let run = awaitingConsent else { return }
         awaitingConsent = nil
         consent = nil
-        setState(run.turnID, .working("Preparing the index…"))
+        setState(run.turnID, .working(String(localized: "Preparing the index…")))
         start(run, consented: true)
     }
 
@@ -344,6 +344,7 @@ final class ArchiveModel {
         abort(nil)
         resetChat(id: UUID())
         suppressSaves = true
+        chatScope = .all
         self.turns = turns
         self.consent = consent.map { (meetings: $0.0, provider: $0.1, model: $0.2) }
         previewBusy = consent == nil && turns.contains { if case .working = $0.state { true } else { false } }
@@ -408,7 +409,7 @@ final class ArchiveModel {
 
         let emptyMessage = "No meetings with transcripts or notes in \(run.scopeLabel)."
         guard index.chunks.contains(where: { run.scopeIDs.contains($0.sessionID) }) else { return publishNoAnswer(emptyMessage, run, token) }
-        setState(run.turnID, .working("Searching your meetings…"))
+        setState(run.turnID, .working(String(localized: "Searching your meetings…")))
         let snapshot = index
         let queryText = (pairs.last.map { "\($0.question)\n" } ?? "") + run.question
         let vector = try await wrap("Couldn't search with", provider: run.embedClient.provider, model: run.embedAssignment.model) {
@@ -423,7 +424,7 @@ final class ArchiveModel {
         let budget = run.askProvider.isLocal
             ? ContextBudget.resolve(provider: run.askProvider, detected: await ContextProbe.detect(client: run.askClient, model: model)) : nil
         try check(token)
-        setState(run.turnID, .working("Answering…"))
+        setState(run.turnID, .working(String(localized: "Answering…")))
         let names = labels()
         let answer = try await wrap("Couldn't get an answer from", provider: run.askProvider, model: model, transport: limits.transport,
                                     maxTokens: limits.maxTokens) {

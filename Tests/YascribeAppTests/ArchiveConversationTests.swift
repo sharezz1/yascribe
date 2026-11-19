@@ -161,12 +161,15 @@ private func sample(id: UUID = UUID(), scope: ArchiveScopeRef? = .all) -> Archiv
         let loaded = try store.load(chat.id)
         let turn = loaded.turns[0]
         let shown = ArchivePresentation.message(try #require(turn.text), scopeLabel: turn.scopeLabel, scope: loaded.scope, bundle: bundle)
-        #expect(shown == (bundle == pl ? "Brak spotkań z transkryptami lub notatkami w zakresie: Wszystkie spotkania." : turn.text))
+        #expect(shown == (bundle == pl ? "Brak spotkań z transkryptami lub notatkami w zakresie: wszystkie spotkania." : turn.text))
         try store.save(loaded)
         #expect(try Data(contentsOf: store.url(for: chat.id)) == before)
     }
     #expect(ArchivePresentation.scope("All meetings", ref: .folder("x"), bundle: pl) == "All meetings")
-    #expect(ArchivePresentation.scope("This meeting: Settings", ref: .meeting("m"), bundle: pl) == "To spotkanie: Settings")
+    let meetingScope = ArchivePresentation.scope("This meeting: Settings", ref: .meeting("m"), bundle: pl)
+    #expect(ArchivePresentation.format("Ask about %@", meetingScope, bundle: pl) == "Zapytaj: to spotkanie – Settings")
+    #expect(ArchivePresentation.scope("No folder", ref: .unfiled, bundle: pl) == "bez folderu")
+    #expect(ArchivePresentation.scope("No folder", ref: .unfiled, bundle: en) == "No folder")
     #expect(ArchivePresentation.message(try #require(chat.turns[0].text), scopeLabel: "All meetings", scope: nil, bundle: pl) == chat.turns[0].text)
     #expect(ArchivePresentation.message("Unknown failure", bundle: pl) == "Unknown failure")
     #expect(ArchivePresentation.message("This answer was interrupted when Yascribe closed. Ask again.", bundle: pl) == "Odpowiedź przerwano po zamknięciu Yascribe. Zadaj pytanie ponownie.")

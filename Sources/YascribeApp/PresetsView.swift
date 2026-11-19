@@ -17,7 +17,7 @@ final class PresetEditorState: ObservableObject {
     var isDirty: Bool { draft != nil && draft != original }
 
     func select(_ p: Preset?) { draft = p; original = p; error = nil }
-    func startNew() { draft = Preset(name: "New preset", language: nil, asr: nil); original = nil; error = nil }
+    func startNew() { draft = Preset(name: String(localized: "New preset"), language: nil, asr: nil); original = nil; error = nil }
     /// Zamyka okno bez zapisu; nowy, niezapisany preset znika razem z oknem.
     func close() { draft = nil; original = nil; error = nil }
 }
@@ -364,13 +364,13 @@ struct FullyLocalBadge: View {
 /// Rola z lokalnym serwerem tekstowym (Ollama, llama.cpp, oMLX, własny na loopbacku): znacznik „On this Mac"; przy korekcie ostrzeżenie,
 /// że mały model potrafi zmienić nazwy, liczby i daty. Aplikacja nie poleca żadnych modeli (spec fazy 2.0 §14 pkt 6).
 struct LocalRoleNote: View {
-    static let correctionWarning = "Small local models can change names, numbers or dates while correcting. Compare with the original transcript."
+    static let correctionWarning = String(localized: "Small local models can change names, numbers or dates while correcting. Compare with the original transcript.")
     var warnsAboutCorrection = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             OnThisMacTag()
-            if warnsAboutCorrection { WarnLabel(String(localized: "Small local models can change names, numbers or dates while correcting. Compare with the original transcript.")) }
+            if warnsAboutCorrection { WarnLabel(Self.correctionWarning) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 158).padding(.trailing, 16).padding(.bottom, 10)

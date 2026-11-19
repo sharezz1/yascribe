@@ -99,7 +99,7 @@ struct ArchiveChatView: View {
             Text(turn.question).font(.system(size: 13, weight: .semibold)).textSelection(.enabled)
             switch turn.state {
             case .working(let message):
-                HStack { ProgressView().controlSize(.small); Text(ArchivePresentation.message(message)); Button("Cancel") { model.archive.cancel() }.buttonStyle(.pillSmall) }
+                HStack { ProgressView().controlSize(.small); Text(message); Button("Cancel") { model.archive.cancel() }.buttonStyle(.pillSmall) }
             case .answered(let answer):
                 Text(answer.text).textSelection(.enabled)
                 ForEach(Array(answer.sources.enumerated()), id: \.offset) { index, source in

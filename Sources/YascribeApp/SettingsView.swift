@@ -556,7 +556,7 @@ private struct ProviderRowView: View {
             case .verified(let n)?: StateLabel(.ok, n == 1 ? String(localized: "Verified · 1 model") : String(localized: "Verified · \(n) models"))
             case .failed(let why)? where p.api == .fluidAudio: WarnLabel(String(localized: "Model not ready")).help(why)
             case .failed(let why)?: StateLabel(.bad, String(localized: "Failed")).help(localizedProviderMessage(why))
-            case .limited(let why)?: WarnLabel(why)
+            case .limited(let why)?: WarnLabel(localizedProviderMessage(why))
             case nil: StateLabel(.neutral, String(localized: "Not verified"))
             }
         }
@@ -581,7 +581,8 @@ struct ProviderSetupSheet: View {
     private var showsKeyField: Bool { preset.needsKey || preset.keyOptional }
     private var editableAddress: Bool { preset == .custom && !editing }
     /// Agent CLI: pole ścieżki programu (także przy edycji, R10) zamiast adresu i klucza.
-    private var isAgent: Bool { (state.editing?.kind ?? preset.kind)?.isAgentCLI == true }
+    private var agentVendor: String? { (state.editing?.kind ?? preset.kind)?.agentVendor }
+    private var isAgent: Bool { agentVendor != nil }
     /// Pole kontekstu tylko dla lokalnego serwera OpenAI-compatible (Ollama, llama.cpp, oMLX, własny na loopbacku).
     private var showsContext: Bool {
         guard let url = state.editing?.baseURL ?? URL(string: state.url.trimmingCharacters(in: .whitespaces)) else { return false }
@@ -601,11 +602,11 @@ struct ProviderSetupSheet: View {
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
             ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-            if isAgent {
+            if let vendor = agentVendor {
                 FormRow(label: String(localized: "Program"), labelWidth: 70) {
                     VStack(alignment: .leading, spacing: 6) {
                         TextField("/opt/homebrew/bin/codex", text: $state.url).textFieldStyle(.plain).fieldBox()
-                        Text("Yascribe starts this app with its tools off. It uses your sign-in there (subscription or API key) and keeps no key itself. The transcript goes to \((state.editing?.kind ?? preset.kind)?.agentVendor ?? "the vendor"), under that vendor's terms.")
+                        Text("Yascribe starts this app with its tools off. It uses your sign-in there (subscription or API key) and keeps no key itself. The transcript goes to \(vendor), under that vendor's terms.")
                             .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -692,7 +693,7 @@ struct ProviderSetupSheet: View {
             switch r {
             case .verified(let n): StateLabel(.ok, n == 1 ? String(localized: "Verified · 1 model available") : String(localized: "Verified · \(n) models available"))
             case .failed(let why): StateLabel(.bad, localizedProviderMessage(why)).wrapping()
-            case .limited(let why): WarnLabel(why)
+            case .limited(let why): WarnLabel(localizedProviderMessage(why))
             }
         } else if let n = state.note {
             StateLabel(.neutral, n)
@@ -815,6 +816,7 @@ func localizedProviderMessage(_ message: String) -> String {
     case "Rate limited. Try again in a moment.": String(localized: "Rate limited. Try again in a moment.")
     case "The answer wasn't a model list. Is this an OpenAI-compatible address?": String(localized: "The answer wasn't a model list. Is this an OpenAI-compatible address?")
     case "No API key.": String(localized: "No API key.")
+    case "Key works for transcription only": String(localized: "Key works for transcription only")
     case "Can't connect. Is the server running and the address correct?": String(localized: "Can't connect. Is the server running and the address correct?")
     case "The server didn't answer in time.": String(localized: "The server didn't answer in time.")
     case "Meetings are being moved.": String(localized: "Meetings are being moved.")

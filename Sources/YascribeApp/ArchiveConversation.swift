@@ -47,7 +47,7 @@ enum ArchivePresentation {
         guard let ref else { return label }
         switch ref.kind {
         case .all: return bundle.localizedString(forKey: "All meetings", value: nil, table: nil)
-        case .unfiled: return bundle.localizedString(forKey: "No folder", value: nil, table: nil)
+        case .unfiled: return bundle.localizedString(forKey: "no folder", value: "No folder", table: nil)
         case .folder: return label
         case .meeting:
             let prefix = "This meeting: "
@@ -75,11 +75,11 @@ enum ArchivePresentation {
             "This chat is full. Start a new chat.", "This answer was interrupted when Yascribe closed. Ask again.",
             "Meetings are being moved to a new folder. Ask again when that finishes.",
             "Open a meeting first, or choose All meetings.", "No provider is available.",
-            "This provider is no longer available.", "This provider no longer exists.", "Checking your settings…", "Preparing the index…",
-            "Searching your meetings…", "Answering…",
+            "This provider is no longer available.", "This provider no longer exists.",
             "The embedding model returned vectors of a different size than the archive index uses.",
             "The embedding model returned an unusable vector.",
             "The model's Context window is too small to answer from your meetings.",
+            "The reply was cut off before the end.",
             "the chats folder is a symbolic link", "the chat file is a symbolic link", "invalid chat content",
             "the chat is too large", "unexpected file name", "symbolic link", "file too large",
             "id does not match the file name", "invalid content"

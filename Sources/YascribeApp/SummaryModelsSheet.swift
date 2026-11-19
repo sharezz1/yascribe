@@ -146,7 +146,7 @@ struct SummaryModelsSheet: View {
     private var caption: String {
         var parts = [ModelsSheetRules.correctionOrigin(hasOverride: override != nil, stale: stale,
                                                        presetName: model.notes.presetSummaryChoice(for: item)?.presetName)]
-        if let made = item.notes.summary?.model { parts.append("Current notes: \(model.modelDisplayName(made))") }
+        if let made = item.notes.summary?.model { parts.append(String(localized: "Current notes: \(model.modelDisplayName(made))")) }
         if let n = item.notes.summary?.condensedParts { parts.append("condensed in \(n) parts") }
         return parts.joined(separator: " · ")
     }

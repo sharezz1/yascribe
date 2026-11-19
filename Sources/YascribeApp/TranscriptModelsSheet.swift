@@ -205,7 +205,7 @@ struct TranscriptModelsSheet: View {
     private var correctCaption: String {
         var parts = [ModelsSheetRules.correctionOrigin(hasOverride: hasCorrectionOverride, stale: stale, presetName: preset?.name)]
         if let c = item.corrected {
-            parts.append("Current: \(model.modelDisplayName(c.model))")
+            parts.append(String(localized: "Current: \(model.modelDisplayName(c.model))"))
             let kept = c.failedBatches + c.rejectedLines
             if kept > 0 { parts.append("\(kept) parts kept as heard") }
         }

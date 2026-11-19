@@ -249,7 +249,8 @@ private struct LocalizationScanner {
                 }
             }
             let isPanelProperty = ["prompt", "message", "title"].contains(api) && text(i - 2) == "panel"
-            if inApp, (["messageText", "informativeText", "placeholderString"].contains(api) || isPanelProperty),
+            let isLastErrorLiteral = api == "lastError" && tokens.indices.contains(i + 2) && tokens[i + 2].literal != nil
+            if inApp, (["messageText", "informativeText", "placeholderString"].contains(api) || isPanelProperty || isLastErrorLiteral),
                text(i + 1) == "=" {
                 let start = i + 2
                 let end = expressionEnd(start..<tokens.count)
@@ -259,6 +260,7 @@ private struct LocalizationScanner {
             let localized: Set<String>
             if api == "String" { localized = ["localized"] }
             else if api == "NSLocalizedString" || api == "localizedString" { localized = [api == "NSLocalizedString" ? "0" : "forKey"] }
+            else if inApp && api == "accessibilityAction" && text(i - 1) == "." { localized = ["named"] }
             else if inApp && (Self.swiftUICalls.contains(api) || (Self.modifiers.contains(api) && text(i - 1) == ".")) {
                 localized = ["0"]
             } else { localized = [] }
@@ -273,12 +275,12 @@ private struct LocalizationScanner {
                 let range = (first + (labeled ? 2 : 0))..<argument.upperBound
                 if localized.contains(label) {
                     uses += literals(range, api: api, lookup: .localized)
-                } else if plain.contains(label) || label == "errorDescription" {
-                    uses += literals(range, api: label == "errorDescription" ? "errorDescription" : api, lookup: .plain)
                 } else if canonical.contains(label) {
                     let paired = api == "ClientProblem"
                         || ["ModelStoreError", "DiarizerModelStoreError"].contains(api) && hasDisplayMessage
                     uses += literals(range, api: api, lookup: paired ? .canonical : .plain)
+                } else if plain.contains(label) || label == "errorDescription" || (inApp && label == "message") {
+                    uses += literals(range, api: label == "errorDescription" ? "errorDescription" : api, lookup: .plain)
                 } else if api == "Text", label == "verbatim" {
                     uses += literals(range, api: api, lookup: .verbatim)
                 }
@@ -443,6 +445,9 @@ private func isAllowed(_ use: LocalizationUse, in file: String) -> Bool {
     case ("Sources/YascribeApp/Snapshots.swift", "Text", "openrouter.ai"),
          ("Sources/YascribeApp/Snapshots.swift", "Button", "Ollama"):
         return true // Adres i nazwa dostawcy w danych galerii.
+    case ("Sources/YascribeApp/ArchiveModel.swift", "Failure",
+          #"\(prefix) \(provider.name): \(Self.reason(error, model: model, provider: provider, transport: transport, maxTokens: maxTokens))"#):
+        return true // Zapis rozmowy; ArchivePresentation rozpoznaje prefiks i tłumaczy cały komunikat.
     case ("Sources/YascribeLocalASR/Diarization/DiarizerModelGate.swift", "DiarizerModelStoreError", "model missing, run with --download"):
         return true // DiarizerModelGate.decide: składnia CLI.
     case ("Sources/YascribeLocalASR/WAVDecoder.swift", "WAVDecodeError", "Not a WAV file."),
@@ -458,15 +463,17 @@ private func isAllowed(_ use: LocalizationUse, in file: String) -> Bool {
     }
 }
 
-private func isCanonicalDescription(_ use: LocalizationUse, in file: String) -> Bool {
-    guard use.api == "errorDescription" else { return false }
-    switch (file, use.literal.spelling) {
-    case ("Sources/YascribeNotes/ArchiveIndex.swift", "The embedding model returned vectors of a different size than the archive index uses."),
-         ("Sources/YascribeNotes/ArchiveIndex.swift", "The embedding model returned an unusable vector."),
-         ("Sources/YascribeNotes/ArchiveIndex.swift", "The model's Context window is too small to answer from your meetings."):
+private func isCanonicalPresentation(_ use: LocalizationUse, in file: String) -> Bool {
+    switch (file, use.api, use.literal.spelling) {
+    case ("Sources/YascribeApp/ArchiveModel.swift", "Failure", "Meetings are being moved to a new folder. Ask again when that finishes."),
+         ("Sources/YascribeApp/ArchiveModel.swift", "Failure", "Open a meeting first, or choose All meetings."):
+        return true // Zapis rozmowy, lookup w ArchivePresentation.
+    case ("Sources/YascribeNotes/ArchiveIndex.swift", "errorDescription", "The embedding model returned vectors of a different size than the archive index uses."),
+         ("Sources/YascribeNotes/ArchiveIndex.swift", "errorDescription", "The embedding model returned an unusable vector."),
+         ("Sources/YascribeNotes/ArchiveIndex.swift", "errorDescription", "The model's Context window is too small to answer from your meetings."):
         return true // ArchiveError.errorDescription: zapis rozmowy, lookup w ArchivePresentation.
-    case ("Sources/YascribeTranscription/CloudDiarization.swift", "Recording too long for speaker detection."),
-         ("Sources/YascribeTranscription/CloudDiarization.swift", "Could not encode audio for speaker detection."):
+    case ("Sources/YascribeTranscription/CloudDiarization.swift", "errorDescription", "Recording too long for speaker detection."),
+         ("Sources/YascribeTranscription/CloudDiarization.swift", "errorDescription", "Could not encode audio for speaker detection."):
         return true // CloudDiarizationError.errorDescription: CLI, lookup w displayMessage.
     default: return false
     }
@@ -486,7 +493,7 @@ private func localizationProblems(root: URL, tables: LocalizationTables) throws 
             let source = try String(contentsOf: file, encoding: .utf8)
             for use in scanLocalization(source, inApp: module.lastPathComponent == "YascribeApp") where !isAllowed(use, in: path) {
                 let description = "\(path):\(use.literal.line): \(use.api) \(use.literal.spelling.debugDescription)"
-                if use.lookup == .verbatim || (use.lookup == .plain && !isCanonicalDescription(use, in: path)) {
+                if use.lookup == .verbatim || (use.lookup == .plain && !isCanonicalPresentation(use, in: path)) {
                     problems.append("\(description): bypasses localization")
                 } else if !LocalizationFormat.matches(use.literal, keys: keys) {
                     problems.append("\(description): missing Polish key")
@@ -529,6 +536,7 @@ private func localizationProblems(root: URL, tables: LocalizationTables) throws 
         (#"view.accessibilityLabel("Literal")"#, "accessibilityLabel", .localized),
         (#"view.accessibilityHint("Literal")"#, "accessibilityHint", .localized),
         (#"view.accessibilityValue("Literal")"#, "accessibilityValue", .localized),
+        (#"view.accessibilityAction(named: "Literal") {}"#, "accessibilityAction", .localized),
         (#"String(localized: "Literal")"#, "String", .localized),
         (#"NSLocalizedString("Literal", comment: "ignored")"#, "NSLocalizedString", .localized),
         (#"alert.messageText = "Literal""#, "messageText", .plain),
@@ -538,6 +546,10 @@ private func localizationProblems(root: URL, tables: LocalizationTables) throws 
         (#"field.placeholderString = "Literal""#, "placeholderString", .plain),
         (#"panel.prompt = "Literal""#, "prompt", .plain),
         (#"panel.message = "Literal""#, "message", .plain),
+        (#"model.lastError = "Literal""#, "lastError", .plain),
+        (#"Problem(message: "Literal")"#, "Problem", .plain),
+        (#".failure(Problem(message: "Literal"))"#, "Problem", .plain),
+        (#".failure(ClientProblem(message: "Literal"))"#, "ClientProblem", .canonical),
         (#"PageTitle("Literal")"#, "PageTitle", .plain),
         (#"SectionHeader(heading, note: "Literal")"#, "SectionHeader", .plain),
         (#"FormRow(label: "Literal") {}"#, "FormRow", .plain),

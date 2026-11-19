@@ -17,7 +17,7 @@ final class TemplateEditorState: ObservableObject {
         draft = n; original = n; error = nil
     }
     func startNew() {
-        draft = Template(name: "New template", sections: [TemplateSection(title: "", instruction: "")])
+        draft = Template(name: String(localized: "New template"), sections: [TemplateSection(title: "", instruction: "")])
         original = nil; error = nil
     }
     /// Zamyka okno bez zapisu; nowy, niezapisany szablon znika razem z oknem.
@@ -84,8 +84,11 @@ struct TemplatesView: View {
         } catch TemplateError.noSections {
             state.error = String(localized: "Add at least one section with a title or instruction.")
             return
+        } catch TemplateError.builtinIsReadOnly {
+            state.error = String(localized: "This built-in template is read-only.")
+            return
         } catch {
-            state.error = "\(error)"
+            state.error = String(describing: error)
             return
         }
         model.notes.templates = file
@@ -97,9 +100,10 @@ struct TemplatesView: View {
     private func duplicate() {
         guard let t = state.draft else { return }
         var copy = t.duplicate()
+        copy.name = String(localized: "\(t.name) copy")
         var n = 2
         let names = Set(model.notes.templates.all().map(\.name))
-        while names.contains(copy.name) { copy.name = "\(t.name) copy \(n)"; n += 1 }
+        while names.contains(copy.name) { copy.name = String(localized: "\(t.name) copy \(n)"); n += 1 }
         state.draft = copy
         state.original = nil
         state.error = nil
@@ -115,7 +119,15 @@ struct TemplatesView: View {
 
     private func delete() {
         guard let t = state.original else { return }
-        do { try model.notes.templates.remove(id: t.id) } catch { state.error = "\(error)"; return }
+        do {
+            try model.notes.templates.remove(id: t.id)
+        } catch TemplateError.builtinCantBeRemoved {
+            state.error = String(localized: "Built-in templates can't be removed.")
+            return
+        } catch {
+            state.error = String(describing: error)
+            return
+        }
         state.error = model.saveTemplates()
         if state.error == nil { state.close() }
     }

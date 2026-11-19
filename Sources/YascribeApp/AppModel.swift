@@ -278,8 +278,13 @@ final class AppModel {
         }
         archive.resolveScope = { [weak self] scope in
             guard let self else { return nil }
+            let label = switch meetingFilter {
+            case .all: "All meetings"
+            case .unfiled: "No folder"
+            case .folder(let id): folders.folder(id)?.name ?? "No folder"
+            }
             return ArchiveModel.resolve(scope, sessions: sessions, matches: matchesFilter,
-                                        listLabel: meetingFilter == .all ? "All meetings" : filterLabel, selectedID: selectedSessionID)
+                                        listLabel: label, selectedID: selectedSessionID)
         }
     }
 
@@ -303,14 +308,17 @@ final class AppModel {
                 let aside = url.deletingLastPathComponent().appendingPathComponent("\(name).corrupt-\(stamp)")
                 // ponytail: gdy przeniesienie się nie uda, najbliższy save() nadpisze plik — blokada zapisu per plik, jeśli to się zdarzy
                 let moved = (try? FileManager.default.moveItem(at: url, to: aside)) != nil
-                errors.append("Couldn't read \(name) (\(moved ? "moved to \(aside.lastPathComponent)" : "couldn't move it aside")): \(error)")
+                let detail = String(describing: error)
+                errors.append(moved
+                    ? String(localized: "Couldn't read \(name) (moved to \(aside.lastPathComponent)): \(detail)")
+                    : String(localized: "Couldn't read \(name) (couldn't move it aside): \(detail)"))
                 return fallback
             }
         }
         providers = read(paths.providers, ProvidersFile())
         // Model Yascribe nie jest wierszem listy Providers, ale presety trzymają jego rekord — nie może go zabraknąć (F20 P3).
         if providers.ensureOnDeviceProvider() {
-            do { try JSONFile.save(providers, to: paths.providers) } catch { errors.append("Couldn't save providers.json: \(error)") }
+            do { try JSONFile.save(providers, to: paths.providers) } catch { errors.append(String(localized: "Couldn't save providers.json: \(String(describing: error))")) }
         }
         presets = read(paths.presets, PresetsFile())
         settings = read(paths.settings, GlobalSettings())
@@ -360,7 +368,7 @@ final class AppModel {
         guard Snapshots.directory == nil, recordingsMove == nil else { return }
         let r = AudioRetention.apply(sessions: sessionsDirectory, days: settings.audioRetentionDays, skip: busySessions,
                                      speakersPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin))
-        if !r.errors.isEmpty { lastError = "Couldn't delete old audio: " + r.errors.joined(separator: "\n") }
+        if !r.errors.isEmpty { lastError = String(localized: "Couldn't delete old audio: \(r.errors.joined(separator: "\n"))") }
         if !r.purged.isEmpty { reloadSessions(); refreshRecordingsSize() }
     }
 
@@ -746,26 +754,26 @@ final class AppModel {
     func savePreset(_ p: Preset) -> String? {
         do {
             if let a = p.asr, probeCache.result(provider: a.providerID, model: a.model, role: .asr, language: p.language)?.shape == .chatAudio {
-                return "This model returns no word timings, so it can't be used for meetings."
+                return String(localized: "This model returns no word timings, so it can't be used for meetings.")
             }
             try presets.upsert(p)
             if settings.defaultPresetID == nil { settings.defaultPresetID = p.id }
             save()
             return nil
         } catch PresetError.missingLanguage {
-            return "Choose a language, or Auto for meetings that mix languages."
+            return String(localized: "Choose a language, or Auto for meetings that mix languages.")
         } catch PresetError.missingASR {
-            return "Choose a speech-to-text model."
+            return String(localized: "Choose a speech-to-text model.")
         } catch PresetError.missingName {
-            return "Give the preset a name."
+            return String(localized: "Give the preset a name.")
         } catch {
-            return "\(error)"
+            return String(describing: error)
         }
     }
 
     /// Zapis słownika po zmianie w zakładce Dictionary; `nil` = zapisano, tekst = powód.
     func saveDictionary() -> String? {
-        do { try JSONFile.save(dictionary, to: paths.dictionary); return nil } catch { return "Couldn't save the dictionary: \(error)" }
+        do { try JSONFile.save(dictionary, to: paths.dictionary); return nil } catch { return String(localized: "Couldn't save the dictionary: \(String(describing: error))") }
     }
 
     // MARK: Aktualizacje i zamykanie
@@ -1091,7 +1099,7 @@ final class AppModel {
 
     /// Zapis własnych szablonów; `nil` = zapisano, tekst = powód.
     func saveTemplates() -> String? {
-        do { try JSONFile.save(notes.templates, to: paths.templates); return nil } catch { return "Couldn't save templates: \(error)" }
+        do { try JSONFile.save(notes.templates, to: paths.templates); return nil } catch { return String(localized: "Couldn't save templates: \(String(describing: error))") }
     }
 
     func isTranscribing(_ item: SessionItem) -> Bool { transcribing.contains(item.id) }
@@ -1125,7 +1133,7 @@ final class AppModel {
         } catch RunSnapshotError.chatShapeNotForMeetings {
             lastError = String(localized: "This model returns no word timings, so it can't be used for meetings.")
         } catch {
-            lastError = "\(error)"
+            lastError = String(describing: error)
         }
         return false
     }
@@ -1156,7 +1164,7 @@ final class AppModel {
             let fingerprint = localASRForRun(input.snapshot.model).store.fingerprint()
             if LocalASRVariant(model: input.snapshot.model) == nil,
                (fingerprint == nil || input.snapshot.modelFingerprint != fingerprint) {
-                lastError = "Unknown on-device model: \(input.snapshot.model). Its saved fingerprint doesn't match Parakeet TDT v3."
+                lastError = String(localized: "Unknown on-device model: \(input.snapshot.model). Its saved fingerprint doesn't match Parakeet TDT v3.")
                 return
             }
             if let refusal = RunGate.checkResume(snapshot: input.snapshot, provider: p, currentFingerprint: fingerprint) {
@@ -1397,12 +1405,12 @@ enum TranscriptionStartGate {
     }
 
     private static func refusal(sessionURL: URL, transcribing: Bool, correcting: Bool, generating: Bool, moving: Bool) -> String? {
-        if transcribing { return "This recording is already being transcribed." }
-        if moving { return "Meetings are being moved to a new folder. Transcribe when that finishes." }
+        if transcribing { return String(localized: "This recording is already being transcribed.") }
+        if moving { return String(localized: "Meetings are being moved to a new folder. Transcribe when that finishes.") }
         // Nowy przebieg w trakcie korekty: korekta starego tekstu nadpisałaby wynik albo poszłaby druga (F2, jak w `resume`).
         if correcting { return String(localized: "This transcript is being corrected. Try again when that finishes.") }
         // Po przebiegu ruszyłaby autokorekta obok notatki (ten sam lokalny serwer), a notatka ze starego tekstu nadpisałaby nowe.
-        if generating { return "Notes are being generated for this meeting. Try again when that finishes." }
+        if generating { return String(localized: "Notes are being generated for this meeting. Try again when that finishes.") }
         // Bez audio przebieg utworzyłby pusty `runs/<id>/` jako najnowszą próbę (wznowienie, retencja) bez szans na transkrypt.
         guard AudioRetention.audioFiles(sessionURL).isEmpty else { return nil }
         if let deletion = AudioDeletion.read(sessionURL) { return String(format: NSLocalizedString("This meeting's audio was deleted after %lld days, so it can't be transcribed again.", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(deletion.afterDays)) }
