@@ -474,12 +474,16 @@ struct SummaryTab: View {
     }
 
     private var sourceLine: String {
-        let kind = corrected ? "corrected" : "original"
         let details = [
             item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) },
             model.runLanguage(item).language.map { languageDisplayName($0) },
-        ].compactMap { $0 }
-        return "Uses the \(kind) transcript\(details.isEmpty ? "" : " (\(details.joined(separator: ", ")))")."
+        ].compactMap { $0 }.joined(separator: ", ")
+        switch (corrected, details.isEmpty) {
+        case (true, true): return String(localized: "Uses the corrected transcript.")
+        case (false, true): return String(localized: "Uses the original transcript.")
+        case (true, false): return String(localized: "Uses the corrected transcript (\(details)).")
+        case (false, false): return String(localized: "Uses the original transcript (\(details)).")
+        }
     }
 
     /// Jedna linia bez wnęki: przed notatką szablon · kontekst · opcje · „Generate notes"; po notatce tylko „Improve" + Copy.

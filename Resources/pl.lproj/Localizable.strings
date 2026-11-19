@@ -1035,3 +1035,7 @@
 "With %@ +%lld" = "Z uczestnikami: %@ +%lld";
 "This provider is no longer available." = "Ten dostawca nie jest już dostępny.";
 "%@ only" = "Tylko %@";
+"Uses the corrected transcript." = "Na podstawie poprawionego transkryptu.";
+"Uses the original transcript." = "Na podstawie oryginalnego transkryptu.";
+"Uses the corrected transcript (%@)." = "Na podstawie poprawionego transkryptu (%@).";
+"Uses the original transcript (%@)." = "Na podstawie oryginalnego transkryptu (%@).";
