@@ -19,6 +19,12 @@ extension CLI {
                                                   from: Data(contentsOf: runURL.appendingPathComponent("corrected.json"))).transcript
         }
         let sessionURL = runURL.deletingLastPathComponent().deletingLastPathComponent()
+        // Ręczne poprawki z aplikacji (TASK-109) — ta sama nakładka co w notatce aplikacji, gdy indeksy pasują.
+        // Z katalogu podanego w argumencie, jak oba transkrypty (także kopia przebiegu poza `runs/`).
+        if let edits = (try? JSONFile.load(TranscriptEdits?.self, from: runURL.appendingPathComponent("edits.json"), default: nil)) ?? nil,
+           transcript.utterances.count == raw.utterances.count {
+            transcript = edits.apply(to: transcript)
+        }
         let speakers = SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runURL.lastPathComponent),
             acceptedPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin), currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))
         transcript = transcript.withSpeakerLabels(speakers)

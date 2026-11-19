@@ -1079,3 +1079,12 @@
 "%lld dictionary suggestions from this meeting" = "Sugestie do słownika z tego spotkania: %lld";
 "Ignore" = "Ignoruj";
 "Review" = "Przejrzyj";
+"This segment changed while you were editing it. Copy your text, then open the editor again." = "Ten fragment zmienił się podczas edycji. Skopiuj swój tekst i otwórz edytor ponownie.";
+"Couldn't save the edit: %@" = "Nie można zapisać zmiany: %@";
+"Play segment" = "Odtwórz fragment";
+"Play segment from %@" = "Odtwórz fragment od %@";
+"Edited" = "Edytowano";
+"Pause" = "Wstrzymaj";
+"Edit transcript" = "Edytuj transkrypt";
+"Segment text" = "Tekst fragmentu";
+"⌘↩ saves" = "⌘↩ zapisuje";

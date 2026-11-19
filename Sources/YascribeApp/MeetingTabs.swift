@@ -34,6 +34,19 @@ final class MeetingViewState: ObservableObject {
     /// Source notatki wybrany w oknie Summary; `nil` = jak „Version" w Transcript. Żyje do zamknięcia widoku spotkania.
     @Published var summaryUseCorrected: Bool?
     var summaryCorrected: Bool { summaryUseCorrected ?? useCorrected }
+    /// Jedyny otwarty edytor segmentu (TASK-109): przebieg i indeks z chwili otwarcia — szkic nie trafi do innego przebiegu.
+    @Published var segmentDraft: SegmentDraft?
+}
+
+/// `corrected` i `initial` z chwili otwarcia: przełączenie wersji w trakcie edycji nie zmienia celu zapisu.
+struct SegmentDraft: Equatable {
+    var runID: String
+    var index: Int
+    var speaker: Speaker
+    var start: Double
+    var corrected: Bool
+    var initial: String
+    var text: String
 }
 
 // MARK: Zakładki tekstowe (macos.md §11.5)
@@ -169,7 +182,7 @@ struct TranscriptActions: View {
         guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return }
         let text = TranscriptTab.lines(t, item: item).map { line in
             switch line {
-            case .utterance(let u): Self.copyLine(u)
+            case .utterance(_, let u): Self.copyLine(u)
             case .mute(let m): "[\(MeetingDetailView.time(m.start))] \(m.line)"
             }
         }.joined(separator: "\n")
@@ -182,7 +195,8 @@ struct TranscriptTab: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: MeetingViewState
     let item: SessionItem
-    let onJump: (Utterance) -> Void
+    var playing: Int? = nil
+    let onJump: (Int, Utterance) -> Void
     private var busy: Bool { model.isTranscribing(item) }
     /// Diaryzacja po transkrypcji trzyma `busy` (F01), ale wiersz mówi, co naprawdę trwa.
     private var detecting: Bool { model.isDetectingSpeakers(item) }
@@ -299,6 +313,7 @@ struct TranscriptTab: View {
     @ViewBuilder private var content: some View {
         if let t = shown {
             let numbers = UtteranceRow.speakerNumbers(t)
+            let edited = item.editedIndices(corrected: state.useCorrected)
             // Uwaga 7: lista rośnie z treścią (przewija strona), separator `line2` między wierszami.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !t.failedChunks.isEmpty {
@@ -312,7 +327,7 @@ struct TranscriptTab: View {
                 ForEach(Array(Self.lines(t, item: item).enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
-                    case .utterance(let u): UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: numbers[u.speakerKey ?? ""]) { onJump(u) }
+                    case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""], edited: edited.contains(index))
                     case .mute(let m): MuteRow(note: m)
                     }
                 }
@@ -352,15 +367,52 @@ struct TranscriptTab: View {
         }
     }
 
-    enum Line { case utterance(Utterance), mute(MuteNote) }
+    private func row(_ index: Int, _ u: Utterance, number: Int?, edited: Bool) -> UtteranceRow {
+        // Jeden szkic naraz: otwarty edytor wyłącza pozostałe ołówki (niezapisany szkic nie znika).
+        var startEdit: (() -> Void)?
+        let corrected = state.useCorrected
+        // Szkic z poprzedniego przebiegu (nowy przebieg został bieżącym) nie blokuje ołówków — nowy go zastępuje.
+        let active = state.segmentDraft.map { $0.runID == item.runID } ?? false
+        if let runID = item.runID, !moving, !active, item.canEdit(corrected: corrected) {
+            startEdit = {
+                state.segmentDraft = SegmentDraft(runID: runID, index: index, speaker: u.speaker, start: u.start,
+                                                  corrected: corrected, initial: u.text, text: u.text)
+            }
+        }
+        let onSave: (() -> Void)? = moving ? nil : { save() }
+        return UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
+                            isEdited: edited, draft: draft(index), onStartEdit: startEdit, onSave: onSave,
+                            onCancel: { state.segmentDraft = nil }, onJump: { onJump(index, u) })
+    }
+
+    /// Szkic tylko w wierszu, dla którego go otwarto, i tylko w tym samym przebiegu.
+    private func draft(_ index: Int) -> Binding<String>? {
+        // Po przełączeniu na wersję z innymi indeksami edytor nie staje pod obcą wypowiedzią.
+        guard let d = state.segmentDraft, d.index == index, d.runID == item.runID,
+              d.corrected == state.useCorrected || item.canEdit(corrected: state.useCorrected) else { return nil }
+        return Binding(get: { state.segmentDraft?.text ?? "" }, set: { state.segmentDraft?.text = $0 })
+    }
+
+    /// Edytor zamyka się tylko po udanym zapisie (inaczej szkic zostaje, błąd w `lastError`).
+    private func save() {
+        guard let d = state.segmentDraft else { return }
+        let trimmed = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if trimmed(d.text) == trimmed(d.initial) || model.editUtterance(item, runID: d.runID, index: d.index, speaker: d.speaker, start: d.start,
+                                                                     corrected: d.corrected, text: d.text) {
+            state.segmentDraft = nil
+        }
+    }
+
+    /// Indeks wypowiedzi to pozycja w `utterances` (klucz poprawek i odtwarzania), nie pozycja linii z wyciszeniami.
+    enum Line { case utterance(Int, Utterance), mute(MuteNote) }
 
     /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12”, macos.md §11.5) w kolejności czasu.
     static func lines(_ t: Transcript, item: SessionItem) -> [Line] {
         var mutes = MuteNote.of(summary: item.summary)[...]
         var out: [Line] = []
-        for u in t.utterances {
+        for (i, u) in t.utterances.enumerated() {
             while let m = mutes.first, m.start <= u.start { out.append(.mute(m)); mutes = mutes.dropFirst() }
-            out.append(.utterance(u))
+            out.append(.utterance(i, u))
         }
         return out + mutes.map(Line.mute)
     }
