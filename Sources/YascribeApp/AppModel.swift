@@ -120,8 +120,14 @@ final class AppModel {
         didSet {
             replacementRules = ReplacementRules(dictionary)
             replaced = [:]
+            refreshSuggestions()
         }
     }
+    /// Sugestie Aliasów (TASK-112) z różnicy surowy → poprawiony transkrypt; liczone w tle przez `refreshSuggestions`.
+    var aliasSuggestions: [AliasSuggestion] = []
+    /// Odrzucone sugestie (`dictionary-dismissed.json`); zapis przez `dismissSuggestion`.
+    private(set) var dismissedSuggestions = Set<String>()
+    @ObservationIgnored private var suggestionsGeneration = 0
     /// Reguły skompilowane raz na wersję słownika. Obserwowane: zmiana słownika odświeża otwarte widoki transkryptu.
     private(set) var replacementRules = ReplacementRules(UserDictionary())
     /// Wynik Replacement (klucz: sesja i wariant transkryptu) razem ze źródłem, z którego powstał. Bez obserwacji, bo
@@ -308,6 +314,7 @@ final class AppModel {
         if let problem = loadedPrompts.problem { errors.append(problem) }
         modelNames = read(paths.modelNames, ModelNameCache())
         notes.templates = read(paths.templates, TemplatesFile())
+        dismissedSuggestions = read(paths.dismissedSuggestions, Set<String>())
         dictionary = read(paths.dictionary, UserDictionary())
         folders = read(paths.folders, FoldersFile())
         dictation.loadHistory(stamp: stamp, errors: &errors)
@@ -497,6 +504,54 @@ final class AppModel {
                 kept[entry.key] = (fresh, entry.value.speakers, entry.value.result)
             }
         }
+        refreshSuggestions()
+    }
+
+    /// Przelicza sugestie Aliasów w tle na kopii sesji i słownika; wynik przyjmuje tylko najnowsze wywołanie.
+    func refreshSuggestions() {
+        suggestionsGeneration += 1
+        let generation = suggestionsGeneration
+        let sources = sessions.compactMap { item -> AliasSuggestions.Source? in
+            guard let raw = item.transcript, let fixed = item.corrected else { return nil }
+            return AliasSuggestions.Source(id: item.id, raw: raw, corrected: fixed)
+        }
+        let dictionary = dictionary, dismissed = dismissedSuggestions, fillers = settings.fillerWords ?? FillerWords.defaults
+        guard !sources.isEmpty, !dictionary.terms.isEmpty else { aliasSuggestions = []; return }
+        Task {
+            let found = await Task.detached(priority: .utility) {
+                // Słownik systemowy przez główny wątek (SystemSpelling), więc tylko dla grup po progu i raz na słowo.
+                var common: [String: Bool] = [:]
+                return AliasSuggestions.find(in: sources, dictionary: dictionary, dismissed: dismissed, fillerWords: fillers) { word in
+                    if let known = common[word] { return known }
+                    let known = !SystemSpelling.isMisspelled(word)
+                    common[word] = known
+                    return known
+                }
+            }.value
+            guard generation == suggestionsGeneration else { return }
+            aliasSuggestions = found
+        }
+    }
+
+    /// Add z karty Suggestions: Alias przez ten sam `upsert` co arkusz Terma; `nil` = zapisano, tekst = powód.
+    func acceptSuggestion(_ s: AliasSuggestion) -> String? {
+        let proposed: UserDictionary
+        do { proposed = try AliasSuggestions.accept(s, in: dictionary) } catch {
+            return DictionaryEdit.presentation(of: error, draftTerm: s.term).message
+        }
+        return DictionaryEdit.commit(proposed, replacing: dictionary, set: { dictionary = $0 }, save: saveDictionary)
+    }
+
+    /// Ignore: sugestia nie wraca; nieudany zapis cofa zbiór (pamięć nie rozchodzi się z dyskiem).
+    func dismissSuggestion(_ s: AliasSuggestion) -> String? {
+        let previous = dismissedSuggestions
+        dismissedSuggestions.insert(s.id)
+        do { try JSONFile.save(dismissedSuggestions, to: paths.dismissedSuggestions) } catch {
+            dismissedSuggestions = previous
+            return "Couldn't save the dictionary: \(error)"
+        }
+        aliasSuggestions.removeAll { $0.id == s.id }
+        return nil
     }
 
     /// Jedyny punkt odczytu transkryptu do wyświetlania, wyszukiwania i notatki (F21, D8): `SessionItem.transcript(corrected:)`
