@@ -1,124 +1,146 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/readme/logo/logo-pionowe-ciemne.svg">
-    <img src="docs/readme/logo/logo-pionowe-jasne.svg" alt="Logo Yascribe: złote pióro między dwiema falami dźwięku, motto What's it like to be a scribe?" width="300">
+    <img src="docs/readme/logo/logo-pionowe-jasne.svg" alt="Logo Yascribe przedstawia złote pióro między dwiema falami dźwięku i motto „What's it like to be a scribe?”" width="300">
   </picture>
 </p>
 
 # Yascribe: skryba, który rozumie po polsku
 
-Natywna aplikacja macOS do notatek ze spotkań. Nagrywa rozmowę na Macu, zapisuje ją po polsku i układa z niej notatkę. **Do rozmowy nie dołącza żaden bot.**
+Natywna aplikacja na macOS do notatek ze spotkań. Nagrywa rozmowę na Macu, sporządza transkrypcję po polsku, rozpoznaje rozmówców i przygotowuje notatkę. Możesz też zadawać pytania o jedno spotkanie lub całe archiwum i dyktować tekst w dowolnej aplikacji. **Do rozmowy nie dołącza żaden bot.**
 
-*English: a native macOS meeting-notes app that records system audio and microphone as two separate tracks, transcribes locally or via API, and writes notes with a model you choose. The app UI is currently English; Polish UI is planned.*
+*English: a native macOS meeting-notes app that records system audio and microphone as two separate tracks, transcribes locally or via API, tells speakers apart, writes notes with a model you choose, answers questions about your meetings and does system-wide dictation. The app UI is currently English; Polish UI is planned.*
 
-Język wybierasz sam · lokalnie albo przez API · dwa tory dźwięku · wolne oprogramowanie (GPL-3.0). Projekt jednoosobowy, w budowie. Interfejs aplikacji jest na razie po angielsku (polska wersja jest w planie), dokumenty w repo po polsku.
+Sam wybierasz język i decydujesz, czy przetwarzać dane lokalnie, czy przez API. Aplikacja nagrywa dźwięk na dwóch osobnych ścieżkach i jest wolnym oprogramowaniem (GPL-3.0). To jednoosobowy projekt w trakcie rozwoju (wersje alfa 0.1.x). Interfejs jest na razie po angielsku, a dokumentacja w repozytorium jest po polsku. Polski interfejs jest w planach.
 
 <table>
   <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/meetings-next-dark.png">
-        <img src="docs/readme/img/meetings-next-light.png" alt="Lista spotkań z kartą najbliższego spotkania z kalendarza">
+        <img src="docs/readme/img/meetings-next-light.png" alt="Lista spotkań z kartą najbliższego spotkania z kalendarza, folderami i polem do zadawania pytań">
       </picture>
-      <b>Najbliższe spotkanie pod ręką.</b> Karta z kalendarza Apple: godzina, liczba uczestników i jeden przycisk Record. Notatka dostaje tytuł z wydarzenia.
+      <b>Najbliższe spotkanie.</b> Na karcie spotkania z kalendarza Apple wystarczy kliknąć „Record”. Na liście są foldery spotkań, a na dole pole „Ask about All meetings”.
     </td>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/meeting-summary-dark.png">
-        <img src="docs/readme/img/meeting-summary-light.png" alt="Notatka ze spotkania z zakładkami My notes, Transcript i Summary">
+        <img src="docs/readme/img/meeting-summary-light.png" alt="Notatka ze spotkania z zakładkami „Summary”, „My notes” i „Transcript”">
       </picture>
-      <b>Podsumowanie z zadaniami.</b> Szablon, kontekst i model w jednym pasku. Zadania mają właściciela, powód i termin.
+      <b>Po otwarciu spotkania od razu widzisz notatkę.</b> Z podsumowania dowiesz się, kto odpowiada za każde zadanie i z czego ono wynika. „Copy” kopiuje notatkę, a „Improve…” pozwala wygenerować ją ponownie innym modelem.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/speakers-transcript-dark.png">
+        <img src="docs/readme/img/speakers-transcript-light.png" alt="Transkrypcja z rozmówcami oznaczonymi kolorami i listą uczestników „Who is this?”">
+      </picture>
+      <b>Kto mówi?</b> Każdy rozmówca ma numer i kolor. Kliknij jego oznaczenie, by otworzyć listę „Who is this?” z uczestnikami z kalendarza i osobami z poprzednich spotkań.
+    </td>
+    <td width="50%">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/speakers-summary-dark.png">
+        <img src="docs/readme/img/speakers-summary-light.png" alt="Notatka z imionami rozmówców, które można kliknąć, w tych samych kolorach co w transkrypcji">
+      </picture>
+      <b>Imiona także w notatce.</b> W notatce widać imiona przypisane rozmówcom. Gdy zmienisz imię, zmiana od razu pojawi się w notatce, kopii i archiwum, bez ponownego generowania notatki.
     </td>
   </tr>
 </table>
 
 *Dane na zrzutach są przykładowe.*
 
-## Dlaczego polski nie jest tu dodatkiem
+## Obsługa języka polskiego
 
-Po angielsku gotowe narzędzia działają dobrze. Polski wymaga zwykle trybu wielojęzycznego, w którym model sam zgaduje język i potrafi się pomylić, na przykład zapisać polską rozmowę cyrylicą. Dlatego w Yascribe **język podajesz modelowi wprost**, a automatyczne wykrywanie jest tylko awaryjne.
+Gotowe narzędzia dobrze radzą sobie z angielskim. Język polski zwykle wymaga trybu wielojęzycznego, w którym model sam rozpoznaje język. Czasem się myli i potrafi zapisać polską rozmowę cyrylicą. W Yascribe **sam wskazujesz modelowi język**, a automatyczne wykrywanie służy tylko jako opcja awaryjna.
 
-- **Język ustawiasz sam.** Preset łączy język z modelami transkrypcji, korekty i notatki, więc nie mogą się rozjechać. Przy starcie nagrania widzisz, że działa „Polish · PL".
-- **Polskie przerywniki znikają.** Yyy, mhm i podobne wypadają z transkryptu po korekcie. Surowy zapis zostaje nietknięty.
-- **Model, który zna polski.** Parakeet TDT v3 działa w całości na Macu: 483 MB, bez sieci, ok. 170 razy szybciej, niż trwa nagranie.
-- **Nazwy własne.** Słownik z własnymi terminami i aliasami poprawia zapis przy odczycie transkryptu, a terminy i uczestnicy z kalendarza trafiają też do poleceń korekty i notatki.
+- **Wybór języka.** Preset określa język oraz modele do transkrypcji, korekty i tworzenia notatki, dzięki czemu wszystkie etapy korzystają z jednego ustawienia języka. Gdy zaczynasz nagrywać, widzisz oznaczenie „Polish · PL”.
+- **Usuwanie polskich przerywników.** Korekta usuwa z transkrypcji „yyy”, „mhm” i podobne przerywniki. Surowy zapis pozostaje bez zmian.
+- **Modele obsługujące polski.** Parakeet TDT v3 (483 MB) i Parakeet Ultra (632 MB) działają w całości na Macu, bez dostępu do sieci.
+- **Nazwy własne i odmiana.** Do słownika możesz dodać własne terminy i aliasy. Pomaga poprawnie zapisywać nazwy także w odmienionych formach. Aplikacja uwzględnia terminy ze słownika i uczestników z kalendarza w poleceniach do korekty i tworzenia notatki.
+- **Sprawdzanie liczb.** Korekta ma zachować sens wypowiedzi. W notatce pojawia się ostrzeżenie, jeśli zawiera ona liczbę, której nie było w transkrypcji.
 
 ## Jak to działa
 
-1. **Nagrywasz.** Dźwięk systemowy i mikrofon trafiają do dwóch osobnych plików, nigdy do jednego miksu, bo z miksu nie da się już odzyskać czystego głosu. Każdy tor możesz wyciszyć jednym kliknięciem, a wyciszenie w Teams wycisza tor mikrofonu w nagraniu.
-2. **Transkrybujesz.** Lokalnie przez Parakeet albo przez API (OpenRouter, ElevenLabs Scribe v2). Przerwaną transkrypcję aplikacja wznawia tam, gdzie stanęła.
-3. **Poprawiasz.** Model usuwa przerywniki, a słownik poprawia nazwy własne. Długie spotkania są dzielone na części, żeby mieściły się w kontekście modelu. Przebieg możesz powtórzyć innym modelem („Transcribe again…").
-4. **Dostajesz notatkę.** Szablon z własnymi sekcjami, kontekst spotkania i model wybrany osobno dla każdego spotkania.
+1. **Nagrywasz.** Aplikacja zapisuje dźwięk systemowy i dźwięk z mikrofonu w osobnych plikach, bo po zmiksowaniu obu ścieżek nie da się odzyskać czystego głosu. Każdą ścieżkę możesz wyciszyć jednym kliknięciem. Gdy wyciszysz mikrofon w Teams, aplikacja wyciszy również jego ścieżkę w nagraniu.
+2. **Transkrybujesz.** Możesz użyć lokalnego modelu Parakeet lub skorzystać z API (OpenRouter, ElevenLabs Scribe v2, oMLX z modelem Whisper lub Qwen3-ASR albo dowolny endpoint zgodny z OpenAI). Przed transkrypcją aplikacja usuwa echo głośników ze ścieżki mikrofonu, dzięki czemu nie przypisuje głosów innych rozmówców do „Me”. Jeśli transkrypcja się przerwie, aplikacja wznawia ją od miejsca przerwania.
+3. **Rozpoznajesz rozmówców.** Scribe v2 sam rozróżnia rozmówców. Na Macu robi to lokalny model, a w chmurze możesz też użyć Mistrala. Imiona przypisujesz rozmówcom jednym kliknięciem.
+4. **Poprawiasz.** Model usuwa przerywniki, a słownik poprawia nazwy własne. Aplikacja dzieli transkrypcje długich spotkań na fragmenty, które mieszczą się w oknie kontekstowym modelu. Opcja „Improve…” pozwala powtórzyć korektę innym modelem.
+5. **Dostajesz notatkę.** Aplikacja tworzy ją na podstawie szablonu z własnymi sekcjami i kontekstu spotkania. Model możesz wybrać osobno dla każdego spotkania. W „Settings” możesz zmienić polecenia do korekty i tworzenia notatki.
+6. **Pytasz.** W „Ask” możesz zadawać pytania o jedno spotkanie, folder lub całe archiwum. Odpowiedzi zawierają odnośniki do źródeł. Historię rozmów znajdziesz w „Past chats”.
 
-Gdy rozmowa w Teams się kończy, pigułka pyta „Meeting ended?" i bez odpowiedzi kończy nagranie po 5 sekundach (Continue je przerywa).
+Gdy kończy się rozmowa w Teams, w panelu nagrywania pojawia się pytanie „Meeting ended?”. Po 5 sekundach bez odpowiedzi aplikacja kończy nagranie. „Continue” przerywa odliczanie.
+
+**Dyktowanie.** Aby dyktować tekst do dowolnej aplikacji, przytrzymaj lub naciśnij klawisz przypisany do skrótu globalnego (domyślnie Fn). Dyktowanie korzysta z tego samego modelu transkrypcji, słownika i filtra przerywników. Korekta jest opcjonalna, a historia zawiera wyłącznie tekst.
 
 <table>
   <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/pill-expanded-dark.png">
-        <img src="docs/readme/img/pill-expanded-light.png" alt="Pigułka nagrywania: dwa tory z poziomami i przyciskami Mute">
+        <img src="docs/readme/img/pill-expanded-light.png" alt="Panel nagrywania z poziomami dźwięku i przyciskami „Mute” dla dwóch ścieżek">
       </picture>
-      <b>Pigułka podczas nagrania.</b> System i mikrofon na osobnych poziomach, z nazwą urządzenia i wyciszeniem na torze.
+      <b>Panel nagrywania.</b> Panel pokazuje nazwę urządzenia oraz osobno poziom dźwięku systemowego i mikrofonu. Każdą ścieżkę możesz wyciszyć, a mikrofon możesz zmienić w trakcie nagrania.
     </td>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/pill-offer-call-dark.png">
-        <img src="docs/readme/img/pill-offer-call-light.png" alt="Pigułka z propozycją nagrania rozmowy w Teams">
+        <img src="docs/readme/img/pill-offer-call-light.png" alt="Panel z propozycją nagrania rozmowy w Teams">
       </picture>
-      <b>Rozmowa w Teams? Zapyta.</b> Aplikacja wykrywa rozmowę i proponuje start z wybranym presetem.
+      <b>Nagrywanie rozmów w Teams.</b> Gdy aplikacja wykryje rozmowę, proponuje rozpoczęcie nagrania z wybranym presetem.
     </td>
   </tr>
   <tr>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/templates-builtin-dark.png">
-        <img src="docs/readme/img/templates-builtin-light.png" alt="Edytor szablonów z listą sekcji notatki">
+        <img src="docs/readme/img/templates-builtin-light.png" alt="Edytor szablonu z listą sekcji notatki">
       </picture>
-      <b>Szablony ze swoimi sekcjami.</b> Standard, 1:1, cotygodniówka, rozmowa z klientem albo własny. Każda sekcja ma opis tego, co model ma w niej zapisać.
+      <b>Szablony notatek.</b> Możesz wybrać szablon Standard, 1:1, cotygodniówkę lub rozmowę z klientem albo utworzyć własny. Opis każdej sekcji określa, co model ma w niej zapisać.
     </td>
     <td width="50%">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/readme/img/settings-on-this-mac-dark.png">
-        <img src="docs/readme/img/settings-on-this-mac-light.png" alt="Ustawienia: model Yascribe oraz lista dostawców z Ollamą, llama.cpp i oMLX">
+        <img src="docs/readme/img/settings-on-this-mac-light.png" alt="Ustawienia z modelami Parakeet na Macu i listą dostawców">
       </picture>
-      <b>Własny model albo chmura.</b> Karta modelu Yascribe, OpenRouter, ElevenLabs, Ollama, llama.cpp, oMLX i dowolny endpoint zgodny z OpenAI.
+      <b>Modele lokalne i w chmurze.</b> Do wyboru masz Parakeet na Macu, OpenRouter, ElevenLabs, Mistral, Ollama, llama.cpp, oMLX i dowolny endpoint zgodny z OpenAI. Eksperymentalnie możesz też skorzystać z Codexa i Claude Code po zalogowaniu się na własne konto.
     </td>
   </tr>
 </table>
 
 ## Twoje dane
 
-- **Bez bota.** Nagrywa Mac, a nie uczestnik spotkania. Nikt na rozmowie nie widzi dodatkowej osoby.
-- **Wszystko lokalnie.** Nagrania, transkrypty i notatki leżą w `~/Library/Application Support/Yascribe`. Transkrypcja Parakeetem i notatka przez Ollamę, llama.cpp albo oMLX działają bez sieci. Do chmury trafia tylko to, co sam wybierzesz.
-- **Audio z terminem.** Audio możesz usuwać automatycznie po wybranym czasie, na przykład po 30 dniach. Transkrypty i notatki zostają, a audio czeka na zakończoną transkrypcję.
-- **Klucze API** trzymane są w pęku kluczy macOS i wpisujesz je sam w aplikacji.
+- **Bez bota.** Rozmowę nagrywasz na swoim Macu. Pozostali uczestnicy nie widzą na liście żadnej dodatkowej osoby.
+- **Wszystko lokalnie.** Aplikacja zapisuje nagrania, transkrypcje i notatki w `~/Library/Application Support/Yascribe`. Możesz transkrybować nagrania za pomocą Parakeeta, rozpoznawać rozmówców na Macu i tworzyć notatki za pomocą Ollamy, llama.cpp lub oMLX bez dostępu do sieci. Aplikacja wysyła do chmury tylko te dane, które wybierzesz. Przy wyborze dostawcy wskazuje, dokąd wyśle transkrypcję.
+- **Czas przechowywania nagrań.** Możesz włączyć automatyczne usuwanie nagrań po wybranym czasie, na przykład po 30 dniach. Aplikacja zachowuje transkrypcje i notatki, a nagrania usuwa dopiero po zakończeniu transkrypcji.
+- **Klucze API** wpisujesz w aplikacji, która zapisuje je w pęku kluczy macOS. Codex i Claude Code mają osobne logowanie. Yascribe nie przechowuje ich kluczy.
 
 ## Instalacja
 
-1. Pobierz `Yascribe-<wersja>.zip` z [Releases](https://github.com/sharezz1/yascribe/releases/latest), rozpakuj i przeciągnij `Yascribe.app` do `/Applications`.
-2. Aplikacja jest podpisana samopodpisanym certyfikatem i **nie jest notaryzowana**, więc macOS zapyta o zgodę przy pierwszym uruchomieniu (Ustawienia systemowe → Prywatność i ochrona → „Otwórz mimo to"). Notaryzacja jest w planie.
-3. Przy pierwszym nagraniu zatwierdź dostęp do mikrofonu, dźwięku systemowego i (opcjonalnie) kalendarza. Synchronizacja wyciszenia z Teams wymaga jeszcze zgody Accessibility.
-4. Aktualizacje: Yascribe → „Check for Updates…". Instalacja zawsze na Twoje kliknięcie i nigdy nie przerywa trwającego nagrania.
+1. Pobierz `Yascribe-<wersja>.zip` z [Releases](https://github.com/sharezz1/yascribe/releases/latest), rozpakuj archiwum i przeciągnij `Yascribe.app` do `/Applications`.
+2. Aplikacja ma podpis z certyfikatem Apple Development. **Nie ma jeszcze notaryzacji**, więc przy pierwszym uruchomieniu macOS poprosi o zgodę (Ustawienia systemowe → Prywatność i ochrona → „Otwórz mimo to”). Notaryzacja jest w planach.
+3. Przy pierwszym nagraniu udziel dostępu do mikrofonu, dźwięku systemowego i opcjonalnie do kalendarza. Synchronizacja wyciszenia z Teams i dyktowanie wymagają też uprawnienia „Accessibility”, a skrót do dyktowania dodatkowo uprawnienia „Input Monitoring”.
+4. Aktualizacje sprawdzisz przez Yascribe → „Check for Updates…” lub w menu na pasku. Aplikacja instaluje aktualizację dopiero po kliknięciu i nigdy nie przerywa trwającego nagrania.
 
-Wymagania: macOS 27.
+Aplikacja wymaga macOS 27.
 
 ## Co dalej
 
-**Mamy:** nagrywanie dwóch torów z wyciszaniem i wykrywaniem końca spotkania · transkrypcja lokalna (Parakeet v3) i przez API · korekta z filtrem przerywników · słownik z importem i eksportem · notatki z szablonów, model per spotkanie · modele lokalne (Ollama, llama.cpp, oMLX, własny endpoint) · nagrywanie na słuchawkach Bluetooth · kalendarz Apple i oferta startu przy rozmowie w Teams · archiwum z wyszukiwarką, retencją audio i jasnym/ciemnym motywem · aktualizacje jednym kliknięciem.
+**Już działa.** Nagrywanie na dwóch ścieżkach z wyciszaniem, wykrywaniem końca spotkania i zmianą mikrofonu w trakcie nagrania · usuwanie echa głośników ze ścieżki mikrofonu · transkrypcja lokalna (Parakeet v3, Parakeet Ultra) i przez API · rozpoznawanie rozmówców i wyświetlanie ich imion w transkrypcji i notatce · korekta z filtrem przerywników i własnymi poleceniami · słownik z obsługą odmiany, importu i eksportu · notatki z szablonów i wybór modelu dla każdego spotkania · pytania w „Ask” o spotkanie, folder lub archiwum · dyktowanie do dowolnej aplikacji · modele lokalne (Ollama, llama.cpp, oMLX, własny endpoint) i agenci CLI (Codex, Claude Code) · nagrywanie z użyciem słuchawek Bluetooth · kalendarz Apple i proponowanie nagrania po wykryciu rozmowy w Teams · foldery, krótki opis spotkania („Overview”) oraz archiwum z wyszukiwarką i ustawieniem czasu przechowywania nagrań · jasny i ciemny motyw · aktualizacje jednym kliknięciem · narzędzie `yascribe-cli` do transkrypcji, korekty, tworzenia notatek i rozpoznawania rozmówców w terminalu.
 
-**W kolejce:**
-- polski interfejs (aplikacja rozumie po polsku, a sama jest po angielsku),
-- klik na słowo w transkrypcie dopisuje alias do słownika; podpowiadanie słów lokalnemu modelowi (word boosting) po pomiarze,
-- **echo głośników w mikrofonie** (wysoki priorytet): usuwanie echa, żeby głosy rozmówców nie lądowały w torze „Me",
-- transkrypt na żywo i wznawianie nagrania do tej samej notatki,
-- wybór mikrofonu i wyjścia przed startem (mikrofon da się już zmienić w pigułce w trakcie nagrania).
+**W kolejce**
 
-**Pomysły bez terminu:** czat nad spotkaniem i archiwum · rozpoznawanie rozmówców i zakładka z zadaniami · punkty notatki z odnośnikiem do transkryptu · MCP dla Claude i eksport do markdown · dyktowanie na żywo · wbudowany model tekstowy · Google Calendar, Outlook, Slack · notaryzacja.
+- polski interfejs (aplikacja już rozumie polski, a jej interfejs jest na razie po angielsku),
+- dodawanie aliasu do słownika przez kliknięcie słowa w transkrypcji oraz podpowiadanie słów lokalnemu modelowi (word boosting) po pomiarach,
+- transkrypcja na żywo i możliwość wznowienia nagrywania w ramach tej samej notatki,
+- kolejne lokalne modele transkrypcji,
+- „Record now” w menu na pasku.
+
+**Pomysły bez terminu.** Notaryzacja i Developer ID · Google Calendar, Outlook, Slack · MCP dla Claude i eksport do Markdown.
 
 ## Budowanie
 
-Wystarczą Command Line Tools (Swift 6.4), bez Xcode.
+Do zbudowania aplikacji wystarczą Command Line Tools (Swift 6.4). Xcode nie jest potrzebny.
 
 ```
 swift package --disable-keychain resolve
@@ -129,10 +151,10 @@ scripts/bundle.sh       # składa .build/Yascribe.app
 
 ## Nazwa i znak
 
-Motto „What's it like to be a scribe?" nawiązuje do monologu skryby z „Asterix i Obelix: Misja Kleopatra". Pióro to zapis, a fale po bokach to dwa kanały nagrania: system i mikrofon.
+Motto „What's it like to be a scribe?” nawiązuje do monologu skryby z filmu „Asterix i Obelix: Misja Kleopatra”. Pióro symbolizuje zapis, a fale po bokach przedstawiają dwie ścieżki nagrania, jedną dla dźwięku systemowego i drugą dla mikrofonu.
 
 ## Licencja
 
-Yascribe jest wolnym oprogramowaniem na licencji **GNU GPL v3** (plik [LICENSE](LICENSE)). Licencje zależności i atrybucje: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Yascribe jest wolnym oprogramowaniem na licencji **GNU GPL v3** (plik [LICENSE](LICENSE)). Licencje zależności i informacje o ich autorach znajdziesz w pliku [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 Copyright (C) 2026 Michał Przytulski

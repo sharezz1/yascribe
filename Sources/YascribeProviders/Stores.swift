@@ -25,6 +25,8 @@ public struct YascribePaths: Sendable {
     public var modelNames: URL { root.appendingPathComponent("model-names.json") }
     public var templates: URL { root.appendingPathComponent("templates.json") }
     public var dictionary: URL { root.appendingPathComponent("dictionary.json") }
+    /// Odrzucone sugestie Aliasów (TASK-112): klucze `AliasSuggestion.id`; brak pliku = żadnych.
+    public var dismissedSuggestions: URL { root.appendingPathComponent("dictionary-dismissed.json") }
     /// Własne polecenia korekty i podsumowania (TASK-96); brak pliku = domyślne z aplikacji.
     public var prompts: URL { root.appendingPathComponent("prompts.json") }
     /// Foldery spotkań (TASK-26); brak pliku = brak folderów.

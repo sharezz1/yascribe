@@ -25,6 +25,8 @@ final class DictionaryViewState: ObservableObject {
     @Published var notice: String?
     /// Katalog eksportu czekający na zgodę na nadpisanie istniejących plików.
     @Published var pendingExport: URL?
+    /// Ryzykowna sugestia Aliasu czekająca na potwierdzenie Add (TASK-112).
+    @Published var pendingRisky: AliasSuggestion?
 
     func openNew() {
         draft = DictionaryTerm(""); draftIsNew = true; selection = nil; resetEditorMessages()
