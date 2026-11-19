@@ -55,13 +55,22 @@ final class LanguageRestart {
 
     static func launch() throws {
         guard let executable = Bundle.main.executableURL else { throw CocoaError(.fileNoSuchFile) }
+        let bundle = Bundle.main.bundleURL
+        // Paczka: `open` bez -n aktywuje instancję uruchomioną w międzyczasie (np. z Docka) zamiast startować drugą.
+        // Zmienne środowiska przekazujemy jawnie (tylko nietajne ścieżki/ustawienia deweloperskie).
+        let env = ["YASCRIBE_DATA_DIR", "YASCRIBE_MODEL_STORE", "YASCRIBE_AEC_H"].compactMap { key in
+            ProcessInfo.processInfo.environment[key].map { "\(key)=\($0)" }
+        }
+        let relaunch = bundle.pathExtension == "app"
+            ? ["/usr/bin/open", "-a", bundle.path] + env.flatMap { ["--env", $0] }
+            : [executable.path]
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", """
-            while kill -0 "$1" 2>/dev/null; do sleep 0.2; done
-            if /bin/ps -axww -o comm= | /usr/bin/grep -Fxq -- "$2"; then exit 0; fi
-            exec "$2"
-            """, "yascribe-restart", String(ProcessInfo.processInfo.processIdentifier), executable.path]
+            pid="$1"; shift
+            while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
+            exec "$@"
+            """, "yascribe-restart", String(ProcessInfo.processInfo.processIdentifier)] + relaunch
         try process.run()
     }
 }
