@@ -115,6 +115,13 @@ Gdy kończy się rozmowa w Teams, w panelu nagrywania pojawia się pytanie „Me
 - **Czas przechowywania nagrań.** Możesz włączyć automatyczne usuwanie nagrań po wybranym czasie, na przykład po 30 dniach. Aplikacja zachowuje transkrypcje i notatki, a nagrania usuwa dopiero po zakończeniu transkrypcji.
 - **Klucze API** wpisujesz w aplikacji, która zapisuje je w pęku kluczy macOS. Codex i Claude Code mają osobne logowanie. Yascribe nie przechowuje ich kluczy.
 
+## Agenci AI (MCP)
+
+Yascribe ma serwer MCP na stdio, więc Claude Code, Codex, OpenCode, Hermes i pi mogą czytać Twoje spotkania:
+listę z wyszukiwaniem, transkrypt i notatkę, a także całe spotkanie jako markdown. Serwer tylko czyta i nic
+nie wychodzi z niego bez Twojej zgody: włącz ją w **Settings → Agent access (MCP)**. Instrukcja podłączenia
+dla każdego klienta: [docs/readme/mcp.md](docs/readme/mcp.md).
+
 ## Instalacja
 
 1. Pobierz `Yascribe-<wersja>.zip` z [Releases](https://github.com/sharezz1/yascribe/releases/latest), rozpakuj archiwum i przeciągnij `Yascribe.app` do `/Applications`.
@@ -126,7 +133,7 @@ Aplikacja wymaga macOS 27.
 
 ## Co dalej
 
-**Już działa.** Nagrywanie na dwóch ścieżkach z wyciszaniem, wykrywaniem końca spotkania i zmianą mikrofonu w trakcie nagrania · usuwanie echa głośników ze ścieżki mikrofonu · transkrypcja lokalna (Parakeet v3, Parakeet Ultra) i przez API · rozpoznawanie rozmówców i wyświetlanie ich imion w transkrypcji i notatce · korekta z filtrem przerywników i własnymi poleceniami · słownik z obsługą odmiany, importu i eksportu · notatki z szablonów i wybór modelu dla każdego spotkania · pytania w „Ask” o spotkanie, folder lub archiwum · dyktowanie do dowolnej aplikacji · modele lokalne (Ollama, llama.cpp, oMLX, własny endpoint) i agenci CLI (Codex, Claude Code) · nagrywanie z użyciem słuchawek Bluetooth · kalendarz Apple i proponowanie nagrania po wykryciu rozmowy w Teams · foldery, krótki opis spotkania („Overview”) oraz archiwum z wyszukiwarką i ustawieniem czasu przechowywania nagrań · jasny i ciemny motyw · aktualizacje jednym kliknięciem · narzędzie `yascribe-cli` do transkrypcji, korekty, tworzenia notatek i rozpoznawania rozmówców w terminalu.
+**Już działa.** Nagrywanie na dwóch ścieżkach z wyciszaniem, wykrywaniem końca spotkania i zmianą mikrofonu w trakcie nagrania · usuwanie echa głośników ze ścieżki mikrofonu · transkrypcja lokalna (Parakeet v3, Parakeet Ultra) i przez API · rozpoznawanie rozmówców i wyświetlanie ich imion w transkrypcji i notatce · korekta z filtrem przerywników i własnymi poleceniami · słownik z obsługą odmiany, importu i eksportu · notatki z szablonów i wybór modelu dla każdego spotkania · pytania w „Ask” o spotkanie, folder lub archiwum · dyktowanie do dowolnej aplikacji · modele lokalne (Ollama, llama.cpp, oMLX, własny endpoint) i agenci CLI (Codex, Claude Code) · nagrywanie z użyciem słuchawek Bluetooth · kalendarz Apple i proponowanie nagrania po wykryciu rozmowy w Teams · foldery, krótki opis spotkania („Overview”) oraz archiwum z wyszukiwarką i ustawieniem czasu przechowywania nagrań · jasny i ciemny motyw · aktualizacje jednym kliknięciem · narzędzie `yascribe-cli` do transkrypcji, korekty, tworzenia notatek i rozpoznawania rozmówców w terminalu · serwer MCP dla agentów AI (lista spotkań, transkrypt, notatka i eksport do markdown).
 
 **W kolejce**
 
@@ -136,7 +143,7 @@ Aplikacja wymaga macOS 27.
 - kolejne lokalne modele transkrypcji,
 - „Record now” w menu na pasku.
 
-**Pomysły bez terminu.** Notaryzacja i Developer ID · Google Calendar, Outlook, Slack · MCP dla Claude i eksport do Markdown.
+**Pomysły bez terminu.** Notaryzacja i Developer ID · Google Calendar, Outlook, Slack.
 
 ## Budowanie
 
