@@ -39,7 +39,7 @@ import Testing
         let pair = ("ten rok jest", "ten Nimbu jest")
         #expect(find([source("a", [pair, pair])], common: ["rok"]).isEmpty)
         let s = try #require(find([source("a", [pair]), source("b", [pair])], common: ["rok"]).first)
-        #expect((s.alias, s.risky, s.sessions) == ("rok", true, ["a", "b"]))
+        #expect((s.alias, s.inflects, s.risky, s.sessions) == ("rok", false, true, ["a", "b"]))
     }
 
     @Test func pairAlreadyCoveredByAnAliasIsNotSuggested() {
@@ -58,8 +58,8 @@ import Testing
     }
 
     @Test func suggestionThatWouldFailValidationIsDropped() {
-        // „Rokm" jest już Aliasem innego Terma: upsert rzuciłby `aliasTaken`.
-        let other = DictionaryTerm("Orbit", aliases: [DictionaryAlias("Rokm")])
+        // „Rokm" jest już (wyłączonym) Aliasem innego Terma: upsert rzuciłby `aliasTaken`.
+        let other = DictionaryTerm("Orbit", aliases: [DictionaryAlias("Rokm", enabled: false)])
         let pair = ("Rokm tu", "Nimbu tu")
         #expect(find([source("a", [pair, pair])], [nimbu, other]).isEmpty)
     }
@@ -71,9 +71,9 @@ import Testing
 
     @Test func multiWordPhraseAndPhraseWithEnding() throws {
         let s = try #require(find([source("a", [("to ko pt", "to KOPT"), ("ko pt.", "KOPT.")])]).first)
-        #expect((s.alias, s.inflects, s.term) == ("ko pt", true, "KOPT"))
-        let e = try #require(find([source("a", [("z ko ptem", "z KOPTem"), ("ko pta", "KOPTa")])]).first)
-        #expect((e.alias, e.inflects, e.count) == ("ko pt", true, 2))
+        #expect((s.alias, s.inflects, s.term) == ("ko pt", false, "KOPT"))
+        // Fraza z końcówką: bez sugestii („ko pt*” przepisałoby „ko ptak”).
+        #expect(find([source("a", [("z ko ptem", "z KOPTem"), ("ko pta", "KOPTa")])]).isEmpty)
     }
 
     @Test func failedOrMisalignedCorrectionsAreSkipped() {
@@ -95,12 +95,90 @@ import Testing
         #expect(find([source("a", [pair, pair])]).isEmpty)
     }
 
+    @Test func acceptedAliasFixesTheRawText() throws {
+        let pairs = [("byłem w Rokmie wczoraj", "byłem w Nimbuie wczoraj"), ("Rokm działa.", "Nimbu działa.")]
+        let s = try #require(find([source("a", pairs)]).first)
+        let rules = ReplacementRules(try AliasSuggestions.accept(s, in: UserDictionary(terms: [nimbu, kopt])))
+        for (raw, fixed) in pairs { #expect(rules.apply(to: raw) == fixed) }
+    }
+
+    @Test func baseFormOnlyGivesAnExactAlias() throws {
+        let s = try #require(find([source("a", [("szko tu", "Nimbu tu"), ("szko tam", "Nimbu tam")])]).first)
+        #expect((s.alias, s.inflects) == ("szko", false))
+    }
+
+    @Test func stemThatWouldRewriteKeptWordsIsRisky() throws {
+        let pairs = [("w Rokmie", "w Nimbuie"), ("w Rokmie", "w Nimbuie"), ("Rokmowski przyszedł", "Rokmowski przyszedł")]
+        #expect(find([source("a", pairs)]).isEmpty)
+        let s = try #require(find([source("a", pairs), source("b", [("Rokma tu", "Nimbua tu")])]).first)
+        #expect((s.alias, s.inflects, s.risky) == ("Rokm", true, true))
+    }
+
+    @Test func punctuationInsideThePhraseIsIgnored() {
+        let pair = ("to ko, pt tu", "to KOPT tu")
+        #expect(find([source("a", [pair, pair])]).isEmpty)
+    }
+
+    @Test func stemCorrectedToDifferentTermsIsDropped() {
+        #expect(find([source("a", [("Rokm tu", "Nimbu tu"), ("Rokm tu", "Nimbu tu"), ("Rokm tam", "KOPT tam"), ("Rokm tam", "KOPT tam")])]).isEmpty)
+    }
+
+    @Test func ordinaryWordStartingWithTheTermIsNotAnEnding() {
+        let port = DictionaryTerm("Port")
+        let lower = ("ten pordfel", "ten portfel"), upper = ("Pordfel tu", "Portfel tu")
+        #expect(find([source("a", [lower, lower])], [port]).isEmpty)
+        #expect(find([source("a", [upper, upper])], [port], common: ["portfel"]).isEmpty)
+    }
+
+    @Test func multiWordTermSharingAWordWithTheRawText() throws {
+        let max = DictionaryTerm("Nimbu Max")
+        let pair = ("mamy Rokm Max tu", "mamy Nimbu Max tu")
+        let s = try #require(find([source("a", [pair, pair])], [max]).first)
+        #expect((s.alias, s.inflects, s.term) == ("Rokm Max", false, "Nimbu Max"))
+    }
+
+    @Test func exactAliasThatWouldRewriteKeptWordsIsRisky() throws {
+        let pairs = [("Nima tu", "Nimbu tu"), ("Nima tam", "Nimbu tam"), ("Nima przyszła", "Nima przyszła")]
+        #expect(find([source("a", pairs)]).isEmpty)
+        let s = try #require(find([source("a", pairs), source("b", [("Nima jest", "Nimbu jest")])]).first)
+        #expect((s.alias, s.inflects, s.risky) == ("Nima", false, true))
+    }
+
+    @Test func wordsCorrectedToSomethingElseAlsoCountAsRisk() {
+        // „szkoła” korektor poprawił gramatycznie (nie zostawił), ale `szko*` i tak by je przepisało.
+        #expect(find([source("a", [("w szkoa", "w Nimbua"), ("w szkoa", "w Nimbua"), ("w szkoła", "w szkole")])]).isEmpty)
+    }
+
+    @Test func dismissalFromTheOldIDFormatStillHides() {
+        // 0.1.23 zapisywała `*` także dla samych form podstawowych.
+        let pair = ("szko tu", "Nimbu tu")
+        #expect(find([source("a", [pair, pair])], dismissed: ["szko*→nimbu"]).isEmpty)
+        #expect(find([source("a", [("w Rokmie", "w Nimbuie"), ("w Rokmie", "w Nimbuie")])], dismissed: ["rokm→nimbu"]).isEmpty)
+    }
+
+    @Test func singleHallucinationDoesNotCancelAStrongSuggestion() {
+        // Inna poprawka tego samego słowa robi z sugestii ryzykowną (2 spotkania), ale jej nie kasuje.
+        let s = find([source("a", [("Rokm tu", "Nimbu tu"), ("Rokm tam", "KOPT tam")]), source("b", [("Rokm tu", "Nimbu tu")])])
+        #expect(s.map(\.term) == ["Nimbu"])
+        #expect(s.first?.risky == true)
+    }
+
+    @Test func termWrittenWithDifferentCaseAfterTheFirstLetter() throws {
+        let s = try #require(find([source("a", [("z kopem", "z Koptem"), ("z kopem", "z Koptem")])]).first)
+        #expect((s.alias, s.inflects, s.term) == ("kop", true, "KOPT"))
+    }
+
+    @Test func fillerWidenedIntoAMultiWordTermIsIgnored() {
+        let pair = ("yyy Max tu", "Nimbu Max tu")
+        #expect(find([source("a", [pair, pair])], [DictionaryTerm("Nimbu Max")]).isEmpty)
+    }
+
     @Test func acceptAddsTheAliasWithItsFlags() throws {
         let pair = ("ten rok jest", "ten Nimbu jest")
         let s = try #require(find([source("a", [pair]), source("b", [pair])], common: ["rok"]).first)
         let d = try AliasSuggestions.accept(s, in: UserDictionary(terms: [nimbu, kopt]))
         let alias = try #require(d.terms.first { $0.id == nimbu.id }?.aliases.first)
-        #expect((alias.text, alias.inflecting, alias.risky, alias.enabled) == ("rok", true, true, true))
+        #expect((alias.text, alias.inflecting, alias.risky, alias.enabled) == ("rok", false, true, true))
         #expect(find([source("a", [pair]), source("b", [pair])], d.terms, common: ["rok"]).isEmpty)
     }
 }
