@@ -23,6 +23,7 @@ struct YascribeApp: App {
         } else {
             model.monitor.start()
             model.dictation.start()
+            if !LegacyMigration.isDevRun { model.verifyProvidersOnLaunch() } // dev-run nie czyta prawdziwego pęku
         }
     }
 

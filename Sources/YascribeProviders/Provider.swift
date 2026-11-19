@@ -49,6 +49,10 @@ public struct Provider: Codable, Equatable, Identifiable, Sendable {
     /// logowanie zostaje w CLI (subskrypcja albo klucz w CLI), Yascribe nie trzyma żadnego klucza (TASK-86).
     public var requiresKey: Bool { !isLocal && !api.isAgentCLI }
 
+    /// Test połączenia przy starcie aplikacji: OpenAI-compatible tylko z adresem presetu. Własny punkt końcowy (także
+    /// tunel na 127.0.0.1) pomijamy, bo zapytanie może obudzić płatny serwer (np. RunPod z zimnym startem).
+    public var verifiesOnLaunch: Bool { api != .openAICompatible || ProviderPreset.matching(self) != nil }
+
     /// Czy dostawca może obsłużyć rolę (F20 P4). Poprawa, podsumowanie i embedding to czat/embeddingi OpenAI-compatible;
     /// ElevenLabs (sam ASR) i Yascribe (Parakeet, sam ASR) ich nie mają. ASR: wszyscy poza agentem CLI (o wyniku decyduje sonda).
     /// Agent CLI (TASK-86) robi tylko czat: poprawę i podsumowanie.

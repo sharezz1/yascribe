@@ -701,6 +701,11 @@ final class AppModel {
         }
     }
 
+    /// Test połączenia po starcie aplikacji, żeby lista nie pokazywała „Not verified” po każdej aktualizacji.
+    func verifyProvidersOnLaunch() {
+        for p in providers.providers where p.verifiesOnLaunch { Task { await verifyProvider(p.id) } }
+    }
+
     /// Test połączenia (`listModels`, u ElevenLabs `GET /v1/models`): Verified albo powód (zły klucz, guardrail, adres,
     /// serwer wyłączony).
     func verifyProvider(_ id: UUID) async {
@@ -785,7 +790,7 @@ final class AppModel {
     }
 
     var modelLists: [ModelListKey: [ModelInfo]] = [:]
-    /// Wynik ostatniego testu połączenia per dostawca (w pamięci; po restarcie Not verified, dopóki nie klikniesz Verify).
+    /// Wynik ostatniego testu połączenia per dostawca (w pamięci; po starcie wypełnia go `verifyProvidersOnLaunch`).
     var providerChecks: [UUID: ProviderCheck] = [:]
     private(set) var providerVerifying: Set<UUID> = []
     private(set) var loadingModels: Set<ModelListKey> = []
