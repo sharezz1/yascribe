@@ -282,10 +282,7 @@ struct MeetingDetailView: View {
     }
 
     /// Start < 0 = mowa przed osią sesji (mikrofon ruszył wcześniej niż tap systemowy) — pokazujemy 0:00:00.
-    static func time(_ s: Double) -> String {
-        let i = Int(max(0, s))
-        return String(format: "%d:%02d:%02d", i / 3600, i / 60 % 60, i % 60)
-    }
+    static func time(_ s: Double) -> String { MeetingArchive.time(s) }
 }
 
 /// Menu Meeting → „Play/Pause Recording”: akcja z otwartego widoku spotkania (`focusedSceneValue`).
@@ -304,11 +301,6 @@ struct PlayRecordingButton: View {
     var body: some View {
         Button("Play/Pause Recording") { play?() }.disabled(play == nil)
     }
-}
-
-extension Utterance {
-    /// Kolumna mówcy i kopiowanie: „Me", „Them" albo „Them A" po wykryciu mówców (TASK-22 §4.4).
-    var speakerName: String { speaker == .me ? "Me" : speakerLabel ?? "Them" }
 }
 
 /// Wiersz transkryptu (b-transcript.png): czas (cyfry stałej szerokości, klik = odtwarzanie), mówca, tekst;

@@ -1088,3 +1088,12 @@
 "Edit transcript" = "Edytuj transkrypt";
 "Segment text" = "Tekst fragmentu";
 "⌘↩ saves" = "⌘↩ zapisuje";
+"Agent access (MCP)" = "Dostęp agentów (MCP)";
+"Agent access" = "Dostęp agentów";
+"Agents such as Claude Code or Codex can list meetings and read transcripts and notes through Yascribe's MCP server. What they read is sent to that agent's model provider under its terms. Read-only." = "Agenci, np. Claude Code lub Codex, mogą przez serwer MCP Yascribe przeglądać listę spotkań oraz czytać transkrypty i notatki. To, co przeczytają, trafia do dostawcy modelu danego agenta na jego warunkach. Tylko do odczytu.";
+"Allow AI agents to read meetings" = "Zezwól agentom AI na odczyt spotkań";
+"Run this once in Terminal. The server only answers while Agent access is on." = "Uruchom to raz w Terminalu. Serwer odpowiada tylko wtedy, gdy dostęp agentów jest włączony.";
+"Copy the command" = "Skopiuj polecenie";
+"Other agents" = "Inni agenci";
+"Setup for other agents" = "Konfiguracja innych agentów";
+"Claude Code" = "Claude Code";

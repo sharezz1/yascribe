@@ -14,6 +14,8 @@ final class SettingsDraft: ObservableObject {
     @Published var fillers = ""
     /// Sekcja Summary: „Thinking" (F20 P1).
     @Published var summaryThinking = true
+    /// Sekcja Agent access (MCP, TASK-31): zgoda na odczyt spotkań przez agentów.
+    @Published var agentAccess = false
     /// Karta „Speaker detection" (TASK-22).
     @Published var dictation = DictationSettings()
     /// Podstawy poleceń korekty i podsumowania (TASK-96): pole pokazuje własny tekst albo domyślny; `keepMine` = „Keep mine" po zmianie domyślnego.
@@ -79,7 +81,23 @@ final class SettingsDraft: ObservableObject {
         embedding = s.embedding; askModel = s.askModel; dictation = s.dictationOrDefault; saved = false
         removeFillers = s.removeFillersEnabled
         summaryThinking = s.summaryThinkingEnabled
+        agentAccess = s.agentAccessEnabled
         fillers = FillerWords.format(s.fillerWords ?? FillerWords.defaults)
+    }
+
+    /// Wartość zapisywana do `GlobalSettings.agentAccess`; `nil` = wyłączone.
+    var agentAccessValue: Bool? { agentAccess ? true : nil }
+
+    /// Czy szkic różni się od zapisanych ustawień (Save aktywny). Wydzielone z widoku, żeby dało się sprawdzić w teście.
+    func isDirty(comparedTo s: GlobalSettings, prompts: PromptOverrides) -> Bool {
+        embedding != s.embedding
+            || askModel != s.askModel
+            || removeFillers != s.removeFillersEnabled
+            || summaryThinking != s.summaryThinkingEnabled
+            || agentAccess != s.agentAccessEnabled
+            || dictationForComparison != Self.comparableDictation(s.dictationOrDefault)
+            || FillerWords.parse(fillers) != (s.fillerWords ?? FillerWords.defaults)
+            || promptsApplied(to: prompts) != prompts
     }
 }
 
@@ -126,13 +144,7 @@ struct SettingsView: View {
     @StateObject private var draft = SettingsDraft()
 
     private var isDirty: Bool {
-        draft.embedding != model.settings.embedding
-            || draft.askModel != model.settings.askModel
-            || draft.removeFillers != model.settings.removeFillersEnabled
-            || draft.summaryThinking != model.settings.summaryThinkingEnabled
-            || draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
-            || FillerWords.parse(draft.fillers) != (model.settings.fillerWords ?? FillerWords.defaults)
-            || draft.promptsApplied(to: model.prompts) != model.prompts
+        draft.isDirty(comparedTo: model.settings, prompts: model.prompts)
     }
 
     /// Tekst polecenia ponad limitem: Save zablokowany, licznik czerwony.
@@ -161,6 +173,7 @@ struct SettingsView: View {
                     UpdatesSection()
                     MeetingSettingsSections()
                     DictationSettingsSection(settings: $draft.dictation).id("dictation-settings")
+                    AgentAccessSettingsView(agentAccess: $draft.agentAccess)
                     correctionSection
                     summarySection
                     archiveSearch
@@ -421,17 +434,28 @@ struct SettingsView: View {
             return
         }
         let words = FillerWords.parse(draft.fillers)
-        model.settings.embedding = draft.embedding
-        model.settings.askModel = draft.askModel
-        model.settings.removeFillers = draft.removeFillers
-        model.settings.fillerWords = words == FillerWords.defaults ? nil : words
-        model.settings.summaryThinking = draft.summaryThinking
-        let dictationChanged = draft.dictationForComparison != SettingsDraft.comparableDictation(model.settings.dictationOrDefault)
+        // Kandydat najpierw do settings.json, dopiero potem do pamięci: błąd zapisu nic nie zmienia (ani `didSet` archiwum,
+        // ani przełącznik zgody MCP, który serwer czyta z pliku — TASK-31); szkic zostaje „dirty".
+        var candidate = model.settings
+        candidate.embedding = draft.embedding
+        candidate.askModel = draft.askModel
+        candidate.removeFillers = draft.removeFillers
+        candidate.fillerWords = words == FillerWords.defaults ? nil : words
+        candidate.summaryThinking = draft.summaryThinking
+        candidate.agentAccess = draft.agentAccessValue
+        let dictationChanged = draft.dictationForComparison != SettingsDraft.comparableDictation(candidate.dictationOrDefault)
         if dictationChanged {
             var dictation = draft.dictation
-            dictation.launcherOriginX = model.settings.dictationOrDefault.launcherOriginX
-            model.settings.dictation = dictation
+            dictation.launcherOriginX = candidate.dictationOrDefault.launcherOriginX
+            candidate.dictation = dictation
         }
+        do {
+            try JSONFile.save(candidate, to: model.paths.settings)
+        } catch {
+            model.lastError = String(localized: "Couldn't save your settings: \(error.localizedDescription)")
+            return
+        }
+        model.settings = candidate
         model.save()
         if dictationChanged { model.dictation.applySettings() }
         draft.fillers = FillerWords.format(words)

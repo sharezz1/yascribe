@@ -176,16 +176,12 @@ struct TranscriptActions: View {
     }
 
     /// Kopia kanoniczna (angielskie „Me”/„Them” i linie wyciszenia), niezależna od języka interfejsu; kolumna pokazuje nazwy przetłumaczone.
-    static func copyLine(_ u: Utterance) -> String { "[\(MeetingDetailView.time(u.start))] \(u.speakerName): \(u.text)" }
+    /// Ten sam zapis co eksport MCP (`MeetingArchive`).
+    static func copyLine(_ u: Utterance) -> String { MeetingArchive.copyLine(u) }
 
     private func copy() {
         guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return }
-        let text = TranscriptTab.lines(t, item: item).map { line in
-            switch line {
-            case .utterance(_, let u): Self.copyLine(u)
-            case .mute(let m): "[\(MeetingDetailView.time(m.start))] \(m.line)"
-            }
-        }.joined(separator: "\n")
+        let text = MeetingArchive.copyLines(t, summary: item.summary).joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
@@ -406,15 +402,14 @@ struct TranscriptTab: View {
     /// Indeks wypowiedzi to pozycja w `utterances` (klucz poprawek i odtwarzania), nie pozycja linii z wyciszeniami.
     enum Line { case utterance(Int, Utterance), mute(MuteNote) }
 
-    /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12”, macos.md §11.5) w kolejności czasu.
+    /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12", macos.md §11.5) w kolejności czasu.
     static func lines(_ t: Transcript, item: SessionItem) -> [Line] {
-        var mutes = MuteNote.of(summary: item.summary)[...]
-        var out: [Line] = []
-        for (i, u) in t.utterances.enumerated() {
-            while let m = mutes.first, m.start <= u.start { out.append(.mute(m)); mutes = mutes.dropFirst() }
-            out.append(.utterance(i, u))
+        MeetingArchive.lines(t, summary: item.summary).map { line in
+            switch line {
+            case .utterance(let i, let u): .utterance(i, u)
+            case .mute(let m): .mute(m)
+            }
         }
-        return out + mutes.map(Line.mute)
     }
 }
 

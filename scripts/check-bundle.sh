@@ -46,4 +46,24 @@ case "$BUILD" in ''|*[!0-9]*|0) echo "check-bundle: CFBundleVersion nie jest lic
 OUTSIDE="$(git grep -l 'import Sparkle' -- Sources | grep -v '^Sources/YascribeUpdates/' || true)"
 [ -z "$OUTSIDE" ] || { echo "check-bundle: import Sparkle poza YascribeUpdates: $OUTSIDE" >&2; exit 1; }
 codesign --verify --strict --deep "$APP"
+# Serwer MCP dla agentów (TASK-31): binarka w paczce, podpisana razem z aplikacją, i odpowiada przed EOF.
+CLI="$APP/Contents/MacOS/yascribe-cli"
+[ -f "$CLI" ] && [ -x "$CLI" ] || { echo "check-bundle: brak wykonywalnego $CLI" >&2; exit 1; }
+codesign --verify --strict "$CLI"
+ERR="$(mktemp -t yascribe-mcp-err)"
+OUT="$(mktemp -t yascribe-mcp-out)"
+# Stdin otwarty 3 s, odpowiedzi muszą przyjść PRZED EOF — inaczej klient czekałby na zamknięcie wejścia.
+( printf '{"jsonrpc":"2.0","id":1,"method":"ping"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n'; sleep 3 ) | "$CLI" mcp >"$OUT" 2>"$ERR" &
+PID=$!
+SECONDS=0
+while [ "$(wc -l < "$OUT" | tr -d ' ')" -lt 2 ] && [ "$SECONDS" -lt 3 ]; do sleep 0.1; done
+ELAPSED=$SECONDS
+wait "$PID" || true
+[ "$ELAPSED" -lt 3 ] || { echo "check-bundle: serwer MCP odpowiedział po EOF (${ELAPSED}s)" >&2; rm -f "$ERR" "$OUT"; exit 1; }
+FIRST="$(sed -n '1p' "$OUT")"
+SECOND="$(sed -n '2p' "$OUT")"
+[ "$FIRST" = '{"id":1,"jsonrpc":"2.0","result":{}}' ] || { echo "check-bundle: zła odpowiedź MCP na ping: $FIRST" >&2; rm -f "$ERR" "$OUT"; exit 1; }
+case "$SECOND" in *'"list_meetings"'*) ;; *) echo "check-bundle: tools/list bez list_meetings: $SECOND" >&2; rm -f "$ERR" "$OUT"; exit 1 ;; esac
+[ ! -s "$ERR" ] || { echo "check-bundle: serwer MCP pisze na stderr: $(cat "$ERR")" >&2; rm -f "$ERR" "$OUT"; exit 1; }
+rm -f "$ERR" "$OUT"
 echo "check-bundle: OK ($APP)"
