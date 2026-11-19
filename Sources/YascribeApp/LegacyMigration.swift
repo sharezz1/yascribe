@@ -31,16 +31,14 @@ enum LegacyMigration {
         case .notNeeded, .moved:
             return
         case .bothHaveData:
-            if !alert("Two data folders found",
-                      "Yascribe found data from the old MeetNotes app, but its own data folder isn't empty either. Nothing was moved or merged. "
-                      + "Use Yascribe's data, or quit and sort out the two folders yourself.",
-                      primary: "Use Yascribe data", secondary: "Quit") { exit(0) }
+            if !alert(String(localized: "Two data folders found"),
+                      String(localized: "Yascribe found data from the old MeetNotes app, but its own data folder isn't empty either. Nothing was moved or merged. Use Yascribe's data, or quit and sort out the two folders yourself."),
+                      primary: String(localized: "Use Yascribe data"), secondary: String(localized: "Quit")) { exit(0) }
         case .oldAppRunning:
-            _ = alert("Quit MeetNotes first", "Quit the old MeetNotes first, then open Yascribe again.", primary: "Quit")
+            _ = alert(String(localized: "Quit MeetNotes first"), String(localized: "Quit the old MeetNotes first, then open Yascribe again."), primary: String(localized: "Quit"))
             exit(0)
         case .failed(let message):
-            _ = alert("Couldn't move your data", "Yascribe couldn't take over the data from MeetNotes, so it won't start on an empty folder. "
-                      + "The old data wasn't changed.\n\n\(message)", primary: "Quit")
+            _ = alert(String(localized: "Couldn't move your data"), String(localized: "Yascribe couldn't take over the data from MeetNotes, so it won't start on an empty folder. The old data wasn't changed.\n\n\(message)"), primary: String(localized: "Quit"))
             exit(0)
         }
     }
@@ -56,10 +54,10 @@ enum LegacyMigration {
         KeyMigrationLedger.record(outcomes, root: root)
         var notes: [String] = []
         for id in ids {
-            let name = model.provider(id)?.name ?? "a provider"
+            let name = model.provider(id)?.name ?? String(localized: "a provider")
             switch outcomes[id] {
-            case .unreadable: notes.append("Couldn't read the old key for \(name) (access denied). Enter it again in Settings.")
-            case .newStoreFailed: notes.append("Couldn't save the key for \(name) in Yascribe's keychain service. Enter it again in Settings.")
+            case .unreadable: notes.append(String(localized: "Couldn't read the old key for \(name) (access denied). Enter it again in Settings."))
+            case .newStoreFailed: notes.append(String(localized: "Couldn't save the key for \(name) in Yascribe's keychain service. Enter it again in Settings."))
             default: break
             }
         }

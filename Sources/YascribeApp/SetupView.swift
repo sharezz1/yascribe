@@ -20,15 +20,15 @@ struct SetupView: View {
             Text("Set up recording").font(.title2)
             Text("Yascribe records the other side of the call from system audio and your voice from the microphone, into separate files. It never asks to record your screen.")
                 .foregroundStyle(.secondary)
-            row(title: "Microphone", detail: "Your side of the conversation.", ok: state.mic == .authorized) {
+            row(title: String(localized: "Microphone"), detail: String(localized: "Your side of the conversation."), ok: state.mic == .authorized) {
                 Button("Allow") {
                     AVCaptureDevice.requestAccess(for: .audio) { _ in
                         DispatchQueue.main.async { state.mic = AVCaptureDevice.authorizationStatus(for: .audio) }
                     }
                 }
             }
-            row(title: "System audio", detail: systemAudioDetail, ok: isWorking) {
-                Button(state.checking ? "Checking…" : "Test") {
+            row(title: String(localized: "System audio"), detail: systemAudioDetail, ok: isWorking) {
+                Button(state.checking ? String(localized: "Checking…") : String(localized: "Test")) {
                     state.checking = true
                     Task { @MainActor in
                         let result = await SystemAudioCheck.run()
@@ -61,10 +61,10 @@ struct SetupView: View {
 
     private var systemAudioDetail: String {
         switch state.systemAudio {
-        case .works: "Working — the test tone was captured."
-        case .silent: "The test tone wasn't captured. Allow Yascribe under System Audio Recording Only."
-        case .failed(let e): "Couldn't start capture: \(e)"
-        case nil: "The other side of the call. Test plays a short tone."
+        case .works: String(localized: "Working — the test tone was captured.")
+        case .silent: String(localized: "The test tone wasn't captured. Allow Yascribe under System Audio Recording Only.")
+        case .failed(let e): String(localized: "Couldn't start capture: \(e)")
+        case nil: String(localized: "The other side of the call. Test plays a short tone.")
         }
     }
 

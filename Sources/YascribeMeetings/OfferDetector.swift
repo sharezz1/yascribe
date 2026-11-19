@@ -137,7 +137,7 @@ public struct OfferDetector {
     private func windowEnd(_ e: CalendarEventInfo) -> Date { min(e.start + tuning.offerGrace, e.end) }
 
     private static let appNames = ["com.microsoft.teams2": "Teams"]
-    private static func appName(_ family: String) -> String {
+    public static func appName(_ family: String) -> String {
         appNames[family] ?? String(family.split(separator: ".").last ?? Substring(family))
     }
 }

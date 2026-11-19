@@ -22,12 +22,13 @@ private func concept(_ text: String) -> [Double] {
 }
 
 private final class Wire: HTTPClient, @unchecked Sendable {
-    struct Call: Sendable {
+    struct Call: Equatable, Sendable {
         let host: String
         let kind: String
         let model: String
         let input: String
         let user: String
+        let system: String
     }
     private let lock = NSLock()
     private var log: [Call] = []
@@ -51,7 +52,8 @@ private final class Wire: HTTPClient, @unchecked Sendable {
         let isEmbedding = request.url!.path.hasSuffix("/embeddings")
         let messages = body["messages"] as? [[String: Any]] ?? []
         let call = Call(host: request.url!.host() ?? "", kind: isEmbedding ? "embeddings" : "chat", model: body["model"] as? String ?? "",
-                        input: body["input"] as? String ?? "", user: messages.last?["content"] as? String ?? "")
+                        input: body["input"] as? String ?? "", user: messages.last?["content"] as? String ?? "",
+                        system: messages.first { $0["role"] as? String == "system" }?["content"] as? String ?? "")
         lock.withLock { log.append(call) }
         if let pause = delay(call) { try await Task.sleep(for: pause) }
         let reply: [String: Any]
@@ -78,7 +80,7 @@ private extension ArchiveModel.TurnState {
 @MainActor private final class Harness {
     let dir: URL
     let wire: Wire
-    let model = ArchiveModel()
+    let model: ArchiveModel
     let notes = NotesModel()
     var items: [SessionItem] = []
     var folders: [String: String] = [:]
@@ -120,7 +122,8 @@ private extension ArchiveModel.TurnState {
     }
 
     /// `like`: ten sam katalog danych, serwer, dostawcy i spotkania, ale nowy `ArchiveModel` („restart").
-    init(wire: Wire = Wire(), embedLocal: Bool = false, like other: Harness? = nil) {
+    init(wire: Wire = Wire(), embedLocal: Bool = false, like other: Harness? = nil, presentationBundle: Bundle = .main) {
+        model = ArchiveModel(presentationBundle: presentationBundle)
         dir = other?.dir ?? FileManager.default.temporaryDirectory.appendingPathComponent("mn-archive-\(UUID().uuidString)")
         self.wire = other?.wire ?? wire
         embedProvider = other?.embedProvider ?? Provider(name: "Embed Cloud", baseURL: URL(string: embedLocal ? "http://localhost:11434/v1" : "https://embed.example.test/v1")!)
@@ -947,4 +950,30 @@ private func followUpWire() -> Wire {
     let prompt = try #require(reopened.wire.chats.last?.user)
     #expect(!prompt.contains("Earlier conversation") && !prompt.contains("Outside the folder"))
     #expect(reopened.last?.answer?.sources.map(\.sessionID) == ["m1"])
+}
+
+@Test @MainActor func archiveDisplayLanguageDoesNotChangeModelRequest() async throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let pl = try #require(Bundle(path: root.appendingPathComponent("Resources/pl.lproj").path))
+    let en = try #require(Bundle(path: root.appendingPathComponent("Resources/en.lproj").path))
+    func ask(in bundle: Bundle, displayedScope: String) async throws -> (Wire.Call, ArchiveConversation.Turn) {
+        let h = Harness(presentationBundle: bundle)
+        h.useAutomaticScope()
+        h.addMeeting("m1", title: "Settings", notes: "Budget is 10")
+        #expect(h.model.draftScopeLabel == displayedScope)
+        await h.ask("What is the budget?")
+        #expect(h.model.currentScopeLabel == displayedScope)
+        let request = try #require(h.wire.chats.last)
+        #expect(!request.system.isEmpty && request.user.contains("Settings"))
+        let chat = try h.store.load(h.model.currentChatID)
+        #expect(chat.scope == .all)
+        var turn = try #require(chat.turns.last)
+        #expect(turn.scopeLabel == "All meetings" && turn.kind == .answered)
+        turn.id = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        return (request, turn)
+    }
+    let polish = try await ask(in: pl, displayedScope: "wszystkie spotkania")
+    let english = try await ask(in: en, displayedScope: "All meetings")
+    #expect(polish.0 == english.0)
+    #expect(polish.1 == english.1)
 }

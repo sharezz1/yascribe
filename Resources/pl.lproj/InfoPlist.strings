@@ -1,0 +1,3 @@
+"NSMicrophoneUsageDescription" = "Yascribe nagrywa Twój głos ze spotkania przez mikrofon.";
+"NSAudioCaptureUsageDescription" = "Yascribe nagrywa rozmówców z dźwięku systemowego. Nigdy nie nagrywa ekranu.";
+"NSCalendarsFullAccessUsageDescription" = "Yascribe odczytuje kalendarz, aby rozpoznawać spotkania i nazywać notatki. Nigdy nie zmienia wydarzeń.";

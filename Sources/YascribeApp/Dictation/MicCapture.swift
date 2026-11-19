@@ -10,8 +10,8 @@ final class MicCapture: AudioCapturing, @unchecked Sendable {
         case permission, device(String)
         var errorDescription: String? {
             switch self {
-            case .permission: "Microphone access is needed for dictation."
-            case let .device(why): "Microphone unavailable: \(why)"
+            case .permission: String(localized: "Microphone access is needed for dictation.")
+            case let .device(why): String(localized: "Microphone unavailable: \(why)")
             }
         }
     }
@@ -43,8 +43,10 @@ final class MicCapture: AudioCapturing, @unchecked Sendable {
             try src.start { [weak self] event in
                 switch event {
                 case let .chunk(chunk): self?.append(chunk.samples)
-                case let .failed(why) where Self.isFatal(event): onFailure(why)
-                case .endOfStream: onFailure("Microphone stopped.")
+                case let .failed(why) where Self.isFatal(event):
+                    let detail = String(why.dropFirst(RawMicrophoneSource.reopenFailurePrefix.count)).trimmingCharacters(in: .whitespaces)
+                    onFailure(String(localized: "Microphone unavailable: \(detail)"))
+                case .endOfStream: onFailure(String(localized: "Microphone stopped."))
                 case .failed, .deviceChanged: break
                 }
             }

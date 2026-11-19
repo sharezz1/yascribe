@@ -45,7 +45,7 @@ struct YascribeApp: App {
                     .keyboardShortcut(",", modifiers: .command)
             }
             CommandMenu("Recording") {
-                Button(model.recording.isRecording ? "Stop Recording" : "Record Meeting") {
+                Button(model.recording.isRecording ? String(localized: "Stop Recording") : String(localized: "Record Meeting")) {
                     model.recording.isRecording ? model.recording.stop() : model.startRecording()
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -86,9 +86,27 @@ struct YascribeApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var model: AppModel?
+    static let languageRestart = LanguageRestart()
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model = Self.model else { return .terminateNow }
+        if Self.languageRestart.requested {
+            guard model.canRestartForLanguage else {
+                _ = Self.languageRestart.consume(ifIdle: false, launch: {})
+                return .terminateCancel
+            }
+            guard case .now = model.terminationDecision(), model.notes.flushPendingSaves() else {
+                _ = Self.languageRestart.consume(ifIdle: false, launch: {})
+                return .terminateCancel
+            }
+            guard Self.languageRestart.consume(ifIdle: model.canRestartForLanguage, launch: LanguageRestart.launch) else {
+                let alert = NSAlert()
+                alert.messageText = String(localized: "Could not restart Yascribe.")
+                alert.runModal()
+                return .terminateCancel
+            }
+            return .terminateNow
+        }
         switch model.terminationDecision() {
         case .now: return .terminateNow
         case .cancel: return .terminateCancel
@@ -139,7 +157,13 @@ struct CheckForUpdatesButton: View {
 enum AppAppearance: String, CaseIterable {
     case system, light, dark
 
-    var name: String { rawValue.capitalized }
+    var name: String {
+        switch self {
+        case .system: String(localized: "System")
+        case .light: String(localized: "Light")
+        case .dark: String(localized: "Dark")
+        }
+    }
     var native: NSAppearance? {
         switch self {
         case .system: nil
@@ -152,6 +176,8 @@ enum AppAppearance: String, CaseIterable {
 struct ContentView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system
     @Environment(AppModel.self) private var model
+    @AppStorage("uiLanguage", store: .standard) private var languageChoice: UILanguage = .auto
+    @StateObject private var language = LanguageSelection()
 
     var body: some View {
         @Bindable var model = model
@@ -173,7 +199,7 @@ struct ContentView: View {
             case .presets: PresetsView()
             case .templates: TemplatesView()
             case .settings: SettingsView()
-            case .tasks: LaterPhaseView(title: "Tasks", text: "Tasks with owners across meetings arrive with notes and speaker identity.")
+            case .tasks: LaterPhaseView(title: String(localized: "Tasks"), text: String(localized: "Tasks with owners across meetings arrive with notes and speaker identity."))
             case .dictation: DictationView()
             case .dictionary: DictionaryView()
             }
@@ -188,6 +214,26 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Menu {
+                    ForEach(UILanguage.allCases, id: \.self) { choice in
+                        Button {
+                            language.select(choice)
+                        } label: {
+                            HStack {
+                                switch choice {
+                                case .auto: Text("Auto")
+                                case .pl: Text(verbatim: "Polski")
+                                case .en: Text(verbatim: "English")
+                                }
+                                if languageChoice == choice { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                } label: { Image(systemName: "globe") }
+                .help("Language")
+                .accessibilityLabel("Language")
+            }
+            ToolbarItem(placement: .automatic) {
+                Menu {
                     Picker("Appearance", selection: $appearance) {
                         ForEach(AppAppearance.allCases, id: \.self) { mode in
                             Text(mode.name).tag(mode)
@@ -196,12 +242,20 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "circle.lefthalf.filled")
                 }
-                .help("Appearance: " + appearance.name)
+                .help(String.localizedStringWithFormat(NSLocalizedString("Appearance: %@", comment: ""), appearance.name))
                 .accessibilityLabel("Appearance")
             }
         }
         .onAppear { NSApp.appearance = appearance.native }
         .onChange(of: appearance) { _, value in NSApp.appearance = value.native }
+        .alert("Language changes after restart", isPresented: $language.showRestart) {
+            Button("Restart now") {
+                AppDelegate.languageRestart.request(ifIdle: model.canRestartForLanguage) { NSApp.terminate(nil) }
+            }.disabled(!model.canRestartForLanguage)
+            Button("Later", role: .cancel) { }
+        } message: {
+            if !model.canRestartForLanguage { Text("Restart is unavailable while Yascribe is busy.") }
+        }
         .sheet(isPresented: $model.showSetup) { SetupView() }
         .alert("Something went wrong", isPresented: Binding(get: { model.lastError != nil }, set: { if !$0 { model.lastError = nil } })) {
             Button("OK") { model.lastError = nil }
@@ -218,9 +272,9 @@ struct SidebarList: View {
 
     var body: some View {
         List(selection: $selection) {
-            Label(Section.meetings.rawValue, systemImage: Section.meetings.symbol).tag(Section.meetings)
+            Label(Section.meetings.title, systemImage: Section.meetings.symbol).tag(Section.meetings)
                 .foregroundStyle(.mnText)
-            Label(Section.dictation.rawValue, systemImage: Section.dictation.symbol).tag(Section.dictation)
+            Label(Section.dictation.title, systemImage: Section.dictation.symbol).tag(Section.dictation)
                 .foregroundStyle(.mnText)
         }
         .scrollContentBackground(.hidden)
@@ -236,7 +290,7 @@ struct SidebarList: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             List(selection: $selection) {
                 ForEach([Section.presets, .templates, .dictionary, .settings]) { s in
-                    Label(s.rawValue, systemImage: s.symbol).tag(s)
+                    Label(s.title, systemImage: s.symbol).tag(s)
                         .foregroundStyle(.mnText)
                 }
             }

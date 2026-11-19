@@ -40,7 +40,7 @@ final class RecordingController {
     var updatePending = false
     var stallHint: String? {
         PillHint.systemStalled(stalled: systemStalled, micUID: micUID, outputUID: outputUID, isBluetooth: micIsBluetooth)
-            ?? (updatePending ? "Update installs when you stop." : nil)
+            ?? (updatePending ? String(localized: "Update installs when you stop.") : nil)
     }
     /// Tory wyciszone w pigułce (macos.md §11.5); każde nagranie startuje bez wyciszenia.
     private(set) var muted: Set<String> = []
@@ -89,8 +89,8 @@ final class RecordingController {
         isRecording = r.endReason == nil
         muted = []
         muteWarning = false
-        micName = CoreAudioDevices.defaultInputName() ?? "Unknown microphone"
-        outputName = CoreAudioDevices.defaultOutputName() ?? "Unknown output"
+        micName = CoreAudioDevices.defaultInputName() ?? String(localized: "Unknown microphone")
+        outputName = CoreAudioDevices.defaultOutputName() ?? String(localized: "Unknown output")
         refreshDeviceIdentity()
         systemStalled = false
         started = Date()
@@ -229,7 +229,7 @@ final class RecordingController {
         guard !isRecording else { return } // nigdy nie zasłaniamy pigułki nagrania
         pill.onPrimary = onStart
         pill.onSecondary = { [weak self] in onDismiss(); self?.hideOffer() }
-        present(.offer(offer), title: "Meeting detected")
+        present(.offer(offer), title: String(localized: "Meeting detected"))
     }
 
     /// Zdejmuje wyłącznie ofertę; pigułka nagrania zostaje.
@@ -242,7 +242,7 @@ final class RecordingController {
         pill.onPrimary = onStop
         pill.onSecondary = { [weak self] in onContinue(); self?.hideEndPrompt() }
         pill.endDeadline = Date().addingTimeInterval(Self.endPromptAutoStopSeconds)
-        present(.endPrompt(signal), title: "Meeting ended?")
+        present(.endPrompt(signal), title: String(localized: "Meeting ended?"))
         endPromptTask?.cancel()
         endPromptTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(Self.endPromptAutoStopSeconds))
@@ -408,7 +408,7 @@ extension RecordingController {
         let host = PillHostingView(rootView: PillContentView(model: model, pill: pill), pill: pill)
         let p = PillPanel(contentRect: NSRect(origin: .zero, size: host.fittingSize),
                           styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        p.title = "Recording" // nie widać, ale czyta go VoiceOver i menu Window
+        p.title = String(localized: "Recording") // nie widać, ale czyta go VoiceOver i menu Window
         p.level = .floating
         p.isFloatingPanel = true
         p.hidesOnDeactivate = false
@@ -520,7 +520,7 @@ struct RecordingPanelView: View {
                 .frame(width: 14).opacity(micMuted ? 1 : 0)
                 .help("Microphone muted").accessibilityLabel("Microphone muted").accessibilityHidden(!micMuted)
             Button("Stop") { rec.stop() }.buttonStyle(StopButtonStyle()).keyboardShortcut(".", modifiers: .command)
-            PillIconButton(systemImage: "chevron.up", label: "Show details") { pill.expanded = true }
+            PillIconButton(systemImage: "chevron.up", label: String(localized: "Show details")) { pill.expanded = true }
         }
         // Szerokość z treści przy najszerszym liczniku. Zmierzone: ideał 253, ale przy propozycji 253 układ ściskał się do 245
         // i „Stop” łamał się na „Sto / p” (przypuszczalnie zaokrąglenie ideału do punktu);
@@ -540,21 +540,21 @@ struct RecordingPanelView: View {
                 .accessibilityElement(children: .combine)
                 Text(Self.shortClock(rec.elapsed)).font(.callout).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1).fixedSize()
                 Spacer(minLength: 0)
-                PillIconButton(systemImage: "chevron.down", label: "Hide details", size: 24) { pill.expanded = false }
+                PillIconButton(systemImage: "chevron.down", label: String(localized: "Hide details"), size: 24) { pill.expanded = false }
             }
             // Ostrzeżenie w miejscu linii presetu, ta sama wysokość — okno nie zmienia rozmiaru (decyzja 1).
             Text(rec.eventTitle.map { "\($0) · \(rec.presetLabel)" } ?? rec.presetLabel).lineLimit(rec.eventTitle == nil ? nil : 1)
                 .font(.callout).foregroundStyle(.mnText2).opacity(rec.muteWarning || rec.stallHint != nil ? 0 : 1)
                 .overlay(alignment: .leading) {
                     // Na tym samym miejscu i o tej samej wysokości co ostrzeżenie: okno pigułki zmienia rozmiar tylko przy rozwinięciu.
-                    if rec.muteWarning { WarnLabel("Nothing is being recorded").lineLimit(1).fixedSize() }
+                    if rec.muteWarning { WarnLabel(String(localized: "Nothing is being recorded")).lineLimit(1).fixedSize() }
                     else if let hint = rec.stallHint { Text(hint).font(.callout).foregroundStyle(.mnText2).lineLimit(1).fixedSize() }
                 }
                 .padding(.leading, 16).padding(.top, 2).padding(.bottom, 14)
-            LevelRow(title: "System audio: \(rec.systemStalled ? "No system audio yet · " : "")\(rec.outputName)", db: rec.levels["system"], animated: !reduceMotion,
+            LevelRow(kind: .system, detail: rec.systemStalled ? String(localized: "No system audio yet · \(rec.outputName)") : rec.outputName, db: rec.levels["system"], animated: !reduceMotion,
                      muted: rec.muted.contains("system")) { rec.toggleMute("system") }
             // Nazwa mikrofonu wyraźnie — żeby od razu było widać, gdy nagrywa nie ten (decyzja użytkownika).
-            LevelRow(title: "Microphone: \(rec.micName)", db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion,
+            LevelRow(kind: .microphone, detail: rec.micName, db: rec.levels["mic_raw"], emphasized: true, animated: !reduceMotion,
                      muted: rec.muted.contains("mic_raw"), onToggleMute: { rec.toggleMute("mic_raw") },
                      inputMenu: InputMenu(devices: rec.inputDevices, selectedUID: rec.selectedInputUID) { rec.selectInput(uid: $0) })
                 .padding(.top, 10)
@@ -622,7 +622,33 @@ struct InputMenu {
 }
 
 struct LevelRow: View {
-    let title: String
+    enum Kind {
+        case system, microphone
+        var label: String {
+            switch self {
+            case .system: String(localized: "System audio")
+            case .microphone: String(localized: "Microphone")
+            }
+        }
+        func muteLabel(muted: Bool) -> String {
+            switch (self, muted) {
+            case (.microphone, true): String(localized: "Unmute microphone")
+            case (.microphone, false): String(localized: "Mute microphone")
+            case (.system, true): String(localized: "Unmute system audio")
+            case (.system, false): String(localized: "Mute system audio")
+            }
+        }
+        func muteHelp(muted: Bool) -> String {
+            switch (self, muted) {
+            case (.microphone, true): String(localized: "Record microphone again")
+            case (.microphone, false): String(localized: "Record silence instead of microphone")
+            case (.system, true): String(localized: "Record system audio again")
+            case (.system, false): String(localized: "Record silence instead of system audio")
+            }
+        }
+    }
+    let kind: Kind
+    var detail: String? = nil
     let db: Double?
     var emphasized = false
     var animated = true
@@ -632,26 +658,21 @@ struct LevelRow: View {
 
     static func fraction(db: Double?) -> Double { max(0, min(1, ((db ?? -60) + 60) / 60)) }
 
-    private var parts: (label: String, detail: String?) {
-        guard let r = title.range(of: ": ") else { return (title, nil) }
-        return (String(title[..<r.lowerBound]), String(title[r.upperBound...]))
-    }
     private var hasSignal: Bool { (db ?? -160) > -60 }
-
-    private var isMic: Bool { parts.label.hasPrefix("Microphone") }
+    var iconName: String {
+        kind == .microphone ? (muted ? "mic.slash" : "mic") : (muted ? "speaker.slash" : "speaker.wave.2")
+    }
 
     @ViewBuilder private var icon: some View {
-        let name = isMic ? (muted ? "mic.slash" : "mic") : (muted ? "speaker.slash" : "speaker.wave.2")
-        Image(systemName: name).font(.system(size: 12)).foregroundStyle(.mnText2).frame(width: 14).accessibilityHidden(true)
+        Image(systemName: iconName).font(.system(size: 12)).foregroundStyle(.mnText2).frame(width: 14).accessibilityHidden(true)
     }
 
     @ViewBuilder private var muteButton: some View {
         if let onToggleMute {
-            let what = isMic ? "microphone" : "system audio"
-            Button(muted ? "Unmute" : "Mute", action: onToggleMute)
+            Button(muted ? String(localized: "Unmute") : String(localized: "Mute"), action: onToggleMute)
                 .buttonStyle(MuteButtonStyle(muted: muted))
-                .help(muted ? "Record \(what) again" : "Record silence instead of \(what)")
-                .accessibilityLabel("\(muted ? "Unmute" : "Mute") \(what)")
+                .help(kind.muteHelp(muted: muted))
+                .accessibilityLabel(kind.muteLabel(muted: muted))
         }
     }
 
@@ -659,7 +680,7 @@ struct LevelRow: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 8) {
                 icon
-                Text(parts.label).font(.callout).foregroundStyle(.mnText).frame(width: 92, alignment: .leading)
+                Text(kind.label).font(.callout).foregroundStyle(.mnText).frame(width: 92, alignment: .leading)
                 ZStack(alignment: .leading) {
                     Capsule().fill(.mnLine)
                     GeometryReader { g in Capsule().fill(muted ? Color.mnText3 : Color.mnAccent).frame(width: g.size.width * Self.fraction(db: db)) }
@@ -672,10 +693,10 @@ struct LevelRow: View {
                     else { Text("—").foregroundStyle(.mnText2) }
                 }
                 .frame(width: onToggleMute == nil ? 14 : 44, alignment: .trailing)
-                .accessibilityLabel(muted ? "Muted" : hasSignal ? "Signal present" : "No signal")
+                .accessibilityLabel(muted ? String(localized: "Muted") : hasSignal ? String(localized: "Signal present") : String(localized: "No signal"))
                 muteButton
             }
-            if let detail = parts.detail {
+            if let detail {
                 let text = Text(detail).font(.callout.weight(.semibold)).foregroundStyle(.mnText).lineLimit(2, reservesSpace: true)
                 if let menu = inputMenu {
                     // Ukryty tekst rezerwuje dwa wiersze jak bez menu: rozmiar rozwiniętej pigułki nie zależy od menu.

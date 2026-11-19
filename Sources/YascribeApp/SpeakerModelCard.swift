@@ -30,7 +30,7 @@ final class SpeakerModelSupport: ObservableObject {
                 self.progress = max(current, Double(done) / Double(max(total, 1))) // zdarzenia mogą dotrzeć poza kolejnością
             }
         }
-        do { try await store.download(progress: report) } catch { self.error = error.localizedDescription }
+        do { try await store.download(progress: report) } catch { self.error = (error as? DiarizerModelStoreError)?.displayMessage ?? error.localizedDescription }
         progress = nil
         status = store.status()
     }
@@ -38,7 +38,7 @@ final class SpeakerModelSupport: ObservableObject {
     func remove() {
         guard progress == nil else { return }
         error = nil
-        do { try store.remove() } catch { self.error = error.localizedDescription }
+        do { try store.remove() } catch { self.error = (error as? DiarizerModelStoreError)?.displayMessage ?? error.localizedDescription }
         status = store.status()
     }
 
@@ -54,18 +54,18 @@ enum SpeakerModelCardText {
     static let noticeName = "SpeakerDetection-CC-BY-4.0"
     static let licenseURL = URL(string: "https://creativecommons.org/licenses/by/4.0/")!
     static let size = "22 MB" // DiarizerManifest.offline: 21 599 417 B
-    static let missingHint = "Download the speaker model in Settings"
+    static var missingHint: String { String(localized: "Download the speaker model in Settings") }
 
     static func title(status: DiarizerModelStatus, progress: Double?) -> String {
-        if let progress { return "Downloading \(Int((progress * 100).rounded()))%" }
+        if let progress { return String(localized: "Downloading \(Int((progress * 100).rounded()))%") }
         switch status {
-        case .missing: return "Not downloaded"
-        case .incomplete: return "Incomplete"
-        case .ready: return "Ready"
+        case .missing: return String(localized: "Not downloaded")
+        case .incomplete: return String(localized: "Incomplete")
+        case .ready: return String(localized: "Ready")
         }
     }
 
-    static func primaryLabel(status: DiarizerModelStatus) -> String { status == .ready ? "Remove" : "Download" }
+    static func primaryLabel(status: DiarizerModelStatus) -> String { status == .ready ? String(localized: "Remove") : String(localized: "Download") }
 }
 
 enum SpeakerMenuDecision {

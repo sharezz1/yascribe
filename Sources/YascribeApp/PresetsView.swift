@@ -17,7 +17,7 @@ final class PresetEditorState: ObservableObject {
     var isDirty: Bool { draft != nil && draft != original }
 
     func select(_ p: Preset?) { draft = p; original = p; error = nil }
-    func startNew() { draft = Preset(name: "New preset", language: nil, asr: nil); original = nil; error = nil }
+    func startNew() { draft = Preset(name: String(localized: "New preset"), language: nil, asr: nil); original = nil; error = nil }
     /// Zamyka okno bez zapisu; nowy, niezapisany preset znika razem z oknem.
     func close() { draft = nil; original = nil; error = nil }
 }
@@ -33,7 +33,7 @@ struct PresetsView: View {
         ScrollPage(640) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    PageTitle("Presets")
+                    PageTitle(String(localized: "Presets"))
                     Spacer()
                     Button { state.startNew() } label: { Label("New preset", systemImage: "plus") }
                         .buttonStyle(.pill)
@@ -60,8 +60,8 @@ struct PresetsView: View {
     }
 
     private func meta(_ p: Preset) -> String {
-        var parts = [p.languageLabel, p.asr.map { $0.model.split(separator: "/").last.map(String.init) ?? $0.model } ?? "No speech-to-text model"]
-        if p.id == model.settings.defaultPresetID { parts.append("default") }
+        var parts = [AppModel.presetLanguageLabel(p), p.asr.map { $0.model.split(separator: "/").last.map(String.init) ?? $0.model } ?? String(localized: "No speech-to-text model")]
+        if p.id == model.settings.defaultPresetID { parts.append(String(localized: "default")) }
         return parts.joined(separator: " · ")
     }
 
@@ -78,7 +78,7 @@ struct PresetSheet: View {
     var onSave: () -> Void
 
     var body: some View {
-        EditorSheet(title: state.isNew ? "New preset" : "Edit preset", dirty: state.isDirty, error: state.error,
+        EditorSheet(title: state.isNew ? String(localized: "New preset") : String(localized: "Edit preset"), dirty: state.isDirty, error: state.error,
                     onCancel: { state.close() }, onSave: onSave) {
             EmptyView()
         } content: {
@@ -156,43 +156,43 @@ struct PresetForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                EditorNameField(placeholder: "Name", text: draft.name)
+                EditorNameField(placeholder: String(localized: "Name"), text: draft.name)
                 if state.draft?.id == model.settings.defaultPresetID {
                     Text("Default preset").font(.system(size: 12)).foregroundStyle(.mnText2)
                 }
                 if state.draft?.isFullyLocal(providers: model.providers.providers) == true { FullyLocalBadge() }
             }
-            RoleSection(title: "Speech to text", role: .asr, assignment: draft.asr, language: draft.wrappedValue.language) {
+            RoleSection(title: String(localized: "Speech to text"), role: .asr, assignment: draft.asr, language: draft.wrappedValue.language) {
                 // 🔴 Bez wartości domyślnej (P7). „Auto" to opcja awaryjna na końcu listy, z ostrzeżeniem.
-                FormRow(label: "Language") {
+                FormRow(label: String(localized: "Language")) {
                     VStack(alignment: .leading, spacing: 6) {
-                        FieldMenu(label: "Language", value: languageName(draft.languageChoice.wrappedValue), width: 180) {
+                        FieldMenu(label: String(localized: "Language"), value: languageName(draft.languageChoice.wrappedValue), width: 180) {
                             Picker("Language", selection: draft.languageChoice) {
                                 Text("Choose…").tag(LanguageChoice.unset)
-                                ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(LanguageChoice.code(l.code)) }
+                                ForEach(LanguageCode.selectable, id: \.code) { l in Text(languageDisplayName(l.code)).tag(LanguageChoice.code(l.code)) }
                                 Divider()
                                 Text("Auto (mixed languages)").tag(LanguageChoice.auto)
                             }
                             .pickerStyle(.inline).labelsHidden()
                         }
                         if draft.wrappedValue.isAutoLanguage {
-                            WarnLabel("Lower quality, risk of invented text. Use Auto only for meetings that mix languages.")
+                            WarnLabel(String(localized: "Lower quality, risk of invented text. Use Auto only for meetings that mix languages."))
                         }
                     }
                 }
             }
-            RoleSection(title: "Correction", role: .correction, assignment: draft.correction, language: nil,
-                        promptTitle: "Extra instructions",
-                        promptHint: "Added to the correction prompt, e.g. “Keep product names unchanged.”") { EmptyView() }
-            RoleSection(title: "Summary", role: .summary, assignment: draft.summary, language: nil) {
-                FormRow(label: "Notes language",
+            RoleSection(title: String(localized: "Correction"), role: .correction, assignment: draft.correction, language: nil,
+                        promptTitle: String(localized: "Extra instructions"),
+                        promptHint: String(localized: "Added to the correction prompt, e.g. “Keep product names unchanged.”")) { EmptyView() }
+            RoleSection(title: String(localized: "Summary"), role: .summary, assignment: draft.summary, language: nil) {
+                FormRow(label: String(localized: "Notes language"),
                         caption: draft.wrappedValue.isAutoLanguage && draft.wrappedValue.notesLanguage == nil
-                            ? "With Auto, notes are written in the language that predominates in the transcript." : nil) {
-                    FieldMenu(label: "Notes language",
-                              value: draft.notesLanguage.wrappedValue.map { languageName(.code($0)) } ?? "Same as preset", width: 180) {
+                            ? String(localized: "With Auto, notes are written in the language that predominates in the transcript.") : nil) {
+                    FieldMenu(label: String(localized: "Notes language"),
+                              value: draft.notesLanguage.wrappedValue.map { languageName(.code($0)) } ?? String(localized: "Same as preset"), width: 180) {
                         Picker("Notes language", selection: draft.notesLanguage) {
                             Text("Same as preset").tag(LanguageCode?.none)
-                            ForEach(LanguageCode.selectable, id: \.code) { l in Text(l.name).tag(Optional(l.code)) }
+                            ForEach(LanguageCode.selectable, id: \.code) { l in Text(languageDisplayName(l.code)).tag(Optional(l.code)) }
                         }
                         .pickerStyle(.inline).labelsHidden()
                     }
@@ -233,11 +233,11 @@ struct RoleSection<Extra: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title, note: optional ? "— optional" : nil) {
+            SectionHeader(title, note: optional ? String(localized: "— optional") : nil) {
                 if optional {
                     Toggle(title, isOn: enabled).labelsHidden().toggleStyle(.switch).controlSize(.small)
                         .disabled(providers.isEmpty && assignment == nil)
-                        .help("Use a \(title.lowercased()) step")
+                        .help("Use a correction step")
                 }
             }
             if !optional || assignment != nil { Card { rows } }
@@ -247,8 +247,8 @@ struct RoleSection<Extra: View>: View {
     @ViewBuilder private var rows: some View {
         let showProvider = providers.count > 1 || assignment == nil
         if showProvider {
-            FormRow(label: "Provider") {
-                FieldMenu(label: "Provider", value: providers.first { $0.id == assignment?.providerID }?.roleLabel ?? "None", width: 180) {
+            FormRow(label: String(localized: "Provider")) {
+                FieldMenu(label: String(localized: "Provider"), value: providers.first { $0.id == assignment?.providerID }?.roleLabel ?? String(localized: "None"), width: 180) {
                     Picker("Provider", selection: Binding(get: { assignment?.providerID }, set: { id in
                         assignment = id.map { RoleAssignment(providerID: $0, model: LocalASRModels.modelWhenSelecting(model.provider($0), previous: assignment?.model ?? ""), prompt: assignment?.prompt) }
                     })) {
@@ -261,7 +261,7 @@ struct RoleSection<Extra: View>: View {
         }
         if let a = assignment {
             if showProvider { RowDivider() }
-            FormRow(label: "Model") {
+            FormRow(label: String(localized: "Model")) {
                 ModelPicker(providerID: a.providerID, role: role,
                             selection: Binding(get: { assignment?.model ?? "" }, set: { assignment?.model = $0 }))
             }
@@ -276,7 +276,7 @@ struct RoleSection<Extra: View>: View {
                     LocalRoleNote(warnsAboutCorrection: role == .correction)
                 }
             }
-            if let note = AgentPrivacy.caption(providers.first(where: { $0.id == a.providerID })) {
+            if let note = agentPrivacyCaption(providers.first(where: { $0.id == a.providerID })) {
                 WarnLabel(note).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 158).padding(.trailing, 16).padding(.bottom, 10)
             }
@@ -364,7 +364,7 @@ struct FullyLocalBadge: View {
 /// Rola z lokalnym serwerem tekstowym (Ollama, llama.cpp, oMLX, własny na loopbacku): znacznik „On this Mac"; przy korekcie ostrzeżenie,
 /// że mały model potrafi zmienić nazwy, liczby i daty. Aplikacja nie poleca żadnych modeli (spec fazy 2.0 §14 pkt 6).
 struct LocalRoleNote: View {
-    static let correctionWarning = "Small local models can change names, numbers or dates while correcting. Compare with the original transcript."
+    static let correctionWarning = String(localized: "Small local models can change names, numbers or dates while correcting. Compare with the original transcript.")
     var warnsAboutCorrection = false
 
     var body: some View {
@@ -386,23 +386,23 @@ struct ProbeBadges: View {
             if let r = result {
                 if r.works {
                     HStack(spacing: 14) {
-                        StateLabel(.ok, "Verified")
+                        StateLabel(.ok, String(localized: "Verified"))
                         switch r.languageHandling {
-                        case .enforced: StateLabel(.ok, "Language enforced")
-                        case .filtered: StateLabel(.neutral, "Language filtered")
-                        case .unknown: WarnLabel("Language handling unknown")
+                        case .enforced: StateLabel(.ok, String(localized: "Language enforced"))
+                        case .filtered: StateLabel(.neutral, String(localized: "Language filtered"))
+                        case .unknown: WarnLabel(String(localized: "Language handling unknown"))
                         case .automatic, nil: EmptyView()
                         }
-                        if r.shape == .chatAudio { StateLabel(.neutral, "No word timings") }
+                        if r.shape == .chatAudio { StateLabel(.neutral, String(localized: "No word timings")) }
                     }
                     if r.languageHandling == .automatic {
-                        WarnLabel("This model detects language itself — your language setting can't be enforced")
+                        WarnLabel(String(localized: "This model detects language itself — your language setting can't be enforced"))
                     }
                 } else {
-                    StateLabel(.bad, "Doesn't work in this role").help(r.failure ?? "")
+                    StateLabel(.bad, String(localized: "Doesn't work in this role")).help(r.failure.map(localizedProviderMessage) ?? "")
                 }
             } else {
-                StateLabel(.neutral, "Not tested")
+                StateLabel(.neutral, String(localized: "Not tested"))
             }
         }
     }
@@ -411,8 +411,18 @@ struct ProbeBadges: View {
 /// Nazwa wyboru języka do pola `FieldMenu`.
 func languageName(_ c: LanguageChoice) -> String {
     switch c {
-    case .unset: "Choose…"
-    case .auto: "Auto (mixed languages)"
-    case .code(let code): LanguageCode.selectable.first { $0.code == code }?.name ?? "\(code)"
+    case .unset: String(localized: "Choose…")
+    case .auto: String(localized: "Auto (mixed languages)")
+    case .code(let code): languageDisplayName(code)
     }
+}
+
+func languageDisplayName(_ code: LanguageCode, locale: Locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")) -> String {
+    locale.localizedString(forLanguageCode: code.rawValue) ?? code.rawValue
+}
+
+func agentPrivacyCaption(_ provider: Provider?) -> String? {
+    guard let provider, let vendor = provider.api.agentVendor else { return nil }
+    let app = provider.api == .codexCLI ? "Codex" : "Claude Code"
+    return String(localized: "The transcript goes to \(vendor) through \(app), with your sign-in in that app.")
 }

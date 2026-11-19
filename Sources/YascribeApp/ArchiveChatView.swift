@@ -21,7 +21,7 @@ struct ArchiveChatView: View {
                     model.selectedSessionID = nil
                 } label: { Label("Back to meetings", systemImage: "arrow.left") }
                     .buttonStyle(.pillSmall)
-                Text(state.pane == .history ? "Past chats" : (model.archive.currentChatTitle.isEmpty ? "New chat" : model.archive.currentChatTitle))
+                Text(state.pane == .history ? String(localized: "Past chats") : (model.archive.currentChatTitle.isEmpty ? String(localized: "New chat") : model.archive.currentChatTitle))
                     .font(.system(size: 14, weight: .semibold)).lineLimit(1)
                 Spacer(minLength: 4)
                 if state.pane == .history || !model.archive.turns.isEmpty {
@@ -77,7 +77,7 @@ struct ArchiveChatView: View {
                     }
                     if let consent = model.archive.consent {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Index \(consent.meetings) meetings with \(consent.provider) · \(consent.model)?").fontWeight(.semibold)
+                            Text(String(format: NSLocalizedString("Index %@ with %@ · %@?", comment: ""), String(format: NSLocalizedString("%lld meetings", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(consent.meetings)), consent.provider, consent.model)).fontWeight(.semibold)
                             Text("Their transcripts and notes are sent to \(consent.provider) to build a search index stored on this Mac.")
                             HStack {
                                 Button("Cancel") { model.archive.cancel() }.buttonStyle(.pillSmall)
@@ -108,17 +108,17 @@ struct ArchiveChatView: View {
                             state.showingSource = true
                             model.selectedSessionID = item.id
                         } label: {
-                            Text("[\(index + 1)] \(item.title) · \(item.startedAt.formatted(date: .abbreviated, time: .omitted))" + (source.start.map { " · " + MeetingDetailView.time($0) } ?? ""))
+                            Text(String(localized: "[\(index + 1)] \(item.displayTitle) · \(item.startedAt.formatted(date: .abbreviated, time: .omitted))") + (source.start.map { " · " + MeetingDetailView.time($0) } ?? ""))
                                 .underline().frame(maxWidth: .infinity, alignment: .leading)
                         }.buttonStyle(.plain)
                     } else {
                         Text("[\(index + 1)] Meeting unavailable").foregroundStyle(.mnText2)
                     }
                 }
-            case .noAnswer(let message): Text(message).foregroundStyle(.mnText2)
+            case .noAnswer(let message): Text(model.archive.displayedMessage(message, for: turn)).foregroundStyle(.mnText2)
             case .failed(let message, let opensSettings):
-                WarnLabel(message)
-                if opensSettings { LinkButton("Open Settings") { model.section = .settings } }
+                WarnLabel(model.archive.displayedMessage(message, for: turn))
+                if opensSettings { LinkButton(String(localized: "Open Settings")) { model.section = .settings } }
             case .cancelled: Text("Cancelled").foregroundStyle(.mnText2)
             }
         }.font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)

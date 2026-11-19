@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Czy aplikacja robi coś, czego restart nie może przerwać (nagrywanie, zapis, przenoszenie nagrań).
 @MainActor
@@ -15,7 +16,7 @@ public enum UpdatePhase: Equatable {
 
 /// Bramka restartu po aktualizacji: nie pozwala Sparkle zrestartować aplikacji w trakcie nagrania i blokuje nowe nagrania,
 /// gdy instalacja trwa. Wszystko na MainActor, bez blokad; blok restartu jest trzymany co najwyżej jeden.
-@MainActor
+@MainActor @Observable
 public final class RestartGate {
     private let activity: any RecordingActivity
     private var held: (@MainActor @Sendable () -> Void)?

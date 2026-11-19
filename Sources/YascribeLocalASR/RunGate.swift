@@ -7,6 +7,20 @@ public struct RunGateRefusal: Error, Equatable, Sendable {
     public var message: String
     /// `true` = przycisk „Download" naprawia sprawę (brak modelu albo uszkodzony).
     public var canDownload: Bool
+    public var displayMessage: String {
+        switch message {
+        case "The on-device speech model isn't downloaded yet. Download it in Settings.": return String(localized: "The on-device speech model isn't downloaded yet. Download it in Settings.")
+        case "The on-device model changed since this run. Start a new transcription.": return String(localized: "The on-device model changed since this run. Start a new transcription.")
+        default:
+            let prefixes = [("The on-device speech model failed its check: ", ". Download it again."), ("Another app stored a different variant of this model: ", ".")]
+            for (index, pair) in prefixes.enumerated() where message.hasPrefix(pair.0) && message.hasSuffix(pair.1) {
+                let reason = ModelStatus.displayReason(String(message.dropFirst(pair.0.count).dropLast(pair.1.count)))
+                if index == 0 { return String(localized: "The on-device speech model failed its check: \(reason). Download it again.") }
+                return String(localized: "Another app stored a different variant of this model: \(reason).")
+            }
+            return message
+        }
+    }
 
     public init(message: String, canDownload: Bool) {
         self.message = message

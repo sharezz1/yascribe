@@ -11,12 +11,12 @@ public enum OSStatusText {
 
     public static func describe(_ code: Int) -> String {
         switch fourCC(code) {
-        case "wht?": "unspecified audio file error — the file is missing or unreadable"
-        case "typ?": "unsupported audio file type"
-        case "fmt?": "unsupported audio data format"
-        case "dta?": "invalid audio data"
-        case let c?: "audio error '\(c)' (\(code))"
-        case nil: "audio error \(code)"
+        case "wht?": String(localized: "unspecified audio file error — the file is missing or unreadable")
+        case "typ?": String(localized: "unsupported audio file type")
+        case "fmt?": String(localized: "unsupported audio data format")
+        case "dta?": String(localized: "invalid audio data")
+        case let c?: String(localized: "audio error '\(c)' (\(code))")
+        case nil: String(localized: "audio error \(code)")
         }
     }
 }

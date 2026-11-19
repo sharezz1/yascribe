@@ -71,7 +71,7 @@ public enum NotesStoreError: Error, Equatable, LocalizedError {
     case sessionMissing
 
     public var errorDescription: String? {
-        switch self { case .sessionMissing: "The meeting's folder no longer exists." }
+        switch self { case .sessionMissing: String(localized: "The meeting's folder no longer exists.") }
     }
 }
 
@@ -197,6 +197,6 @@ public struct NotesStore: Sendable {
         var name = base
         while fm.fileExists(atPath: directory.appendingPathComponent(name).path) { n += 1; name = "\(base)-\(n)" }
         try fm.moveItem(at: url, to: directory.appendingPathComponent(name))
-        return "\(url.lastPathComponent) couldn't be read, so it was kept as \(name) and a new one was started."
+        return String(localized: "\(url.lastPathComponent) couldn't be read, so it was kept as \(name) and a new one was started.")
     }
 }

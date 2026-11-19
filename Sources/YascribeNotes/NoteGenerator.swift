@@ -15,8 +15,8 @@ public enum NoteProgress: Equatable, Sendable {
 
     public var text: String {
         switch self {
-        case .condensing(let pass, let part, let count): "Condensing part \(part) of \(count) (pass \(pass))…"
-        case .writing: "Writing the notes…"
+        case .condensing(let pass, let part, let count): String(localized: "Condensing part \(part) of \(count) (pass \(pass))…")
+        case .writing: String(localized: "Writing the notes…")
         }
     }
 }
@@ -93,7 +93,7 @@ public struct NoteGenerator: Sendable {
         for u in transcript.utterances { if let key = u.speakerKey, labels[key] == nil { labels[key] = u.speakerLabel } }
         // Tytuł trafia na listę spotkań i do nazw plików: znaczniki zamienione na etykiety z chwili generowania.
         let title = rawTitle.map { SpeakerMarkers(keys: speakerKeys, names: labels, numbers: numbers).resolved($0) }
-        guard !body.isEmpty else { throw NoteGenerationError.failed("\(model) returned an empty reply.") }
+        guard !body.isEmpty else { throw NoteGenerationError.failed(String(localized: "\(model) returned an empty reply.")) }
         // Liczby, których nie ma w materiale, to zwykle wymysł modelu: zapisujemy je przy notatce, widok pokazuje je jako ostrzeżenie.
         let unverified = NumberCheck.unverified(in: SpeakerMarkers.stripped(body), sources: NotePromptBuilder.transcriptLines(transcript) + [myNotes, context])
         var summary = NoteSummary(title: title, markdown: body, templateID: template.id, model: model,
@@ -104,7 +104,7 @@ public struct NoteGenerator: Sendable {
             // Nieczytelny stary summary.json został odłożony na bok przed zapisem — powiedz to użytkownikowi.
             if let problem = try store.writeSummary(summary, now: now) { onProblem(problem) }
         } catch {
-            throw NoteGenerationError.failed("Couldn't save the notes: \(error)")
+            throw NoteGenerationError.failed(String(localized: "Couldn't save the notes: \(error.localizedDescription)"))
         }
         return summary
     }
@@ -140,24 +140,24 @@ public struct NoteGenerator: Sendable {
                                      speakerLegend: speakerLegend)
         }
         guard limit > 0 else {
-            throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes." + customPromptHint)
+            throw NoteGenerationError.failed(String(localized: "\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.") + customPromptHint)
         }
         // Sam prompt szablonu (bez My notes i kontekstu) ponad budżetem: okno za małe na notatki — nie wina użytkownika.
         let bare = NotePromptBuilder.prompt(template: template, lines: [], myNotes: "", context: "", notesLanguage: notesLanguage,
                                             condensed: true, vocabulary: vocabulary, rulesBody: rulesBody).chars
         guard bare <= limit else {
-            throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes." + customPromptHint)
+            throw NoteGenerationError.failed(String(localized: "\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.") + customPromptHint)
         }
         // My notes + kontekst + prompt szablonu same ponad budżetem — mapa niczego nie naprawi, więc nie marnujemy wywołań.
         let sample = NotePromptBuilder.hasMarkers(lines) ? "[0:00] [[S1]]: x" : "[0:00] Them A: x"
         let room = limit - reduce(hasSpeakerLabels ? [sample] : []).chars + (hasSpeakerLabels ? sample.count : 0) // miejsce na linie transkryptu w prompcie reduce
         guard room >= 0 else {
-            throw NoteGenerationError.failed("Your notes and context are too long for this model's Context window." + customPromptHint)
+            throw NoteGenerationError.failed(String(localized: "Your notes and context are too long for this model's Context window.") + customPromptHint)
         }
         let partChars = min(ContextBudget.mapPartCap,
                             budget.pairedInputChars(fixedChars: NotePromptBuilder.mapSystemChars(vocabulary: vocabulary, hasSpeakerLabels: hasSpeakerLabels), replyFactor: ContextBudget.mapReplyFactor))
         guard partChars > 0 else {
-            throw NoteGenerationError.failed("\(model)'s Context window (\(budget.tokens) tokens) is too small for notes." + customPromptHint)
+            throw NoteGenerationError.failed(String(localized: "\(model)'s Context window (\(budget.tokens) tokens) is too small for notes.") + customPromptHint)
         }
         var current = lines
         var firstPassParts = 0
@@ -177,14 +177,13 @@ public struct NoteGenerator: Sendable {
             if Double(after) * pow(ratio, Double(Self.maxMapLevels - level)) > Double(room) { break }
         }
         throw NoteGenerationError.failed(
-            "The transcript is too long for this model's Context window. Raise the server's context length "
-                + "(for Ollama: OLLAMA_CONTEXT_LENGTH=16384 or more) and the Context window field in Settings, or use a model with a longer context." + customPromptHint)
+            String(localized: "The transcript is too long for this model's Context window. Raise the server's context length (for Ollama: OLLAMA_CONTEXT_LENGTH=16384 or more) and the Context window field in Settings, or use a model with a longer context.") + customPromptHint)
     }
 
     /// Dopisek do błędów budżetu, gdy użytkownik ma własne reguły: to one mogły zjeść okno.
     var customPromptHint: String {
         let body = rulesBody.trimmingCharacters(in: .whitespacesAndNewlines)
-        return body == SummaryPrompt.defaultBody ? "" : " Your custom summary prompt is \(body.count) characters; shorten it or reset it in Settings."
+        return body == SummaryPrompt.defaultBody ? "" : String(localized: " Your custom summary prompt is \(body.count) characters; shorten it or reset it in Settings.")
     }
 
     /// Linie wyjścia mapy w formacie transkryptu (`[m:ss]` / `[h:mm:ss]` na początku); wstęp, punktory i płoty kodu odpadają.
@@ -227,7 +226,7 @@ public struct NoteGenerator: Sendable {
                                           maxTokens: replyTokens, temperature: limits.temperature, thinking: thinking)
                 }
                 guard let kept = Self.transcriptLines(inReply: reply) else {
-                    throw NoteGenerationError.failed("Part \(i + 1) of \(parts.count) failed: the model didn't keep the transcript format")
+                    throw NoteGenerationError.failed(String(localized: "Part \(i + 1) of \(parts.count) failed: the model didn't keep the transcript format"))
                 }
                 out += kept
             } catch where Task.isCancelled || error is CancellationError {
@@ -236,10 +235,10 @@ public struct NoteGenerator: Sendable {
                 throw e
             } catch ProviderError.replyCutOff {
                 // Ucięta część mapy: model nie skondensował jej dość (limit wyjścia to nasz `max_tokens`) — nie rada o „Context window".
-                throw NoteGenerationError.failed("\(model) didn't condense part \(i + 1) of \(parts.count) enough. Try another model.")
+                throw NoteGenerationError.failed(String(localized: "\(model) didn't condense part \(i + 1) of \(parts.count) enough. Try another model."))
             } catch {
                 let why = ContextError.describe(model: model, error, provider: client.provider, transport: limits.transport, isLocal: true)
-                throw NoteGenerationError.failed("Part \(i + 1) of \(parts.count) failed: \(why)")
+                throw NoteGenerationError.failed(String(localized: "Part \(i + 1) of \(parts.count) failed: \(why)"))
             }
         }
         return (out, parts.count)

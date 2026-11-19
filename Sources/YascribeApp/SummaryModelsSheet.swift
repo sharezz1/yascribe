@@ -42,7 +42,7 @@ struct SummaryModelsSheet: View {
     }
 
     var body: some View {
-        EditorSheet(title: "Improve summary", dirty: reason == nil, error: ui.error, onCancel: onClose, footer: .closeAction(item.notes.summary == nil ? "Generate notes" : "Regenerate"), actionReason: reason, onSave: run, idealHeight: nil) {
+        EditorSheet(title: String(localized: "Improve summary"), dirty: reason == nil, error: ui.error, onCancel: onClose, footer: .closeAction(item.notes.summary == nil ? String(localized: "Generate notes") : String(localized: "Regenerate")), actionReason: reason, onSave: run, idealHeight: nil) {
             VStack(alignment: .leading, spacing: 12) {
                 templateRow
                 contextRow
@@ -58,10 +58,10 @@ struct SummaryModelsSheet: View {
     }
 
     private var templateRow: some View {
-        SheetRow(label: "Template") {
-            FieldMenu(label: "Template", value: template.name, width: nil, flexible: true) {
+        SheetRow(label: String(localized: "Template")) {
+            FieldMenu(label: String(localized: "Template"), value: template.displayName(), width: nil, flexible: true) {
                 Picker("Template", selection: $state.templateID) {
-                    ForEach(model.notes.templates.all()) { t in Text(t.name).tag(t.id) }
+                    ForEach(model.notes.templates.all()) { t in Text(t.displayName()).tag(t.id) }
                 }
                 .pickerStyle(.inline).labelsHidden()
             }
@@ -69,7 +69,7 @@ struct SummaryModelsSheet: View {
     }
 
     private var contextRow: some View {
-        SheetRow(label: "Context") {
+        SheetRow(label: String(localized: "Context")) {
             TextField("Optional: names, topics, what matters", text: $state.context, axis: .vertical)
                 .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...4)
                 .padding(.horizontal, 10).padding(.vertical, 6)
@@ -91,8 +91,8 @@ struct SummaryModelsSheet: View {
 
     @ViewBuilder private var providerAndModel: some View {
         let providers = RoleProviders.choices(model.providers.providers, role: .summary, current: draft.providerID)
-        SheetRow(label: "Provider") {
-            FieldMenu(label: "Provider", value: provider(draft.providerID)?.roleLabel ?? "None", width: nil, flexible: true) {
+        SheetRow(label: String(localized: "Provider")) {
+            FieldMenu(label: String(localized: "Provider"), value: provider(draft.providerID)?.roleLabel ?? String(localized: "None"), width: nil, flexible: true) {
                 Picker("Provider", selection: Binding(get: { draft.providerID }, set: { id in
                     guard id != draft.providerID else { return }
                     draft.providerID = id
@@ -105,13 +105,13 @@ struct SummaryModelsSheet: View {
             }
         }
         if let pid = draft.providerID {
-            SheetRow(label: "Model") {
+            SheetRow(label: String(localized: "Model")) {
                 ModelPicker(providerID: pid, role: .summary, selection: $draft.model, showProvider: false).frame(maxWidth: .infinity)
                 if provider(pid)?.isLocal == true { OnThisMacTag() }
             }
-            if let note = AgentPrivacy.caption(provider(pid)) { SheetNote(note) }
+            if let note = agentPrivacyCaption(provider(pid)) { SheetNote(note) }
             if provider(pid)?.isLocal != true {
-                SheetRow(label: "Thinking") {
+                SheetRow(label: String(localized: "Thinking")) {
                     Toggle("Thinking", isOn: Binding(get: { draft.thinking ?? model.settings.summaryThinkingEnabled },
                                                      set: { draft.thinking = $0 }))
                         .labelsHidden().toggleStyle(.switch).controlSize(.small)
@@ -131,8 +131,8 @@ struct SummaryModelsSheet: View {
     }
 
     private var sourceMenu: some View {
-        SheetRow(label: "Source") {
-            FieldMenu(label: "Source", value: draft.sourceLabel(item), width: nil, flexible: true) {
+        SheetRow(label: String(localized: "Source")) {
+            FieldMenu(label: String(localized: "Source"), value: draft.sourceLabel(item), width: nil, flexible: true) {
                 Picker("Source", selection: $draft.useCorrected) {
                     Text("Corrected").tag(true).disabled(item.corrected == nil)
                     Text("Original").tag(false)
@@ -146,7 +146,7 @@ struct SummaryModelsSheet: View {
     private var caption: String {
         var parts = [ModelsSheetRules.correctionOrigin(hasOverride: override != nil, stale: stale,
                                                        presetName: model.notes.presetSummaryChoice(for: item)?.presetName)]
-        if let made = item.notes.summary?.model { parts.append("Current notes: \(model.modelDisplayName(made))") }
+        if let made = item.notes.summary?.model { parts.append(String(localized: "Current notes: \(model.modelDisplayName(made))")) }
         if let n = item.notes.summary?.condensedParts { parts.append("condensed in \(n) parts") }
         return parts.joined(separator: " · ")
     }
@@ -157,7 +157,7 @@ struct SummaryModelsSheet: View {
         if draft.submit(item: item, state: state, notes: model.notes, template: template, context: state.context, preset: preset) {
             onClose()
         } else {
-            ui.error = model.lastError ?? "Couldn't start the notes."
+            ui.error = model.lastError ?? String(localized: "Couldn't start the notes.")
             model.lastError = nil // odmowa widoczna w oknie, bez drugiego, globalnego alertu
         }
     }

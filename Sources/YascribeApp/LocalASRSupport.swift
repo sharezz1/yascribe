@@ -31,7 +31,7 @@ final class LocalASRSupport: ObservableObject {
     /// Pobranie po kliknięciu. `force` (naprawa uszkodzonego) liczy sam `ModelStore.download` — wołający nie dostaje argumentu.
     func download() async {
         guard phase == .idle, runs.isIdle else {
-            downloadError = "Can't download the on-device model while it is downloading or in use."
+            downloadError = String(localized: "Can't download the on-device model while it is downloading or in use.")
             return
         }
         downloadError = nil
@@ -46,7 +46,7 @@ final class LocalASRSupport: ObservableObject {
                 if let p { self.highest = max(self.highest, p); self.phase = .downloading(self.highest) } else { self.phase = .downloading(nil) }
             }
         }
-        do { try await store.download(progress: report) } catch { downloadError = "\(error.localizedDescription)" }
+        do { try await store.download(progress: report) } catch { downloadError = (error as? ModelStoreError)?.displayMessage ?? error.localizedDescription }
         phase = .idle
         refresh()
     }
@@ -55,11 +55,11 @@ final class LocalASRSupport: ObservableObject {
     /// (`runs`: od `beginRun()` do `endRun()` każdego przebiegu).
     func remove() {
         guard phase == .idle, runs.isIdle else {
-            downloadError = "Can't remove the on-device model while it is downloading or in use."
+            downloadError = String(localized: "Can't remove the on-device model while it is downloading or in use.")
             return
         }
         downloadError = nil
-        do { try store.remove() } catch { downloadError = "\(error.localizedDescription)" }
+        do { try store.remove() } catch { downloadError = (error as? ModelStoreError)?.displayMessage ?? error.localizedDescription }
         refresh()
     }
 
@@ -77,7 +77,7 @@ final class LocalASRSupport: ObservableObject {
             if runs.isIdle { phase = .idle }
         case .failed(let reason):
             phase = .idle
-            downloadError = "Couldn't load the on-device model: \(reason)"
+            downloadError = String(localized: "Couldn't load the on-device model: \(reason)")
         }
     }
 

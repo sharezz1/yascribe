@@ -4,6 +4,12 @@ import YascribeProviders
 
 public enum CloudDiarizationError: Error, LocalizedError, Equatable {
     case tooLong, audioFormat
+    public var displayMessage: String {
+        switch self {
+        case .tooLong: String(localized: "Recording too long for speaker detection.")
+        case .audioFormat: String(localized: "Could not encode audio for speaker detection.")
+        }
+    }
     public var errorDescription: String? {
         switch self {
         case .tooLong: "Recording too long for speaker detection."

@@ -36,14 +36,14 @@ public struct ComingUp: Equatable, Sendable {
         if host.contains("teams.") { return "Teams" }
         if host.contains("meet.google.") { return "Google Meet" }
         if host.contains("zoom.us") { return "Zoom" }
-        return host.isEmpty ? "Online" : host
+        return host.isEmpty ? String(localized: "Online") : host
     }
 
     /// „Next · in 8 min” (w górę: zostało 7,5 min → 8) albo „Now · started 5 min ago” dla trwającego.
     public static func timing(_ e: CalendarEventInfo, now: Date) -> String {
         let s = e.start.timeIntervalSince(now)
-        if s > 0 { return "Next · in \(Int((s / 60).rounded(.up))) min" }
+        if s > 0 { return String(localized: "Next · in \(Int((s / 60).rounded(.up))) min") }
         let ago = Int(-s / 60)
-        return ago < 1 ? "Now · starting" : "Now · started \(ago) min ago"
+        return ago < 1 ? String(localized: "Now · starting") : String(localized: "Now · started \(ago) min ago")
     }
 }

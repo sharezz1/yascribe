@@ -36,41 +36,41 @@ enum ModelsSheetRules {
     static func transcribeReason(blocker: String?, correcting: Bool, generating: Bool, hasPreset: Bool, providerChosen: Bool,
                                  modelEmpty: Bool, languageChosen: Bool, correctionIncomplete: Bool = false) -> String? {
         if let blocker { return blocker }
-        if correcting { return "Correction is running." }
-        if generating { return "Notes are being generated." }
-        if !hasPreset { return "This meeting has no preset." }
-        if !providerChosen || modelEmpty { return "Choose a model." }
-        if !languageChosen { return "Choose a language." }
-        if correctionIncomplete { return "Choose a correction model." }
+        if correcting { return String(localized: "Correction is running.") }
+        if generating { return String(localized: "Notes are being generated.") }
+        if !hasPreset { return String(localized: "This meeting has no preset.") }
+        if !providerChosen || modelEmpty { return String(localized: "Choose a model.") }
+        if !languageChosen { return String(localized: "Choose a language.") }
+        if correctionIncomplete { return String(localized: "Choose a correction model.") }
         return nil
     }
 
     static func correctReason(canCorrectNow: Bool, moving: Bool, transcribing: Bool, correcting: Bool, generating: Bool,
                               hasUsableTranscript: Bool, hasDraft: Bool) -> String? {
-        if moving { return "Meetings are being moved." }
-        if transcribing { return "Transcription is running." }
-        if correcting { return "Correction is running." }
-        if generating { return "Notes are being generated." }
-        if !hasUsableTranscript { return "No usable transcript." }
-        if !hasDraft { return "Choose a model." }
+        if moving { return String(localized: "Meetings are being moved.") }
+        if transcribing { return String(localized: "Transcription is running.") }
+        if correcting { return String(localized: "Correction is running.") }
+        if generating { return String(localized: "Notes are being generated.") }
+        if !hasUsableTranscript { return String(localized: "No usable transcript.") }
+        if !hasDraft { return String(localized: "Choose a model.") }
         // Zapas: `canCorrectNow` zna jeszcze warunki, których nie rozpisano powyżej.
-        return canCorrectNow ? nil : "Can't improve the transcript right now."
+        return canCorrectNow ? nil : String(localized: "Can't improve the transcript right now.")
     }
 
     static func correctionOrigin(hasOverride: Bool, stale: Bool, presetName: String?) -> String {
-        if stale { return "The model you chose is no longer available" }
-        if hasOverride { return "Chosen for this meeting" }
-        return "From the preset: \(presetName ?? "none")"
+        if stale { return String(localized: "The model you chose is no longer available") }
+        if hasOverride { return String(localized: "Chosen for this meeting") }
+        return String(localized: "From the preset: \(presetName ?? String(localized: "none"))")
     }
 
     static func summaryReason(generating: Bool, hasText: Bool, hasChoice: Bool, moving: Bool, correcting: Bool,
                               transcribing: Bool) -> String? {
-        if generating { return "Notes are being generated." }
-        if !hasText { return "Nothing to summarize." }
-        if !hasChoice { return "Choose a model." }
-        if moving { return "Meetings are being moved." }
-        if correcting { return "Correction is running." }
-        if transcribing { return "Transcription is running." }
+        if generating { return String(localized: "Notes are being generated.") }
+        if !hasText { return String(localized: "Nothing to summarize.") }
+        if !hasChoice { return String(localized: "Choose a model.") }
+        if moving { return String(localized: "Meetings are being moved.") }
+        if correcting { return String(localized: "Correction is running.") }
+        if transcribing { return String(localized: "Transcription is running.") }
         return nil
     }
 
@@ -101,7 +101,7 @@ final class TranscriptModelsDraft: ObservableObject {
     /// Zapis pada albo wybór niedokończony: `start` nie jest wołany. Brak korekty w ogóle (nic nie wybrano): bez zapisu.
     @MainActor
     func startTranscribe(item: SessionItem, notes: NotesModel, preset: RoleAssignment?, start: () -> Bool) -> Bool {
-        if correctionIncomplete { notes.report("Choose a correction model first."); return false }
+        if correctionIncomplete { notes.report(String(localized: "Choose a correction model first.")); return false }
         if let choice = ModelsSheetRules.draft(providerID: correctProviderID, model: correctModel, thinking: nil, preset: preset,
                                                hasOverride: notes.usableOverride(.correction, for: item) != nil, usePreset: usePreset),
            !notes.saveDraft(.correction, choice, item: item) { return false }
@@ -121,7 +121,7 @@ final class TranscriptModelsDraft: ObservableObject {
     @MainActor
     func clearOverride(item: SessionItem, notes: NotesModel) -> Bool {
         // W trakcie ASR korekta po przebiegu czyta to nadpisanie: zdjęcie go teraz po cichu pominęłoby wybraną korektę.
-        guard !notes.isTranscribing(item.id) else { notes.report("Transcription is running."); return false }
+        guard !notes.isTranscribing(item.id) else { notes.report(String(localized: "Transcription is running.")); return false }
         guard notes.setOverride(.correction, nil, item: item) else { return false }
         correctProviderID = nil
         correctModel = ""
@@ -151,7 +151,7 @@ final class SummaryModelsDraft: ObservableObject {
     /// Jedna wartość dla podpisu, wysłanego tekstu i zapamiętanego Source: korekta mogła zniknąć po otwarciu okna.
     func effectiveCorrected(_ item: SessionItem) -> Bool { useCorrected && item.corrected != nil }
 
-    func sourceLabel(_ item: SessionItem) -> String { effectiveCorrected(item) ? "Corrected" : "Original" }
+    func sourceLabel(_ item: SessionItem) -> String { effectiveCorrected(item) ? String(localized: "Corrected") : String(localized: "Original") }
 
     /// Tekst z transkryptu wybranego w oknie, nie z „Version" w Transcript.
     func hasText(_ item: SessionItem) -> Bool {

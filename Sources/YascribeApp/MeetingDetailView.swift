@@ -94,12 +94,12 @@ struct MeetingDetailView: View {
         .background(Color.mnCard)
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
         .focusedSceneValue(\.playRecording, isRecording || item.audioDeletedAfterDays != nil ? nil : { togglePlayback() })
-        .navigationTitle(item.title)
+        .navigationTitle(item.displayTitle)
         .onAppear {
             if isRecording, state.tab == nil { state.tab = .myNotes }
             if !state.loadedMyNotes { state.myNotes = item.notes.myNotes; state.loadedMyNotes = true }
         }
-        .confirmationDialog("Move “\(item.title)” to the Trash?", isPresented: Binding(
+        .confirmationDialog("Move “\(item.displayTitle)” to the Trash?", isPresented: Binding(
             get: { model.pendingDelete == item.id }, set: { if !$0 { model.pendingDelete = nil } }), titleVisibility: .visible) {
             Button("Move to Trash", role: .destructive) { model.deleteSession(item.id) }
             Button("Cancel", role: .cancel) {}
@@ -181,10 +181,10 @@ struct MeetingDetailView: View {
                 MetaLine([
                     item.startedAt.formatted(date: .abbreviated, time: .shortened),
                     item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) } ?? "",
-                    model.presetFor(sessionURL: item.url).map { "Preset \($0.name)" } ?? "",
-                    item.audioDeletedAfterDays.map { "Audio deleted after \($0) days" } ?? "",
+                    model.presetFor(sessionURL: item.url).map { String(localized: "Preset \($0.name)") } ?? "",
+                    item.audioDeletedAfterDays.map { String(format: NSLocalizedString("Audio deleted after %lld days", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64($0)) } ?? "",
                 ])
-                if model.notes.isTitling(item.id) { StateLabel(.progress(nil), "Naming the meeting…") }
+                if model.notes.isTitling(item.id) { StateLabel(.progress(nil), String(localized: "Naming the meeting…")) }
                 ForEach(item.trackProblems, id: \.trackID) { problemButton($0) }
             }
             HStack(spacing: 12) {
@@ -193,7 +193,7 @@ struct MeetingDetailView: View {
                 EventAttendeesLine(link: item.notes.meta.calendarEvent)
             }
             // R3: na czas przenoszenia folderu nagrań spotkanie jest tylko do odczytu.
-            if model.recordingsMove != nil { StateLabel(.progress(nil), "Moving recordings…") }
+            if model.recordingsMove != nil { StateLabel(.progress(nil), String(localized: "Moving recordings…")) }
             if !item.notes.problems.isEmpty {
                 Label("\(item.notes.problems.joined(separator: ", ")) in this meeting's notes couldn't be read. They're kept aside before anything new is saved.",
                       systemImage: "exclamationmark.triangle")
@@ -276,7 +276,7 @@ struct MeetingDetailView: View {
             playback.track = nil
             let ns = error as NSError
             let why = ns.domain == NSOSStatusErrorDomain ? OSStatusText.describe(ns.code) : error.localizedDescription
-            model.lastError = "Couldn't open the \(track) recording: \(why)"
+            model.lastError = String(localized: "Couldn't open the \(track) recording: \(why)")
             return false
         }
     }
@@ -348,6 +348,13 @@ struct UtteranceRow: View {
         utterance.speaker == .me ? .mnAccent : speakerNumber.map(Self.color(number:)) ?? .mnText
     }
 
+    private var displaySpeakerName: String {
+        if utterance.speaker == .me { return String(localized: "Me") }
+        if let key = utterance.speakerKey, let name = item?.speakers?.names?[key] { return name }
+        if let number = speakerNumber { return String(localized: "Speaker \(number)") }
+        return String(localized: "Them")
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
             Button(MeetingDetailView.time(utterance.start), action: onJump)
@@ -355,11 +362,11 @@ struct UtteranceRow: View {
                 .font(.system(size: 13)).monospacedDigit().foregroundStyle(.mnText2)
                 .frame(width: 72, alignment: .leading)
                 .disabled(deletedHelp != nil)
-                .help(deletedHelp ?? "Play segment")
+                .help(deletedHelp ?? String(localized: "Play segment"))
                 .accessibilityLabel("Play segment from \(MeetingDetailView.time(utterance.start))")
             Group {
                 if utterance.speaker == .them, let key = utterance.speakerKey, let item, let number = speakerNumber {
-                    Button(utterance.speakerName) { picker.isPresented = true }
+                    Button(displaySpeakerName) { picker.isPresented = true }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Speaker \(number), rename")
                         .popover(isPresented: $picker.isPresented) {
@@ -371,7 +378,7 @@ struct UtteranceRow: View {
                             }
                         }
                 } else {
-                    Text(utterance.speakerName)
+                    Text(displaySpeakerName)
                 }
             }
             .font(.system(size: 13, weight: .semibold))
@@ -389,17 +396,17 @@ struct UtteranceRow: View {
                 }
                 if let lang = utterance.languageMismatch {
                     // P11: widoczne, nie ukryte — i wyłączone z notatek.
-                    WarnLabel(isAuto ? "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes"
-                                     : "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes")
+                    WarnLabel(isAuto ? String(localized: "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes")
+                                     : String(localized: "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes"))
                 }
                 if utterance.echoOfThem == true {
-                    StateLabel(.neutral, "Echo of the other side — excluded from notes")
+                    StateLabel(.neutral, String(localized: "Echo of the other side — excluded from notes"))
                 }
                 if utterance.approximateTiming {
-                    StateLabel(.neutral, "Approximate timing")
+                    StateLabel(.neutral, String(localized: "Approximate timing"))
                 }
                 if isEdited, draft == nil {
-                    StateLabel(.neutral, "Edited")
+                    StateLabel(.neutral, String(localized: "Edited"))
                 }
             }
             actions
@@ -417,7 +424,7 @@ struct UtteranceRow: View {
         HStack(spacing: 10) {
             Button(action: onJump) { Image(systemName: isPlaying ? "pause.fill" : "play.fill") }
                 .disabled(deletedHelp != nil)
-                .help(deletedHelp ?? (isPlaying ? "Pause" : "Play segment"))
+                .help(deletedHelp ?? (isPlaying ? String(localized: "Pause") : String(localized: "Play segment")))
                 .accessibilityLabel(isPlaying ? "Pause" : "Play segment")
             if let onStartEdit, draft == nil {
                 Button(action: onStartEdit) { Image(systemName: "pencil") }

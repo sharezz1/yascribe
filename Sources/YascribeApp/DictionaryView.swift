@@ -34,7 +34,7 @@ struct DictionaryView: View {
         .confirmationDialog("Replace existing files?", isPresented: Binding(get: { state.pendingExport != nil }, set: { if !$0 { state.pendingExport = nil } })) {
             Button("Replace", role: .destructive) { if let dir = state.pendingExport { write(to: dir) } }
         } message: {
-            Text("\(state.pendingExport?.lastPathComponent ?? "The folder") already has files with these names. Their contents will be replaced.")
+            Text("\(state.pendingExport?.lastPathComponent ?? String(localized: "The folder")) already has files with these names. Their contents will be replaced.")
         }
         .confirmationDialog("Add a risky alias?", isPresented: Binding(get: { state.pendingRisky != nil }, set: { if !$0 { state.pendingRisky = nil } })) {
             Button("Add Anyway") { if let s = state.pendingRisky { add(s) } }
@@ -47,15 +47,11 @@ struct DictionaryView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageTitle("Dictionary").padding(.bottom, 18)
+            PageTitle(String(localized: "Dictionary")).padding(.bottom, 18)
             Card {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("No terms yet").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
-                    (Text("Add the names and words your meetings keep getting wrong. A ")
-                        + Text("term").fontWeight(.semibold).foregroundStyle(.mnText)
-                        + Text(" is the correct spelling. Its ")
-                        + Text("aliases").fontWeight(.semibold).foregroundStyle(.mnText)
-                        + Text(" are the wrong spellings the transcript produces; they are replaced automatically, in every meeting."))
+                    Text("Add the names and words your meetings keep getting wrong. A term is the correct spelling. Its aliases are the wrong spellings the transcript produces; they are replaced automatically, in every meeting.")
                         .font(.callout).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 8) {
                         Text("Roky, Rokm").foregroundStyle(.mnText2)
@@ -85,7 +81,7 @@ struct DictionaryView: View {
     private var listState: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                PageTitle("Dictionary")
+                PageTitle(String(localized: "Dictionary"))
                 Spacer()
                 Button("Import…") { importFiles() }.buttonStyle(.pill)
                 Button("Export…") { exportFiles() }.buttonStyle(.pill)
@@ -108,7 +104,7 @@ struct DictionaryView: View {
             if let c = counter {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle").font(.system(size: 11, weight: .bold)).foregroundStyle(.mnWarn)
-                    Text("\(c.count) \(c.count == 1 ? "term doesn’t" : "terms don’t") fit the correction prompt").foregroundStyle(.mnText)
+                    Text(String(format: NSLocalizedString("%lld terms do not fit the correction prompt", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(c.count))).foregroundStyle(.mnText)
                     Spacer(minLength: 8)
                     Text(c.detail).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle)
                 }
@@ -163,15 +159,15 @@ struct DictionaryView: View {
             state.notice = nil
         } else {
             state.error = nil
-            state.notice = "Added “\(SuggestionRow.aliasText(s))” to \(s.term)."
+            state.notice = String(localized: "Added “\(SuggestionRow.aliasText(s))” to \(s.term).")
         }
     }
 
     static func riskyMessage(_ s: AliasSuggestion) -> String {
         // Alias z odmianą podmienia rdzeń i zostawia końcówkę („kopem” → „KOPTem”).
-        let change = s.inflects ? "Every word starting with “\(s.alias)” in transcripts will start with “\(s.term)” instead"
-            : "Every “\(s.alias)” in transcripts will become “\(s.term)”"
-        return "“\(s.alias)” is also an ordinary word. \(change), even where it was right."
+        s.inflects
+            ? String(localized: "“\(s.alias)” is also an ordinary word. Every word starting with “\(s.alias)” in transcripts will start with “\(s.term)” instead, even where it was right.")
+            : String(localized: "“\(s.alias)” is also an ordinary word. Every “\(s.alias)” in transcripts will become “\(s.term)”, even where it was right.")
     }
 
     @ViewBuilder private var messages: some View {
@@ -195,8 +191,10 @@ struct DictionaryView: View {
     private var countLine: String {
         let terms = model.dictionary.terms
         let aliases = terms.reduce(0) { $0 + $1.aliases.count }
-        let total = "\(terms.count) \(terms.count == 1 ? "term" : "terms") · \(aliases) \(aliases == 1 ? "alias" : "aliases")"
-        return shown.count == terms.count ? total : "\(shown.count) of \(total)"
+        let termCount = String(format: NSLocalizedString("%lld terms", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(terms.count))
+        let aliasCount = String(format: NSLocalizedString("%lld aliases", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(aliases))
+        let total = "\(termCount) · \(aliasCount)"
+        return shown.count == terms.count ? total : String(localized: "\(shown.count) of \(total)")
     }
 
     /// D10: ile Termów nie mieści się w poleceniu korektora presetu aktywnego dla nowych nagrań (nie liczy nadpisań w pojedynczym spotkaniu).
@@ -206,7 +204,7 @@ struct DictionaryView: View {
         let budget = ContextBudget.resolve(provider: provider, detected: nil)
         let omitted = DictionaryPrompt.make(model.dictionary, link: nil, maxChars: DictionaryPrompt.maxChars(budget: budget)).omittedTerms
         guard omitted > 0 else { return nil }
-        return (omitted, budget.map { "\(c.model) · context \($0.tokens)" } ?? c.model)
+        return (omitted, budget.map { String(localized: "\(c.model) · context \($0.tokens)") } ?? c.model)
     }
 
     // MARK: Import i eksport
@@ -217,29 +215,29 @@ struct DictionaryView: View {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        panel.message = "Choose \(Self.vocabularyFile) and/or \(Self.replacementsFile)"
-        panel.prompt = "Import"
+        panel.message = String(localized: "Choose \(Self.vocabularyFile) and/or \(Self.replacementsFile)")
+        panel.prompt = String(localized: "Import")
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
         var vocabularies: [String] = [], replacements: [String] = []
         do {
             for url in panel.urls {
                 // Limit rozmiaru przed odczytem; przekroczenie przerywa cały import, zanim cokolwiek się zmieni.
                 if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > Self.maxImportBytes {
-                    state.error = "“\(url.lastPathComponent)” is larger than 5 MB. Nothing was imported."
+                    state.error = String(localized: "“\(url.lastPathComponent)” is larger than 5 MB. Nothing was imported.")
                     return
                 }
                 let text = try String(contentsOf: url, encoding: .utf8)
                 if url.pathExtension.lowercased() == "tsv" { replacements.append(text) } else { vocabularies.append(text) }
             }
         } catch {
-            state.error = "Couldn’t read the file: \(error.localizedDescription). Nothing was imported."
+            state.error = String(localized: "Couldn’t read the file: \(error.localizedDescription). Nothing was imported.")
             return
         }
         // Każdy plik osobno (stan sekcji i BOM nie przechodzą dalej); słownik zmienia się dopiero po udanym zapisie.
         let result = DictionaryTransfer.importFiles(vocabularies: vocabularies, replacements: replacements, into: model.dictionary)
         if result.dictionary != model.dictionary {
             if let failure = DictionaryEdit.commit(result.dictionary, replacing: model.dictionary, set: { model.dictionary = $0 }, save: { model.saveDictionary() }) {
-                state.error = "\(failure) Nothing was imported; try again."
+                state.error = String(localized: "\(failure) Nothing was imported; try again.")
                 return
             }
         }
@@ -254,8 +252,8 @@ struct DictionaryView: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.message = "Choose a folder for \(Self.vocabularyFile) and \(Self.replacementsFile)"
-        panel.prompt = "Export"
+        panel.message = String(localized: "Choose a folder for \(Self.vocabularyFile) and \(Self.replacementsFile)")
+        panel.prompt = String(localized: "Export")
         guard panel.runModal() == .OK, let dir = panel.url else { return }
         let clash = [Self.vocabularyFile, Self.replacementsFile].contains { FileManager.default.fileExists(atPath: dir.appendingPathComponent($0).path) }
         if clash { state.pendingExport = dir } else { write(to: dir) }
@@ -266,9 +264,9 @@ struct DictionaryView: View {
         do {
             try DictionaryTransfer.exportVocabulary(model.dictionary).write(to: dir.appendingPathComponent(Self.vocabularyFile), atomically: true, encoding: .utf8)
             try DictionaryTransfer.exportReplacements(model.dictionary).write(to: dir.appendingPathComponent(Self.replacementsFile), atomically: true, encoding: .utf8)
-            state.notice = "Exported \(Self.vocabularyFile) and \(Self.replacementsFile) to \(dir.lastPathComponent)."
+            state.notice = String(localized: "Exported \(Self.vocabularyFile) and \(Self.replacementsFile) to \(dir.lastPathComponent).")
         } catch {
-            state.error = "Couldn’t export: \(error.localizedDescription)"
+            state.error = String(localized: "Couldn’t export: \(error.localizedDescription)")
         }
     }
 }
@@ -279,13 +277,13 @@ private struct DictionaryRow: View {
     let selected: Bool
 
     private var aliasLine: String {
-        guard !term.aliases.isEmpty else { return "No aliases · hint for the model only" }
+        guard !term.aliases.isEmpty else { return String(localized: "No aliases · hint for the model only") }
         return term.aliases.map { a in
             let text = a.inflecting ? a.text + "*" : a.text
             switch (a.risky, a.enabled) {
-            case (true, false): return "\(text) (risky, off)"
-            case (true, true): return "\(text) (risky)"
-            case (false, false): return "\(text) (off)"
+            case (true, false): return String(localized: "\(text) (risky, off)")
+            case (true, true): return String(localized: "\(text) (risky)")
+            case (false, false): return String(localized: "\(text) (off)")
             default: return text
             }
         }.joined(separator: ", ")
@@ -319,8 +317,12 @@ private struct SuggestionRow: View {
     static func aliasText(_ s: AliasSuggestion) -> String { s.inflects ? s.alias + "*" : s.alias }
 
     private var detail: String {
-        let meetings = suggestion.sessions.count
-        return "\(suggestion.count)× in \(meetings) \(meetings == 1 ? "meeting" : "meetings") · seen as \(suggestion.forms.joined(separator: ", "))"
+        let locale = Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en")
+        let count = Int64(suggestion.sessions.count)
+        let fallback = count == 1 ? "%lld meeting" : "%lld meetings"
+        let format = NSLocalizedString("%lld meetings (in)", value: fallback, comment: "")
+        let meetings = String(format: format, locale: locale, count)
+        return String(localized: "\(suggestion.count)× in \(meetings). Seen as \(suggestion.forms.joined(separator: ", ")).")
     }
 
     var body: some View {
@@ -353,9 +355,9 @@ private struct SuggestionRow: View {
 extension TermPriority {
     var label: String {
         switch self {
-        case .high: "High"
-        case .normal: "Normal"
-        case .low: "Low"
+        case .high: String(localized: "High")
+        case .normal: String(localized: "Normal")
+        case .low: String(localized: "Low")
         }
     }
 }
@@ -388,15 +390,15 @@ struct DictionaryTermSheet: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(state.draftIsNew ? "New term" : "Edit term").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
+                    Text(state.draftIsNew ? String(localized: "New term") : String(localized: "Edit term")).font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
                         .padding(.bottom, 8)
-                    FormRow(label: "Term", caption: state.termError, isError: true, labelWidth: 70) {
+                    FormRow(label: String(localized: "Term"), caption: state.termError, isError: true, labelWidth: 70) {
                         TextField("Correct spelling, e.g. Nimbu", text: term).textFieldStyle(.plain).fieldBox()
                     }
                     .padding(.horizontal, -16)
-                    FormRow(label: "Priority", labelWidth: 70) {
+                    FormRow(label: String(localized: "Priority"), labelWidth: 70) {
                         HStack(spacing: 12) {
-                            FieldMenu(label: "Priority", value: priority.wrappedValue.label, width: 120) {
+                            FieldMenu(label: String(localized: "Priority"), value: priority.wrappedValue.label, width: 120) {
                                 Picker("Priority", selection: priority) {
                                     ForEach(TermPriority.allCases, id: \.self) { Text($0.label).tag($0) }
                                 }
@@ -406,7 +408,7 @@ struct DictionaryTermSheet: View {
                         }
                     }
                     .padding(.horizontal, -16)
-                    SectionHeader("Aliases", note: nil) { Text("replaced in every transcript").font(.system(size: 11)).foregroundStyle(.mnText2) }
+                    SectionHeader(String(localized: "Aliases"), note: nil) { Text("replaced in every transcript").font(.system(size: 11)).foregroundStyle(.mnText2) }
                     Card {
                         HStack(spacing: 12) {
                             Text("Alias").frame(maxWidth: .infinity, alignment: .leading)
@@ -455,7 +457,7 @@ struct DictionaryTermSheet: View {
         .frame(width: 500)
         .background(.mnCard)
         .tint(.mnAccent) // arkusz nie dziedziczy akcentu z okna (macos.md §10, odstępstwo 5)
-        .confirmationDialog("Delete “\(state.draft?.text ?? "this term")”?", isPresented: $state.confirmingDelete) {
+        .confirmationDialog("Delete “\(state.draft?.text ?? String(localized: "this term"))”?", isPresented: $state.confirmingDelete) {
             Button("Delete term", role: .destructive) { delete() }
         } message: {
             Text("Its aliases stop being replaced. Transcripts already corrected keep their text.")
@@ -496,7 +498,7 @@ struct DictionaryTermSheet: View {
         let text = typed.text
         guard !text.isEmpty else { return true }
         if d.aliases.contains(where: { UserDictionary.key($0.text) == UserDictionary.key(text) }) {
-            state.aliasError = "“\(text)” is already in this list."
+            state.aliasError = String(localized: "“\(text)” is already in this list.")
             return false
         }
         d.aliases.append(DictionaryAlias(text, inflects: typed.inflects))
@@ -561,36 +563,36 @@ struct DictionaryImportSheet: View {
                         Image(systemName: nothingChanged ? "minus" : "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.mnAccent)
                             .padding(.top, 3).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(nothingChanged ? "Nothing new to import" : "Import finished").font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
+                            Text(nothingChanged ? String(localized: "Nothing new to import") : String(localized: "Import finished")).font(.system(size: 14, weight: .semibold)).foregroundStyle(.mnText)
                             if !files.isEmpty { Text(files.joined(separator: " · ")).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(1).truncationMode(.middle) }
                         }
                     }
                     Card {
                         HStack(alignment: .top, spacing: 0) {
-                            stat(report.termsAdded, "terms added")
-                            stat(report.aliasesAdded, "aliases added")
-                            stat(report.riskyLeftOff, "risky, left off")
-                            stat(report.conflicts.count, "conflicts")
+                            stat(report.termsAdded, format: NSLocalizedString("%lld terms added", comment: ""))
+                            stat(report.aliasesAdded, format: NSLocalizedString("%lld aliases added", comment: ""))
+                            stat(report.riskyLeftOff, format: NSLocalizedString("%lld risky, left off", comment: ""))
+                            stat(report.conflicts.count, format: NSLocalizedString("%lld conflicts", comment: ""))
                         }
                         .padding(.horizontal, 16).padding(.vertical, 12)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(report.summary)
+                        .accessibilityLabel(report.displaySummary)
                     }
                     .padding(.top, 14)
                     if !report.conflicts.isEmpty {
-                        SectionHeader("Conflicts") { Text("an alias belongs to one term").font(.system(size: 11)).foregroundStyle(.mnText2) }
+                        SectionHeader(String(localized: "Conflicts")) { Text("an alias belongs to one term").font(.system(size: 11)).foregroundStyle(.mnText2) }
                         Card {
                             // Setki konfliktów przy dużym pliku: od kilku wierszy lista przewija się, arkusz nie rośnie bez końca.
                             if report.conflicts.count > 4 { ScrollView { conflictRows }.frame(maxHeight: 190) } else { conflictRows }
                         }
                     }
                     if report.rejected > 0 {
-                        Text("\(report.rejected) \(report.rejected == 1 ? "entry was" : "entries were") skipped: text can’t start with # or contain tabs or line breaks.")
+                        Text(String(format: NSLocalizedString("%lld entries were skipped: text can’t start with # or contain tabs or line breaks.", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(report.rejected)))
                             .font(.system(size: 11)).foregroundStyle(.mnWarn).fixedSize(horizontal: false, vertical: true).padding(.top, 10).padding(.leading, 2)
                     }
                     Text(report.riskyLeftOff > 0
-                         ? "Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are."
-                         : "Terms and aliases you already had were left as they are.")
+                         ? String(localized: "Risky aliases are switched off. Turn them on one by one in the list. Terms and aliases you already had were left as they are.")
+                         : String(localized: "Terms and aliases you already had were left as they are."))
                         .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true).padding(.top, 10).padding(.leading, 2)
                 }
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 12)
@@ -615,7 +617,7 @@ struct DictionaryImportSheet: View {
                 if i > 0 { RowDivider(inset: 0) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("“\(c.alias)”").font(.system(size: 13, weight: .medium)).foregroundStyle(.mnText)
-                    (Text("Kept for ") + Text(c.keptBy).fontWeight(.semibold).foregroundStyle(.mnText) + Text(", skipped for \(c.skippedFor)."))
+                    Text("Kept for \(c.keptBy), skipped for \(c.skippedFor).")
                         .font(.system(size: 11)).foregroundStyle(.mnText2)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -625,9 +627,11 @@ struct DictionaryImportSheet: View {
         }
     }
 
-    private func stat(_ n: Int, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("\(n)").font(.system(size: 26, design: .serif)).monospacedDigit().foregroundStyle(.mnText)
+    private func stat(_ n: Int, format: String) -> some View {
+        let text = String(format: format, locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(n))
+        let label = String(text.dropFirst(String(n).count)).trimmingCharacters(in: .whitespaces)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(n, format: .number).font(.system(size: 26, design: .serif)).monospacedDigit().foregroundStyle(.mnText)
             Text(label).font(.system(size: 11)).foregroundStyle(.mnText2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

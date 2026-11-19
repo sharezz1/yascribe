@@ -84,7 +84,7 @@ public enum AutoTitle {
                 if m.manualTitle == nil && m.autoTitle == nil && m.calendarEvent == nil { m.autoTitle = title; stored = true }
             }) { onProblem(problem) }
         } catch {
-            onProblem("Couldn't save the meeting title: \(error)")
+            onProblem(String(localized: "Couldn't save the meeting title: \(error.localizedDescription)"))
         }
         return stored ? title : nil
     }
