@@ -208,8 +208,8 @@ struct TranscriptTab: View {
             // TASK-112: korekta tego spotkania podsunęła Aliasy do słownika (lista i Add w zakładce Dictionary).
             if item.corrected != nil, !correcting, suggestionCount > 0 {
                 HStack(spacing: 8) {
-                    StateLabel(.neutral, "\(suggestionCount) dictionary \(suggestionCount == 1 ? "suggestion" : "suggestions") from this meeting")
-                    LinkButton("Review") { model.section = .dictionary }
+                    StateLabel(.neutral, String.localizedStringWithFormat(NSLocalizedString("%lld dictionary suggestions from this meeting", comment: ""), Int64(suggestionCount)))
+                    LinkButton(String(localized: "Review")) { model.section = .dictionary }
                 }
             }
             // „Transcribe again…": stary transkrypt zostaje widoczny, dopóki nowy przebieg się nie zakwalifikuje (R23). Linia ogólna

@@ -1064,3 +1064,15 @@
 "silent" = "cisza";
 "The download didn't finish: The Internet connection appears to be offline." = "Pobieranie nie zostało ukończone. Brak połączenia z internetem.";
 "Couldn’t save the dictionary: The file couldn’t be saved because the disk is full." = "Nie udało się zapisać słownika. Brak miejsca na dysku.";
+"Suggestions" = "Sugestie";
+"The correction model kept fixing these. Add one as an alias to fix it in every transcript, without the model." = "Model korekty wielokrotnie poprawiał te słowa. Dodaj je jako alias, aby były poprawiane w każdym transkrypcie bez udziału modelu.";
+"This alias is also an ordinary word" = "Ten alias jest też zwykłym słowem";
+"Don’t suggest this again" = "Nie proponuj ponownie";
+"Add %@ as an alias of %@" = "Dodaj „%1$@” jako alias terminu „%2$@”";
+"Add a risky alias?" = "Dodać ryzykowny alias?";
+"Add Anyway" = "Dodaj mimo to";
+"“%@” is also an ordinary word. Every word starting with “%@” in transcripts will start with “%@” instead, even where it was right." = "„%1$@” to także zwykłe słowo. Każde słowo zaczynające się od „%2$@” w transkryptach będzie się zaczynać od „%3$@”, nawet tam, gdzie było poprawne.";
+"“%@” is also an ordinary word. Every “%@” in transcripts will become “%@”, even where it was right." = "„%1$@” to także zwykłe słowo. Każde „%2$@” w transkryptach zmieni się w „%3$@”, nawet tam, gdzie było poprawne.";
+"%lld dictionary suggestions from this meeting" = "Sugestie do słownika z tego spotkania: %lld";
+"Ignore" = "Ignoruj";
+"Review" = "Przejrzyj";

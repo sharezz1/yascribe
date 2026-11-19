@@ -370,5 +370,21 @@
 			<string>%lld language flags</string>
 		</dict>
 	</dict>
+	<key>%lld dictionary suggestions from this meeting</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld dictionary suggestion from this meeting</string>
+			<key>other</key>
+			<string>%lld dictionary suggestions from this meeting</string>
+		</dict>
+	</dict>
 </dict>
 </plist>
