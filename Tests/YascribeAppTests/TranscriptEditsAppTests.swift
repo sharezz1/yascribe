@@ -27,8 +27,11 @@ private func item(session: URL) -> SessionItem {
         #expect(i.transcript(corrected: false)?.utterances.map(\.text) == ["helo Rokm", "Hey."])
         #expect(i.transcript(corrected: true)?.utterances.map(\.text) == ["Hello Rokm.", "Hey."])
         #expect(i.uneditedTranscript(corrected: true)?.utterances[1].text == "Hi.")
+        #expect(i.canEdit(corrected: true))
         i.corrected?.transcript.utterances.append(u(.them, 9, "extra"))
         #expect(i.transcript(corrected: true)?.utterances[1].text == "Hi.")
+        #expect(!i.canEdit(corrected: true))
+        #expect(i.canEdit(corrected: false))
         #expect(i.transcript(corrected: false)?.utterances[1].text == "Hey.")
     }
 
@@ -55,6 +58,11 @@ private func item(session: URL) -> SessionItem {
         #expect(!model.editUtterance(stale, runID: "other", index: 0, corrected: true, text: "x"))
         #expect(!FileManager.default.fileExists(atPath: other.edits.path))
         #expect(!model.editUtterance(stale, runID: "run", index: 5, corrected: true, text: "x"))
+        // Korekta niezgodna z transkryptem: edycja tylko w Original, zapis w Corrected odmówiony.
+        var misaligned = stale
+        misaligned.corrected?.transcript.utterances.append(u(.them, 9, "extra"))
+        #expect(!model.editUtterance(misaligned, runID: "run", index: 1, corrected: true, text: "nope"))
+        #expect(TranscriptEdits.load(run: run)?.edits.map(\.text) == ["Hello, Rokm.", "hey"])
 
         // Tekst równy widocznemu (po słowniku) usuwa poprawkę zamiast tworzyć pozorną.
         model.dictionary = UserDictionary(terms: [DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm")])])

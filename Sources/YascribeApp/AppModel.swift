@@ -93,6 +93,11 @@ struct SessionItem: Identifiable, Equatable {
         base.utterances.count == transcript?.utterances.count ? edits : nil
     }
 
+    /// Ta sama zgodność indeksów co przy nakładaniu: w niezgodnej korekcie poprawka by się nie pokazała, więc edycja tylko w Original.
+    func canEdit(corrected useCorrected: Bool) -> Bool {
+        uneditedTranscript(corrected: useCorrected)?.utterances.count == transcript?.utterances.count
+    }
+
     func uneditedTranscript(corrected useCorrected: Bool) -> Transcript? {
         useCorrected ? (corrected?.transcript ?? transcript) : transcript
     }
@@ -1357,7 +1362,7 @@ final class AppModel {
     @discardableResult
     func editUtterance(_ item: SessionItem, runID: String, index: Int, corrected: Bool, text: String) -> Bool {
         // Szkic z poprzedniego przebiegu nie trafia do nowego; podczas przenoszenia nagrań stary katalog zaraz zniknie.
-        guard recordingsMove == nil, item.runID == runID, RunDirectory.isValid(runID: runID),
+        guard recordingsMove == nil, item.runID == runID, RunDirectory.isValid(runID: runID), item.canEdit(corrected: corrected),
               let base = item.uneditedTranscript(corrected: corrected), base.utterances.indices.contains(index) else { return false }
         let run = RunDirectory(session: item.url, runID: runID)
         do {

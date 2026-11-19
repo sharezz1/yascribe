@@ -247,6 +247,7 @@ struct MeetingDetailView: View {
         let offset = item.summary?.tracks.first { $0.id == track }?.offsetSeconds ?? 0
         guard playback.track == track || load(track), let player = playback.player else { return }
         let window = Self.segmentWindow(start: u.start, end: u.end, offset: offset, fileDuration: player.duration)
+        guard window.to > window.from else { return }
         player.currentTime = window.from
         guard player.play() else { return }
         playback.started(index: index, seconds: window.to - window.from)
@@ -257,7 +258,7 @@ struct MeetingDetailView: View {
     /// shortcut: stały offset toru, bez dryfu kotwic zegara z `Merger`; poprawić, jeśli koniec segmentu słyszalnie się rozjedzie.
     static func segmentWindow(start: Double, end: Double, offset: Double, fileDuration: Double) -> (from: Double, to: Double) {
         let from = min(max(0, start - offset), fileDuration)
-        let to = min((end > start ? end : start + 0.5) - offset, fileDuration)
+        let to = max(from, min((end > start ? end : start + 0.5) - offset, fileDuration)) // segment cały przed startem toru = puste okno
         return (from, to)
     }
 
@@ -270,6 +271,7 @@ struct MeetingDetailView: View {
             playback.track = track
             return true
         } catch {
+            playback.stop()
             playback.player = nil
             playback.track = nil
             let ns = error as NSError
@@ -405,6 +407,9 @@ struct UtteranceRow: View {
         .padding(.vertical, 11)
         .contentShape(Rectangle())
         .onHover { picker.hovering = $0 }
+        // Ikony są tylko na hover — VoiceOver i klawiatura dostają te same akcje nazwane na wierszu.
+        .accessibilityAction(named: isPlaying ? "Pause" : "Play segment") { if deletedHelp == nil { onJump() } }
+        .accessibilityAction(named: "Edit transcript") { onStartEdit?() }
     }
 
     /// Stała szerokość: pojawienie się ikon na hover nie przesuwa tekstu.
@@ -424,6 +429,7 @@ struct UtteranceRow: View {
         .font(.system(size: 12)).foregroundStyle(.mnText2)
         .frame(width: 44, alignment: .trailing)
         .opacity(picker.hovering || isPlaying ? 1 : 0)
+        .allowsHitTesting(picker.hovering || isPlaying)
     }
 
     /// Esc = Cancel, ⌘↩ = Save; zwykły Return to nowa linia. Jeden edytor naraz (`MeetingViewState.segmentDraft`).

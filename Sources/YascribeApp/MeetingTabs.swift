@@ -31,7 +31,14 @@ final class MeetingViewState: ObservableObject {
     @Published var segmentDraft: SegmentDraft?
 }
 
-struct SegmentDraft: Equatable { var runID: String; var index: Int; var text: String }
+/// `corrected` i `initial` z chwili otwarcia: przełączenie wersji w trakcie edycji nie zmienia celu zapisu.
+struct SegmentDraft: Equatable {
+    var runID: String
+    var index: Int
+    var corrected: Bool
+    var initial: String
+    var text: String
+}
 
 // MARK: Zakładki tekstowe (macos.md §11.5)
 
@@ -330,9 +337,11 @@ struct TranscriptTab: View {
     }
 
     private func row(_ index: Int, _ u: Utterance, number: Int?, edited: Bool) -> UtteranceRow {
+        // Jeden szkic naraz: otwarty edytor wyłącza pozostałe ołówki (niezapisany szkic nie znika).
         var startEdit: (() -> Void)?
-        if let runID = item.runID, !moving {
-            startEdit = { state.segmentDraft = SegmentDraft(runID: runID, index: index, text: u.text) }
+        let corrected = state.useCorrected
+        if let runID = item.runID, !moving, state.segmentDraft == nil, item.canEdit(corrected: corrected) {
+            startEdit = { state.segmentDraft = SegmentDraft(runID: runID, index: index, corrected: corrected, initial: u.text, text: u.text) }
         }
         let onSave: (() -> Void)? = moving ? nil : { save() }
         return UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
@@ -349,7 +358,10 @@ struct TranscriptTab: View {
     /// Edytor zamyka się tylko po udanym zapisie (inaczej szkic zostaje, błąd w `lastError`).
     private func save() {
         guard let d = state.segmentDraft else { return }
-        if model.editUtterance(item, runID: d.runID, index: d.index, corrected: state.useCorrected, text: d.text) { state.segmentDraft = nil }
+        let trimmed = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if trimmed(d.text) == trimmed(d.initial) || model.editUtterance(item, runID: d.runID, index: d.index, corrected: d.corrected, text: d.text) {
+            state.segmentDraft = nil
+        }
     }
 
     /// Indeks wypowiedzi to pozycja w `utterances` (klucz poprawek i odtwarzania), nie pozycja linii z wyciszeniami.

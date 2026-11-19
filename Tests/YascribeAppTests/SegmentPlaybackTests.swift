@@ -13,6 +13,7 @@ import Testing
         #expect(MeetingDetailView.segmentWindow(start: 58, end: 70, offset: 0, fileDuration: 60) == (58, 60)) // koniec pliku
         #expect(MeetingDetailView.segmentWindow(start: 7, end: 7, offset: 0, fileDuration: 60) == (7, 7.5)) // bez długości
         #expect(MeetingDetailView.segmentWindow(start: 70, end: 72, offset: 0, fileDuration: 60) == (60, 60))
+        #expect(MeetingDetailView.segmentWindow(start: 1, end: 2, offset: 3, fileDuration: 60) == (0, 0)) // cały przed startem toru
     }
 
     @Test func lateStopOfPreviousSegmentDoesNotStopNext() async throws {
