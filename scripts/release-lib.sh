@@ -24,6 +24,9 @@ default_identity_check() {
         || { echo "podpis nie spełnia wymagania Apple Development zespołu $YASCRIBE_TEAM_ID (ad-hoc albo obcy certyfikat)" >&2; return 1; }
     dr="$(codesign -d -r- "$app" 2>&1 | sed -n 's/^designated => //p')"
     [ "$dr" = "$base and $team" ] || { echo "designated requirement nie jest zespołowe: $dr" >&2; return 1; }
+    # Serwer MCP w paczce (TASK-31) podpisany tą samą tożsamością — bez tego agent uruchomiłby obcy plik.
+    codesign --verify --strict -R="anchor apple generic and $team" "$app/Contents/MacOS/yascribe-cli" 2>/dev/null \
+        || { echo "podpis yascribe-cli nie spełnia wymagania zespołu $YASCRIBE_TEAM_ID" >&2; return 1; }
 }
 
 # Pobranie feedu: 0 = treść na stdout, 22 = HTTP 404 (brak feedu), inny kod = błąd. Z atrapą (YASCRIBE_FETCH) kody idą wprost;

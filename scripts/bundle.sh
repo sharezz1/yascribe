@@ -14,10 +14,14 @@ CONFIG="${CONFIG:-debug}"
 # Logi budowy na stderr: stdout to wyłącznie ścieżka paczki (kontrakt z run.sh).
 swift build --disable-keychain -c "$CONFIG" --product YascribeApp >&2
 BIN="$(swift build --disable-keychain -c "$CONFIG" --show-bin-path)/YascribeApp"
+# Serwer MCP dla agentów (TASK-31): ta sama konfiguracja, w paczce obok aplikacji.
+swift build --disable-keychain -c "$CONFIG" --product yascribe-cli >&2
+CLI_BIN="$(swift build --disable-keychain -c "$CONFIG" --show-bin-path)/yascribe-cli"
 APP="${YASCRIBE_APP:-.build/Yascribe.app}"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/YascribeApp"
+cp "$CLI_BIN" "$APP/Contents/MacOS/yascribe-cli"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp Resources/MenuBarIcon.svg "$APP/Contents/Resources/MenuBarIcon.svg"
@@ -60,8 +64,8 @@ if [ "$IDENTITY" != "-" ]; then
     done
     [ "$SIGN" = "-" ] && echo "UWAGA: brak certyfikatu \"$IDENTITY\" (zespół $TEAM) — podpis ad-hoc; TCC zresetuje uprawnienia po każdej przebudowie, pęk zapyta o hasło" >&2
 fi
-# Podpis od środka, każdy element osobno, bez --deep: Autoupdate, Updater.app, framework, aplikacja.
-for part in "$FW/Versions/B/Autoupdate" "$FW/Versions/B/Updater.app" "$FW"; do
+# Podpis od środka, każdy element osobno, bez --deep: Autoupdate, Updater.app, framework, CLI, aplikacja.
+for part in "$FW/Versions/B/Autoupdate" "$FW/Versions/B/Updater.app" "$FW" "$APP/Contents/MacOS/yascribe-cli"; do
     codesign --force --sign "$SIGN" "$part" >&2
 done
 # Designated requirement aplikacji wiąże zespół, nie nazwę (CN) ani odcisk certyfikatu; tylko dla certyfikatu Apple.
