@@ -34,6 +34,7 @@ struct CLI {
                                                                   mówcy z toru system przebiegu → speakers.json (domyślnie najnowszy przebieg, czułość medium);
                                                                   brak modelu = błąd, pobranie tylko z --download (≈22 MB do Models/speaker-diarization)
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
+      mcp                                                         serwer MCP na stdio (tylko odczyt; zgoda w Settings → Agent access)
     Czasy z transcribe są na osi sesji; czas w pliku ścieżki = czas na osi − przesunięcie z summarize.
     """
 
@@ -45,6 +46,15 @@ struct CLI {
         var args = Array(CommandLine.arguments.dropFirst())
         guard !args.isEmpty else { print(usage); exit(64) }
         let cmd = args.removeFirst()
+        // Serwer MCP przed walidacją opcji i przed jakimkolwiek `print`: stdout należy wyłącznie do protokołu (§13.13).
+        if cmd == "mcp" {
+            guard args.isEmpty else {
+                FileHandle.standardError.write(Data("mcp nie przyjmuje argumentów\n".utf8))
+                exit(64)
+            }
+            MCPServer(paths: YascribePaths.fromEnvironment()).run()
+            return
+        }
         if let bad = args.first(where: { $0.hasPrefix("--") && !known.contains($0) }) {
             FileHandle.standardError.write(Data("nieznana opcja: \(bad)\n".utf8))
             print(usage); exit(64)
