@@ -57,16 +57,9 @@ struct SessionItem: Identifiable, Equatable {
     /// Ręczny > auto > tytuł z notatki > „Untitled meeting".
     var title: String { NoteTitle.display(meta: notes.meta, noteTitle: notes.summary?.title) }
 
-    /// Znaczniki `[[SN]]` notatki → bieżące nazwy mówców.
-    /// shortcut: numeracja z surowego transkryptu, także gdy notatka powstała z poprawionego; zmienić, jeśli „Speaker N” w notatce
-    /// rozjedzie się z transkryptem.
-    /// Inne wykrycie mówców niż przy generowaniu (skrót odcinków): te same klucze mogą znaczyć inne osoby, więc bez numeracji
-    /// — znaczniki zostają samym „Speaker N” z notatki.
+    /// Znaczniki `[[SN]]` notatki → bieżące nazwy mówców (wspólne z serwerem MCP).
     var speakerMarkers: SpeakerMarkers {
-        let current = speakers.map(\.segmentsDigest)
-        let sameDetection = current != nil && notes.summary?.speakersDigest == current
-        return SpeakerMarkers(keys: notes.summary?.speakers, names: speakers?.names ?? [:],
-                              numbers: sameDetection ? transcript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(speakers)) } ?? [:] : [:])
+        MeetingArchive.speakerMarkers(summary: notes.summary, speakers: speakers, rawTranscript: transcript)
     }
 
     /// Treść notatki z nazwami mówców zamiast znaczników — do schowka i archiwum.
@@ -78,9 +71,7 @@ struct SessionItem: Identifiable, Equatable {
     }
 
     /// Najdłuższy tor: gdy dźwięk systemowy nic nie nagrał (0 klatek), czas liczy się z mikrofonu, nie „0 min".
-    var duration: Double? {
-        summary?.tracks.compactMap { t in t.frames.flatMap { f in t.sampleRate > 0 ? Double(f) / t.sampleRate : nil } }.max()
-    }
+    var duration: Double? { MeetingArchive.duration(summary) }
 }
 
 /// Klucz listy modeli: dostawca + modalność wyjścia (`filter == ""` = lista domyślna).
@@ -325,7 +316,7 @@ final class AppModel {
     // MARK: Nagrania: lokalizacja i retencja audio (macos.md §11.5, Recordings)
 
     /// Folder ze wszystkimi spotkaniami: z ustawień albo `<dane>/sessions`.
-    var sessionsDirectory: URL { settings.recordingsPath.map { URL(fileURLWithPath: $0) } ?? paths.sessions }
+    var sessionsDirectory: URL { MeetingArchive.sessionsDirectory(paths: paths, settings: settings) }
     /// Postęp trwającego przenoszenia (`nil` = nic się nie przenosi).
     private(set) var recordingsMove: RecordingsMove.Progress?
     /// Wynik ostatniego przenoszenia: `moved` + szczegół (powód błędu albo resztki, których nie dało się usunąć).
@@ -429,14 +420,17 @@ final class AppModel {
         }
     }
 
-    func save() {
+    @discardableResult
+    func save() -> Bool {
         do {
             try JSONFile.save(providers, to: paths.providers)
             try JSONFile.save(presets, to: paths.presets)
             try JSONFile.save(settings, to: paths.settings)
             try JSONFile.save(probeCache, to: paths.probeCache)
+            return true
         } catch {
             lastError = "Couldn't save your settings: \(error)"
+            return false
         }
     }
 
@@ -461,7 +455,7 @@ final class AppModel {
                                           uniquingKeysWith: { a, _ in a })
         sessions = dirs.compactMap { url -> SessionItem? in
             let sd = SessionDirectory(url: url)
-            guard fm.fileExists(atPath: sd.journalURL.path) else { return nil }
+            guard MeetingArchive.isSession(url) else { return nil }
             let summary = try? sd.summarize()
             let run = RunSelection.of(session: url)
             let store = NotesStore(session: url)
@@ -562,7 +556,9 @@ final class AppModel {
         guard let source = item.transcript(corrected: corrected) else { return nil }
         let key = ReplacedKey(id: item.id, corrected: corrected)
         if let hit = replaced[key], hit.source == source, hit.speakers == item.speakers { return hit.result }
-        let result = Replacement.apply(source, rules: rules).withSpeakerLabels(item.speakers)
+        let result = MeetingArchive.displayTranscript(raw: item.transcript, corrected: item.corrected,
+                                                      useCorrected: corrected, rules: rules, speakers: item.speakers)
+        guard let result else { return nil }
         replaced[key] = (source, item.speakers, result)
         return result
     }

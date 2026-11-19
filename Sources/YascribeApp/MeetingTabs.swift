@@ -156,16 +156,11 @@ struct TranscriptActions: View {
     }
 
     /// Ten sam mówca co w kolumnie transkryptu (§4.4).
-    static func copyLine(_ u: Utterance) -> String { "[\(MeetingDetailView.time(u.start))] \(u.speakerName): \(u.text)" }
+    static func copyLine(_ u: Utterance) -> String { MeetingArchive.copyLine(u) }
 
     private func copy() {
         guard let t = model.transcript(of: item, corrected: state.useCorrected) else { return }
-        let text = TranscriptTab.lines(t, item: item).map { line in
-            switch line {
-            case .utterance(let u): Self.copyLine(u)
-            case .mute(let m): "[\(MeetingDetailView.time(m.start))] \(m.line)"
-            }
-        }.joined(separator: "\n")
+        let text = MeetingArchive.copyLines(t, summary: item.summary).joined(separator: "\n")
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
@@ -333,15 +328,14 @@ struct TranscriptTab: View {
 
     enum Line { case utterance(Utterance), mute(MuteNote) }
 
-    /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12”, macos.md §11.5) w kolejności czasu.
+    /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12", macos.md §11.5) w kolejności czasu.
     static func lines(_ t: Transcript, item: SessionItem) -> [Line] {
-        var mutes = MuteNote.of(summary: item.summary)[...]
-        var out: [Line] = []
-        for u in t.utterances {
-            while let m = mutes.first, m.start <= u.start { out.append(.mute(m)); mutes = mutes.dropFirst() }
-            out.append(.utterance(u))
+        MeetingArchive.lines(t, summary: item.summary).map { line in
+            switch line {
+            case .utterance(let u): .utterance(u)
+            case .mute(let m): .mute(m)
+            }
         }
-        return out + mutes.map(Line.mute)
     }
 }
 
