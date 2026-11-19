@@ -36,6 +36,11 @@ struct DictionaryView: View {
         } message: {
             Text("\(state.pendingExport?.lastPathComponent ?? String(localized: "The folder")) already has files with these names. Their contents will be replaced.")
         }
+        .confirmationDialog("Add a risky alias?", isPresented: Binding(get: { state.pendingRisky != nil }, set: { if !$0 { state.pendingRisky = nil } })) {
+            Button("Add Anyway") { if let s = state.pendingRisky { add(s) } }
+        } message: {
+            if let s = state.pendingRisky { Text(Self.riskyMessage(s)) }
+        }
     }
 
     // MARK: Stan pusty
@@ -111,6 +116,7 @@ struct DictionaryView: View {
                 .help("Terms are added to the correction prompt by priority; the rest are left out. A larger context window or a higher priority keeps more of them.")
             }
             messages.padding(.top, 10)
+            if !model.aliasSuggestions.isEmpty { suggestions.padding(.top, 14) }
             if shown.isEmpty {
                 Text("No terms match “\(state.query)”.").font(.callout).foregroundStyle(.mnText2).padding(.top, 16).padding(.horizontal, 2)
             } else {
@@ -125,6 +131,43 @@ struct DictionaryView: View {
                 .padding(.top, 14)
             }
         }
+    }
+
+    // MARK: Sugestie (TASK-112)
+
+    /// Powtarzające się poprawki korektora na Term, których nie pokrywa żaden Alias: Add dopisuje Alias, Ignore chowa na stałe.
+    private var suggestions: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Suggestions").font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
+            Text("The correction model kept fixing these. Add one as an alias to fix it in every transcript, without the model.")
+                .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
+            Card {
+                ForEach(Array(model.aliasSuggestions.enumerated()), id: \.element.id) { i, s in
+                    if i > 0 { RowDivider() }
+                    SuggestionRow(suggestion: s, add: { if s.risky { state.pendingRisky = s } else { add(s) } },
+                                  ignore: { state.error = model.dismissSuggestion(s); state.notice = nil })
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    private func add(_ s: AliasSuggestion) {
+        state.pendingRisky = nil
+        if let failure = model.acceptSuggestion(s) {
+            state.error = failure
+            state.notice = nil
+        } else {
+            state.error = nil
+            state.notice = "Added “\(SuggestionRow.aliasText(s))” to \(s.term)."
+        }
+    }
+
+    static func riskyMessage(_ s: AliasSuggestion) -> String {
+        // Alias z odmianą podmienia rdzeń i zostawia końcówkę („kopem” → „KOPTem”).
+        let change = s.inflects ? "Every word starting with “\(s.alias)” in transcripts will start with “\(s.term)” instead"
+            : "Every “\(s.alias)” in transcripts will become “\(s.term)”"
+        return "“\(s.alias)” is also an ordinary word. \(change), even where it was right."
     }
 
     @ViewBuilder private var messages: some View {
@@ -262,6 +305,46 @@ private struct DictionaryRow: View {
         .background(selected ? Color.mnSelection : .clear)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct SuggestionRow: View {
+    let suggestion: AliasSuggestion
+    let add: () -> Void
+    let ignore: () -> Void
+
+    /// `rok*` przy odmianie, jak na liście Aliasów.
+    static func aliasText(_ s: AliasSuggestion) -> String { s.inflects ? s.alias + "*" : s.alias }
+
+    private var detail: String {
+        let meetings = suggestion.sessions.count
+        return "\(suggestion.count)× in \(meetings) \(meetings == 1 ? "meeting" : "meetings") · seen as \(suggestion.forms.joined(separator: ", "))"
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if suggestion.risky {
+                        Image(systemName: "exclamationmark.triangle").font(.system(size: 10, weight: .bold)).foregroundStyle(.mnWarn)
+                            .accessibilityLabel("Risky")
+                            .help("This alias is also an ordinary word")
+                    }
+                    Text(Self.aliasText(suggestion)).foregroundStyle(.mnText2)
+                    Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.mnText3).accessibilityHidden(true)
+                    Text(suggestion.term).fontWeight(.semibold).foregroundStyle(.mnText)
+                }
+                .font(.system(size: 13)).lineLimit(1)
+                Text(detail).font(.system(size: 11)).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 8)
+            Button("Ignore", action: ignore).buttonStyle(.pill).help("Don’t suggest this again")
+            Button("Add", action: add).buttonStyle(.pill)
+                .accessibilityLabel("Add \(Self.aliasText(suggestion)) as an alias of \(suggestion.term)")
+        }
+        .padding(.horizontal, 16).padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

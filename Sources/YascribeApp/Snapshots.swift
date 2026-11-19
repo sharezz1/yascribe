@@ -299,6 +299,11 @@ enum Snapshots {
                         try render("meeting-transcript-model", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: picked, state: transcriptView) }
                         // Faza 2.1 minimalizm: jedna linia narzędzi (Version ▾ … Copy ⋯) po gotowej korekcie.
                         try render("meeting-transcript-calm", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: picked, state: transcriptView) }
+                        // TASK-112: linia „N dictionary suggestions from this meeting” z odnośnikiem do Dictionary.
+                        model.aliasSuggestions = [AliasSuggestion(id: "snap", termID: UUID(), term: "Nimbu", alias: "Rokn", inflects: true, risky: false,
+                                                                  forms: ["Rokna"], count: 2, sessions: [picked.id])]
+                        try render("meeting-transcript-suggestions", size: CGSize(width: 900, height: 360), dark: dark, model: model) { MeetingDetailView(item: picked, state: transcriptView) }
+                        model.aliasSuggestions = []
                         // Bez korekty: „Improve transcript” na wierzchu linii narzędzi (przed pierwszą korektą).
                         var notCorrected = picked
                         notCorrected.corrected = nil
@@ -667,6 +672,14 @@ enum Snapshots {
                 model.presets.presets.append(dictPreset)
                 model.activePresetID = dictPreset.id
                 try render("dictionary-list", size: CGSize(width: 900, height: 760), dark: dark, model: model) { DictionaryView() }
+                // TASK-112: karta Suggestions nad listą — zwykła i ryzykowna (ikona ostrzeżenia, Add pyta o potwierdzenie).
+                model.aliasSuggestions = [
+                    AliasSuggestion(id: "s1", termID: terms[0].id, term: "Nimbu", alias: "Rokn", inflects: true, risky: false,
+                                    forms: ["Rokna", "Roknie", "Rokn"], count: 5, sessions: ["a", "b", "c"]),
+                    AliasSuggestion(id: "s2", termID: terms[1].id, term: "KOPT", alias: "kop", inflects: true, risky: true,
+                                    forms: ["kopem", "kopa"], count: 3, sessions: ["a", "b"])]
+                try render("dictionary-suggestions", size: CGSize(width: 900, height: 760), dark: dark, model: model) { DictionaryView() }
+                model.aliasSuggestions = []
                 let termEditing = DictionaryViewState()
                 termEditing.open(terms[0])
                 termEditing.newAlias = "Zoomem"

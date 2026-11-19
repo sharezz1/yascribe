@@ -189,6 +189,7 @@ struct TranscriptTab: View {
     private var moving: Bool { model.recordingsMove != nil }
     /// Wznowienie w trakcie korekty dałoby drugą korektę tego samego przebiegu (F2).
     private var correcting: Bool { model.notes.isCorrecting(item.id) }
+    private var suggestionCount: Int { model.aliasSuggestions.filter { $0.sessions.contains(item.id) }.count }
 
     var body: some View {
         PinnedBarPage {
@@ -203,6 +204,13 @@ struct TranscriptTab: View {
             if let why = model.notes.correctionFailureMessage(item.id) {
                 ErrorLine(message: String(localized: "Correction failed: \(why)"), retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
                     .disabled(moving)
+            }
+            // TASK-112: korekta tego spotkania podsunęła Aliasy do słownika (lista i Add w zakładce Dictionary).
+            if item.corrected != nil, !correcting, suggestionCount > 0 {
+                HStack(spacing: 8) {
+                    StateLabel(.neutral, "\(suggestionCount) dictionary \(suggestionCount == 1 ? "suggestion" : "suggestions") from this meeting")
+                    LinkButton("Review") { model.section = .dictionary }
+                }
             }
             // „Transcribe again…": stary transkrypt zostaje widoczny, dopóki nowy przebieg się nie zakwalifikuje (R23). Linia ogólna
             // tylko do pierwszego przeładowania, zanim próba ma `input.json` (wtedy wchodzi baner z modelem).
