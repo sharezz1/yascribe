@@ -449,7 +449,7 @@ enum Snapshots {
                 }
                 try render("pill-levels", size: CGSize(width: 360, height: 130), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Preset: Polish · PL").font(.caption).foregroundStyle(.secondary)
+                        Text("Preset: \("Polish") · \("PL")").font(.caption).foregroundStyle(.secondary)
                         LevelRow(kind: .system, db: -22)
                         LevelRow(kind: .microphone, detail: "MacBook Air Microphone", db: -41, emphasized: true)
                         LevelRow(kind: .microphone, detail: "silent", db: -160, emphasized: true)
@@ -501,7 +501,7 @@ enum Snapshots {
                 for (name, status, activity) in cardScenes {
                     try render("model-card-\(name)", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                         VStack(alignment: .leading, spacing: 0) {
-                            SectionHeader("Yascribe models")
+                            SectionHeader(String(localized: "Yascribe models"))
                             ModelCardContent(card: ModelCardState(status: status, activity: activity), location: cardFolder)
                         }
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
@@ -510,7 +510,7 @@ enum Snapshots {
                 // Błąd pobrania pod opisem i wiersze edytora presetu (ASR, „On this Mac"): brak modelu / pobieranie / gotowy.
                 try render("model-card-download-error", size: CGSize(width: 700, height: 250), dark: dark, model: model) {
                     VStack(alignment: .leading, spacing: 0) {
-                        SectionHeader("Yascribe models")
+                        SectionHeader(String(localized: "Yascribe models"))
                         ModelCardContent(card: ModelCardState(status: .missing, activity: .idle), location: cardFolder,
                                          error: "The download didn't finish: The Internet connection appears to be offline.")
                     }
@@ -734,12 +734,12 @@ enum Snapshots {
 struct ComponentGallery: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PageTitle("Settings")
-            SectionHeader("Correction", note: "— optional") { Toggle("", isOn: .constant(true)).toggleStyle(.switch).labelsHidden() }
+            PageTitle(String(localized: "Settings"))
+            SectionHeader(String(localized: "Correction"), note: String(localized: "— optional")) { Toggle("", isOn: .constant(true)).toggleStyle(.switch).labelsHidden() }
             Card {
-                FormRow(label: "Language", caption: "✓ Language enforced") { Text("Polish") }
+                FormRow(label: String(localized: "Language"), caption: String(localized: "Language enforced")) { Text(languageDisplayName(.polish)) }
                 RowDivider()
-                FormRow(label: "Address", caption: "Enter a full address.", isError: true) { Text("openrouter.ai") }
+                FormRow(label: String(localized: "Address"), caption: String(localized: "Enter a full address."), isError: true) { Text("openrouter.ai") }
             }
             HStack(spacing: 8) {
                 Button("Record") {}.buttonStyle(.pillPrimary)
@@ -750,17 +750,17 @@ struct ComponentGallery: View {
             }
             .padding(.vertical, 16)
             HStack(spacing: 14) {
-                StateLabel(.ok, "Notes ready")
-                StateLabel(.bad, "Correction failed")
-                StateLabel(.live, "Recording 12:04")
+                StateLabel(.ok, String(localized: "Notes ready"))
+                StateLabel(.bad, String(localized: "Correction failed"))
+                StateLabel(.live, String(localized: "Recording \("12:04")"))
             }
             HStack(spacing: 14) {
-                StateLabel(.neutral, "Transcript ready")
-                StateLabel(.progress(0.41), "Transcribing 41%")
-                StateLabel(.progress(nil), "Correcting…")
+                StateLabel(.neutral, String(localized: "Transcript ready"))
+                StateLabel(.progress(0.41), String(localized: "Transcribing \(41)%"))
+                StateLabel(.progress(nil), String(localized: "Correcting…"))
             }
             .padding(.vertical, 10)
-            MetaLine(["Oct 15, 11:29", "42 min", "Preset Polish"])
+            MetaLine(["Oct 15, 11:29", "42 min", String(localized: "Preset \("Polish")")])
             Spacer()
         }
         .padding(24)

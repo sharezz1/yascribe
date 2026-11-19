@@ -219,7 +219,7 @@ struct ComingUpHeader: View {
         let recording = model.recording.isRecording
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                PageTitle("Meetings").fixedSize(horizontal: true, vertical: false)
+                PageTitle(String(localized: "Meetings")).fixedSize(horizontal: true, vertical: false)
                 Spacer(minLength: 12)
                 PresetMenu()
                 recordButton(recording: recording, primary: recording || up.next == nil)
@@ -295,7 +295,9 @@ struct NextMeetingCard: View {
     private var details: String {
         var parts = [event.start.formatted(date: .omitted, time: .shortened) + " – " + event.end.formatted(date: .omitted, time: .shortened)]
         let n = event.attendees.count
-        if n > 0 { parts.append(n == 1 ? String(localized: "1 attendee") : String(localized: "\(n) attendees")) }
+        if n > 0 {
+            parts.append(String(format: NSLocalizedString("%lld attendees", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(n)))
+        }
         parts.append(String(localized: "notes titled and linked to this event"))
         return parts.joined(separator: " · ")
     }
@@ -461,15 +463,18 @@ struct PresetMenu: View {
     var width: CGFloat? = 140
 
     var body: some View {
-        FieldMenu(label: "Preset", value: model.activePreset?.name ?? "No preset", width: width) {
+        FieldMenu(label: String(localized: "Preset"), value: model.activePreset?.name ?? String(localized: "No preset"), width: width) {
             ForEach(model.presets.presets) { p in
                 Button(AppModel.label(p)) { model.activePresetID = p.id }
             }
             Divider()
             Button("Edit Presets…") { model.section = .presets }
         }
-        .help(model.activePreset.map { "Preset for the next recording: \($0.languageLabel) · \($0.asr?.model ?? "no speech-to-text model")" }
-              ?? "Create a preset to start recording")
+        .help(model.activePreset.map { preset in
+            let language = AppModel.presetLanguageLabel(preset)
+            let asr = preset.asr?.model ?? String(localized: "no speech-to-text model")
+            return String(localized: "Preset for the next recording: \(language) · \(asr)")
+        } ?? String(localized: "Create a preset to start recording"))
     }
 }
 
@@ -494,7 +499,7 @@ struct SessionRow: View {
         if let d = item.duration { parts.append(Duration.seconds(d).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated))) }
         let lang = model.runLanguage(item)
         if lang.isAuto {
-            parts.append("Auto")
+            parts.append(String(localized: "Auto"))
         } else if let l = lang.language {
             parts.append(languageDisplayName(l))
         }
@@ -513,8 +518,8 @@ struct SessionRow: View {
                         // ostrzeżenia — cisza na samym początku, po której przyszedł dźwięk, to informacja w widoku spotkania.
                         let bad = item.trackProblems.filter(\.isWarning)
                         if !bad.isEmpty {
-                            Label("Problem: " + Set(bad.map { $0.name.lowercased() }).sorted().joined(separator: ", "),
-                                  systemImage: "exclamationmark.triangle")
+                            let tracks = Set(bad.map { $0.name.lowercased() }).sorted().joined(separator: ", ")
+                            Label("Problem: \(tracks)", systemImage: "exclamationmark.triangle")
                                 .font(.system(size: 11)).foregroundStyle(.mnWarn)
                                 .help(bad.map(\.line).joined(separator: "\n"))
                         }
@@ -566,9 +571,9 @@ struct SessionRow: View {
     @ViewBuilder private var sessionStatusView: some View {
         switch status {
         case .recording:
-            StateLabel(.live, "Recording \(RecordingPanelView.clock(model.recording.elapsed))")
+            StateLabel(.live, String(localized: "Recording \(RecordingPanelView.clock(model.recording.elapsed))"))
         case .transcribing(let p):
-            StateLabel(.progress(p), "Transcribing \(Int(p * 100))%")
+            StateLabel(.progress(p), String(localized: "Transcribing \(Int(p * 100))%"))
         case .correcting:
             StateLabel(.progress(nil), String(localized: "Correcting…"))
         case .correctionFailed:
@@ -584,7 +589,7 @@ struct SessionRow: View {
         case .notesReady:
             StateLabel(.ok, String(localized: "Notes ready"))
         case .flagged(let n):
-            WarnLabel("\(n) language flags")
+            WarnLabel(String(format: NSLocalizedString("%lld language flags", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(n)))
         case .transcriptReady:
             StateLabel(.neutral, String(localized: "Transcript ready"))
         case .notTranscribed:

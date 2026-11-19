@@ -20,7 +20,7 @@ for lang in en pl; do
     [ -s "$table" ] || { echo "check-bundle: brak tabeli $table" >&2; exit 1; }
     plural_table="$APP/Contents/Resources/$lang.lproj/Localizable.stringsdict"
     [ -s "$plural_table" ] || { echo "check-bundle: brak tabeli $plural_table" >&2; exit 1; }
-    plutil -extract CFBundleLocalizations json "$PLIST" | grep -q "\"$lang\"" || { echo "check-bundle: brak języka $lang" >&2; exit 1; }
+    plutil -extract CFBundleLocalizations json -o - "$PLIST" | grep -q "\"$lang\"" || { echo "check-bundle: brak języka $lang" >&2; exit 1; }
 done
 PL_INFO="$APP/Contents/Resources/pl.lproj/InfoPlist.strings"
 [ -s "$PL_INFO" ] || { echo "check-bundle: brak $PL_INFO" >&2; exit 1; }

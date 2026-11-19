@@ -157,7 +157,7 @@ struct MeetingDetailView: View {
                 MetaLine([
                     item.startedAt.formatted(date: .abbreviated, time: .shortened),
                     item.duration.map { Duration.seconds($0).formatted(.units(allowed: [.hours, .minutes], width: .abbreviated)) } ?? "",
-                    model.presetFor(sessionURL: item.url).map { "Preset \($0.name)" } ?? "",
+                    model.presetFor(sessionURL: item.url).map { String(localized: "Preset \($0.name)") } ?? "",
                     item.audioDeletedAfterDays.map { String(format: NSLocalizedString("Audio deleted after %lld days", comment: ""), locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64($0)) } ?? "",
                 ])
                 if model.notes.isTitling(item.id) { StateLabel(.progress(nil), String(localized: "Naming the meeting…")) }
@@ -335,8 +335,8 @@ struct UtteranceRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let lang = utterance.languageMismatch {
                     // P11: widoczne, nie ukryte — i wyłączone z notatek.
-                    WarnLabel(isAuto ? "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes"
-                                     : "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes")
+                    WarnLabel(isAuto ? String(localized: "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes")
+                                     : String(localized: "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes"))
                 }
                 if utterance.echoOfThem == true {
                     StateLabel(.neutral, String(localized: "Echo of the other side — excluded from notes"))

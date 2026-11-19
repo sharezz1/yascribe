@@ -422,5 +422,45 @@
 			<string>%lld dni</string>
 		</dict>
 	</dict>
+	<key>%lld attendees</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld uczestnik</string>
+			<key>few</key>
+			<string>%lld uczestników</string>
+			<key>many</key>
+			<string>%lld uczestników</string>
+			<key>other</key>
+			<string>%lld uczestników</string>
+		</dict>
+	</dict>
+	<key>%lld language flags</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld ostrzeżenie o języku</string>
+			<key>few</key>
+			<string>%lld ostrzeżenia o języku</string>
+			<key>many</key>
+			<string>%lld ostrzeżeń o języku</string>
+			<key>other</key>
+			<string>%lld ostrzeżeń o języku</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

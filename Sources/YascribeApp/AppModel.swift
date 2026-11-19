@@ -534,12 +534,15 @@ final class AppModel {
         switch makeClient(for: providerID) {
         case .success(let c): return c
         case .failure(let problem):
-            lastError = problem.message
+            lastError = problem.displayMessage
             return nil
         }
     }
 
-    struct ClientProblem: Error { let message: String }
+    struct ClientProblem: Error {
+        let message: String
+        var displayMessage: String { ArchivePresentation.message(message) }
+    }
 
     /// Dostawca z kluczem albo powód, dlaczego nie da się do niego wysłać żądania.
     private func providerWithKey(_ providerID: UUID, diarization: Bool = false) -> Result<(Provider, String?), ClientProblem> {
@@ -582,7 +585,7 @@ final class AppModel {
                 return nil
             }
         case .failure(let problem):
-            lastError = problem.message
+            lastError = problem.displayMessage
             return nil
         }
     }
@@ -595,14 +598,15 @@ final class AppModel {
         providerVerifying.insert(id)
         defer { providerVerifying.remove(id) }
         switch providerWithKey(id) {
-        case .failure(let problem): providerChecks[id] = .failed(problem.message)
+        case .failure(let problem): providerChecks[id] = .failed(problem.displayMessage)
         case .success(let (p, _)) where p.api == .fluidAudio: // bez sieci: model jest w magazynie i zgadza się z manifestem
             localASRModels.forEach { $0.refresh() }
             let ready = localASRModels.filter { RunGate.check(status: $0.status) == nil }
             if ready.count == LocalASRVariant.allCases.count {
                 providerChecks[id] = .verified(models: ready.count)
             } else if !ready.isEmpty {
-                providerChecks[id] = .limited(ready.map { $0.store.variant.displayName }.joined(separator: ", ") + " only")
+                let variants = ready.map { $0.store.variant.displayName }.joined(separator: ", ")
+                providerChecks[id] = .limited(String(localized: "\(variants) only"))
             } else {
                 providerChecks[id] = RunGate.check(status: localASR("")!.status).map { .failed($0.displayMessage) } ?? .verified(models: 1)
             }
@@ -719,7 +723,7 @@ final class AppModel {
         if self.provider(providerID)?.api.isAgentCLI == true {
             switch makeClient(for: providerID) {
             case .success(let c): probeCache.record(await ProbeRunner(client: c).probe(model: model, role: role, language: language)); save()
-            case .failure(let problem): lastError = problem.message
+            case .failure(let problem): lastError = problem.displayMessage
             }
             return
         }
@@ -1092,7 +1096,11 @@ final class AppModel {
 
     func isTranscribing(_ item: SessionItem) -> Bool { transcribing.contains(item.id) }
 
-    static func label(_ p: Preset) -> String { "\(p.name) · \(p.languageLabel)" }
+    static func label(_ p: Preset) -> String { "\(p.name) · \(presetLanguageLabel(p))" }
+
+    static func presetLanguageLabel(_ p: Preset) -> String {
+        p.isAutoLanguage ? String(localized: "Auto ⚠") : p.languageLabel
+    }
 
     /// `true` = przebieg przyjęty i wystartował; odmowa zostawia powód w `lastError`.
     @discardableResult

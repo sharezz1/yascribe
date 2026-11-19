@@ -60,7 +60,7 @@ struct PresetsView: View {
     }
 
     private func meta(_ p: Preset) -> String {
-        var parts = [p.isAutoLanguage ? String(localized: "Auto ⚠") : p.languageLabel, p.asr.map { $0.model.split(separator: "/").last.map(String.init) ?? $0.model } ?? String(localized: "No speech-to-text model")]
+        var parts = [AppModel.presetLanguageLabel(p), p.asr.map { $0.model.split(separator: "/").last.map(String.init) ?? $0.model } ?? String(localized: "No speech-to-text model")]
         if p.id == model.settings.defaultPresetID { parts.append(String(localized: "default")) }
         return parts.joined(separator: " · ")
     }
@@ -399,7 +399,7 @@ struct ProbeBadges: View {
                         WarnLabel(String(localized: "This model detects language itself — your language setting can't be enforced"))
                     }
                 } else {
-                    StateLabel(.bad, String(localized: "Doesn't work in this role")).help(r.failure ?? "")
+                    StateLabel(.bad, String(localized: "Doesn't work in this role")).help(r.failure.map(localizedProviderMessage) ?? "")
                 }
             } else {
                 StateLabel(.neutral, String(localized: "Not tested"))

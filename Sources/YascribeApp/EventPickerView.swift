@@ -84,7 +84,14 @@ struct EventPickerContent: View {
             .padding(.vertical, 7).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(r.event.title), \(r.event.start.formatted(date: .omitted, time: .shortened))\(r.overlapsRecording ? ", during the recording" : "")\(isLinked(r.event) ? ", linked" : "")")
+        .accessibilityLabel(eventAccessibilityLabel(r))
+    }
+
+    private func eventAccessibilityLabel(_ r: Ranked) -> String {
+        var parts = [r.event.title, r.event.start.formatted(date: .omitted, time: .shortened)]
+        if r.overlapsRecording { parts.append(String(localized: "During the recording")) }
+        if isLinked(r.event) { parts.append(String(localized: "Linked")) }
+        return parts.joined(separator: ", ")
     }
 
     private func row(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
@@ -102,7 +109,8 @@ struct EventAttendeesLine: View {
     var body: some View {
         let names = (link?.attendees ?? []).compactMap { $0.name ?? $0.email }
         if !names.isEmpty {
-            Text("With " + names.prefix(3).joined(separator: ", ") + (names.count > 3 ? " +\(names.count - 3)" : ""))
+            let visible = names.prefix(3).joined(separator: ", ")
+            Text(names.count > 3 ? String(localized: "With \(visible) +\(names.count - 3)") : String(localized: "With \(visible)"))
                 .font(.callout).foregroundStyle(.mnText2).lineLimit(1)
         }
     }

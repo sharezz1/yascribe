@@ -108,7 +108,7 @@ struct ArchiveChatView: View {
                             state.showingSource = true
                             model.selectedSessionID = item.id
                         } label: {
-                            Text("[\(index + 1)] \(item.title) · \(item.startedAt.formatted(date: .abbreviated, time: .omitted))" + (source.start.map { " · " + MeetingDetailView.time($0) } ?? ""))
+                            Text(String(localized: "[\(index + 1)] \(item.displayTitle) · \(item.startedAt.formatted(date: .abbreviated, time: .omitted))") + (source.start.map { " · " + MeetingDetailView.time($0) } ?? ""))
                                 .underline().frame(maxWidth: .infinity, alignment: .leading)
                         }.buttonStyle(.plain)
                     } else {

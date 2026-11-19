@@ -203,17 +203,17 @@ struct ArchiveConversationStore {
     }
 
     func save(_ conversation: ArchiveConversation) throws {
-        guard !isSymlink(directory) else { throw StoreError(errorDescription: "the chats folder is a symbolic link") }
+        guard !isSymlink(directory) else { throw StoreError(errorDescription: String(localized: "the chats folder is a symbolic link")) }
         let target = url(for: conversation.id)
-        guard !isSymlink(target) else { throw StoreError(errorDescription: "the chat file is a symbolic link") }
+        guard !isSymlink(target) else { throw StoreError(errorDescription: String(localized: "the chat file is a symbolic link")) }
         var stored = conversation
         stored.version = ArchiveConversation.currentVersion
         for i in stored.turns.indices {
             stored.turns[i].sources = stored.turns[i].sources?.map { var chunk = $0; chunk.vector = Data(); return chunk }
         }
-        guard stored.isValid else { throw StoreError(errorDescription: "invalid chat content") }
+        guard stored.isValid else { throw StoreError(errorDescription: String(localized: "invalid chat content")) }
         let data = try Self.encoder.encode(stored)
-        guard data.count <= Self.maxFileBytes else { throw StoreError(errorDescription: "the chat is too large") }
+        guard data.count <= Self.maxFileBytes else { throw StoreError(errorDescription: String(localized: "the chat is too large")) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try data.write(to: target, options: .atomic)
     }
@@ -221,13 +221,13 @@ struct ArchiveConversationStore {
     /// Plik musi mieć nazwę `<UUID>.json`, tożsamy `id` w środku, rozsądny rozmiar i nie być dowiązaniem.
     func load(fileURL file: URL) throws -> ArchiveConversation {
         let name = file.deletingPathExtension().lastPathComponent
-        guard file.pathExtension == "json", let fileID = UUID(uuidString: name) else { throw StoreError(errorDescription: "unexpected file name") }
-        guard !isSymlink(file) else { throw StoreError(errorDescription: "symbolic link") }
+        guard file.pathExtension == "json", let fileID = UUID(uuidString: name) else { throw StoreError(errorDescription: String(localized: "unexpected file name")) }
+        guard !isSymlink(file) else { throw StoreError(errorDescription: String(localized: "symbolic link")) }
         let size = (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        guard size <= Self.maxFileBytes else { throw StoreError(errorDescription: "file too large") }
+        guard size <= Self.maxFileBytes else { throw StoreError(errorDescription: String(localized: "file too large")) }
         var conversation = try Self.decoder.decode(ArchiveConversation.self, from: Data(contentsOf: file))
-        guard conversation.id == fileID else { throw StoreError(errorDescription: "id does not match the file name") }
-        guard conversation.isValid else { throw StoreError(errorDescription: "invalid content") }
+        guard conversation.id == fileID else { throw StoreError(errorDescription: String(localized: "id does not match the file name")) }
+        guard conversation.isValid else { throw StoreError(errorDescription: String(localized: "invalid content")) }
         for i in conversation.turns.indices {
             conversation.turns[i].sources = conversation.turns[i].sources?.map { var chunk = $0; chunk.vector = Data(); return chunk }
         }
@@ -235,7 +235,7 @@ struct ArchiveConversationStore {
     }
 
     func load(_ id: UUID) throws -> ArchiveConversation {
-        guard !isSymlink(directory) else { throw StoreError(errorDescription: "the chats folder is a symbolic link") }
+        guard !isSymlink(directory) else { throw StoreError(errorDescription: String(localized: "the chats folder is a symbolic link")) }
         return try load(fileURL: url(for: id))
     }
 

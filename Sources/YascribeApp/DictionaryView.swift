@@ -544,7 +544,7 @@ struct DictionaryImportSheet: View {
         let text = String(format: format, locale: Locale(identifier: Bundle.main.preferredLocalizations.first ?? "en"), Int64(n))
         let label = String(text.dropFirst(String(n).count)).trimmingCharacters(in: .whitespaces)
         return VStack(alignment: .leading, spacing: 2) {
-            Text("\(n)").font(.system(size: 26, design: .serif)).monospacedDigit().foregroundStyle(.mnText)
+            Text(n, format: .number).font(.system(size: 26, design: .serif)).monospacedDigit().foregroundStyle(.mnText)
             Text(label).font(.system(size: 11)).foregroundStyle(.mnText2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

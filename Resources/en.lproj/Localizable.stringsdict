@@ -338,5 +338,37 @@
 			<string>%lld days</string>
 		</dict>
 	</dict>
+	<key>%lld attendees</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld attendee</string>
+			<key>other</key>
+			<string>%lld attendees</string>
+		</dict>
+	</dict>
+	<key>%lld language flags</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld language flag</string>
+			<key>other</key>
+			<string>%lld language flags</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

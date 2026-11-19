@@ -197,7 +197,7 @@ struct TranscriptTab: View {
                 if p.isWarning { WarnLabel(p.line) } else { StateLabel(.neutral, p.line) }
             }
             if model.notes.isCorrecting(item.id) {
-                StateLabel(.progress(nil), "\(item.corrected == nil ? "After the meeting, we improve" : "Improving") the transcript\(modelName.map { " with \(model.modelDisplayName($0))" } ?? "")…")
+                StateLabel(.progress(nil), correctionProgress)
                     .help(modelName ?? "")
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
@@ -227,19 +227,32 @@ struct TranscriptTab: View {
         }
     }
 
+    private var correctionProgress: String {
+        let displayModel = modelName.map { model.modelDisplayName($0) }
+        return switch (item.corrected == nil, displayModel) {
+        case (true, let name?): String(localized: "After the meeting, we improve the transcript with \(name)…")
+        case (true, nil): String(localized: "After the meeting, we improve the transcript…")
+        case (false, let name?): String(localized: "Improving the transcript with \(name)…")
+        case (false, nil): String(localized: "Improving the transcript…")
+        }
+    }
+
     /// Baner R23: najnowsza próba nie jest bieżącym przebiegiem (trwa, padła, z lukami albo pusta).
     @ViewBuilder private var attemptBanner: some View {
         if let a = item.attemptNotPromoted {
-            let what = a.snapshot.map { "Transcription with \(runLabel($0))" } ?? "The new transcription"
-            let from = item.runSnapshot.map { "the transcript from \(runLabel($0))" } ?? "the previous transcript"
+            let from = item.runSnapshot.map { String(localized: "the transcript from \(runLabel($0))") }
+                ?? String(localized: "the previous transcript")
+            let run = a.snapshot.map(runLabel)
             // W toku także przy wznowieniu próby z lukami (na dysku wciąż `.gaps`); tuż po starcie nowej próby baner może do
             // pierwszego przeładowania nazywać model poprzedniej.
             if busy {
-                StateLabel(.progress(nil), "\(what) is in progress — showing \(from).").wrapping()
+                StateLabel(.progress(nil), run.map { String(localized: "Transcription with \($0) is in progress — showing \(from).") }
+                           ?? String(localized: "The new transcription is in progress — showing \(from).")).wrapping()
             } else {
                 // Jedna linia: krótkie „Resume" obok komunikatu (pełna etykieta z modelem ucinała się przy 900 pt).
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    WarnLabel("\(what) didn't finish — showing \(from).").help(Self.why(a.reason))
+                    WarnLabel(run.map { String(localized: "Transcription with \($0) didn't finish — showing \(from).") }
+                              ?? String(localized: "The new transcription didn't finish — showing \(from).")).help(Self.why(a.reason))
                     if a.snapshot != nil {
                         Button("Resume") { model.resume(item, runID: item.latestAttemptID) }
                             .buttonStyle(.pillSmall).fixedSize().disabled(moving || correcting)
@@ -252,7 +265,7 @@ struct TranscriptTab: View {
 
     /// „parakeet-tdt (EN)" — czytelna nazwa modelu i język przebiegu.
     private func runLabel(_ s: RunSnapshot) -> String {
-        "\(model.modelDisplayName(s.model)) (\(s.preset.isAutoLanguage ? "Auto" : s.language?.rawValue.uppercased() ?? "?"))"
+        "\(model.modelDisplayName(s.model)) (\(s.preset.isAutoLanguage ? String(localized: "Auto") : s.language?.rawValue.uppercased() ?? "?"))"
     }
 
     private static func why(_ r: RunSelection.Reason) -> String {
@@ -265,7 +278,8 @@ struct TranscriptTab: View {
 
     /// Wznowienie zawsze idzie do najnowszej próby; etykieta mówi, którą, gdy to nie bieżący przebieg.
     private var resumeLabel: String {
-        item.attemptNotPromoted?.snapshot.map { "Resume Transcription with \(runLabel($0))" } ?? "Resume Transcription"
+        item.attemptNotPromoted?.snapshot.map { String(localized: "Resume Transcription with \(runLabel($0))") }
+            ?? String(localized: "Resume Transcription")
     }
 
     // Nadpisanie per spotkanie (chip modelu) wygrywa z presetem, tak jak przy samej korekcie.
@@ -416,7 +430,7 @@ struct SummaryTab: View {
                 }
             }
             if let numbers = item.notes.summary?.unverifiedNumbers, !numbers.isEmpty {
-                WarnLabel("Not written as digits in the transcript: \(numbers.joined(separator: ", ")). Check these numbers in the notes.")
+                WarnLabel(String(localized: "Not written as digits in the transcript: \(numbers.joined(separator: ", ")). Check these numbers in the notes."))
             }
             if choice?.isFallback == true || choice == nil { modelLine }
             if item.notes.summary == nil, !hasText { Text(disabledReason).font(.callout).foregroundStyle(.mnText2) }
@@ -433,7 +447,7 @@ struct SummaryTab: View {
     /// Postęp generowania (krok z `NoteGenerator`) i „Cancel": podział długiego transkryptu może trwać kilka minut.
     private var generatingRow: some View {
         HStack(spacing: 10) {
-            StateLabel(.progress(nil), model.notes.progress[item.id]?.text ?? "Generating notes…")
+            StateLabel(.progress(nil), model.notes.progress[item.id]?.text ?? String(localized: "Generating notes…"))
             Button("Cancel") { model.notes.cancelGeneration(item.id) }
                 .buttonStyle(.pillSmall)
                 .help("Stop generating the notes")

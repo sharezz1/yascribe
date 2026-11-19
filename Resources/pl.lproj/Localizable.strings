@@ -994,3 +994,44 @@
 "%lld risky, left off" = "%lld ryzykownych, wyłączonych";
 
 "%lld days (elapsed)" = "%lld dni";
+
+/* Uzupełnienia pokrycia interfejsu */
+"[%lld] %@ · %@" = "[%lld] %@ · %@";
+"%@  ·" = "%@  ·";
+"“%@”" = "„%@”";
+"%@ – %@" = "%@ – %@";
+"%@ in this meeting's notes couldn't be read. They're kept aside before anything new is saved." = "Nie udało się odczytać plików notatek z tego spotkania (%@). Przed zapisem nowych notatek pliki zostaną odłożone na bok.";
+"%@: %@" = "%@: %@";
+"Unexpected alphabet (%@) — likely misrecognized, excluded from notes" = "Nieoczekiwany alfabet (%@) — tekst prawdopodobnie rozpoznano błędnie i pominięto w notatkach";
+"Looks like %@, not the preset's language — excluded from notes" = "Rozpoznano prawdopodobnie język %@ zamiast języka z zestawu ustawień. Tekst pominięto w notatkach";
+"After the meeting, we improve the transcript with %@…" = "Ulepszanie transkryptu po spotkaniu za pomocą modelu %@…";
+"After the meeting, we improve the transcript…" = "Ulepszanie transkryptu po spotkaniu…";
+"Improving the transcript with %@…" = "Ulepszanie transkryptu za pomocą modelu %@…";
+"the transcript from %@" = "transkrypt z przebiegu %@";
+"the previous transcript" = "poprzedni transkrypt";
+"Transcription with %@ is in progress — showing %@." = "Trwa transkrypcja z modelem %@. Na ekranie nadal jest %@.";
+"The new transcription is in progress — showing %@." = "Trwa nowa transkrypcja. Na ekranie nadal jest %@.";
+"Transcription with %@ didn't finish — showing %@." = "Transkrypcja z modelem %@ nie została ukończona. Na ekranie nadal jest %@.";
+"The new transcription didn't finish — showing %@." = "Nowa transkrypcja nie została ukończona. Na ekranie nadal jest %@.";
+"%@ — %@. Finished parts aren't paid for again." = "%@ — %@. Za ukończone części nie zapłacisz ponownie.";
+"Resume Transcription with %@" = "Wznów transkrypcję z modelem %@";
+"Resume Transcription" = "Wznów transkrypcję";
+"Couldn't transcribe %@–%@" = "Nie udało się transkrybować odcinka %@–%@";
+"Transcribe with %@" = "Transkrybuj z zestawem ustawień %@";
+"Not written as digits in the transcript: %@. Check these numbers in the notes." = "W transkrypcie brakuje zapisu cyframi: %@. Sprawdź te liczby w notatkach.";
+"Context: %@" = "Kontekst: %@";
+"Preset for the next recording: %@ · %@" = "Zestaw ustawień dla następnego nagrania: %@ · %@";
+"no speech-to-text model" = "brak modelu transkrypcji";
+"Problem: %@" = "Problem: %@";
+"Transcribing %lld%%" = "Transkrypcja %lld%%";
+"%lld language flags" = "Ostrzeżenia o języku: %lld";
+"Remove %@?" = "Usunąć %@?";
+"%lld / %lld" = "%lld / %lld";
+"Preset %@" = "Zestaw ustawień %@";
+"Preset: %@ · %@" = "Zestaw ustawień: %@ · %@";
+"Enter a full address." = "Podaj pełny adres.";
+"Linked" = "Powiązane";
+"With %@" = "Z uczestnikami: %@";
+"With %@ +%lld" = "Z uczestnikami: %@ +%lld";
+"This provider is no longer available." = "Ten dostawca nie jest już dostępny.";
+"%@ only" = "Tylko %@";
