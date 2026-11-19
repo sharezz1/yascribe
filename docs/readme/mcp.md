@@ -11,8 +11,8 @@ Nie uruchamia też żadnych modeli ani podsumowań — to robi wyłącznie aplik
 
 Domyślnie serwer nie wydaje żadnych danych. Żeby go włączyć:
 
-1. Otwórz Yascribe → **Settings** → **Agent access (MCP)**.
-2. Włącz **Allow AI agents to read meetings** i kliknij **Save**.
+1. Otwórz Yascribe → **Ustawienia** → **Dostęp agentów (MCP)**. W angielskim interfejsie: **Settings** → **Agent access (MCP)**.
+2. Włącz **Zezwól agentom AI na odczyt spotkań** i kliknij **Zapisz**.
 
 Przełącznik zapisuje zgodę w `settings.json` tego katalogu danych, z którego czyta serwer.
 Wyłączenie (albo usunięcie lub uszkodzenie `settings.json`) natychmiast zamyka dostęp: każde narzędzie
@@ -140,7 +140,7 @@ dokładnie to, co daje przycisk „Copy” w aplikacji. Gdy jest więcej linii, 
 
 ## Rozwiązywanie problemów
 
-- **„Agent access is off…”** — włącz przełącznik w Settings i zapisz.
+- **„Agent access is off…”** — włącz przełącznik w Ustawieniach i zapisz.
 - **Pusto, choć masz spotkania** — sprawdź, czy klient uruchamia serwer z tym samym `YASCRIBE_DATA_DIR`
   (albo bez niego, jeśli używasz zwykłego katalogu).
 - **Klient nie widzi narzędzi** — uruchom ręcznie i sprawdź, czy odpowiada:
