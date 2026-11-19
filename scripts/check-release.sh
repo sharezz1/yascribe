@@ -171,6 +171,8 @@ cat > "$T/cs/codesign" <<'EOF'
 # Dokładne argumenty, nie sklejone "$*": zgubione cudzysłowy wokół -R= zmieniłyby ich liczbę.
 if [ "$#" -eq 5 ] && [ "$1 $2 $3 $5" = "--verify --strict --deep /x" ]; then
     [ "$4" = "$FAKE_CS_WANT_R" ] && [ "${FAKE_CS_VERIFY:-ok}" = "ok" ]
+elif [ "$#" -eq 4 ] && [ "$1 $2 $4" = "--verify --strict /x/Contents/MacOS/yascribe-cli" ]; then
+    [ "$3" = "$FAKE_CS_WANT_CLI_R" ] && [ "${FAKE_CS_VERIFY:-ok}" = "ok" ]
 elif [ "$#" -eq 3 ] && [ "$1 $2 $3" = "-d -r- /x" ]; then
     echo "Executable=/x"; echo "designated => $FAKE_CS_DR"
 else exit 3; fi
@@ -178,6 +180,7 @@ EOF
 chmod +x "$T/cs/codesign"
 TEAM_DR='identifier "io.github.sharezz1.yascribe" and anchor apple generic and certificate leaf[subject.OU] = "885WJQV8LG"'
 export FAKE_CS_WANT_R='-R=identifier "io.github.sharezz1.yascribe" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.1] and certificate leaf[field.1.2.840.113635.100.6.1.12] and certificate leaf[subject.OU] = "885WJQV8LG"'
+export FAKE_CS_WANT_CLI_R='-R=anchor apple generic and certificate leaf[subject.OU] = "885WJQV8LG"'
 idcheck() { # wynik: RC
     ( export PATH="$T/cs:$PATH" "$@"; . "$SRC/scripts/release-lib.sh"; default_identity_check /x ) > /dev/null 2>&1
     RC=$?
