@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import YascribeLocalASR
+import YascribeNotes
 import YascribeProviders
 import YascribeRecording
 import YascribeSessionFormat
@@ -252,4 +253,99 @@ private actor ScriptedEngine: LocalASREngine {
     let wrapper = try #require(built.input.transcriber as? ReleasingTranscriber)
     #expect(wrapper.support === f.model.localASR(LocalASRModels.parakeetUltra))
     #expect(built.input.asrModel == LocalASRModels.parakeetUltra)
+}
+
+/// Atrapa czatu: zapamiętuje model każdego żądania. Korekta dostaje linie `[n] …` z powrotem z wielką literą i kropką;
+/// autotytuł i przegląd — stały tekst.
+private final class ChatSeen: HTTPClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen: [(model: String, prompt: String)] = []
+    var models: [String] { lock.withLock { seen.map(\.model) } }
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data("{}".utf8)) as? [String: Any]
+        let model = body?["model"] as? String ?? ""
+        let user = ((body?["messages"] as? [[String: Any]])?.last?["content"] as? String) ?? ""
+        lock.withLock { seen.append((model, user)) }
+        let lines = user.split(separator: "\n").filter { $0.hasPrefix("[") }
+            .compactMap { l in l.split(separator: "]", maxSplits: 1).first.map { "\($0)] Dzień dobry." } }
+        let content = model == "corr" ? lines.joined(separator: "\n") : "Dzień dobry."
+        let reply = try JSONSerialization.data(withJSONObject: ["choices": [["message": ["content": content]]]])
+        return (reply, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+}
+
+/// TASK-122: koniec nagrania → transkrypcja → mówcy (model na tym Macu, już pobrany) → korekta → autotytuł i przegląd
+/// → pełna notatka z szablonu Standard, wszystko samo, wg modeli z presetu.
+@Test @MainActor func finishedTranscriptionRunsSpeakersCorrectionAndNotesFromPreset() async throws {
+    let f = try LocalFixture(engine: ScriptedEngine(failing: false))
+    defer { f.clean() }
+    let remote = Provider(name: "Remote", baseURL: URL(string: "https://example.test/v1")!)
+    f.model.providers = ProvidersFile(providers: [f.provider, remote])
+    let http = ChatSeen()
+    f.model.notes.clientFor = { _ in OpenAICompatibleClient(provider: remote, key: "test-fake-key", http: http) }
+    // Model mówców „pobrany" (pliki o rozmiarach z manifestu), sama praca — atrapa.
+    let diarizer = f.model.speakerModel.store.directory
+    for (file, size) in DiarizerManifest.offline.files {
+        let url = diarizer.appendingPathComponent(file)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        let h = try FileHandle(forWritingTo: url)
+        try h.truncate(atOffset: UInt64(size))
+        try h.close()
+    }
+    #expect(f.model.speakerModel.store.status() == .ready)
+    var preset = f.preset(LocalASRModels.parakeetV3)
+    preset.correction = RoleAssignment(providerID: remote.id, model: "corr")
+    preset.summary = RoleAssignment(providerID: remote.id, model: "sum")
+    let session = try f.session(loud: true)
+    try JSONFile.save(preset, to: session.appendingPathComponent("preset.json")) // jak `startRecording`: preset zamrożony przy starcie
+    f.model.speakerWorkOverride = {
+        #expect(http.models.isEmpty) // mówcy przed korektą i podsumowaniem
+        return SpeakerDiarization.fromTrack(segments: [("speaker_0", 0, 100)], clock: SessionClock(summary: try SessionDirectory(url: session).summarize()),
+                                            modelPin: DiarizerManifest.pin, sensitivity: .medium,
+                                            audioFingerprint: SpeakerDiarization.audioFingerprint(session: session), createdAt: Date())
+    }
+    #expect(f.model.transcribe(sessionURL: session, preset: preset))
+    let dir = try await f.finish(session)
+    let id = session.lastPathComponent
+    let store = NotesStore(session: session)
+    let deadline = ContinuousClock.now + .seconds(10)
+    while (try? store.readSummary()) ?? nil == nil || f.model.notes.state(id) == .generating, ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let runID = dir.url.lastPathComponent
+    #expect(SpeakerDiarization.load(run: dir, acceptedPins: [DiarizerManifest.pin], currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: session)) != nil)
+    #expect(http.models.first == "corr")
+    #expect(http.models.count == 4 && http.models.dropFirst().allSatisfy { $0 == "sum" })
+    #expect(CorrectedTranscript.load(session: session, runID: runID)?.transcript.utterances.first?.text == "Dzień dobry.")
+    #expect(store.readMeta().autoTitle != nil)
+    #expect(store.readMeta().overview == "Dzień dobry.")
+    #expect(try store.readSummary()?.templateID == Template.standard.id)
+    #expect(try store.readSummary()?.speakers?.isEmpty == false) // notatka zna mówców z diaryzacji
+}
+
+/// Gotowa notatka zostaje: nowa transkrypcja tego spotkania nie generuje jej drugi raz sama.
+@Test @MainActor func automaticNotesSkipMeetingThatAlreadyHasNotes() async throws {
+    let f = try LocalFixture(engine: ScriptedEngine(failing: false))
+    defer { f.clean() }
+    let remote = Provider(name: "Remote", baseURL: URL(string: "https://example.test/v1")!)
+    f.model.providers = ProvidersFile(providers: [f.provider, remote])
+    let http = ChatSeen()
+    f.model.notes.clientFor = { _ in OpenAICompatibleClient(provider: remote, key: "test-fake-key", http: http) }
+    var preset = f.preset(LocalASRModels.parakeetV3)
+    preset.summary = RoleAssignment(providerID: remote.id, model: "sum")
+    let session = try f.session(loud: true)
+    try JSONFile.save(preset, to: session.appendingPathComponent("preset.json")) // jak `startRecording`: preset zamrożony przy starcie
+    let store = NotesStore(session: session)
+    let mine = NoteSummary(title: nil, markdown: "Moja notatka", templateID: "mine", model: "x", context: "", generatedAt: Date())
+    try JSONFile.save(mine, to: session.appendingPathComponent("notes/summary.json"))
+    #expect(f.model.transcribe(sessionURL: session, preset: preset))
+    _ = try await f.finish(session)
+    let deadline = ContinuousClock.now + .seconds(10)
+    while store.readMeta().overview == nil || f.model.notes.isTitling(session.lastPathComponent), ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(http.models.count == 2) // autotytuł i przegląd, bez notatki
+    #expect(try store.readSummary()?.markdown == "Moja notatka")
 }

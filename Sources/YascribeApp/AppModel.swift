@@ -1349,19 +1349,40 @@ final class AppModel {
             self.transcribing.remove(id)
             if let finished, post {
                 await self.notes.afterTranscription(sessionURL: sessionURL, runID: runID, snapshot: snapshot, transcript: finished)
+                self.reloadSessions()
+                await self.generateNotesAfterTranscription(sessionURL: sessionURL, runID: runID)
             }
             self.reloadSessions()
         }
         return true
     }
 
+    /// TASK-122: pełna notatka sama po korekcie i przeglądzie — szablon Standard (z edycjami użytkownika), poprawiony transkrypt.
+    /// Tylko bieżący przebieg, bez istniejącej notatki (nowa transkrypcja nie nadpisuje gotowej) i gdy jest model podsumowania.
+    func generateNotesAfterTranscription(sessionURL: URL, runID: String) async {
+        // `reloadSessions` dociąga mówców w tle — etykiety do notatki czytamy z dysku, jak `afterTranscription`.
+        let speakers = await Task.detached {
+            SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runID), acceptedPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin),
+                                    currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))
+        }.value
+        guard RunSelection.shouldPostProcess(session: sessionURL, runID: runID),
+              var item = sessions.first(where: { $0.id == sessionURL.lastPathComponent }), item.runID == runID,
+              (try? NotesStore(session: sessionURL).readSummary()) ?? nil == nil, // dysk, nie pamięć: ręczna notatka z ostatniej chwili zostaje
+              notes.summaryChoice(for: item) != nil else { return }
+        item.speakers = speakers
+        let template = notes.templates.all().first { $0.id == Template.standard.id } ?? .standard
+        notes.generate(item: item, useCorrected: true, template: template, context: "")
+    }
+
+    /// Model przebiegu z diaryzacją → mówcy przez jego API; inaczej (np. Parakeet) model mówców na tym Macu, jeśli już pobrany
+    /// (TASK-122; pobranie zostaje akcją użytkownika). Bez żadnego z nich — Me / Them.
     func detectSpeakersAfterTranscription(sessionURL: URL, runID: String, themUtterances: Int) async -> Bool {
         guard let snapshot = runSnapshot(sessionURL: sessionURL, runID: runID),
-              let provider = provider(snapshot.providerID),
-              await SpeakerDetectionDecision.shouldRun(capable: SpeakerCapability.supports(api: provider.api, model: snapshot.model),
+              let provider = provider(snapshot.providerID) else { return false }
+        let cloud = SpeakerCapability.supports(api: provider.api, model: snapshot.model) ? cloudProvider(snapshot.providerID) : nil
+        guard await SpeakerDetectionDecision.shouldRun(capable: cloud != nil || speakerModel.store.status() == .ready,
                   themUtterances: themUtterances, hasSystemTrack: { await Task.detached { Self.hasSystemTrack(sessionURL) }.value }),
-              let cloud = cloudProvider(snapshot.providerID) else { return false }
-        guard let ticket = reserveSpeakerTicket(sessionURL: sessionURL, runID: runID) else { return false }
+              let ticket = reserveSpeakerTicket(sessionURL: sessionURL, runID: runID) else { return false }
         await performSpeakerDetection(ticket, sessionURL: sessionURL, cloud: cloud)
         return true
     }
