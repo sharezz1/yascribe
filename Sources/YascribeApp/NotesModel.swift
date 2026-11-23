@@ -364,7 +364,8 @@ final class NotesModel {
     }
 
     /// Tylko migawki (`Snapshots.swift`): stan „w toku" bez uruchamiania pracy. Bez argumentów czyści stan.
-    func setPreview(_ id: String, generating: NoteProgress? = nil, correcting isCorrecting: Bool = false) {
+    func setPreview(_ id: String, generating: NoteProgress? = nil, correcting isCorrecting: Bool = false, correctionFailed: String? = nil) {
+        correctionFailure[id] = correctionFailed
         generation[id] = generating == nil ? nil : .generating
         progress[id] = generating
         // Tylko tryb migawek, w którym nic naprawdę nie trwa: wyczyszczenie rejestru nikomu nie zabiera biletu.
