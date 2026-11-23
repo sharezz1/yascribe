@@ -1352,7 +1352,8 @@ final class AppModel {
         }.value
         guard RunSelection.shouldPostProcess(session: sessionURL, runID: runID),
               var item = sessions.first(where: { $0.id == sessionURL.lastPathComponent }), item.runID == runID,
-              item.notes.summary == nil, notes.summaryChoice(for: item) != nil else { return }
+              (try? NotesStore(session: sessionURL).readSummary()) ?? nil == nil, // dysk, nie pamięć: ręczna notatka z ostatniej chwili zostaje
+              notes.summaryChoice(for: item) != nil else { return }
         item.speakers = speakers
         let template = notes.templates.all().first { $0.id == Template.standard.id } ?? .standard
         notes.generate(item: item, useCorrected: true, template: template, context: "")
