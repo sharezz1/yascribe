@@ -1500,7 +1500,13 @@ final class AppModel {
         // Wraca po faktycznym końcu pracy, także anulowanej — dopiero wtedy bilet schodzi (F02).
         let result = await SpeakerDetectionWork.result(of: work)
         do {
-            let (diarization, voiceError) = try result.get()
+            var (diarization, voiceError) = try result.get()
+            // Zgoda cofnięta w trakcie wykrywania: imiona z profili nie trafiają do pliku (świeże wykrycie nie ma innych imion).
+            if settings.voiceProfiles != true, diarization.voiceMatches != nil {
+                diarization.names = nil
+                diarization.voiceMatches = nil
+                voiceError = nil
+            }
             // Bez `await` między bramką a zapisem: nowszy bilet nie wejdzie pomiędzy.
             if SpeakerDetectionTicket.mayWrite(ticket, current: speakerTickets[id], cancelled: Task.isCancelled || work.isCancelled) {
                 try JSONFile.save(diarization, to: RunDirectory(session: sessionURL, runID: ticket.runID).speakers, createParents: false)
@@ -1620,7 +1626,8 @@ final class AppModel {
 
     /// Podobieństwo, gdy imię mówcy pochodzi z profilu głosu bieżącego modelu (UI: ikona, „Not X”); inaczej `nil`.
     func voiceRecognition(_ item: SessionItem, key: String) -> Double? {
-        guard let match = item.speakers?.voiceMatches?[key], match.model == voiceModel.id, item.speakers?.names?[key] != nil else { return nil }
+        guard let match = item.speakers?.voiceMatches?[key], match.model == voiceModel.id, item.speakers?.names?[key] != nil,
+              voiceProfiles.profiles.contains(where: { $0.id == match.profileID }) else { return nil } // usunięty profil: bez znacznika
         return match.similarity
     }
     private func voiceSupport(_ model: VoiceModel) -> SpeakerModelSupport { model == .diarizer ? speakerModel : campPlusModel }

@@ -1,3 +1,4 @@
+@preconcurrency import AVFoundation
 import FluidAudio
 import Foundation
 
@@ -42,6 +43,13 @@ public actor VoiceEmbedder {
         let lock = try store.lockForUse()
         defer { withExtendedLifetime(lock) {} }
         let rate = 16_000.0
+        let seconds = (try? AVAudioFile(forReading: systemTrack)).map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
+        let free = (try? FileManager.default.temporaryDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
+            .volumeAvailableCapacityForImportantUsage ?? 0
+        guard SpeakerDiarizer.hasRoomForPCM(trackSeconds: seconds, freeBytes: free) else {
+            throw DiarizerModelStoreError(message: "Not enough free disk space to detect speakers in this recording.",
+                                          displayMessage: String(localized: "Not enough free disk space to detect speakers in this recording."))
+        }
         let source = try SpeakerDiarizer.makeSource(from: systemTrack, sampleRate: Int(rate))
         defer { source.cleanup() }
         let duration = Double(source.sampleCount) / rate

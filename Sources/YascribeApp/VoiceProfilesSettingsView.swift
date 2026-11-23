@@ -26,7 +26,8 @@ struct VoiceConsentAlert: ViewModifier {
     @Environment(AppModel.self) private var model
 
     func body(content: Content) -> some View {
-        content.alert("Remember voices?", isPresented: Binding(get: { model.voiceConsentPending != nil }, set: { _ in })) {
+        content.alert("Remember voices?", isPresented: Binding(get: { model.voiceConsentPending != nil },
+                                                                   set: { if !$0, model.voiceConsentPending != nil { model.answerVoiceConsent(false) } })) {
             Button("Remember voices") { model.answerVoiceConsent(true) }
             Button("Not now", role: .cancel) { model.answerVoiceConsent(false) }
         } message: {

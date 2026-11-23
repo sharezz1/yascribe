@@ -66,13 +66,14 @@ public struct VoiceProfiles: Codable, Equatable, Sendable {
         if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
     }
 
-    /// Dopisuje próbkę do profilu o tym imieniu (bez wielkości liter) albo do nowego. Ta sama próbka drugi raz nic nie zmienia.
+    /// Dopisuje próbkę do profilu o tym imieniu (bez wielkości liter) albo do nowego. Ta sama próbka tego samego modelu drugi raz
+    /// nic nie zmienia; ten sam mówca liczony innym modelem to osobna próbka.
     @discardableResult
     public mutating func learn(name: String, sample: VoiceSample, now: Date) -> UUID {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let index = profiles.firstIndex { $0.name.caseInsensitiveCompare(name) == .orderedSame }
             ?? { profiles.append(VoiceProfile(name: name, updatedAt: now, samples: [])); return profiles.count - 1 }()
-        if !profiles[index].samples.contains(where: { $0.id == sample.id }) {
+        if !profiles[index].samples.contains(where: { $0.id == sample.id && $0.model == sample.model }) {
             profiles[index].samples.append(sample)
             let own = profiles[index].samples.indices.filter { profiles[index].samples[$0].model == sample.model }
             if own.count > Self.maxSamplesPerModel { profiles[index].samples.remove(at: own[0]) }
@@ -81,7 +82,7 @@ public struct VoiceProfiles: Codable, Equatable, Sendable {
         return profiles[index].id
     }
 
-    /// Cofnięcie nauki (imię zmienione albo zdjęte): próbka znika z każdego profilu, profil bez próbek też.
+    /// Cofnięcie nauki (imię zmienione albo zdjęte): próbki tego mówcy (wszystkich modeli) znikają z każdego profilu, profil bez próbek też.
     public mutating func forget(sampleID: String) {
         for i in profiles.indices { profiles[i].samples.removeAll { $0.id == sampleID } }
         profiles.removeAll { $0.samples.isEmpty }

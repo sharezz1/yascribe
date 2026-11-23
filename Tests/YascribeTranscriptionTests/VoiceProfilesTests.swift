@@ -70,3 +70,12 @@ private func sample(_ id: String, _ values: [Float] = [1, 0], seconds: Double = 
 @Test func sampleIDIncludesDigest() {
     #expect(VoiceSample.id(session: "s", run: "r", key: "S1", digest: "d") == "s/r/S1/d")
 }
+
+@Test func sameSpeakerOtherModelIsNewSampleAndForgetRemovesBoth() {
+    var p = VoiceProfiles()
+    p.learn(name: "Anna Testowa", sample: sample("a", model: "diarizer/x"), now: date)
+    p.learn(name: "Anna Testowa", sample: sample("a", model: "campplus/y"), now: date)
+    #expect(p.profiles[0].samples.count == 2 && p.profiles[0].vector(model: "campplus/y") != nil)
+    p.forget(sampleID: "a")
+    #expect(p.profiles.isEmpty)
+}

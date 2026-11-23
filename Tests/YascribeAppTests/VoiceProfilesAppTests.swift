@@ -195,11 +195,41 @@ private actor EmbedGate {
 @Test @MainActor func recognitionShownOnlyForCurrentModel() throws {
     let f = try Fixture(); defer { try? FileManager.default.removeItem(at: f.root) }
     var item = f.item
-    let id = UUID()
+    let id = f.model.voiceProfiles.learn(name: "Anna Testowa", sample: VoiceSample(id: "x", model: VoiceModel.diarizer.id, values: [1, 0, 0, 0], seconds: 40), now: Date())
     item.speakers = Fixture.diarization().applying([.init(key: "S1", profileID: id, similarity: 0.9)], names: [id: "Anna Testowa"], model: VoiceModel.diarizer.id)
     #expect(f.model.voiceRecognition(item, key: "S1") == 0.9)
     #expect(f.model.voiceRecognition(item, key: "S2") == nil)
     f.model.setVoiceBeta(true)
     #expect(f.model.voiceRecognition(item, key: "S1") == nil) // imię zostaje, znacznik „rozpoznano” tylko dla bieżącego modelu
     #expect(item.speakers?.names?["S1"] == "Anna Testowa")
+}
+
+@Test @MainActor func voiceProfilesLiveOutsideMeetingsAndDeletedProfileLosesMark() throws {
+    let f = try Fixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    // Biometria w katalogu danych, poza folderem spotkań (archiwum i MCP czytają tylko spotkania).
+    #expect(VoiceProfiles.url(root: f.model.paths.root).deletingLastPathComponent().standardizedFileURL.path == f.model.paths.root.standardizedFileURL.path)
+    #expect(!VoiceProfiles.url(root: f.model.paths.root).path.hasPrefix(f.model.paths.sessions.path + "/"))
+    let id = f.model.voiceProfiles.learn(name: "Anna Testowa", sample: VoiceSample(id: "x", model: VoiceModel.diarizer.id, values: [1, 0, 0, 0], seconds: 40), now: Date())
+    var item = f.item
+    item.speakers = Fixture.diarization().applying([.init(key: "S1", profileID: id, similarity: 0.9)], names: [id: "Anna Testowa"], model: VoiceModel.diarizer.id)
+    #expect(f.model.voiceRecognition(item, key: "S1") == 0.9)
+    f.model.deleteVoiceProfile(id)
+    #expect(f.model.voiceRecognition(item, key: "S1") == nil)
+}
+
+@Test @MainActor func consentRevokedDuringDetectionDropsNames() async throws {
+    let f = try Fixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    f.model.setVoiceConsent(true)
+    f.model.voiceProfiles.learn(name: "Anna Testowa", sample: VoiceSample(id: "x", model: VoiceModel.diarizer.id, values: [1, 0, 0, 0], seconds: 40), now: Date())
+    let gate = EmbedGate()
+    await gate.setHold()
+    f.model.voiceEmbedOverride = { _, speakers, _ in await gate.embed(speakers) }
+    f.model.speakerWorkOverride = { Fixture.diarization() }
+    let detection = Task { await f.model.detectSpeakers(sessionURL: f.session, runID: "run", sensitivity: .medium) }
+    while await gate.calls == 0 { await Task.yield() }
+    f.model.setVoiceConsent(false)
+    await gate.release()
+    await detection.value
+    let saved = try #require(try f.speakers())
+    #expect(saved.names == nil && saved.voiceMatches == nil && saved.segments.count == 2)
 }
