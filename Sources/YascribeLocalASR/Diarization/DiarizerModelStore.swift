@@ -34,11 +34,14 @@ public struct DiarizerModelStore: Sendable {
     public let directory: URL
     let manifest: ModelManifest
     private let fetch: Fetch
+    /// Plik manifestu → adres przypiętej rewizji HF (model mówców albo CAM++, TASK-117).
+    private let remote: @Sendable (String) -> URL
 
     public init(directory: URL = DiarizerModelStore.defaultDirectory, manifest: ModelManifest = DiarizerManifest.offline,
-                fetch: Fetch? = nil) {
+                remote: @escaping @Sendable (String) -> URL = DiarizerManifest.url(for:), fetch: Fetch? = nil) {
         self.directory = directory
         self.manifest = manifest
+        self.remote = remote
         self.fetch = fetch ?? { try await URLSession.shared.download(from: $0) }
     }
 
@@ -97,7 +100,7 @@ public struct DiarizerModelStore: Sendable {
         let part = target.appendingPathExtension("part")
         defer { try? fm.removeItem(at: part) }
         try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let (temporary, response) = try await fetch(DiarizerManifest.url(for: file))
+        let (temporary, response) = try await fetch(remote(file))
         try? fm.removeItem(at: part)
         try fm.moveItem(at: temporary, to: part)
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0

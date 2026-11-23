@@ -9,7 +9,8 @@ public actor SpeakerDiarizer {
     typealias Work = @Sendable (URL) async throws -> [(speaker: String, start: Double, end: Double)]
 
     /// Jedna diaryzacja naraz w procesie (R04): kolejka wspólna dla wszystkich instancji, obejmuje cały przebieg.
-    private static let queue = DiarizationQueue()
+    /// Odciski głosu (`VoiceEmbedder`, TASK-117) stają w tej samej kolejce: jeden model CoreML naraz (Mac 16 GB).
+    static var queue: DiarizationQueue { DiarizationQueue.shared }
 
     private let store: DiarizerModelStore
     private let work: Work?
@@ -136,12 +137,17 @@ protocol DiarizationSteps {
 extension OfflineDiarizerManager: DiarizationSteps {}
 
 /// Przebieg czeka, aż poprzedni się skończy (także błędem); `while`, bo między wznowieniem a wejściem może wskoczyć nowy.
-private actor DiarizationQueue {
+actor DiarizationQueue {
+    static let shared = DiarizationQueue()
     private var busy = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
 
     func serialized<T: Sendable>(_ body: @Sendable () async throws -> T) async throws -> T {
         while busy { await withCheckedContinuation { waiters.append($0) } }
+        if Task.isCancelled {
+            if !waiters.isEmpty { waiters.removeFirst().resume() } // przekaż kolejkę dalej, nie zatrzymuj jej
+            throw CancellationError()
+        }
         busy = true
         defer {
             busy = false

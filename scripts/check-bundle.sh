@@ -9,6 +9,7 @@ APP="$(YASCRIBE_APP=.build/check/Yascribe.app YASCRIBE_SIGN_IDENTITY=- scripts/b
 [ -d "$APP" ] || { echo "check-bundle: brak paczki $APP" >&2; exit 1; }
 cmp Resources/ThirdPartyNotices/SpeexDSP.txt "$APP/Contents/Resources/ThirdPartyNotices/SpeexDSP.txt" || { echo "check-bundle: brak licencji SpeexDSP" >&2; exit 1; }
 cmp Resources/ThirdPartyNotices/SpeakerDetection-CC-BY-4.0.txt "$APP/Contents/Resources/ThirdPartyNotices/SpeakerDetection-CC-BY-4.0.txt" || { echo "check-bundle: brak noty CC-BY-4.0 modelu mówców" >&2; exit 1; }
+cmp Resources/ThirdPartyNotices/VoiceModel-CAMPlus-Apache-2.0.txt "$APP/Contents/Resources/ThirdPartyNotices/VoiceModel-CAMPlus-Apache-2.0.txt" || { echo "check-bundle: brak noty Apache 2.0 modelu CAM++" >&2; exit 1; }
 cmp Resources/MenuBarIcon.svg "$APP/Contents/Resources/MenuBarIcon.svg" || { echo "check-bundle: brak ikony paska menu" >&2; exit 1; }
 PLIST="$APP/Contents/Info.plist"
 plutil -lint "$PLIST" >/dev/null
