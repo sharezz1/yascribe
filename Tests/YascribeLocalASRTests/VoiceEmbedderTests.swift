@@ -63,3 +63,7 @@ private struct Boom: Error {}
     }
     #expect(!FileManager.default.fileExists(atPath: root.path))
 }
+
+@Test func voiceModelCLINames() {
+    #expect(VoiceModel(cliName: "diarizer") == .diarizer && VoiceModel(cliName: "campplus") == .campPlus && VoiceModel(cliName: "cam") == nil)
+}

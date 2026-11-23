@@ -33,13 +33,15 @@ struct CLI {
       diarize <katalog sesji> [--run ID] [--sensitivity low|medium|high] [--download] [--mistral] [--cloud]
                                                                   mówcy z toru system przebiegu → speakers.json (domyślnie najnowszy przebieg, czułość medium);
                                                                   brak modelu = błąd, pobranie tylko z --download (≈22 MB do Models/speaker-diarization)
+      voices <katalog sesji>… [--model diarizer|campplus]          kalibracja profili głosów: odciski mówców ≥ 20 s z bieżących speakers.json
+                                                                  i macierz cosinusów (nic nie zapisuje; model już pobrany; nie razem z aplikacją)
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
       mcp                                                         serwer MCP na stdio (tylko odczyt; zgoda w Settings → Agent access)
     Czasy z transcribe są na osi sesji; czas w pliku ścieżki = czas na osi − przesunięcie z summarize.
     """
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
-    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary", "--out", "--only", "--source", "--thinking", "--context", "--timeout", "--sensitivity"]
+    static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary", "--out", "--only", "--source", "--thinking", "--context", "--timeout", "--sensitivity", "--model"]
     static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output", "--download", "--mistral", "--cloud"])
 
     static func main() async {
@@ -74,6 +76,7 @@ struct CLI {
             case "dictionary-check": try dictionaryCheck(args)
             case "correct": try await correct(args)
             case "diarize": try await diarize(args)
+            case "voices": try await voices(args)
             case "session-from-file": try await sessionFromFile(args)
             default: print(usage); exit(64)
             }

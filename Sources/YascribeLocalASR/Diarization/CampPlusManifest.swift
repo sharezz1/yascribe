@@ -34,6 +34,15 @@ public enum CampPlusManifest {
 public enum VoiceModel: String, Sendable, CaseIterable {
     case diarizer, campPlus
 
+    /// Nazwa w CLI `voices --model`.
+    public init?(cliName: String) {
+        switch cliName {
+        case "diarizer": self = .diarizer
+        case "campplus": self = .campPlus
+        default: return nil
+        }
+    }
+
     public var id: String {
         switch self {
         case .diarizer: "diarizer/" + DiarizerManifest.pin
