@@ -400,9 +400,9 @@ struct UtteranceRow: View {
                                      : String(localized: "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes"))
                 }
                 if let onRestore {
-                    HStack(spacing: 8) {
-                        StateLabel(.neutral, String(localized: "Deleted — left out of copy, search and new notes"))
-                        Button(String(localized: "Restore"), action: onRestore).buttonStyle(.pillSmall)
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        StateLabel(.neutral, String(localized: "Deleted — left out of copy, search and new notes")).wrapping()
+                        Button(String(localized: "Restore"), action: onRestore).buttonStyle(.pillSmall).fixedSize()
                     }
                 }
                 if utterance.echoOfThem == true {
