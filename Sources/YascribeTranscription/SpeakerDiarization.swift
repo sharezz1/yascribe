@@ -26,6 +26,10 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
     public var createdAt: Date?
     public var segments: [Segment]
     public var names: [String: String]? = nil
+    /// Imiona podstawione z profili głosów (TASK-117); klucz mówcy → profil. Same identyfikatory, nigdy wektory.
+    public var voiceMatches: [String: VoiceMatch]? = nil
+    /// „To nie X” dla mówcy w tym wykryciu; ponowne wykrycie pisze plik od nowa, więc odrzucenia znikają z kluczami.
+    public var voiceRejected: [String: [UUID]]? = nil
 
     public init(version: Int, modelPin: String, sensitivity: SpeakerSensitivity?, fa: Double?, fb: Double?,
                 threshold: Double?, minClusterSeconds: Double?, audioFingerprint: String?, createdAt: Date?, segments: [Segment]) {
@@ -43,6 +47,21 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
         result.names = names.isEmpty ? nil : names
         return result
     }
+
+    /// Dopasowania z profili: imię do `names` (notatka, znaczniki, archiwum działają bez zmian) i ślad w `voiceMatches`.
+    /// Klucz z imieniem (ręcznym albo już dopasowanym) zostaje nietknięty.
+    public func applying(_ matches: [VoiceMatcher.Match], names profileNames: [UUID: String], model: String) -> SpeakerDiarization {
+        var result = self
+        for match in matches where result.names?[match.key] == nil {
+            guard let name = profileNames[match.profileID], segments.contains(where: { $0.speaker == match.key }) else { continue }
+            result.names = (result.names ?? [:]).merging([match.key: name]) { $1 }
+            result.voiceMatches = (result.voiceMatches ?? [:]).merging([match.key: VoiceMatch(profileID: match.profileID, similarity: match.similarity, model: model)]) { $1 }
+        }
+        return result
+    }
+
+    /// Klucze z imieniem — dopasowanie ich pomija.
+    public var namedKeys: Set<String> { Set(names?.keys.map { $0 } ?? []) }
 
     public static func fromTrack(segments: [(speaker: String, start: Double, end: Double)], clock: SessionClock,
                                  track: String = "system", modelPin: String, sensitivity: SpeakerSensitivity?,
@@ -83,6 +102,14 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
               currentAudioFingerprint == nil || value.audioFingerprint == currentAudioFingerprint else { return nil }
         return value
     }
+}
+
+public struct VoiceMatch: Codable, Equatable, Sendable {
+    public var profileID: UUID
+    public var similarity: Double
+    /// Model, którym dopasowano; po zmianie modelu UI nie pokazuje „Rozpoznano po głosie” (imię zostaje).
+    public var model: String?
+    public init(profileID: UUID, similarity: Double, model: String?) { self.profileID = profileID; self.similarity = similarity; self.model = model }
 }
 
 extension RunDirectory {
