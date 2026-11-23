@@ -7,8 +7,11 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
         public var speaker: String
         public var start: Double
         public var end: Double
-        public init(speaker: String, start: Double, end: Double) {
-            self.speaker = speaker; self.start = start; self.end = end
+        /// Czas na torze (nie w sesji) — wejście do odcisku głosu (TASK-117); starsze pliki go nie mają.
+        public var trackStart: Double? = nil
+        public var trackEnd: Double? = nil
+        public init(speaker: String, start: Double, end: Double, trackStart: Double? = nil, trackEnd: Double? = nil) {
+            self.speaker = speaker; self.start = start; self.end = end; self.trackStart = trackStart; self.trackEnd = trackEnd
         }
     }
 
@@ -49,7 +52,7 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
                            threshold: threshold, minClusterSeconds: minClusterSeconds, audioFingerprint: audioFingerprint,
                            createdAt: createdAt, segments: segments.map {
             Segment(speaker: $0.speaker, start: clock.sessionSeconds(track: track, trackSeconds: $0.start),
-                    end: clock.sessionSeconds(track: track, trackSeconds: $0.end))
+                    end: clock.sessionSeconds(track: track, trackSeconds: $0.end), trackStart: $0.start, trackEnd: $0.end)
         })
     }
 
