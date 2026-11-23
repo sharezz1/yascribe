@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import YascribeLocalASR
+import YascribeNotes
 import YascribeProviders
 import YascribeRecording
 import YascribeSessionFormat
@@ -252,4 +253,50 @@ private actor ScriptedEngine: LocalASREngine {
     let wrapper = try #require(built.input.transcriber as? ReleasingTranscriber)
     #expect(wrapper.support === f.model.localASR(LocalASRModels.parakeetUltra))
     #expect(built.input.asrModel == LocalASRModels.parakeetUltra)
+}
+
+/// Atrapa czatu: zapamiętuje model każdego żądania. Korekta dostaje linie `[n] …` z powrotem z wielką literą i kropką;
+/// autotytuł i przegląd — stały tekst.
+private final class ChatSeen: HTTPClient, @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen: [String] = []
+    var models: [String] { lock.withLock { seen } }
+    func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data("{}".utf8)) as? [String: Any]
+        let model = body?["model"] as? String ?? ""
+        lock.withLock { seen.append(model) }
+        let user = ((body?["messages"] as? [[String: Any]])?.last?["content"] as? String) ?? ""
+        let lines = user.split(separator: "\n").filter { $0.hasPrefix("[") }
+            .compactMap { l in l.split(separator: "]", maxSplits: 1).first.map { "\($0)] Dzień dobry." } }
+        let content = model == "corr" ? lines.joined(separator: "\n") : "Dzień dobry."
+        let reply = try JSONSerialization.data(withJSONObject: ["choices": [["message": ["content": content]]]])
+        return (reply, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+    }
+}
+
+/// TASK-122: koniec nagrania → transkrypcja → korekta → autotytuł i przegląd, wszystko samo, wg modeli z presetu.
+@Test @MainActor func finishedTranscriptionStartsCorrectionThenSummaryFromPreset() async throws {
+    let f = try LocalFixture(engine: ScriptedEngine(failing: false))
+    defer { f.clean() }
+    let remote = Provider(name: "Remote", baseURL: URL(string: "https://example.test/v1")!)
+    f.model.providers = ProvidersFile(providers: [f.provider, remote])
+    let http = ChatSeen()
+    f.model.notes.clientFor = { _ in OpenAICompatibleClient(provider: remote, key: "test-fake-key", http: http) }
+    var preset = f.preset(LocalASRModels.parakeetV3)
+    preset.correction = RoleAssignment(providerID: remote.id, model: "corr")
+    preset.summary = RoleAssignment(providerID: remote.id, model: "sum")
+    let session = try f.session(loud: true)
+    #expect(f.model.transcribe(sessionURL: session, preset: preset))
+    let dir = try await f.finish(session)
+    let id = session.lastPathComponent
+    let store = NotesStore(session: session)
+    let deadline = ContinuousClock.now + .seconds(10)
+    while f.model.notes.isCorrecting(id) || f.model.notes.isTitling(id) || store.readMeta().overview == nil, ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(http.models.first == "corr")
+    #expect(http.models.count == 3 && http.models.dropFirst().allSatisfy { $0 == "sum" })
+    #expect(CorrectedTranscript.load(session: session, runID: dir.url.lastPathComponent)?.transcript.utterances.first?.text == "Dzień dobry.")
+    #expect(store.readMeta().autoTitle != nil)
+    #expect(store.readMeta().overview == "Dzień dobry.")
 }
