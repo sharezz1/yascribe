@@ -122,6 +122,14 @@ private struct MeetingDestinationView: View {
     let item: SessionItem
     @ObservedObject var askState: AskBarState
     @StateObject private var detailState = MeetingViewState()
+    @Environment(AppModel.self) private var model
+
+    /// „Retry" z listy po nieudanej korekcie: otwiera spotkanie od razu z oknem Improve.
+    private func consumeImproveRequest() {
+        guard model.improveRequest == item.id else { return }
+        model.improveRequest = nil
+        detailState.openModelsSheet(on: .transcript)
+    }
 
 
     var body: some View {
@@ -136,10 +144,11 @@ private struct MeetingDestinationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.mnCard)
-        .onAppear { if askState.showingSource { detailState.tab = .transcript } }
+        .onAppear { consumeImproveRequest(); if askState.showingSource { detailState.tab = .transcript } }
         .onChange(of: askState.showingSource) { _, showing in
             if showing { detailState.tab = .transcript }
         }
+        .onChange(of: model.improveRequest) { _, _ in consumeImproveRequest() }
         .onChange(of: item.id) { _, _ in
             if askState.showingSource { detailState.tab = .transcript }
         }
@@ -533,9 +542,9 @@ struct SessionRow: View {
             .focused($focused)
             .onChange(of: focused) { _, value in if value { onPreview?() } }
             if status == .correctionFailed {
-                Button("Retry") { model.notes.retryCorrection(item) }
-                    .buttonStyle(.pillSmall).disabled(!model.notes.canRetryCorrection(item))
-                    .help("Run the correction again")
+                Button("Retry") { model.improveRequest = item.id; model.selectedSessionID = item.id }
+                    .buttonStyle(.pillSmall).disabled(!model.notes.canCorrectNow(item))
+                    .help("Choose the model and try again")
             }
             SessionFolderMenu(item: item)
             Menu {

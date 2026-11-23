@@ -172,6 +172,8 @@ final class AppModel {
     private struct ReplacedKey: Hashable { var id: String; var corrected: Bool }
     var sessions: [SessionItem] = []
     var selectedSessionID: String?
+    /// Spotkanie, które po otwarciu ma pokazać okno Improve (Retry z listy po nieudanej korekcie).
+    var improveRequest: String?
     var activePresetID: UUID?
     var lastError: String?
     /// Kalendarz Apple (T7); prośba o dostęp dopiero z przełącznika w Settings.

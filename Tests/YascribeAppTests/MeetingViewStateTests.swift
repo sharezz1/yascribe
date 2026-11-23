@@ -34,3 +34,15 @@ import Testing
         #expect(!state.summaryCorrected)
     }
 }
+
+/// TASK-121: „Retry" przy błędzie korekty/notatki otwiera okno Improve na właściwej karcie, nie ponawia po cichu.
+@MainActor @Suite("MeetingViewState.openModelsSheet") struct OpenModelsSheetTests {
+    @Test func opensSheetOnGivenTab() {
+        let state = MeetingViewState()
+        state.openModelsSheet(on: .transcript)
+        #expect(state.modelsSheet && state.tab == .transcript)
+        state.modelsSheet = false
+        state.openModelsSheet(on: .summary)
+        #expect(state.modelsSheet && state.tab == .summary)
+    }
+}

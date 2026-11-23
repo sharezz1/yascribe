@@ -31,6 +31,8 @@ final class MeetingViewState: ObservableObject {
     @Published var showContext = false
     /// Okno „Models…" (zakładka wybiera treść); otwarte na `MeetingDetailView`, poza przewijaną stroną.
     @Published var modelsSheet = false
+    /// Błąd korekty/notatki: „Retry" otwiera okno Improve (dostawca i model do zmiany), nie powtarza tego samego niedziałającego modelu.
+    func openModelsSheet(on tab: MeetingTab) { self.tab = tab; modelsSheet = true }
     /// Source notatki wybrany w oknie Summary; `nil` = jak „Version" w Transcript. Żyje do zamknięcia widoku spotkania.
     @Published var summaryUseCorrected: Bool?
     var summaryCorrected: Bool { summaryUseCorrected ?? useCorrected }
@@ -79,7 +81,7 @@ struct MeetingTabBar: View {
     }
 }
 
-/// Błąd: ikona + słowo w `rec` (łamie się na kilka linii, w przeciwieństwie do `StateLabel`) i Retry.
+/// Błąd: ikona + słowo w `rec` (łamie się na kilka linii, w przeciwieństwie do `StateLabel`) i Retry (otwiera okno wyboru modelu).
 struct ErrorLine: View {
     let message: String
     var retry: (() -> Void)?
@@ -91,7 +93,7 @@ struct ErrorLine: View {
             }
             .font(.callout).foregroundStyle(.mnRec)
             .accessibilityElement(children: .combine)
-            if let retry { Button("Retry", action: retry).buttonStyle(.pillSmall) }
+            if let retry { Button("Retry", action: retry).buttonStyle(.pillSmall).help("Choose the model and try again") }
         }
     }
 }
@@ -212,7 +214,7 @@ struct TranscriptTab: View {
                     .help(modelName ?? "")
             }
             if let why = model.notes.correctionFailureMessage(item.id) {
-                ErrorLine(message: String(localized: "Correction failed: \(why)"), retry: model.notes.canRetryCorrection(item) ? { model.notes.retryCorrection(item) } : nil)
+                ErrorLine(message: String(localized: "Correction failed: \(why)"), retry: model.notes.canCorrectNow(item) ? { state.openModelsSheet(on: .transcript) } : nil)
                     .disabled(moving)
             }
             // TASK-112: korekta tego spotkania podsunęła Aliasy do słownika (lista i Add w zakładce Dictionary).
@@ -602,7 +604,7 @@ struct SummaryTab: View {
     }
 
     @ViewBuilder private var errorView: some View {
-        if case .failed(let message) = gen { ErrorLine(message: message) { run() }.disabled(moving || correcting || transcribing) }
+        if case .failed(let message) = gen { ErrorLine(message: message) { state.openModelsSheet(on: .summary) }.disabled(moving || correcting || transcribing) }
     }
 
     /// Ten sam „Who is this?” co w transkrypcie; zmiana imienia od razu przerysowuje notatkę (bloki zawierają nazwy).
