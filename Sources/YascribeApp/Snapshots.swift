@@ -314,6 +314,11 @@ enum Snapshots {
                         try render("models-transcript", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: picked) {} }
                         let sheetOpen = MeetingViewState(); sheetOpen.tab = .transcript; sheetOpen.modelsSheet = true
                         try render("models-transcript-open", size: CGSize(width: 900, height: 820), dark: dark, model: model) { MeetingDetailView(item: picked, state: sheetOpen) }
+                        // TASK-121: błąd korekty — „Retry" otwiera to samo okno z bieżącym modelem do zmiany.
+                        model.notes.setPreview(notCorrected.id, correctionFailed: "Your Claude Code subscription has expired.")
+                        let failedOpen = MeetingViewState(); failedOpen.tab = .transcript; failedOpen.modelsSheet = true
+                        try render("models-transcript-after-error", size: CGSize(width: 900, height: 820), dark: dark, model: model) { MeetingDetailView(item: notCorrected, state: failedOpen) }
+                        model.notes.setPreview(notCorrected.id)
                         model.notes.setPreview(picked.id, correcting: true)
                         try render("models-transcript-correcting", size: CGSize(width: 560, height: 720), dark: dark, model: model) { TranscriptModelsSheet(item: picked) {} }
                         model.notes.setPreview(picked.id)
