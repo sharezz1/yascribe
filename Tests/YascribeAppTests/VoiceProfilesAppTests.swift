@@ -182,3 +182,24 @@ private actor EmbedGate {
     #expect(f.model.voiceProfiles.profiles.isEmpty)
     #expect(!FileManager.default.fileExists(atPath: VoiceProfiles.url(root: f.root).path) && !FileManager.default.fileExists(atPath: corrupt.path))
 }
+
+@Test func voiceProfilesTexts() {
+    #expect(VoiceProfilesText.recognized(similarity: 0.874) == "Recognized by voice (87%)")
+    let profile = VoiceProfile(name: "Anna Testowa", updatedAt: Date(), samples: [
+        VoiceSample(id: "a", model: "m", values: [1], seconds: 20), VoiceSample(id: "b", model: "m", values: [1], seconds: 70),
+        VoiceSample(id: "c", model: "old", values: [1], seconds: 600)])
+    #expect(VoiceProfilesText.row(profile, model: "m") == "2 samples · 2 min")
+    #expect(!VoiceProfilesText.needsSample(profile, model: "m") && VoiceProfilesText.needsSample(profile, model: "new"))
+}
+
+@Test @MainActor func recognitionShownOnlyForCurrentModel() throws {
+    let f = try Fixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    var item = f.item
+    let id = UUID()
+    item.speakers = Fixture.diarization().applying([.init(key: "S1", profileID: id, similarity: 0.9)], names: [id: "Anna Testowa"], model: VoiceModel.diarizer.id)
+    #expect(f.model.voiceRecognition(item, key: "S1") == 0.9)
+    #expect(f.model.voiceRecognition(item, key: "S2") == nil)
+    f.model.setVoiceBeta(true)
+    #expect(f.model.voiceRecognition(item, key: "S1") == nil) // imię zostaje, znacznik „rozpoznano” tylko dla bieżącego modelu
+    #expect(item.speakers?.names?["S1"] == "Anna Testowa")
+}

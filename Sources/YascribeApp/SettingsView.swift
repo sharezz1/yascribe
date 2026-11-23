@@ -172,6 +172,7 @@ struct SettingsView: View {
                     RecordingsSection() // uwaga 8: między Providers a Archive search
                     UpdatesSection()
                     MeetingSettingsSections()
+                    VoiceProfilesSection()
                     DictationSettingsSection(settings: $draft.dictation).id("dictation-settings")
                     AgentAccessSettingsView(agentAccess: $draft.agentAccess)
                     correctionSection

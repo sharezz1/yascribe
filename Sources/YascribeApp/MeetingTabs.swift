@@ -713,7 +713,8 @@ struct SummaryTab: View {
         guard let key = item.speakerMarkers.numbers.first(where: { $0.value == number })?.key else { return AnyView(EmptyView()) }
         return AnyView(SpeakerPicker(attendees: item.notes.meta.calendarEvent?.attendees ?? [],
                                      known: KnownPeople.load(root: model.paths.root).names,
-                                     currentName: item.speakers?.names?[key], number: number) { name in
+                                     currentName: item.speakers?.names?[key], number: number,
+                                     recognized: model.voiceRecognition(item, key: key)) { name in
             model.renameSpeaker(item: item, key: key, name: name)
             close()
         })

@@ -616,6 +616,19 @@ enum Snapshots {
                 model.providerChecks[omlxLocal.id] = .failed(LocalServerHint.message(for: omlxLocal, error: ProviderError.http(401, "API key required"))!)
                 model.providerChecks[parakeetLocal.id] = .verified(models: 1)
                 try render("settings-local-servers", size: CGSize(width: 900, height: 1000), dark: dark, model: model) { SettingsView() }
+                // TASK-117: profile głosów — fikcyjne osoby, syntetyczne wektory; drugi profil bez próbki bieżącego modelu.
+                model.settings.voiceProfiles = true
+                model.voiceProfiles = VoiceProfiles(profiles: [
+                    VoiceProfile(name: "Anna Testowa", updatedAt: Date(timeIntervalSince1970: 0), samples: (0..<3).map {
+                        VoiceSample(id: "a\($0)", model: VoiceModel.diarizer.id, values: [1, 0], seconds: 80) }),
+                    VoiceProfile(name: "Bob Example", updatedAt: Date(timeIntervalSince1970: 0), samples: [
+                        VoiceSample(id: "b", model: "diarizer/old", values: [0, 1], seconds: 40)])])
+                try render("settings-voice-profiles", size: CGSize(width: 700, height: 470), dark: dark, model: model) {
+                    VStack(alignment: .leading, spacing: 0) { VoiceProfilesSection() }.padding(20)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                }
+                model.voiceProfiles = VoiceProfiles()
+                model.settings.voiceProfiles = nil
                 let sheetOmlx = ProviderSheetState(); sheetOmlx.setUp(.omlx)
                 try render("settings-sheet-omlx", size: CGSize(width: 520, height: 330), dark: dark, model: model) { ProviderSetupSheet(state: sheetOmlx) }
                 let sheetOmlxDown = ProviderSheetState(); sheetOmlxDown.setUp(.omlx)

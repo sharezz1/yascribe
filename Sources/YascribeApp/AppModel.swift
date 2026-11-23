@@ -1617,6 +1617,12 @@ final class AppModel {
     // MARK: Profile głosów (TASK-117)
 
     var voiceModel: VoiceModel { settings.voiceModelBeta == true ? .campPlus : .diarizer }
+
+    /// Podobieństwo, gdy imię mówcy pochodzi z profilu głosu bieżącego modelu (UI: ikona, „Not X”); inaczej `nil`.
+    func voiceRecognition(_ item: SessionItem, key: String) -> Double? {
+        guard let match = item.speakers?.voiceMatches?[key], match.model == voiceModel.id, item.speakers?.names?[key] != nil else { return nil }
+        return match.similarity
+    }
     private func voiceSupport(_ model: VoiceModel) -> SpeakerModelSupport { model == .diarizer ? speakerModel : campPlusModel }
 
     private var voiceEmbed: VoiceContext.Embed {
