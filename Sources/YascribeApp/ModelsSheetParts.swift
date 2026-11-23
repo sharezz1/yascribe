@@ -7,7 +7,8 @@ struct SheetRow<Control: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text(label).font(.system(size: 13)).foregroundStyle(.mnText2).frame(width: 78, alignment: .leading)
+            // 96 pt: polskie „Rozumowanie” (13 pt) mieści się w jednej linii; lineLimit nie łamie słowa, tylko skraca.
+            Text(label).font(.system(size: 13)).foregroundStyle(.mnText2).lineLimit(1).frame(width: 96, alignment: .leading)
             control
         }
     }
