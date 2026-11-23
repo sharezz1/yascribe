@@ -166,6 +166,10 @@ public struct GlobalSettings: Codable, Equatable, Sendable {
     public var experimentalAgentCLIs: Bool?
     /// Zgoda na odczyt spotkań przez agentów przez serwer MCP (TASK-31). Opcjonalne (E6): `nil` = wyłączone.
     public var agentAccess: Bool?
+    /// Zgoda na profile głosów (TASK-117 D3). Opcjonalne (E6): `nil` = nie pytano, `false` = odmowa, `true` = zgoda.
+    public var voiceProfiles: Bool?
+    /// Model odcisku głosu CAM++ v2 (beta) zamiast modelu mówców. Opcjonalne (E6): `nil` = wyłączone.
+    public var voiceModelBeta: Bool?
     public static let defaultKeepAudioDays = 30
     public var agentCLIsEnabled: Bool { experimentalAgentCLIs == true }
     public var agentAccessEnabled: Bool { agentAccess ?? false }

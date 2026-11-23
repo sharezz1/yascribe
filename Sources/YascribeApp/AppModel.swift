@@ -201,7 +201,7 @@ final class AppModel {
     }
     /// Wykrywanie mówców w toku (TASK-22 R05): bilet na sesję = sesja zajęta, wiersz „Detecting speakers…” i bramka zapisu.
     private(set) var speakerTickets: [String: SpeakerDetectionTicket] = [:]
-    @ObservationIgnored private var speakerTasks: [String: Task<SpeakerDiarization, any Error>] = [:]
+    @ObservationIgnored private var speakerTasks: [String: Task<(SpeakerDiarization, String?), any Error>] = [:]
     @ObservationIgnored private var speakerGeneration = 0
     @ObservationIgnored var diarizationHTTP: any HTTPClient = URLSessionHTTPClient()
     @ObservationIgnored var speakerWorkOverride: (@Sendable () async throws -> SpeakerDiarization)?
@@ -221,6 +221,15 @@ final class AppModel {
     let localASRModels: [LocalASRSupport]
     /// Model wykrywania mówców (TASK-22): status i pobieranie dla karty w Settings i menu ⋯ Transcript.
     let speakerModel: SpeakerModelSupport
+    /// Model odcisku głosu CAM++ v2 (beta, TASK-117): pobieranie tylko przyciskiem w Ustawieniach.
+    let campPlusModel: SpeakerModelSupport
+    /// Profile głosów (`voice-profiles.json`, dane biometryczne, TASK-117 D3); zmiany tylko na MainActor, potem zapis.
+    var voiceProfiles = VoiceProfiles()
+    /// Mówca czekający na odpowiedź w oknie zgody (pierwsze zapamiętanie głosu).
+    var voiceConsentPending: VoiceLearnRequest?
+    /// Testy: liczenie odcisków bez modelu CoreML.
+    @ObservationIgnored var voiceEmbedOverride: VoiceContext.Embed?
+    @ObservationIgnored private lazy var voiceEmbedder = VoiceEmbedder(diarizerStore: speakerModel.store, campPlusStore: campPlusModel.store)
 
     /// `nil` = nieznany model lokalny; pusty = v3 (jak `LocalASRVariant(model:)`).
     func localASR(_ model: String) -> LocalASRSupport? {
@@ -240,6 +249,7 @@ final class AppModel {
     init(localASRModels: [LocalASRSupport]? = nil, localASREngine: (@Sendable (ModelStore) -> any LocalASREngine)? = nil) {
         self.localASREngine = localASREngine
         speakerModel = SpeakerModelSupport(store: DiarizerModelStore(directory: DiarizerModelStore.directory(root: paths.root)))
+        campPlusModel = SpeakerModelSupport(store: CampPlusManifest.store(root: paths.root))
         self.localASRModels = localASRModels ?? LocalASRVariant.allCases.map { LocalASRSupport(store: ModelStore(variant: $0)) }
         recording.model = self
         monitor.model = self
@@ -372,6 +382,7 @@ final class AppModel {
         dismissedSuggestions = read(paths.dismissedSuggestions, Set<String>())
         dictionary = read(paths.dictionary, UserDictionary())
         folders = read(paths.folders, FoldersFile())
+        voiceProfiles = read(VoiceProfiles.url(root: paths.root), VoiceProfiles())
         dictation.loadHistory(stamp: stamp, errors: &errors)
         if !errors.isEmpty { lastError = errors.joined(separator: "\n") }
         reloadSessions()
@@ -1475,18 +1486,25 @@ final class AppModel {
         }
         let http = diarizationHTTP
         let override = speakerWorkOverride
-        let work = Task.detached {
-            if let override { return try await override() }
-            return try await Self.diarization(sessionURL: sessionURL, runID: ticket.runID, store: store, cloud: cloud, http: http)
+        let voice = voiceContext()
+        let work = Task.detached { () -> (SpeakerDiarization, String?) in
+            let diarization: SpeakerDiarization
+            if let override { diarization = try await override() } else {
+                diarization = try await Self.diarization(sessionURL: sessionURL, runID: ticket.runID, store: store, cloud: cloud, http: http)
+            }
+            // TASK-117: imiona z profili przed zapisem — w tej samej pracy, więc między bramką a zapisem nadal nie ma `await`.
+            guard let voice else { return (diarization, nil) }
+            return try await voice.recognize(diarization, systemTrack: SessionDirectory(url: sessionURL).trackURL("system"))
         }
         speakerTasks[id] = work
         // Wraca po faktycznym końcu pracy, także anulowanej — dopiero wtedy bilet schodzi (F02).
         let result = await SpeakerDetectionWork.result(of: work)
         do {
-            let diarization = try result.get()
+            let (diarization, voiceError) = try result.get()
             // Bez `await` między bramką a zapisem: nowszy bilet nie wejdzie pomiędzy.
             if SpeakerDetectionTicket.mayWrite(ticket, current: speakerTickets[id], cancelled: Task.isCancelled || work.isCancelled) {
                 try JSONFile.save(diarization, to: RunDirectory(session: sessionURL, runID: ticket.runID).speakers, createParents: false)
+                if let voiceError { lastError = voiceError }
             }
         } catch {
             // Anulowanie (nowsza operacja albo wywołujący) nie jest błędem dla użytkownika.
@@ -1566,17 +1584,125 @@ final class AppModel {
     func renameSpeaker(item: SessionItem, key: String, name: String?) {
         guard let runID = item.runID else { return }
         let url = RunDirectory(session: item.url, runID: runID).speakers
+        let outcome: VoiceNaming.Outcome
+        let previous: SpeakerDiarization
         do {
             guard let current = try JSONFile.load(SpeakerDiarization?.self, from: url, default: nil),
-                  let renamed = current.renamed(key, to: name) else { return }
-            try JSONFile.save(renamed, to: url, createParents: false)
+                  let result = VoiceNaming.rename(current, key: key, to: name) else { return }
+            // Imię zapisane najpierw: nauka głosu może się nie udać, imię zostaje.
+            try JSONFile.save(result.diarization, to: url, createParents: false)
             if let name {
                 var people = KnownPeople.load(root: paths.root)
                 people.use(name)
                 try people.save(root: paths.root)
             }
+            outcome = result
+            previous = current
             reloadSessions()
-        } catch { lastError = String(localized: "Couldn't rename speaker: \(error.localizedDescription)") }
+        } catch { lastError = String(localized: "Couldn't rename speaker: \(error.localizedDescription)"); return }
+        if outcome.forgetPrevious {
+            var updated = voiceProfiles
+            updated.forget(sampleID: VoiceSample.id(session: item.id, run: runID, key: key, digest: previous.segmentsDigest))
+            if updated != voiceProfiles { voiceProfiles = updated; saveVoiceProfiles() }
+        }
+        guard outcome.learn, let name = outcome.diarization.names?[key] else { return }
+        let request = VoiceLearnRequest(sessionURL: item.url, runID: runID, key: key, name: name, diarization: outcome.diarization)
+        switch settings.voiceProfiles {
+        case true?: learnVoice(request)
+        case nil where VoiceLearning.shouldAsk(consent: nil, refusal: voiceRefusal(request)): voiceConsentPending = request
+        default: break
+        }
+    }
+
+    // MARK: Profile głosów (TASK-117)
+
+    var voiceModel: VoiceModel { settings.voiceModelBeta == true ? .campPlus : .diarizer }
+    private func voiceSupport(_ model: VoiceModel) -> SpeakerModelSupport { model == .diarizer ? speakerModel : campPlusModel }
+
+    private var voiceEmbed: VoiceContext.Embed {
+        if let voiceEmbedOverride { return voiceEmbedOverride }
+        let embedder = voiceEmbedder
+        return { try await embedder.embed(systemTrack: $0, speakers: $1, model: $2) }
+    }
+
+    /// Rozpoznawanie po wykryciu: tylko przy zgodzie, z pobranym modelem, progiem dla modelu i profilem z próbką tego modelu.
+    func voiceContext() -> VoiceContext? {
+        let model = voiceModel
+        let profiles = voiceProfiles.profiles.filter { $0.vector(model: model.id) != nil }
+        guard settings.voiceProfiles == true, VoiceMatcher.threshold(model: model.id) != nil, !profiles.isEmpty,
+              voiceSupport(model).store.status() == .ready else { return nil }
+        return VoiceContext(model: model, profiles: profiles, embed: voiceEmbed)
+    }
+
+    private func voiceRefusal(_ request: VoiceLearnRequest) -> String? {
+        let speech = VoiceSpans.speech(request.diarization)[request.key]
+        return VoiceLearning.refusal(hasAudio: FileManager.default.fileExists(atPath: SessionDirectory(url: request.sessionURL).trackURL("system").path),
+                                     hasTrackTimes: speech != nil, seconds: speech?.seconds ?? 0,
+                                     modelReady: voiceSupport(voiceModel).store.status() == .ready)
+    }
+
+    /// Odcisk tego mówcy → próbka profilu o jego imieniu. Liczenie poza MainActor (kolejka diaryzacji), zapis tu.
+    func learnVoice(_ request: VoiceLearnRequest) {
+        if let refusal = voiceRefusal(request) { lastError = refusal; return }
+        guard let speech = VoiceSpans.speech(request.diarization)[request.key] else { return }
+        let model = voiceModel, embed = voiceEmbed
+        let track = SessionDirectory(url: request.sessionURL).trackURL("system")
+        let sampleID = VoiceSample.id(session: request.sessionURL.lastPathComponent, run: request.runID, key: request.key,
+                                      digest: request.diarization.segmentsDigest)
+        Task {
+            do {
+                guard let vector = try await embed(track, [request.key: speech.spans], model)[request.key] else {
+                    lastError = String(localized: "Couldn't remember the voice: no speech found in the recording.")
+                    return
+                }
+                guard VoiceLearning.mayStore(consent: settings.voiceProfiles) else { return }
+                voiceProfiles.learn(name: request.name, sample: VoiceSample(id: sampleID, model: model.id, values: vector, seconds: speech.seconds), now: Date())
+                saveVoiceProfiles()
+            } catch is CancellationError {
+            } catch {
+                lastError = String(localized: "Couldn't remember the voice: \(SpeakerDetectionError.text(error))")
+            }
+        }
+    }
+
+    func answerVoiceConsent(_ yes: Bool) {
+        let pending = voiceConsentPending
+        voiceConsentPending = nil
+        setVoiceConsent(yes)
+        if yes, let pending { learnVoice(pending) }
+    }
+
+    func setVoiceConsent(_ on: Bool) {
+        settings.voiceProfiles = on
+        save()
+    }
+
+    func setVoiceBeta(_ on: Bool) {
+        settings.voiceModelBeta = on ? true : nil
+        save()
+    }
+
+    func deleteVoiceProfile(_ id: UUID) {
+        voiceProfiles.remove(id: id)
+        saveVoiceProfiles()
+    }
+
+    /// Usuwa plik profili i jego odłożone uszkodzone kopie (`voice-profiles.json.corrupt-…`).
+    func deleteAllVoiceProfiles() {
+        do {
+            try VoiceProfiles.delete(root: paths.root)
+            let fm = FileManager.default
+            for name in (try? fm.contentsOfDirectory(atPath: paths.root.path)) ?? [] where name.hasPrefix(VoiceProfiles.fileName + ".corrupt-") {
+                try fm.removeItem(at: paths.root.appendingPathComponent(name))
+            }
+            voiceProfiles = VoiceProfiles()
+        } catch { lastError = String(localized: "Couldn't delete voice profiles: \(error.localizedDescription)") }
+    }
+
+    private func saveVoiceProfiles() {
+        do { try voiceProfiles.save(root: paths.root) } catch {
+            lastError = String(localized: "Couldn't save voice profiles: \(error.localizedDescription)")
+        }
     }
 
     static func sessionName(_ d: Date) -> String {
