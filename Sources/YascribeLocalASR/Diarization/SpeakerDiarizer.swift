@@ -75,6 +75,10 @@ public actor SpeakerDiarizer {
     /// Tabela D2 (Fa/Fb z `SpeakerSensitivity`); próg AHC zostaje 0,6.
     static func config(for sensitivity: SpeakerSensitivity) -> OfflineDiarizerConfig {
         var config = OfflineDiarizerConfig.default
+        // TASK-118 D2: jeden mówca w chwili (domyślne od 0.18.2 to `false`) — `SpeakerLabels` przypisuje wypowiedź jednemu mówcy.
+        config.postProcessing.exclusiveSegments = true
+        // Ten sam wynik, szczyt pamięci segmentacji ok. 100 MB zamiast 400 MB (32); Mac 16 GB.
+        config.segmentation.batchSize = 8
         config.clustering.threshold = 0.6
         config.clustering.warmStartFa = sensitivity.fa
         config.clustering.warmStartFb = sensitivity.fb

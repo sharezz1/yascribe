@@ -110,7 +110,7 @@ private final class Calls: @unchecked Sendable {
         let s = try installedStore()
         #expect(s.fingerprint(pin: "fluidaudio-0.17.8/v3/int8") != s.fingerprint())
         #expect(s.fingerprint() == s.fingerprint(pin: ModelManifest.pin))
-        #expect(ModelManifest.pin == "fluidaudio-0.17.7/v3/int8")
+        #expect(ModelManifest.pin == "fluidaudio-0.18.4/v3/int8")
     }
 
     @Test func removeDeletesOnlyTheModelDirectoryNotItsSiblings() throws {
@@ -249,11 +249,14 @@ private final class Calls: @unchecked Sendable {
     @Test func completeUltraIsReadyAndFluidAudioAgrees() throws {
         let s = ultraStore(try makeRoot())
         for (file, size) in ModelManifest.parakeetUltra.files {
-            try write(file, size: size, in: s.modelDirectory, content: file.hasSuffix(".json") ? Data(repeating: 0x61, count: Int(size)) : nil)
+            // FluidAudio 0.18.x uznaje za kompletny tylko `model.mil` zakończony `}` (#1147), nie rzadki plik z zerami.
+            let content: Data? = file.hasSuffix(".json") ? Data(repeating: 0x61, count: Int(size))
+                : file.hasSuffix("model.mil") ? Data(repeating: 0x61, count: Int(size) - 1) + Data("}".utf8) : nil
+            try write(file, size: size, in: s.modelDirectory, content: content)
         }
         #expect(s.status() == .ready)
         #expect(ModelStore.fluidAudioModelsExist(.parakeetUltra)(s.modelDirectory))
-        #expect(s.fingerprint() == s.fingerprint(pin: "fluidaudio-0.17.7/ultra"))
+        #expect(s.fingerprint() == s.fingerprint(pin: "fluidaudio-0.18.4/ultra"))
         #expect(s.fingerprint() != s.fingerprint(pin: ModelManifest.pin))
     }
 

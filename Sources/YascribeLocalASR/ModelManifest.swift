@@ -1,7 +1,7 @@
 import Foundation
 
 /// Wzorzec plików modelu Parakeet v3 (`AsrModelVersion.v3`, `ParakeetEncoderPrecision.int8`) z ŚWIEŻEGO pobrania
-/// przypiętym FluidAudio 0.17.7 (F20 S0 §5): nazwa pliku względem katalogu modelu -> rozmiar w bajtach.
+/// przypiętym FluidAudio 0.17.7 (F20 S0 §5; lista plików w 0.18.4 bez zmian, TASK-118): nazwa pliku względem katalogu modelu -> rozmiar w bajtach.
 /// Integralność = rozmiary (sufit: podmiana o tym samym rozmiarze nie jest wykrywana; wersja HF to niepinowane `main`).
 public struct ModelManifest: Codable, Equatable, Sendable {
     public var model: String
@@ -13,9 +13,9 @@ public struct ModelManifest: Codable, Equatable, Sendable {
         self.files = files
     }
 
-    /// Wersja biblioteki, wariant i precyzja, z których pochodzi wzorzec; wchodzi do odcisku modelu.
-    /// Nie zmieniać: zapisane przebiegi v3 trzymają odcisk z tym pinem i `checkResume` odrzuciłby je jako „inny model".
-    public static let pin = "fluidaudio-0.17.7/v3/int8"
+    /// Wersja biblioteki, wariant i precyzja; wchodzi do odcisku modelu. Zmiana unieważnia wznawianie zapisanych przebiegów
+    /// (`checkResume`: „inny model") — świadomie przy podbiciu biblioteki (TASK-118, decyzja D1: 0.17.7 → 0.18.4).
+    public static let pin = "fluidaudio-0.18.4/v3/int8"
 
     public static let parakeetV3 = ModelManifest(model: "parakeet-tdt-0.6b-v3", files: [
         "Decoder.mlmodelc/analytics/coremldata.bin": 243,
@@ -43,7 +43,7 @@ public struct ModelManifest: Codable, Equatable, Sendable {
         "parakeet_vocab.json": 151122,
     ])
 
-    /// Parakeet Ultra (`AsrModelVersion.ultra`, repo `FluidInference/parakeet-ultra-coreml`) z ŚWIEŻEGO pobrania FluidAudio 0.17.7.
+    /// Parakeet Ultra (`AsrModelVersion.ultra`, repo `FluidInference/parakeet-ultra-coreml`) z ŚWIEŻEGO pobrania FluidAudio 0.17.7 (bez zmian w 0.18.4).
     public static let parakeetUltra = ModelManifest(model: "parakeet-ultra", files: [
         "Decoder.mlmodelc/analytics/coremldata.bin": 243,
         "Decoder.mlmodelc/coremldata.bin": 560,
@@ -90,7 +90,7 @@ public enum LocalASRVariant: String, CaseIterable, Sendable {
     public var pin: String {
         switch self {
         case .parakeetV3: ModelManifest.pin
-        case .parakeetUltra: "fluidaudio-0.17.7/ultra"
+        case .parakeetUltra: "fluidaudio-0.18.4/ultra"
         }
     }
 
