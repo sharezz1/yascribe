@@ -43,7 +43,7 @@ public struct NoteGenerator: Sendable {
     /// `SpeakerDiarization.segmentsDigest` diaryzacji, z której pochodzą klucze mówców transkryptu; zapisywany przy mapie znaczników.
     public var speakersDigest: String?
     /// Stan ukryć transkryptu (TASK-119), z tej samej chwili co transkrypt — zapisany w notatce.
-    public var hiddenChangedAt: Date?
+    public var hiddenDigest: String?
     /// Tryb ścisły zapisu (TASK-25): notatka nie odtworzy katalogu spotkania, którego już nie ma (np. po Koszu).
     /// Domyślnie wyłączony — inne klienty generatora zachowują się bez zmian.
     public let requiresExistingSession: Bool
@@ -102,7 +102,7 @@ public struct NoteGenerator: Sendable {
                                   context: context, generatedAt: now, condensedParts: condensedParts, prompt: promptTrace,
                                   unverifiedNumbers: unverified.isEmpty ? nil : unverified, speakers: speakerKeys)
         if speakerKeys != nil { summary.speakersDigest = speakersDigest }
-        summary.hiddenChangedAt = hiddenChangedAt
+        summary.hiddenDigest = hiddenDigest
         do {
             // Nieczytelny stary summary.json został odłożony na bok przed zapisem — powiedz to użytkownikowi.
             if let problem = try store.writeSummary(summary, now: now) { onProblem(problem) }

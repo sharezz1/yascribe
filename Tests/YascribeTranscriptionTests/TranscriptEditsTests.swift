@@ -80,7 +80,7 @@ private func edit(_ i: Int, _ text: String, in t: Transcript = sample) -> Transc
     @Test func oldFileWithoutHiddenDecodes() throws {
         let json = #"{"edits":[{"index":0,"speaker":"them","start":1,"text":"x"}]}"#
         let e = try JSONDecoder().decode(TranscriptEdits.self, from: Data(json.utf8))
-        #expect(e.hidden == nil && e.hiddenChangedAt == nil && e.edits.count == 1)
+        #expect(e.hidden == nil && e.hiddenDigest == "" && e.edits.count == 1)
         #expect(e.markingHidden(sample) == sample)
     }
 
@@ -111,16 +111,16 @@ private func edit(_ i: Int, _ text: String, in t: Transcript = sample) -> Transc
     }
 
     @Test func settingHiddenIsIdempotentAndRestores() {
-        let now = Date(timeIntervalSince1970: 100)
-        let once = TranscriptEdits().settingHidden([key], true, now: now)
-        let twice = once.settingHidden([key, .init(speaker: .them, start: 5.0004)], true, now: Date(timeIntervalSince1970: 200))
+        let once = TranscriptEdits().settingHidden([key], true)
+        let twice = once.settingHidden([key, .init(speaker: .them, start: 5.0004)], true)
         #expect(twice.hidden?.count == 1)
-        #expect(once.hiddenChangedAt == now)
-        let back = twice.settingHidden([key], false, now: Date(timeIntervalSince1970: 300))
-        #expect(back.hidden == nil)
-        #expect(back.hiddenChangedAt == Date(timeIntervalSince1970: 300))
-        // Bez zmiany listy czas zostaje.
-        #expect(back.settingHidden([key], false, now: Date(timeIntervalSince1970: 400)).hiddenChangedAt == Date(timeIntervalSince1970: 300))
+        #expect(twice.hiddenDigest == once.hiddenDigest && once.hiddenDigest == "them@5000")
+        let back = twice.settingHidden([key], false)
+        #expect(back.hidden == nil && back.hiddenDigest == "")
+        // Odcisk nie zależy od kolejności ukrywania.
+        let a = TranscriptEdits().settingHidden([key], true).settingHidden([.init(speaker: .me, start: 1)], true)
+        let b = TranscriptEdits().settingHidden([.init(speaker: .me, start: 1)], true).settingHidden([key], true)
+        #expect(a.hiddenDigest == b.hiddenDigest)
         let roundTrip = try? JSONDecoder().decode(TranscriptEdits.self, from: JSONEncoder().encode(once))
         #expect(roundTrip == once)
     }

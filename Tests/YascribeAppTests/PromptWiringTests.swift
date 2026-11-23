@@ -86,7 +86,7 @@ private final class EchoHTTP: HTTPClient, @unchecked Sendable {
         defer { try? FileManager.default.removeItem(at: session) }
         let model = makeModel(PromptOverrides())
         var item = SessionItem(url: session, startedAt: Date(), transcript: text, runID: "run")
-        item.edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 99)], hiddenChangedAt: Date(timeIntervalSince1970: 2_000))
+        item.edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 99.0004)])
         #expect(model.generate(item: item, useCorrected: false, template: Template.builtIns[0], context: "", draft: .preset))
         try await waitUntil { model.state(item.id) != .generating }
         let saved = try #require(try NotesStore(session: session).readSummary())

@@ -342,7 +342,7 @@ enum Snapshots {
                         }
                         // TASK-119: zaznaczone wiersze (pasek „N selected”), „Undo” po usunięciu, „Show deleted” z „Restore”, komunikat w Summary.
                         var hidden = picked
-                        hidden.edits = TranscriptEdits(hidden: [.init(t.utterances[0])], hiddenChangedAt: Date())
+                        hidden.edits = TranscriptEdits(hidden: [.init(t.utterances[0])])
                         let selecting = MeetingViewState(); selecting.tab = .transcript
                         selecting.click(1, command: true, shift: false, runID: "snapshot-run", corrected: true, visible: [1, 2, 3])
                         selecting.click(2, command: false, shift: true, runID: "snapshot-run", corrected: true, visible: [1, 2, 3])

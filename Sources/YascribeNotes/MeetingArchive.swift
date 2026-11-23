@@ -55,16 +55,12 @@ public enum MeetingArchive {
         return (raw.map { edits.markingHidden($0).withoutHidden() }, corrected.map { edits.markingHidden($0).withoutHidden() })
     }
 
-    /// Notatka powstała przy innym stanie ukryć niż bieżący (TASK-119): mogła zawierać tekst ukryty później (albo nie mieć
-    /// przywróconego). Stan z chwili wzięcia transkryptu, nie `generatedAt` — ukrycie w trakcie generowania też się liczy.
-    /// Tolerancja 1 s: `summary.json` zapisuje daty z dokładnością do sekundy.
+    /// Notatka powstała przy innym zbiorze ukryć niż bieżący (TASK-119): mogła zawierać tekst ukryty później (albo nie mieć
+    /// przywróconego). Zbiór z chwili wzięcia transkryptu, nie czas — ukrycie w trakcie generowania też się liczy, a Undo
+    /// przywracające ten sam zbiór nie daje fałszywego ostrzeżenia. Stare notatki (bez odcisku) = bez ukryć.
     public static func notesPredateHiding(summary: NoteSummary?, edits: TranscriptEdits?) -> Bool {
         guard let summary else { return false }
-        switch (summary.hiddenChangedAt, edits?.hiddenChangedAt) {
-        case (nil, nil): return false
-        case (let a?, let b?): return abs(a.timeIntervalSince(b)) >= 1
-        default: return true
-        }
+        return (summary.hiddenDigest ?? "") != (edits?.hiddenDigest ?? "")
     }
 
     /// Transkrypt do wyświetlenia: `source`, potem Replacement i etykiety mówców.

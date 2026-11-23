@@ -552,11 +552,11 @@ private func snapshot(_ url: URL) throws -> [String: String] {
     let paths = try dataDir()
     defer { try? FileManager.default.removeItem(at: paths.root) }
     try saveSettings(paths) { $0.agentAccess = true }
-    let edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 1)], hiddenChangedAt: Date(timeIntervalSince1970: 1_000))
+    let edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 1)])
     let stale = try makeSession(paths, id: "stara", raw: [utt("tlo", .me, at: 1)], noteSummary: noteSummary("stara notatka"))
     try edits.save(run: RunDirectory(session: stale, runID: runID))
     var current = noteSummary("nowa notatka")
-    current.hiddenChangedAt = Date(timeIntervalSince1970: 1_000)
+    current.hiddenDigest = edits.hiddenDigest
     let fresh = try makeSession(paths, id: "nowa", raw: [utt("tlo", .me, at: 1)], noteSummary: current)
     try edits.save(run: RunDirectory(session: fresh, runID: runID))
     let server = MCPServer(paths: paths, version: "test")

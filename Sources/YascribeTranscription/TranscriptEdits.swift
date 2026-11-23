@@ -35,12 +35,14 @@ public struct TranscriptEdits: Codable, Equatable, Sendable {
     public var edits: [Edit]
     /// Opcjonalne: pliki sprzed TASK-119 go nie mają.
     public var hidden: [Hidden]?
-    /// Ostatnie ukrycie albo przywrócenie — notatka starsza od tej chwili mogła powstać z ukrytym tekstem.
-    public var hiddenChangedAt: Date?
-    public init(edits: [Edit] = [], hidden: [Hidden]? = nil, hiddenChangedAt: Date? = nil) {
+    public init(edits: [Edit] = [], hidden: [Hidden]? = nil) {
         self.edits = edits
         self.hidden = hidden
-        self.hiddenChangedAt = hiddenChangedAt
+    }
+
+    /// Odcisk zbioru ukryć (mówca@start w ms, posortowane); "" = brak. Notatka z innym odciskiem powstała przy innym zbiorze.
+    public var hiddenDigest: String {
+        (hidden ?? []).map { "\($0.speaker.rawValue)@\(Int(($0.start * 1000).rounded()))" }.sorted().joined(separator: ",")
     }
 
     /// Do wyświetlania: brak albo uszkodzony plik = brak poprawek (nie blokuje otwarcia spotkania).
@@ -85,7 +87,7 @@ public struct TranscriptEdits: Codable, Equatable, Sendable {
     public func isHidden(_ u: Utterance) -> Bool { hidden?.contains { $0.matches(u) } ?? false }
 
     /// Ukrywa (`on`) albo przywraca wypowiedzi; bez duplikatów, pusta lista = `nil`.
-    public func settingHidden(_ keys: [Hidden], _ on: Bool, now: Date = Date()) -> TranscriptEdits {
+    public func settingHidden(_ keys: [Hidden], _ on: Bool) -> TranscriptEdits {
         var list = hidden ?? []
         for k in keys {
             list.removeAll { $0.speaker == k.speaker && abs($0.start - k.start) < 0.001 }
@@ -93,7 +95,6 @@ public struct TranscriptEdits: Codable, Equatable, Sendable {
         }
         var result = self
         result.hidden = list.isEmpty ? nil : list
-        if result.hidden != hidden { result.hiddenChangedAt = now }
         return result
     }
 

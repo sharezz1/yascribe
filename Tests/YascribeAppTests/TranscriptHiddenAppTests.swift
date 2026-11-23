@@ -42,7 +42,7 @@ private final class BodiesHTTP: HTTPClient, @unchecked Sendable {
         var item = SessionItem(url: URL(fileURLWithPath: "/nonexistent"), startedAt: Date(), transcript: raw, runID: "run")
         item.corrected = CorrectedTranscript(transcript: Transcript(utterances: [u(.me, 1, "Hintergrund."), u(.them, 4, "The forecast.")], failedChunks: []),
                                              model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
-        item.edits = TranscriptEdits().settingHidden([.init(speaker: .me, start: 1)], true, now: Date(timeIntervalSince1970: 50))
+        item.edits = TranscriptEdits().settingHidden([.init(speaker: .me, start: 1)], true)
         for corrected in [true, false] {
             let t = item.transcript(corrected: corrected)
             #expect(t?.utterances.count == 1)
@@ -56,13 +56,16 @@ private final class BodiesHTTP: HTTPClient, @unchecked Sendable {
         // Ask: indeks archiwum z tego samego odczytu.
         let source = ArchiveModel.source(for: item, notes: NotesModel(), transcript: item.transcript(corrected: true))
         #expect(!String(describing: source).lowercased().contains("hintergrund"))
-        // Notatka z innym stanem ukryć jest nieaktualna — także wygenerowana po ukryciu, jeśli transkrypt wzięto przed nim.
+        // Notatka z innym zbiorem ukryć jest nieaktualna — także wygenerowana po ukryciu, jeśli transkrypt wzięto przed nim.
         #expect(!item.notesPredateHiding)
-        item.notes.summary = NoteSummary(title: nil, markdown: "x", templateID: "t", model: "m", context: "", generatedAt: Date(timeIntervalSince1970: 99))
+        item.notes.summary = NoteSummary(title: nil, markdown: "x", templateID: "t", model: "m", context: "", generatedAt: Date())
         #expect(item.notesPredateHiding)
-        item.notes.summary?.hiddenChangedAt = Date(timeIntervalSince1970: 50.4) // summary.json: sekundy
+        item.notes.summary?.hiddenDigest = item.edits?.hiddenDigest
         #expect(!item.notesPredateHiding)
-        item.notes.summary?.hiddenChangedAt = Date(timeIntervalSince1970: 10)
+        // Ukrycie i Undo: ten sam zbiór, ten sam odcisk — bez fałszywego ostrzeżenia.
+        item.edits = item.edits?.settingHidden([.init(speaker: .them, start: 4)], true).settingHidden([.init(speaker: .them, start: 4)], false)
+        #expect(!item.notesPredateHiding)
+        item.edits = item.edits?.settingHidden([.init(speaker: .them, start: 4)], true)
         #expect(item.notesPredateHiding)
         #expect(!MeetingArchive.notesPredateHiding(summary: NoteSummary(title: nil, markdown: "x", templateID: "t", model: "m", context: "",
                                                                          generatedAt: Date()), edits: nil))
@@ -82,7 +85,6 @@ private final class BodiesHTTP: HTTPClient, @unchecked Sendable {
         #expect(model.setHidden(item, runID: "run", keys: [key], hidden: true))
         #expect(TranscriptEdits.load(run: run)?.hidden == [key])
         #expect(TranscriptEdits.load(run: run)?.edits.map(\.text) == ["edited"])
-        #expect(TranscriptEdits.load(run: run)?.hiddenChangedAt != nil)
         #expect(model.setHidden(item, runID: "run", keys: [key], hidden: false))
         #expect(TranscriptEdits.load(run: run)?.hidden == nil)
         // Inny przebieg niż bieżący: bez zapisu.
