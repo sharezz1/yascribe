@@ -1,6 +1,6 @@
 import Foundation
 
-/// Zamienia surowe zdarzenia postępu FluidAudio 0.17.7 na pasek monotoniczny (F20 S0 §7.3): `fractionCompleted`
+/// Zamienia surowe zdarzenia postępu FluidAudio (0.17.7, bez zmian w 0.18.4) na pasek monotoniczny (F20 S0 §7.3): `fractionCompleted`
 /// spada 3x przy kompilacji, a „pobrane" kończy się na 0,5. Bez typów FluidAudio w sygnaturze — testowalne bez sieci.
 /// `nil` = postęp nieokreślony („Preparing model…"); nie zeruje paska.
 public struct DownloadProgressMapper: Sendable {

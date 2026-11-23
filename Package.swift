@@ -1,4 +1,4 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.2
 import PackageDescription
 
 let package = Package(
@@ -10,7 +10,8 @@ let package = Package(
     ],
     dependencies: [
         // Pierwszy pin zewnętrzny (F20 S0 §2); FluidAudio importuje wyłącznie YascribeLocalASR.
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7"),
+        // Traity (TASK-118): tylko Diarizer — bez TTS i NemoTextProcessing (ITN), których nie używamy. Wymaga tools ≥ 6.2.
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.18.4", traits: ["Diarizer"]),
         // Drugi pin zewnętrzny; Sparkle importuje wyłącznie YascribeUpdates (S0 Yascribe, 2026-10-26).
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.2"),
     ],

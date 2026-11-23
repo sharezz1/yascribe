@@ -12,6 +12,8 @@ import YascribeProviders
         #expect(config.clustering.warmStartFa == fa, "\(sensitivity)")
         #expect(config.clustering.warmStartFb == fb, "\(sensitivity)")
         #expect(config.clustering.threshold == 0.6)
+        #expect(config.postProcessing.exclusiveSegments) // TASK-118 D2: FluidAudio 0.18.2+ domyślnie `false`
+        #expect(config.segmentation.batchSize == 8)
     }
 }
 

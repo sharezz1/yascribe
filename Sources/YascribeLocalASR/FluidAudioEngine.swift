@@ -2,7 +2,7 @@ import FluidAudio
 import Foundation
 import YascribeProviders
 
-/// Silnik Parakeet (wariant z `store`; FluidAudio 0.17.7, API wg S0 §8). Ładuje WYŁĄCZNIE przez `loadLocal` — pozostałe warianty ładowania
+/// Silnik Parakeet (wariant z `store`; FluidAudio 0.18.4, API wg S0 §8). Ładuje WYŁĄCZNIE przez `loadLocal` — pozostałe warianty ładowania
 /// idą przez centrum pobierań FluidAudio i potrafią dociągać pliki z HF bez zgody użytkownika (decyzja 7a; pilnuje tego `LocalASRNetworkGuardTests`).
 /// Brak pliku = lokalny `modelNotFound`.
 public actor FluidAudioEngine: LocalASREngine {

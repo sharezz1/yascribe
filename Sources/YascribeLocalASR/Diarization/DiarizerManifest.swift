@@ -1,12 +1,12 @@
 import Foundation
 
 /// Model diaryzacji offline (community-1 + VBx) z HF `FluidInference/speaker-diarization-coreml` przy rewizji z `ModelNames.swift`
-/// FluidAudio 0.17.7. Lista i rozmiary z API HF `tree` przy tej rewizji (2026-11-17); razem 21 599 417 B. Integralność = rozmiary.
+/// FluidAudio 0.17.7 (ta sama rewizja w 0.18.4). Lista i rozmiary z API HF `tree` przy tej rewizji (2026-11-17); razem 21 599 417 B. Integralność = rozmiary.
 public enum DiarizerManifest {
     public static let repo = "FluidInference/speaker-diarization-coreml"
     public static let revision = "df2625ac79a7ac6b65ad868fee6d80f320da4232"
-    /// Wchodzi do `speakers.json`; inna wartość unieważnia zapisane etykiety.
-    public static let pin = "fluidaudio-0.17.7/speaker-diarization-coreml@df2625ac79a7ac6b65ad868fee6d80f320da4232/offline"
+    /// Wchodzi do `speakers.json`; inna wartość unieważnia zapisane etykiety (świadomie przy 0.17.7 → 0.18.4, TASK-118 D1).
+    public static let pin = "fluidaudio-0.18.4/speaker-diarization-coreml@df2625ac79a7ac6b65ad868fee6d80f320da4232/offline"
 
     public static let offline = ModelManifest(model: "speaker-diarization", files: [
         "Embedding.mlmodelc/analytics/coremldata.bin": 243,

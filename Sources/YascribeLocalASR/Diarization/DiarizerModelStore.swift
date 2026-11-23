@@ -144,7 +144,7 @@ public struct DiarizerModelStore: Sendable {
             compilationDuration: Date().timeIntervalSince(start))
     }
 
-    /// `tensors.psi.data_base64` → float32 little-endian → `[Double]` (format FluidAudio 0.17.7).
+    /// `tensors.psi.data_base64` → float32 little-endian → `[Double]` (format FluidAudio 0.17.7, bez zmian w 0.18.4).
     static func pldaPsi(from url: URL) throws -> [Double] {
         let root = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
         guard let tensors = root?["tensors"] as? [String: Any], let psi = tensors["psi"] as? [String: Any],
