@@ -1106,7 +1106,7 @@
 "Show deleted (%lld)" = "Pokaż usunięte (%lld)";
 "Deleted segments stay out of notes, search, copy and the agent tools" = "Usunięte wypowiedzi nie trafiają do notatek, wyszukiwania, kopii ani narzędzi agentów";
 "Notes were generated before segments were deleted or restored." = "Notatka powstała przed usunięciem lub przywróceniem wypowiedzi.";
-"Deleted — not in notes, search or copy" = "Usunięta — poza notatką, wyszukiwaniem i kopią";
+"Deleted — left out of copy, search and new notes" = "Usunięta — poza kopią, wyszukiwaniem i nowymi notatkami";
 "%lld selected" = "Zaznaczono: %lld";
 "Deleted %lld segments" = "Usunięto wypowiedzi: %lld";
 "Delete %lld segments" = "Usuń wypowiedzi: %lld";

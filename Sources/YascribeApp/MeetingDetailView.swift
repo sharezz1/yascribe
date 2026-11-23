@@ -401,7 +401,7 @@ struct UtteranceRow: View {
                 }
                 if let onRestore {
                     HStack(spacing: 8) {
-                        StateLabel(.neutral, String(localized: "Deleted — not in notes, search or copy"))
+                        StateLabel(.neutral, String(localized: "Deleted — left out of copy, search and new notes"))
                         Button(String(localized: "Restore"), action: onRestore).buttonStyle(.pillSmall)
                     }
                 }

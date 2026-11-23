@@ -56,12 +56,16 @@ private final class BodiesHTTP: HTTPClient, @unchecked Sendable {
         // Ask: indeks archiwum z tego samego odczytu.
         let source = ArchiveModel.source(for: item, notes: NotesModel(), transcript: item.transcript(corrected: true))
         #expect(!String(describing: source).lowercased().contains("hintergrund"))
-        // Notatka sprzed ukrycia jest nieaktualna, nowsza nie.
+        // Notatka z innym stanem ukryć jest nieaktualna — także wygenerowana po ukryciu, jeśli transkrypt wzięto przed nim.
         #expect(!item.notesPredateHiding)
-        item.notes.summary = NoteSummary(title: nil, markdown: "x", templateID: "t", model: "m", context: "", generatedAt: Date(timeIntervalSince1970: 10))
+        item.notes.summary = NoteSummary(title: nil, markdown: "x", templateID: "t", model: "m", context: "", generatedAt: Date(timeIntervalSince1970: 99))
         #expect(item.notesPredateHiding)
-        item.notes.summary?.generatedAt = Date(timeIntervalSince1970: 60)
+        item.notes.summary?.hiddenChangedAt = Date(timeIntervalSince1970: 50.4) // summary.json: sekundy
         #expect(!item.notesPredateHiding)
+        item.notes.summary?.hiddenChangedAt = Date(timeIntervalSince1970: 10)
+        #expect(item.notesPredateHiding)
+        #expect(!MeetingArchive.notesPredateHiding(summary: NoteSummary(title: nil, markdown: "x", templateID: "t", model: "m", context: "",
+                                                                         generatedAt: Date()), edits: nil))
     }
 
     @Test func setHiddenSavesRestoresAndKeepsCorruptFile() throws {

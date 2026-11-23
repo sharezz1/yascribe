@@ -92,10 +92,7 @@ struct SessionItem: Identifiable, Equatable {
     }
 
     /// Notatka powstała przed ostatnim ukryciem albo przywróceniem wypowiedzi (TASK-119).
-    var notesPredateHiding: Bool {
-        guard let summary = notes.summary, let changed = edits?.hiddenChangedAt else { return false }
-        return summary.generatedAt < changed
-    }
+    var notesPredateHiding: Bool { MeetingArchive.notesPredateHiding(summary: notes.summary, edits: edits) }
 
     /// Indeksy wypowiedzi z ręczną poprawką widoczną w tej wersji (etykieta „Edited”).
     func editedIndices(corrected useCorrected: Bool) -> Set<Int> {

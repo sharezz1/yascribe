@@ -324,6 +324,7 @@ final class NotesModel {
         generator.rulesBody = prompts.body(.summary)
         generator.promptTrace = prompts.trace(.summary)
         generator.speakersDigest = item.speakers?.segmentsDigest
+        generator.hiddenChangedAt = item.edits?.hiddenChangedAt // ta sama migawka co `source` wyżej
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url

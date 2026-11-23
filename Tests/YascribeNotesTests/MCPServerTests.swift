@@ -541,9 +541,27 @@ private func snapshot(_ url: URL) throws -> [String: String] {
     let meeting = try call(server, "get_meeting", ["id": "tlo", "include_transcript": true]).text
     #expect(!meeting.lowercased().contains("hintergrund"))
     #expect(meeting.contains("Właściwa treść."))
+    #expect(!meeting.contains("Generated before transcript segments were deleted"))
     let hit = try json(try call(server, "list_meetings", ["query": "Gerede"]).text)
     #expect(hit["total"] as? Int == 0)
     #expect(try json(try call(server, "list_meetings", ["query": "Właściwa"]).text)["total"] as? Int == 1)
+}
+
+// TASK-119: notatka sprzed ukrycia (inny stan ukryć) dostaje w get_meeting ostrzeżenie; zgodna — nie.
+@Test func getMeetingWarnsWhenSummaryPredatesHiding() throws {
+    let paths = try dataDir()
+    defer { try? FileManager.default.removeItem(at: paths.root) }
+    try saveSettings(paths) { $0.agentAccess = true }
+    let edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 1)], hiddenChangedAt: Date(timeIntervalSince1970: 1_000))
+    let stale = try makeSession(paths, id: "stara", raw: [utt("tlo", .me, at: 1)], noteSummary: noteSummary("stara notatka"))
+    try edits.save(run: RunDirectory(session: stale, runID: runID))
+    var current = noteSummary("nowa notatka")
+    current.hiddenChangedAt = Date(timeIntervalSince1970: 1_000)
+    let fresh = try makeSession(paths, id: "nowa", raw: [utt("tlo", .me, at: 1)], noteSummary: current)
+    try edits.save(run: RunDirectory(session: fresh, runID: runID))
+    let server = MCPServer(paths: paths, version: "test")
+    #expect(try call(server, "get_meeting", ["id": "stara"]).text.contains("Generated before transcript segments were deleted"))
+    #expect(!(try call(server, "get_meeting", ["id": "nowa"]).text.contains("Generated before transcript segments were deleted")))
 }
 
 // MARK: - get_meeting

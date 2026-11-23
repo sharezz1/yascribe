@@ -262,7 +262,10 @@ enum MCPTools {
         var sections: [String] = []
         if let overview = record.overview { sections.append("## Overview\n\(overview)") }
         if let summary = record.noteSummary {
-            sections.append("## Summary\n\(record.speakerMarkers.resolved(summary.markdown))")
+            // TASK-119: notatka sprzed ukrycia albo przywrócenia wypowiedzi może zawierać ukryty tekst — agent musi to wiedzieć.
+            let stale = MeetingArchive.notesPredateHiding(summary: summary, edits: record.edits)
+                ? "_Generated before transcript segments were deleted or restored; it may include deleted content._\n" : ""
+            sections.append("## Summary\n\(stale)\(record.speakerMarkers.resolved(summary.markdown))")
         }
         let notes = record.myNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !notes.isEmpty { sections.append("## My notes\n\(notes)") }
