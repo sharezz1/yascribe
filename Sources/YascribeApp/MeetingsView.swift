@@ -148,6 +148,7 @@ private struct MeetingDestinationView: View {
         .onChange(of: askState.showingSource) { _, showing in
             if showing { detailState.tab = .transcript }
         }
+        .onChange(of: model.improveRequest) { _, _ in consumeImproveRequest() }
         .onChange(of: item.id) { _, _ in
             if askState.showingSource { detailState.tab = .transcript }
         }
