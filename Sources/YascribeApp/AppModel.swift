@@ -80,9 +80,21 @@ struct SessionItem: Identifiable, Equatable {
     var notesText: String? { notes.summary.map { speakerMarkers.resolved($0.markdown) } }
 
     /// Transkrypt do wyświetlenia i streszczenia: poprawiony, gdy jest i użytkownik go nie wyłączył.
-    /// Ręczne poprawki obowiązują w obu wersjach (TASK-109).
-    func transcript(corrected useCorrected: Bool) -> Transcript? {
-        MeetingArchive.source(raw: transcript, corrected: corrected, edits: edits, useCorrected: useCorrected)
+    /// Ręczne poprawki obowiązują w obu wersjach (TASK-109). Ukryte wypowiedzi (TASK-119) wycięte, chyba że `includeHidden`
+    /// (tylko widok transkryptu).
+    func transcript(corrected useCorrected: Bool, includeHidden: Bool = false) -> Transcript? {
+        MeetingArchive.source(raw: transcript, corrected: corrected, edits: edits, useCorrected: useCorrected, includeHidden: includeHidden)
+    }
+
+    /// Liczba ukrytych wypowiedzi w tej wersji (przełącznik „Show deleted”).
+    func hiddenCount(corrected useCorrected: Bool) -> Int {
+        transcript(corrected: useCorrected, includeHidden: true)?.utterances.filter { $0.hidden == true }.count ?? 0
+    }
+
+    /// Notatka powstała przed ostatnim ukryciem albo przywróceniem wypowiedzi (TASK-119).
+    var notesPredateHiding: Bool {
+        guard let summary = notes.summary, let changed = edits?.hiddenChangedAt else { return false }
+        return summary.generatedAt < changed
     }
 
     /// Indeksy wypowiedzi z ręczną poprawką widoczną w tej wersji (etykieta „Edited”).
@@ -169,7 +181,7 @@ final class AppModel {
     /// Wynik Replacement (klucz: sesja i wariant transkryptu) razem ze źródłem, z którego powstał. Bez obserwacji, bo
     /// zapisywany w trakcie liczenia widoku.
     @ObservationIgnored private var replaced: [ReplacedKey: (source: Transcript, speakers: SpeakerDiarization?, result: Transcript)] = [:]
-    private struct ReplacedKey: Hashable { var id: String; var corrected: Bool }
+    private struct ReplacedKey: Hashable { var id: String; var corrected: Bool; var includeHidden: Bool }
     var sessions: [SessionItem] = []
     var selectedSessionID: String?
     var activePresetID: UUID?
@@ -552,7 +564,7 @@ final class AppModel {
         }
         let byID = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         replaced = replaced.reduce(into: [:]) { kept, entry in
-            if let fresh = byID[entry.key.id]?.transcript(corrected: entry.key.corrected), fresh == entry.value.source, byID[entry.key.id]?.speakers == entry.value.speakers {
+            if let fresh = byID[entry.key.id]?.transcript(corrected: entry.key.corrected, includeHidden: entry.key.includeHidden), fresh == entry.value.source, byID[entry.key.id]?.speakers == entry.value.speakers {
                 kept[entry.key] = (fresh, entry.value.speakers, entry.value.result)
             }
         }
@@ -561,15 +573,19 @@ final class AppModel {
 
     /// Przelicza sugestie Aliasów w tle na kopii sesji i słownika; wynik przyjmuje tylko najnowsze wywołanie.
     func refreshSuggestions() {
+        // Ukryte wypowiedzi (TASK-119) oznaczone po obu stronach: `find` pomija pary wyłączone z notatek.
         let sources = sessions.compactMap { item -> AliasSuggestions.Source? in
-            guard let raw = item.transcript, let fixed = item.corrected else { return nil }
-            return AliasSuggestions.Source(id: item.id, raw: raw, corrected: fixed)
+            guard let raw = item.transcript, var fixed = item.corrected else { return nil }
+            let edits = item.edits ?? TranscriptEdits()
+            fixed.transcript = edits.markingHidden(fixed.transcript)
+            return AliasSuggestions.Source(id: item.id, raw: edits.markingHidden(raw), corrected: fixed)
         }
         let fillers = settings.fillerWords ?? FillerWords.defaults, dictionary = dictionary
         func lengths(_ t: Transcript) -> String { t.utterances.map { String($0.text.utf8.count) }.joined(separator: ",") }
         let fingerprint = sessions.compactMap { item -> [String]? in
             guard let raw = item.transcript, let fixed = item.corrected else { return nil }
-            return [item.id, item.runID ?? "", fixed.model, lengths(raw), lengths(fixed.transcript)]
+            let hidden = (item.edits?.hidden ?? []).map { "\($0.speaker.rawValue)@\($0.start)" }.joined(separator: ",")
+            return [item.id, item.runID ?? "", fixed.model, lengths(raw), lengths(fixed.transcript), hidden]
         }
         let input = SuggestionsInput(sessions: fingerprint, dictionary: dictionary, fillers: fillers)
         guard input != suggestionsInput else { return }
@@ -624,13 +640,15 @@ final class AppModel {
     /// Jedyny punkt odczytu transkryptu do wyświetlania, wyszukiwania i notatki (F21, D8): `SessionItem.transcript(corrected:)`
     /// po Replacement. Wynik zostaje w pamięci, dopóki źródło jest równe temu, z którego powstał — rewizją jest treść, bo korekta
     /// może zmienić tekst bez zmiany liczby wypowiedzi. Statusy (`!= nil`, „original/corrected") czytają surowe pola.
-    func transcript(of item: SessionItem, corrected: Bool) -> Transcript? {
+    /// Ukryte wypowiedzi (TASK-119) wycięte; `includeHidden` tylko dla widoku transkryptu (indeksy ▶/✎, „Show deleted”).
+    func transcript(of item: SessionItem, corrected: Bool, includeHidden: Bool = false) -> Transcript? {
         let rules = replacementRules // odczyt obserwowany także przy trafieniu w pamięć: zmiana słownika odświeża widok
-        guard let source = item.transcript(corrected: corrected) else { return nil }
-        let key = ReplacedKey(id: item.id, corrected: corrected)
+        guard let source = item.transcript(corrected: corrected, includeHidden: includeHidden) else { return nil }
+        let key = ReplacedKey(id: item.id, corrected: corrected, includeHidden: includeHidden)
         if let hit = replaced[key], hit.source == source, hit.speakers == item.speakers { return hit.result }
         guard let result = MeetingArchive.displayTranscript(raw: item.transcript, corrected: item.corrected, edits: item.edits,
-                                                            useCorrected: corrected, rules: rules, speakers: item.speakers) else { return nil }
+                                                            useCorrected: corrected, rules: rules, speakers: item.speakers,
+                                                            includeHidden: includeHidden) else { return nil }
         replaced[key] = (source, item.speakers, result)
         return result
     }
@@ -1500,6 +1518,23 @@ final class AppModel {
             // Szkic startuje od tekstu po słowniku, więc „bez zmian” porównujemy z tym samym tekstem.
             let original = Replacement.apply(base, rules: replacementRules).utterances[index].text
             try current.setting(text, at: index, of: base.utterances[index], original: original).save(run: run)
+            reloadSessions()
+            return true
+        } catch {
+            lastError = String(localized: "Couldn't save the edit: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// Ukrywa (`hidden`) albo przywraca wypowiedzi przebiegu `runID` (TASK-119). Plik czytany na nowo, jak przy `editUtterance`:
+    /// nie kasujemy zmian zapisanych od ostatniego odczytu ani uszkodzonego pliku. `false` = nie zapisano (powód w `lastError`).
+    @discardableResult
+    func setHidden(_ item: SessionItem, runID: String, keys: [TranscriptEdits.Hidden], hidden: Bool) -> Bool {
+        guard !keys.isEmpty, recordingsMove == nil, RunDirectory.isValid(runID: runID), item.runID == runID else { return false }
+        let run = RunDirectory(session: item.url, runID: runID)
+        do {
+            let current = try TranscriptEdits.loadForEditing(run: run) ?? TranscriptEdits()
+            try current.settingHidden(keys, hidden).save(run: run)
             reloadSessions()
             return true
         } catch {

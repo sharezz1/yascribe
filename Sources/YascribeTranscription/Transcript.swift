@@ -31,13 +31,15 @@ public struct Utterance: Codable, Equatable, Sendable {
     /// Tylko w pamięci, nadawana przy odczycie.
     public var speakerLabel: String? = nil
     public var speakerKey: String? = nil
+    /// Ukryta przez użytkownika (TASK-119): tylko w pamięci, nadawana z `edits.json` (`TranscriptEdits.markingHidden`).
+    public var hidden: Bool? = nil
 
     enum CodingKeys: String, CodingKey {
         case speaker, start, end, text, words, approximateTiming, languageMismatch, echoOfThem
     }
 
-    /// Oznaczona wypowiedź (zły język albo echo) nie trafia do notatki jako fakt.
-    public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true }
+    /// Oznaczona wypowiedź (zły język, echo albo ukryta przez użytkownika) nie trafia do notatki ani do korekty.
+    public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true || hidden == true }
 }
 
 public struct ChunkFailure: Codable, Equatable, Sendable {
@@ -55,6 +57,13 @@ public struct Transcript: Codable, Equatable, Sendable {
 
     public var languageFlagCount: Int { utterances.filter { $0.languageMismatch != nil }.count }
     public var echoCount: Int { utterances.filter { $0.echoOfThem == true }.count }
+
+    /// Bez ukrytych wypowiedzi (TASK-119) — wejście dla wszystkiego poza widokiem transkryptu.
+    public func withoutHidden() -> Transcript {
+        var copy = self
+        copy.utterances.removeAll { $0.hidden == true }
+        return copy
+    }
 }
 
 /// Migawka presetu w chwili przebiegu — nie odwołanie (spec fazy 1, §8, P12).

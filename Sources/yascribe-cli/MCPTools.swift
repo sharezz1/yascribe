@@ -33,7 +33,8 @@ struct MeetingRecord {
 
     /// Jak panel Overview w UI: tylko wynik policzony dla bieżącego przebiegu i bieżących odcisków.
     var overview: String? {
-        Overview.cached(meta, runID: runID, transcript: rawTranscript, correctedTranscript: corrected?.transcript)
+        let basis = MeetingArchive.overviewBasis(raw: rawTranscript, corrected: corrected?.transcript, edits: edits)
+        return Overview.cached(meta, runID: runID, transcript: basis.raw, correctedTranscript: basis.corrected)
     }
 
     var transcriptVersion: String? {

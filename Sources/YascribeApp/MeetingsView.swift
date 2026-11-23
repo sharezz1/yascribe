@@ -167,7 +167,8 @@ struct OverviewPanel: View {
                 .font(.system(size: 11, weight: .medium)).tracking(0.8)
                 .foregroundStyle(.mnText2).accessibilityAddTraits(.isHeader)
             if let item {
-                if let text = Overview.cached(item.notes.meta, runID: item.runID, transcript: item.transcript, correctedTranscript: item.corrected?.transcript) {
+                let basis = MeetingArchive.overviewBasis(raw: item.transcript, corrected: item.corrected?.transcript, edits: item.edits)
+                if let text = Overview.cached(item.notes.meta, runID: item.runID, transcript: basis.raw, correctedTranscript: basis.corrected) {
                     Text(text).font(.system(size: 13)).lineSpacing(5).foregroundStyle(.mnText)
                 } else {
                     Text("No overview yet.").font(.system(size: 13)).foregroundStyle(.mnText2)

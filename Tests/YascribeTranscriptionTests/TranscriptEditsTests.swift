@@ -72,3 +72,56 @@ private func edit(_ i: Int, _ text: String, in t: Transcript = sample) -> Transc
         #expect(throws: (any Error).self) { try TranscriptEdits.loadForEditing(run: run) }
     }
 }
+
+// TASK-119: ukrywanie wypowiedzi — klucz mówca + start, bez indeksu.
+@Suite struct TranscriptHiddenTests {
+    private let key = TranscriptEdits.Hidden(speaker: .them, start: 5)
+
+    @Test func oldFileWithoutHiddenDecodes() throws {
+        let json = #"{"edits":[{"index":0,"speaker":"them","start":1,"text":"x"}]}"#
+        let e = try JSONDecoder().decode(TranscriptEdits.self, from: Data(json.utf8))
+        #expect(e.hidden == nil && e.hiddenChangedAt == nil && e.edits.count == 1)
+        #expect(e.markingHidden(sample) == sample)
+    }
+
+    @Test func marksBySpeakerAndStartEvenWhenIndicesShift() {
+        let e = TranscriptEdits().settingHidden([key], true)
+        #expect(e.markingHidden(sample).utterances.map { $0.hidden == true } == [false, false, true])
+        // Wypowiedź wstawiona przed (Retry Failed Parts): ukrycie idzie za mówcą i początkiem.
+        var shifted = sample
+        shifted.utterances.insert(u(.me, 0.5, "new"), at: 0)
+        #expect(e.markingHidden(shifted).withoutHidden().utterances.map(\.text) == ["new", "helo there", "hi"])
+        var other = sample
+        other.utterances[2].start = 5.002
+        #expect(e.markingHidden(other).withoutHidden().utterances.count == 3)
+        other.utterances[2].start = 5.0005
+        #expect(e.markingHidden(other).withoutHidden().utterances.count == 2)
+        other = sample
+        other.utterances[2].speaker = .me
+        #expect(!e.isHidden(other.utterances[2]))
+    }
+
+    @Test func hiddenIsExcludedFromNotesAndNeverEncoded() throws {
+        let marked = TranscriptEdits().settingHidden([key], true).markingHidden(sample)
+        #expect(marked.utterances[2].excludedFromNotes)
+        #expect(!marked.utterances[0].excludedFromNotes)
+        let json = String(decoding: try JSONEncoder().encode(marked), as: UTF8.self)
+        #expect(!json.contains("hidden"))
+        #expect(try JSONDecoder().decode(Transcript.self, from: Data(json.utf8)) == sample)
+    }
+
+    @Test func settingHiddenIsIdempotentAndRestores() {
+        let now = Date(timeIntervalSince1970: 100)
+        let once = TranscriptEdits().settingHidden([key], true, now: now)
+        let twice = once.settingHidden([key, .init(speaker: .them, start: 5.0004)], true, now: Date(timeIntervalSince1970: 200))
+        #expect(twice.hidden?.count == 1)
+        #expect(once.hiddenChangedAt == now)
+        let back = twice.settingHidden([key], false, now: Date(timeIntervalSince1970: 300))
+        #expect(back.hidden == nil)
+        #expect(back.hiddenChangedAt == Date(timeIntervalSince1970: 300))
+        // Bez zmiany listy czas zostaje.
+        #expect(back.settingHidden([key], false, now: Date(timeIntervalSince1970: 400)).hiddenChangedAt == Date(timeIntervalSince1970: 300))
+        let roundTrip = try? JSONDecoder().decode(TranscriptEdits.self, from: JSONEncoder().encode(once))
+        #expect(roundTrip == once)
+    }
+}

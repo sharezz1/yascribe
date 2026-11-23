@@ -36,3 +36,25 @@ import YascribeProviders
         #expect(written.markdown == "Speaker 1 spoke")
     }
 }
+
+// TASK-119: CLI `note` nie wysyła ukrytej wypowiedzi do modelu — w obu wersjach, także gdy korekta ma inną liczbę wypowiedzi.
+@Test func cliNoteDropsHiddenUtterances() async throws {
+    let session = tempDir()
+    defer { try? FileManager.default.removeItem(at: session) }
+    let run = RunDirectory(session: session, runID: "run")
+    try FileManager.default.createDirectory(at: run.url, withIntermediateDirectories: true)
+    try JSONFile.save(transcript([utt("hintergrund raw", .me, at: 1), utt("keep raw", .them, at: 3)]), to: run.transcript)
+    let corrected = CorrectedTranscript(transcript: transcript([utt("hintergrund fixed", .me, at: 1), utt("keep fixed", .them, at: 3),
+                                                                utt("extra", .them, at: 9)]),
+                                        model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
+    try JSONFile.save(corrected, to: run.corrected)
+    try TranscriptEdits(hidden: [.init(speaker: .me, start: 1)]).save(run: run)
+    let stub = ChatStub { _ in "# Title\nok" }
+    for source in ["raw", "corrected"] {
+        try await CLI.note([run.url.path, "https://example.com/v1", "model", "--language", "pl", "--out",
+                            session.appendingPathComponent("\(source).json").path, "--source", source], clientOverride: chatClient(stub))
+        let call = try #require(stub.calls.last)
+        #expect(!call.user.contains("hintergrund"))
+        #expect(call.user.contains(source == "raw" ? "keep raw" : "keep fixed"))
+    }
+}

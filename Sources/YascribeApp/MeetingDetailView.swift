@@ -320,6 +320,13 @@ struct UtteranceRow: View {
     var onSave: (() -> Void)? = nil
     var onCancel: () -> Void = {}
     let onJump: () -> Void
+    /// TASK-119: ukrywanie. `nil` = akcja niedostępna (brak przebiegu, przenoszenie nagrań).
+    var isSelected = false
+    var deleteCount = 1
+    var onDelete: (() -> Void)? = nil
+    var onRestore: (() -> Void)? = nil
+    /// ⌘-klik (`command`) albo ⇧-klik (`shift`) na wierszu.
+    var onSelect: ((_ command: Bool, _ shift: Bool) -> Void)? = nil
     @Environment(AppModel.self) private var model
     @StateObject private var picker = RowPresentation()
     @FocusState private var editorFocused: Bool
@@ -381,6 +388,7 @@ struct UtteranceRow: View {
                     editor(draft)
                 } else {
                     Text(utterance.text).font(.system(size: 13)).lineSpacing(4)
+                        .strikethrough(utterance.hidden == true, color: .mnText2)
                         .foregroundStyle(utterance.excludedFromNotes ? Color.mnText2 : Color.mnText)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
@@ -390,6 +398,12 @@ struct UtteranceRow: View {
                     // P11: widoczne, nie ukryte — i wyłączone z notatek.
                     WarnLabel(isAuto ? String(localized: "Unexpected alphabet (\(lang.rawValue.uppercased())) — likely misrecognized, excluded from notes")
                                      : String(localized: "Looks like \(lang.rawValue.uppercased()), not the preset's language — excluded from notes"))
+                }
+                if let onRestore {
+                    HStack(spacing: 8) {
+                        StateLabel(.neutral, String(localized: "Deleted — not in notes, search or copy"))
+                        Button(String(localized: "Restore"), action: onRestore).buttonStyle(.pillSmall)
+                    }
                 }
                 if utterance.echoOfThem == true {
                     StateLabel(.neutral, String(localized: "Echo of the other side — excluded from notes"))
@@ -404,11 +418,29 @@ struct UtteranceRow: View {
             actions
         }
         .padding(.vertical, 11)
+        .background(isSelected ? Color.mnAccent.opacity(0.12) : Color.clear)
         .contentShape(Rectangle())
         .onHover { picker.hovering = $0 }
+        // TASK-119: ⌘/⇧-klik zaznacza; zwykły klik dalej zaznacza tekst.
+        .simultaneousGesture(TapGesture().modifiers(.command).onEnded { onSelect?(true, false) })
+        .simultaneousGesture(TapGesture().modifiers(.shift).onEnded { onSelect?(false, true) })
+        .contextMenu {
+            if let onDelete { Button(deleteTitle, action: onDelete) }
+            if let onRestore { Button(String(localized: "Restore"), action: onRestore) }
+        }
         // Ikony są tylko na hover — VoiceOver i klawiatura dostają te same akcje nazwane na wierszu.
         .accessibilityAction(named: isPlaying ? "Pause" : "Play segment") { if deletedHelp == nil { onJump() } }
-        .accessibilityActions { if let onStartEdit { Button("Edit transcript", action: onStartEdit) } }
+        .accessibilityActions {
+            if let onStartEdit { Button("Edit transcript", action: onStartEdit) }
+            if let onDelete { Button(deleteTitle, action: onDelete) }
+            if let onRestore { Button(String(localized: "Restore"), action: onRestore) }
+        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var deleteTitle: String {
+        deleteCount > 1 ? String.localizedStringWithFormat(NSLocalizedString("Delete %lld segments", comment: ""), Int64(deleteCount))
+            : String(localized: "Delete segment")
     }
 
     /// Stała szerokość: pojawienie się ikon na hover nie przesuwa tekstu.
@@ -423,10 +455,15 @@ struct UtteranceRow: View {
                     .help("Edit transcript")
                     .accessibilityLabel("Edit transcript")
             }
+            if let onDelete, draft == nil {
+                Button(action: onDelete) { Image(systemName: "trash") }
+                    .help(deleteTitle)
+                    .accessibilityLabel(deleteTitle)
+            }
         }
         .buttonStyle(.plain)
         .font(.system(size: 12)).foregroundStyle(.mnText2)
-        .frame(width: 44, alignment: .trailing)
+        .frame(width: 64, alignment: .trailing)
         .opacity(picker.hovering || isPlaying ? 1 : 0)
         .allowsHitTesting(picker.hovering || isPlaying)
     }

@@ -19,8 +19,29 @@ public struct TranscriptEdits: Codable, Equatable, Sendable {
         }
     }
 
+    /// Ukryta wypowiedź (TASK-119): mówca + początek, bez indeksu — przeżywa przesunięcie indeksów (Retry Failed Parts,
+    /// korekta z inną liczbą wypowiedzi). Ten sam mówca i ten sam `start` to ten sam fragment audio, więc duplikaty znikają razem.
+    public struct Hidden: Codable, Equatable, Sendable {
+        public var speaker: Speaker
+        public var start: Double
+        public init(speaker: Speaker, start: Double) {
+            self.speaker = speaker
+            self.start = start
+        }
+        public init(_ u: Utterance) { self.init(speaker: u.speaker, start: u.start) }
+        func matches(_ u: Utterance) -> Bool { u.speaker == speaker && abs(u.start - start) < 0.001 }
+    }
+
     public var edits: [Edit]
-    public init(edits: [Edit] = []) { self.edits = edits }
+    /// Opcjonalne: pliki sprzed TASK-119 go nie mają.
+    public var hidden: [Hidden]?
+    /// Ostatnie ukrycie albo przywrócenie — notatka starsza od tej chwili mogła powstać z ukrytym tekstem.
+    public var hiddenChangedAt: Date?
+    public init(edits: [Edit] = [], hidden: [Hidden]? = nil, hiddenChangedAt: Date? = nil) {
+        self.edits = edits
+        self.hidden = hidden
+        self.hiddenChangedAt = hiddenChangedAt
+    }
 
     /// Do wyświetlania: brak albo uszkodzony plik = brak poprawek (nie blokuje otwarcia spotkania).
     public static func load(run: RunDirectory) -> TranscriptEdits? { (try? loadForEditing(run: run)) ?? nil }
@@ -48,6 +69,31 @@ public struct TranscriptEdits: Codable, Equatable, Sendable {
         if new != original.trimmingCharacters(in: .whitespacesAndNewlines) {
             result.edits.append(Edit(index: index, speaker: u.speaker, start: u.start, text: new))
         }
+        return result
+    }
+
+    /// Oznacza ukryte wypowiedzi (`Utterance.hidden`) — niezależnie od liczby wypowiedzi, bo klucz nie ma indeksu.
+    public func markingHidden(_ t: Transcript) -> Transcript {
+        guard let hidden, !hidden.isEmpty else { return t }
+        var result = t
+        for i in result.utterances.indices where hidden.contains(where: { $0.matches(result.utterances[i]) }) {
+            result.utterances[i].hidden = true
+        }
+        return result
+    }
+
+    public func isHidden(_ u: Utterance) -> Bool { hidden?.contains { $0.matches(u) } ?? false }
+
+    /// Ukrywa (`on`) albo przywraca wypowiedzi; bez duplikatów, pusta lista = `nil`.
+    public func settingHidden(_ keys: [Hidden], _ on: Bool, now: Date = Date()) -> TranscriptEdits {
+        var list = hidden ?? []
+        for k in keys {
+            list.removeAll { $0.speaker == k.speaker && abs($0.start - k.start) < 0.001 }
+            if on { list.append(k) }
+        }
+        var result = self
+        result.hidden = list.isEmpty ? nil : list
+        if result.hidden != hidden { result.hiddenChangedAt = now }
         return result
     }
 

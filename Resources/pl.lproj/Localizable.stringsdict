@@ -502,5 +502,65 @@
 			<string>%lld sugestii do słownika z tego spotkania</string>
 		</dict>
 	</dict>
+	<key>%lld selected</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Zaznaczono %lld wypowiedź</string>
+			<key>few</key>
+			<string>Zaznaczono %lld wypowiedzi</string>
+			<key>many</key>
+			<string>Zaznaczono %lld wypowiedzi</string>
+			<key>other</key>
+			<string>Zaznaczono %lld wypowiedzi</string>
+		</dict>
+	</dict>
+	<key>Deleted %lld segments</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Usunięto %lld wypowiedź</string>
+			<key>few</key>
+			<string>Usunięto %lld wypowiedzi</string>
+			<key>many</key>
+			<string>Usunięto %lld wypowiedzi</string>
+			<key>other</key>
+			<string>Usunięto %lld wypowiedzi</string>
+		</dict>
+	</dict>
+	<key>Delete %lld segments</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>Usuń %lld wypowiedź</string>
+			<key>few</key>
+			<string>Usuń %lld wypowiedzi</string>
+			<key>many</key>
+			<string>Usuń %lld wypowiedzi</string>
+			<key>other</key>
+			<string>Usuń %lld wypowiedzi</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

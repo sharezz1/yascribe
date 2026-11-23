@@ -36,6 +36,35 @@ final class MeetingViewState: ObservableObject {
     var summaryCorrected: Bool { summaryUseCorrected ?? useCorrected }
     /// Jedyny otwarty edytor segmentu (TASK-109): przebieg i indeks z chwili otwarcia — szkic nie trafi do innego przebiegu.
     @Published var segmentDraft: SegmentDraft?
+    /// TASK-119: zaznaczone wiersze (indeksy w `utterances`) tego przebiegu i wersji; kotwica ⇧-kliku.
+    @Published var selection = Set<Int>()
+    @Published var selectionAnchor: Int?
+    @Published var selectionScope: SelectionScope?
+    @Published var showHidden = false
+    /// Ostatnio ukryte wypowiedzi — pasek „Undo”.
+    @Published var lastHidden: HiddenUndo?
+
+    struct SelectionScope: Equatable { var runID: String; var corrected: Bool }
+    struct HiddenUndo: Equatable { var runID: String; var keys: [TranscriptEdits.Hidden] }
+
+    /// Zaznaczenie z innego przebiegu albo wersji (inne indeksy) nie obowiązuje.
+    func selected(runID: String?, corrected: Bool) -> Set<Int> {
+        selectionScope == runID.map { SelectionScope(runID: $0, corrected: corrected) } ? selection : []
+    }
+
+    /// ⌘-klik przełącza wiersz, ⇧-klik zaznacza zakres od kotwicy po widocznych wierszach (`visible` w kolejności listy).
+    func click(_ index: Int, command: Bool, shift: Bool, runID: String, corrected: Bool, visible: [Int]) {
+        let scope = SelectionScope(runID: runID, corrected: corrected)
+        if selectionScope != scope { selection = []; selectionAnchor = nil; selectionScope = scope }
+        if shift, let anchor = selectionAnchor, let a = visible.firstIndex(of: anchor), let b = visible.firstIndex(of: index) {
+            selection.formUnion(visible[min(a, b)...max(a, b)])
+        } else if command || shift {
+            if selection.remove(index) == nil { selection.insert(index) }
+            selectionAnchor = index
+        }
+    }
+
+    func clearSelection() { selection = []; selectionAnchor = nil; selectionScope = nil }
 }
 
 /// `corrected` i `initial` z chwili otwarcia: przełączenie wersji w trakcie edycji nie zmienia celu zapisu.
@@ -230,6 +259,7 @@ struct TranscriptTab: View {
                 StateLabel(.progress(nil), String(localized: "Transcribing again…"))
             }
             attemptBanner
+            hiddenBar
             if item.transcript != nil, item.corrected != nil {
                 FieldMenu(label: String(localized: "Version"), value: state.useCorrected ? String(localized: "Corrected") : String(localized: "Original"), width: 120) {
                     Picker("Version", selection: $state.useCorrected) {
@@ -302,7 +332,10 @@ struct TranscriptTab: View {
 
     // Nadpisanie per spotkanie (chip modelu) wygrywa z presetem, tak jak przy samej korekcie.
     private var modelName: String? { model.notes.correctionAssignment(for: item)?.model }
-    private var shown: Transcript? { model.transcript(of: item, corrected: state.useCorrected) }
+    /// Pełny transkrypt (z ukrytymi, TASK-119): indeksy ▶/✎ to pozycje w `utterances`; ukryte wiersze pokazuje tylko „Show deleted”.
+    private var shown: Transcript? { model.transcript(of: item, corrected: state.useCorrected, includeHidden: true) }
+    private var selected: Set<Int> { state.selected(runID: item.runID, corrected: state.useCorrected) }
+    private var canHide: Bool { item.runID != nil && !moving }
     /// Przebieg w Auto: jedyna flaga to „obcy alfabet" (T1), więc etykieta mówi to wprost. Z migawki przebiegu (I2).
     private var isAuto: Bool { model.runLanguage(item).isAuto }
 
@@ -320,10 +353,13 @@ struct TranscriptTab: View {
                         .padding(.bottom, 8)
                 }
                 Rectangle().fill(.mnLine2).frame(height: 0.5)
-                ForEach(Array(Self.lines(t, item: item).enumerated()), id: \.offset) { i, line in
+                let lines = Self.lines(t, item: item, showHidden: state.showHidden)
+                let visible = lines.compactMap { if case .utterance(let i, _) = $0 { i } else { nil } }
+                ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
-                    case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""], edited: edited.contains(index))
+                    case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""], edited: edited.contains(index), in: t,
+                                                           visible: visible)
                     case .mute(let m): MuteRow(note: m)
                     }
                 }
@@ -363,7 +399,7 @@ struct TranscriptTab: View {
         }
     }
 
-    private func row(_ index: Int, _ u: Utterance, number: Int?, edited: Bool) -> UtteranceRow {
+    private func row(_ index: Int, _ u: Utterance, number: Int?, edited: Bool, in t: Transcript, visible: [Int]) -> UtteranceRow {
         // Jeden szkic naraz: otwarty edytor wyłącza pozostałe ołówki (niezapisany szkic nie znika).
         var startEdit: (() -> Void)?
         let corrected = state.useCorrected
@@ -376,9 +412,66 @@ struct TranscriptTab: View {
             }
         }
         let onSave: (() -> Void)? = moving ? nil : { save() }
-        return UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
-                            isEdited: edited, draft: draft(index), onStartEdit: startEdit, onSave: onSave,
-                            onCancel: { state.segmentDraft = nil }, onJump: { onJump(index, u) })
+        let hidden = u.hidden == true
+        // Usunięcie wiersza z zaznaczenia usuwa całe zaznaczenie; inaczej tylko ten wiersz.
+        let targets = selected.contains(index) ? selected.sorted() : [index]
+        var row = UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
+                               isEdited: edited, draft: draft(index), onStartEdit: hidden ? nil : startEdit, onSave: onSave,
+                               onCancel: { state.segmentDraft = nil }, onJump: { onJump(index, u) })
+        row.isSelected = selected.contains(index)
+        if canHide, let runID = item.runID {
+            if hidden {
+                row.onRestore = { setHidden([index], in: t, false) }
+            } else {
+                row.deleteCount = targets.count
+                row.onDelete = { setHidden(targets, in: t, true) }
+                row.onSelect = { command, shift in
+                    state.click(index, command: command, shift: shift, runID: runID, corrected: state.useCorrected, visible: visible)
+                }
+            }
+        }
+        return row
+    }
+
+    /// Ukrycie (TASK-119) po mówcy i początku z pełnego transkryptu tej wersji; po sukcesie pasek „Undo”.
+    private func setHidden(_ indices: [Int], in t: Transcript, _ on: Bool) {
+        guard let runID = item.runID else { return }
+        let keys = indices.filter(t.utterances.indices.contains).map { TranscriptEdits.Hidden(t.utterances[$0]) }
+        guard model.setHidden(item, runID: runID, keys: keys, hidden: on) else { return }
+        if on {
+            state.lastHidden = .init(runID: runID, keys: keys)
+            state.clearSelection()
+        } else {
+            state.lastHidden = nil
+        }
+    }
+
+    /// Pasek zaznaczenia, „Undo” po usunięciu i przełącznik „Show deleted”.
+    @ViewBuilder private var hiddenBar: some View {
+        if let t = shown {
+            let count = t.utterances.filter { $0.hidden == true }.count
+            if !selected.isEmpty, canHide {
+                HStack(spacing: 8) {
+                    Text(String.localizedStringWithFormat(NSLocalizedString("%lld selected", comment: ""), Int64(selected.count)))
+                        .font(.callout).foregroundStyle(.mnText2)
+                    Button(String(localized: "Delete")) { setHidden(selected.sorted(), in: t, true) }.buttonStyle(.pillSmall)
+                    Button(String(localized: "Cancel")) { state.clearSelection() }.buttonStyle(.pillSmall)
+                }
+            }
+            if let undo = state.lastHidden, undo.runID == item.runID, canHide {
+                HStack(spacing: 8) {
+                    StateLabel(.neutral, String.localizedStringWithFormat(NSLocalizedString("Deleted %lld segments", comment: ""), Int64(undo.keys.count)))
+                    LinkButton(String(localized: "Undo")) {
+                        if let runID = item.runID, model.setHidden(item, runID: runID, keys: undo.keys, hidden: false) { state.lastHidden = nil }
+                    }
+                }
+            }
+            if count > 0 {
+                Toggle(String.localizedStringWithFormat(NSLocalizedString("Show deleted (%lld)", comment: ""), Int64(count)), isOn: $state.showHidden)
+                    .toggleStyle(.checkbox).font(.callout)
+                    .help("Deleted segments stay out of notes, search, copy and the agent tools")
+            }
+        }
     }
 
     /// Szkic tylko w wierszu, dla którego go otwarto, i tylko w tym samym przebiegu.
@@ -403,10 +496,11 @@ struct TranscriptTab: View {
     enum Line { case utterance(Int, Utterance), mute(MuteNote) }
 
     /// Wypowiedzi z liniami wyciszenia („Microphone muted 0:05–0:12", macos.md §11.5) w kolejności czasu.
-    static func lines(_ t: Transcript, item: SessionItem) -> [Line] {
-        MeetingArchive.lines(t, summary: item.summary).map { line in
+    /// Ukryte wypowiedzi (TASK-119) tylko z „Show deleted”.
+    static func lines(_ t: Transcript, item: SessionItem, showHidden: Bool = false) -> [Line] {
+        MeetingArchive.lines(t, summary: item.summary).compactMap { line in
             switch line {
-            case .utterance(let i, let u): .utterance(i, u)
+            case .utterance(let i, let u): showHidden || u.hidden != true ? .utterance(i, u) : nil
             case .mute(let m): .mute(m)
             }
         }
@@ -470,6 +564,13 @@ struct SummaryTab: View {
         // Linie stanu (postęp + Cancel, błąd) przypięte nad notatką, żeby nie znikały po przewinięciu (TASK-90).
         PinnedBarPage(spacing: 12) {
             if gen == .generating { generatingRow }
+            // TASK-119: notatka mogła powstać z tekstem, który użytkownik potem ukrył (albo bez przywróconego).
+            if item.notesPredateHiding, gen != .generating {
+                HStack(spacing: 8) {
+                    StateLabel(.neutral, String(localized: "Notes were generated before segments were deleted or restored."))
+                    LinkButton(String(localized: "Regenerate…")) { state.modelsSheet = true }
+                }
+            }
             if correcting, gen != .generating, hasText {
                 Text("Generate notes once the transcript has been improved.").font(.callout).foregroundStyle(.mnText2)
             }
