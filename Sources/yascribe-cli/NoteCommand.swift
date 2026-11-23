@@ -21,9 +21,10 @@ extension CLI {
         let sessionURL = runURL.deletingLastPathComponent().deletingLastPathComponent()
         // Ręczne poprawki z aplikacji (TASK-109) — ta sama nakładka co w notatce aplikacji, gdy indeksy pasują.
         // Z katalogu podanego w argumencie, jak oba transkrypty (także kopia przebiegu poza `runs/`).
-        if let edits = (try? JSONFile.load(TranscriptEdits?.self, from: runURL.appendingPathComponent("edits.json"), default: nil)) ?? nil,
-           transcript.utterances.count == raw.utterances.count {
-            transcript = edits.apply(to: transcript)
+        // Ukryte wypowiedzi (TASK-119) wypadają zawsze — klucz bez indeksu, więc także przy innej liczbie wypowiedzi.
+        if let edits = (try? JSONFile.load(TranscriptEdits?.self, from: runURL.appendingPathComponent("edits.json"), default: nil)) ?? nil {
+            if transcript.utterances.count == raw.utterances.count { transcript = edits.apply(to: transcript) }
+            transcript = edits.markingHidden(transcript).withoutHidden()
         }
         let speakers = SpeakerDiarization.load(run: RunDirectory(session: sessionURL, runID: runURL.lastPathComponent),
             acceptedPins: SpeakerDiarization.knownPins(localPin: DiarizerManifest.pin), currentAudioFingerprint: SpeakerDiarization.audioFingerprint(session: sessionURL))

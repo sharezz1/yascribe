@@ -106,3 +106,21 @@ private func archiveSpeakers(names: [String: String]? = ["voice": "Anna"]) -> Sp
     let shorter = CorrectedTranscript(transcript: transcript([utt("poprawiony", .them, at: 1)]), model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
     #expect(MeetingArchive.source(raw: raw, corrected: shorter, edits: edits, useCorrected: true)?.utterances[0].text == "poprawiony")
 }
+
+// TASK-119: `source` domyślnie wycina ukryte (każdy konsument poza widokiem), `includeHidden` zostawia je oznaczone.
+@Test func archiveSourceDropsHiddenByDefaultInBothVersions() {
+    let raw = transcript([utt("tlo", .me, at: 1), utt("drugi", .them, at: 5)])
+    let corrected = CorrectedTranscript(transcript: transcript([utt("Tło.", .me, at: 1), utt("Drugi.", .them, at: 5), utt("nowy", .them, at: 7)]),
+                                        model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
+    let edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 1)])
+    for useCorrected in [true, false] {
+        let shown = MeetingArchive.source(raw: raw, corrected: corrected, edits: edits, useCorrected: useCorrected)
+        #expect(shown?.utterances.contains { $0.speaker == .me } == false)
+        let full = MeetingArchive.source(raw: raw, corrected: corrected, edits: edits, useCorrected: useCorrected, includeHidden: true)
+        #expect(full?.utterances.first?.hidden == true)
+        #expect(full?.utterances.count == (useCorrected ? 3 : 2))
+        let display = MeetingArchive.displayTranscript(raw: raw, corrected: corrected, edits: edits, useCorrected: useCorrected,
+                                                       rules: ReplacementRules(UserDictionary()), speakers: nil)
+        #expect(display.map { MeetingArchive.copyLines($0, summary: nil) }?.contains { $0.lowercased().contains("tł") || $0.contains("tlo") } == false)
+    }
+}

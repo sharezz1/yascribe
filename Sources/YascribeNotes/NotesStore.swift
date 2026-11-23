@@ -19,6 +19,8 @@ public struct NoteSummary: Codable, Equatable, Sendable {
     public var speakers: [String: String]?
     /// `SpeakerDiarization.segmentsDigest` z chwili generowania; inny (ponowne wykrycie) = znaczniki bez imion.
     public var speakersDigest: String?
+    /// `TranscriptEdits.hiddenDigest` z chwili wzięcia transkryptu (TASK-119); inny niż bieżący = notatka z innym zbiorem ukryć.
+    public var hiddenDigest: String?
 
     public init(title: String?, markdown: String, templateID: String, model: String, context: String, generatedAt: Date,
                 condensedParts: Int? = nil, prompt: PromptTrace? = nil, unverifiedNumbers: [String]? = nil,

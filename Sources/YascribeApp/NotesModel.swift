@@ -232,7 +232,9 @@ final class NotesModel {
         // nie miesza wersji wejścia i polecenia. Uczestnicy z `meta.json` teraz, więc późne powiązanie wydarzenia też się liczy.
         let dict = dictionary(), rules = replacementRules(), prompts = prompts()
         let link = store(sessionURL).readMeta().calendarEvent
-        let input = Replacement.apply(transcript, rules: rules)
+        // Ukryte wypowiedzi (TASK-119) z bieżącego `edits.json`: Corrector pomija `excludedFromNotes`, ich tekst nie idzie do modelu
+        // i zostaje surowy w `corrected.json` pod tym samym indeksem.
+        let input = Replacement.apply(Self.markingHidden(transcript, session: sessionURL, runID: runID), rules: rules)
         correctionFailure[id] = nil
         onChange()
         let limits = ChatLimits.for(client.provider, call: .correctionBatch)
@@ -276,6 +278,12 @@ final class NotesModel {
         return transcript
     }
 
+    /// Ukrycia z `edits.json` przebiegu nałożone jako flaga (indeksy bez zmian); brak albo uszkodzony plik = bez ukryć.
+    nonisolated static func markingHidden(_ t: Transcript, session: URL, runID: String) -> Transcript {
+        guard RunDirectory.isValid(runID: runID) else { return t }
+        return TranscriptEdits.load(run: RunDirectory(session: session, runID: runID))?.markingHidden(t) ?? t
+    }
+
     // MARK: Notatka na żądanie
 
     /// `draft == nil` = model zapisany przy sesji (pasek); inaczej dokładnie szkic z okna, zapisany przed startem. `true` = wystartowało.
@@ -316,6 +324,7 @@ final class NotesModel {
         generator.rulesBody = prompts.body(.summary)
         generator.promptTrace = prompts.trace(.summary)
         generator.speakersDigest = item.speakers?.segmentsDigest
+        generator.hiddenDigest = item.edits?.hiddenDigest // ta sama migawka co `source` wyżej
         // Język notatki z presetu NAGRANIA (jego język i „Notes language"), także gdy model pochodzi z innego presetu.
         let language = presetFor(item.url)?.effectiveNotesLanguage
         let session = item.url
@@ -409,12 +418,15 @@ final class NotesModel {
             }.value
             guard RunSelection.shouldPostProcess(session: sessionURL, runID: runID) else { return }
             let corrected = CorrectedTranscript.load(session: sessionURL, runID: runID)?.transcript
+            // Wznowienie w tym samym przebiegu ma już `edits.json`: ukryte wypowiedzi (TASK-119) nie idą do tytułu ani Overview.
+            // Tylko tekst dla modelu — odciski i `sourceIsCurrent` porównują pliki bez flagi.
+            let hide = { (t: Transcript) in Self.markingHidden(t, session: sessionURL, runID: runID) }
             let ticket = titles.start(session: id, runID: runID)
             onChange()
             let limits = ChatLimits.for(client.provider, call: .title)
             // Tytuł z tekstu po Replacement — także bez korekty w presecie i po jej porażce (wtedy `working` jest surowy).
             _ = await AutoTitle.generate(client: client, model: choice.assignment.model,
-                                         transcript: Replacement.apply(working, rules: replacementRules()).withSpeakerLabels(speakers),
+                                         transcript: Replacement.apply(hide(working), rules: replacementRules()).withSpeakerLabels(speakers),
                                          notesLanguage: snapshot.preset.effectiveNotesLanguage,
                                          store: store(sessionURL), timeout: limits.soft, chatTimeout: limits.transport,
                                          maxTokens: limits.maxTokens,
@@ -422,9 +434,9 @@ final class NotesModel {
                                          onProblem: { [weak self] msg in Task { @MainActor in self?.report(msg) } })
             if RunSelection.shouldPostProcess(session: sessionURL, runID: runID) {
                 let ok = await Overview.generate(client: client, model: choice.assignment.model,
-                    transcript: Replacement.apply(corrected ?? transcript, rules: replacementRules()).withSpeakerLabels(speakers),
-                    notesLanguage: snapshot.preset.effectiveNotesLanguage, store: store(sessionURL), runID: runID, sourceTranscript: transcript,
-                    correctedTranscript: corrected,
+                    transcript: Replacement.apply(hide(corrected ?? transcript), rules: replacementRules()).withSpeakerLabels(speakers),
+                    notesLanguage: snapshot.preset.effectiveNotesLanguage, store: store(sessionURL), runID: runID,
+                    sourceTranscript: hide(transcript).withoutHidden(), correctedTranscript: corrected.map { hide($0).withoutHidden() },
                     timeout: limits.soft, chatTimeout: limits.transport, maxTokens: limits.maxTokens,
                     stillCurrent: { Overview.sourceIsCurrent(session: sessionURL, runID: runID, transcript: transcript, correctedTranscript: corrected) })
                 if !ok { overviewFailure.insert(id) } else { overviewFailure.remove(id) }
@@ -446,10 +458,13 @@ final class NotesModel {
         let language = (item.runSnapshot?.preset ?? presetFor(item.url))?.effectiveNotesLanguage
         let text = Replacement.apply(transcript, rules: replacementRules()).withSpeakerLabels(item.speakers)
         let corrected = item.corrected?.transcript
+        // Odcisk bez ukrytych wypowiedzi (TASK-119), `stillCurrent` na plikach.
+        let basis = MeetingArchive.overviewBasis(raw: source, corrected: corrected, edits: item.edits)
         onChange()
         Task {
             let ok = await Overview.generate(client: client, model: choice.assignment.model, transcript: text,
-                notesLanguage: language, store: store(item.url), runID: runID, sourceTranscript: source, correctedTranscript: corrected, timeout: limits.soft,
+                notesLanguage: language, store: store(item.url), runID: runID, sourceTranscript: basis.raw ?? source,
+                correctedTranscript: basis.corrected, timeout: limits.soft,
                 chatTimeout: limits.transport, maxTokens: limits.maxTokens,
                 stillCurrent: { Overview.sourceIsCurrent(session: item.url, runID: runID, transcript: source, correctedTranscript: corrected) })
             let outcome = titles.finish(ticket)

@@ -340,6 +340,20 @@ enum Snapshots {
                             var gone = edited; gone.audioDeletedAfterDays = 30
                             return ScrollView { TranscriptTab(state: transcriptView, item: gone, playing: 0) { _, _ in }.padding(20) }
                         }
+                        // TASK-119: zaznaczone wiersze (pasek „N selected”), „Undo” po usunięciu, „Show deleted” z „Restore”, komunikat w Summary.
+                        var hidden = picked
+                        hidden.edits = TranscriptEdits(hidden: [.init(t.utterances[0])])
+                        let selecting = MeetingViewState(); selecting.tab = .transcript
+                        selecting.click(1, command: true, shift: false, runID: "snapshot-run", corrected: true, visible: [1, 2, 3])
+                        selecting.click(2, command: false, shift: true, runID: "snapshot-run", corrected: true, visible: [1, 2, 3])
+                        selecting.lastHidden = .init(runID: "snapshot-run", keys: [.init(t.utterances[0])])
+                        try render("meeting-transcript-hide-selected", size: CGSize(width: 900, height: 480), dark: dark, model: model) { MeetingDetailView(item: hidden, state: selecting) }
+                        let showing = MeetingViewState(); showing.tab = .transcript; showing.showHidden = true
+                        try render("meeting-transcript-hidden-shown", size: CGSize(width: 900, height: 480), dark: dark, model: model) { MeetingDetailView(item: hidden, state: showing) }
+                        var staleNotes = hidden
+                        staleNotes.notes.summary = withNotes.notes.summary
+                        staleNotes.notes.summary?.generatedAt = Date(timeIntervalSinceNow: -3600)
+                        try render("meeting-summary-hidden-stale", size: CGSize(width: 900, height: 480), dark: dark, model: model) { MeetingDetailView(item: staleNotes, state: summaryTab) }
                         // F6 (D13): pierwsza próba bez transkryptu — w stanie „No transcript yet" także „Transcribe again…".
                         var noTranscript = picked
                         noTranscript.transcript = nil; noTranscript.corrected = nil; noTranscript.latestAttemptID = "snapshot-run-2"

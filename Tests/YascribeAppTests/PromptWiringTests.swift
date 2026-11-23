@@ -79,4 +79,18 @@ private final class EchoHTTP: HTTPClient, @unchecked Sendable {
         #expect(http.systems.contains { $0.contains("- Write like a pirate.") && !$0.contains("Be concrete") })
         #expect((try NotesStore(session: session).readSummary())?.prompt == PromptTrace(source: .custom, text: "- Write like a pirate."))
     }
+
+    /// TASK-119: notatka zapisuje stan ukryć z chwili wzięcia transkryptu — ukrycie później (także w trakcie) = nieaktualna.
+    @Test func summaryRecordsTheHidingStateOfItsTranscript() async throws {
+        try FileManager.default.createDirectory(at: session, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: session) }
+        let model = makeModel(PromptOverrides())
+        var item = SessionItem(url: session, startedAt: Date(), transcript: text, runID: "run")
+        item.edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 99.0004)])
+        #expect(model.generate(item: item, useCorrected: false, template: Template.builtIns[0], context: "", draft: .preset))
+        try await waitUntil { model.state(item.id) != .generating }
+        let saved = try #require(try NotesStore(session: session).readSummary())
+        #expect(!MeetingArchive.notesPredateHiding(summary: saved, edits: item.edits))
+        #expect(MeetingArchive.notesPredateHiding(summary: saved, edits: item.edits?.settingHidden([.init(speaker: .me, start: 5)], true)))
+    }
 }

@@ -88,7 +88,8 @@ public enum AliasSuggestions {
             if Task.isCancelled { return [] }
             let raw = source.raw.utterances, fixed = source.corrected.transcript.utterances
             guard !source.corrected.failedCompletely, raw.count == fixed.count else { continue }
-            for (r, f) in zip(raw, fixed) {
+            // Wypowiedź wyłączona z notatek (ukryta przez użytkownika, echo, zły język) nie idzie do korektora — żadnej różnicy w niej nie liczymy.
+            for (r, f) in zip(raw, fixed) where !r.excludedFromNotes && !f.excludedFromNotes {
                 // Korektor dostał tekst po Replacement (NotesModel): pary pokryte już Aliasem nie są różnicą.
                 let o = words(rules.apply(to: r.text)), c = words(f.text)
                 let ok = o.map(CorrectionGuard.key), ck = c.map(CorrectionGuard.key)

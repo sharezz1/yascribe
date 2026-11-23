@@ -523,6 +523,47 @@ private func snapshot(_ url: URL) throws -> [String: String] {
     #expect(try call(server, "get_transcript", ["id": "edycja", "version": "original"]).text.contains("Them: dobre słowo"))
 }
 
+// TASK-119: ukryta wypowiedź (rozmowa z tła) nie wychodzi przez MCP — ani w transkrypcie, ani w wyszukiwaniu.
+@Test func hiddenUtterancesNeverLeaveThroughMCP() throws {
+    let paths = try dataDir()
+    defer { try? FileManager.default.removeItem(at: paths.root) }
+    try saveSettings(paths) { $0.agentAccess = true }
+    let session = try makeSession(paths, id: "tlo", raw: [utt("hintergrund gerede", .me, at: 1), utt("właściwa treść", .them, at: 3)],
+                                  corrected: [utt("Hintergrund Gerede.", .me, at: 1), utt("Właściwa treść.", .them, at: 3)])
+    try TranscriptEdits(hidden: [.init(speaker: .me, start: 1)]).save(run: RunDirectory(session: session, runID: runID))
+    let server = MCPServer(paths: paths, version: "test")
+    for version in ["corrected", "original"] {
+        let text = try call(server, "get_transcript", ["id": "tlo", "version": version]).text
+        #expect(!text.lowercased().contains("hintergrund"))
+        #expect(text.lowercased().contains("właściwa treść"))
+        #expect(text.contains("Lines 1–1 of 1"))
+    }
+    let meeting = try call(server, "get_meeting", ["id": "tlo", "include_transcript": true]).text
+    #expect(!meeting.lowercased().contains("hintergrund"))
+    #expect(meeting.contains("Właściwa treść."))
+    #expect(!meeting.contains("Generated before transcript segments were deleted"))
+    let hit = try json(try call(server, "list_meetings", ["query": "Gerede"]).text)
+    #expect(hit["total"] as? Int == 0)
+    #expect(try json(try call(server, "list_meetings", ["query": "Właściwa"]).text)["total"] as? Int == 1)
+}
+
+// TASK-119: notatka sprzed ukrycia (inny stan ukryć) dostaje w get_meeting ostrzeżenie; zgodna — nie.
+@Test func getMeetingWarnsWhenSummaryPredatesHiding() throws {
+    let paths = try dataDir()
+    defer { try? FileManager.default.removeItem(at: paths.root) }
+    try saveSettings(paths) { $0.agentAccess = true }
+    let edits = TranscriptEdits(hidden: [.init(speaker: .me, start: 1)])
+    let stale = try makeSession(paths, id: "stara", raw: [utt("tlo", .me, at: 1)], noteSummary: noteSummary("stara notatka"))
+    try edits.save(run: RunDirectory(session: stale, runID: runID))
+    var current = noteSummary("nowa notatka")
+    current.hiddenDigest = edits.hiddenDigest
+    let fresh = try makeSession(paths, id: "nowa", raw: [utt("tlo", .me, at: 1)], noteSummary: current)
+    try edits.save(run: RunDirectory(session: fresh, runID: runID))
+    let server = MCPServer(paths: paths, version: "test")
+    #expect(try call(server, "get_meeting", ["id": "stara"]).text.contains("Generated before transcript segments were deleted"))
+    #expect(!(try call(server, "get_meeting", ["id": "nowa"]).text.contains("Generated before transcript segments were deleted")))
+}
+
 // MARK: - get_meeting
 
 @Test func getMeetingRendersMarkdownWithResolvedSpeakersAndTruncates() throws {

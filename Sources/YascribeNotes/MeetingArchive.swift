@@ -37,19 +37,37 @@ public enum MeetingArchive {
 
     /// Wersja przed Replacement: poprawiona, gdy jest i użytkownik jej nie wyłączył; ręczne poprawki (`edits.json`,
     /// TASK-109) w obu wersjach. Korekta z inną liczbą wypowiedzi niż surowy (Retry Failed Parts po korekcie): indeksy
-    /// nie pasują, więc bez poprawek.
+    /// nie pasują, więc bez poprawek. Ukrycia (TASK-119) idą za mówcą i początkiem, więc obowiązują zawsze; domyślnie ukryte
+    /// wypowiedzi są wycięte — tylko widok transkryptu (indeksy ▶/✎, „Show deleted”) prosi o `includeHidden`.
     public static func source(raw: Transcript?, corrected: CorrectedTranscript?, edits: TranscriptEdits?,
-                              useCorrected: Bool) -> Transcript? {
-        guard let base = useCorrected ? (corrected?.transcript ?? raw) : raw else { return nil }
-        guard let edits, base.utterances.count == raw?.utterances.count else { return base }
-        return edits.apply(to: base)
+                              useCorrected: Bool, includeHidden: Bool = false) -> Transcript? {
+        guard var base = useCorrected ? (corrected?.transcript ?? raw) : raw else { return nil }
+        guard let edits else { return base }
+        if base.utterances.count == raw?.utterances.count { base = edits.apply(to: base) }
+        base = edits.markingHidden(base)
+        return includeHidden ? base : base.withoutHidden()
+    }
+
+    /// Podstawa odcisków Overview (TASK-119): surowy i poprawiony bez ukrytych wypowiedzi. Bez ukryć = te same transkrypty co
+    /// dotąd (stare odciski zostają ważne); ukrycie albo przywrócenie zmienia odcisk, więc Overview z ukrytym tekstem nie jest aktualne.
+    public static func overviewBasis(raw: Transcript?, corrected: Transcript?, edits: TranscriptEdits?) -> (raw: Transcript?, corrected: Transcript?) {
+        guard let edits else { return (raw, corrected) }
+        return (raw.map { edits.markingHidden($0).withoutHidden() }, corrected.map { edits.markingHidden($0).withoutHidden() })
+    }
+
+    /// Notatka powstała przy innym zbiorze ukryć niż bieżący (TASK-119): mogła zawierać tekst ukryty później (albo nie mieć
+    /// przywróconego). Zbiór z chwili wzięcia transkryptu, nie czas — ukrycie w trakcie generowania też się liczy, a Undo
+    /// przywracające ten sam zbiór nie daje fałszywego ostrzeżenia. Stare notatki (bez odcisku) = bez ukryć.
+    public static func notesPredateHiding(summary: NoteSummary?, edits: TranscriptEdits?) -> Bool {
+        guard let summary else { return false }
+        return (summary.hiddenDigest ?? "") != (edits?.hiddenDigest ?? "")
     }
 
     /// Transkrypt do wyświetlenia: `source`, potem Replacement i etykiety mówców.
     public static func displayTranscript(raw: Transcript?, corrected: CorrectedTranscript?, edits: TranscriptEdits?,
                                          useCorrected: Bool, rules: ReplacementRules,
-                                         speakers: SpeakerDiarization?) -> Transcript? {
-        source(raw: raw, corrected: corrected, edits: edits, useCorrected: useCorrected)
+                                         speakers: SpeakerDiarization?, includeHidden: Bool = false) -> Transcript? {
+        source(raw: raw, corrected: corrected, edits: edits, useCorrected: useCorrected, includeHidden: includeHidden)
             .map { Replacement.apply($0, rules: rules).withSpeakerLabels(speakers) }
     }
 

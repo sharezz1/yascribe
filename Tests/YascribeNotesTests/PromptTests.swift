@@ -228,18 +228,21 @@ extension VocabularyInPromptTests {
     utterance.echoOfThem = true
     utterance.speakerLabel = "A"
     utterance.speakerKey = "key"
+    utterance.hidden = true // TASK-119: też tylko w pamięci
     let t = transcript([utterance])
     let encoded = try JSONEncoder().encode(t)
     let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
     let fields = try #require((object["utterances"] as? [[String: Any]])?.first)
-    #expect(Set(fields.keys) == Set(Mirror(reflecting: utterance).children.compactMap(\.label)).subtracting(["speakerLabel", "speakerKey"]))
+    #expect(Set(fields.keys) == Set(Mirror(reflecting: utterance).children.compactMap(\.label)).subtracting(["speakerLabel", "speakerKey", "hidden"]))
     #expect(!String(decoding: encoded, as: UTF8.self).contains("speakerLabel"))
+    #expect(!String(decoding: encoded, as: UTF8.self).contains("hidden"))
     let corrected = CorrectedTranscript(transcript: t, model: "test", batches: 1, failedBatches: 0, rejectedLines: 0)
     #expect(!String(decoding: try JSONEncoder().encode(corrected), as: UTF8.self).contains("speakerLabel"))
     let decoded = try JSONDecoder().decode(Transcript.self, from: encoded)
     #expect(decoded.utterances[0].speakerLabel == nil)
     utterance.speakerLabel = nil
     utterance.speakerKey = nil
+    utterance.hidden = nil
     #expect(decoded.utterances[0] == utterance)
 }
 
