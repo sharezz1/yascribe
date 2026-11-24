@@ -28,7 +28,8 @@ public struct TranscriptEdits: Codable, Equatable, Sendable {
             self.speaker = speaker
             self.start = start
         }
-        public init(_ u: Utterance) { self.init(speaker: u.speaker, start: u.start) }
+        /// Część podzielonej wypowiedzi (TASK-127) ukrywa całe źródło: klucz z jego początku.
+        public init(_ u: Utterance) { self.init(speaker: u.speaker, start: u.part?.start ?? u.start) }
         func matches(_ u: Utterance) -> Bool { u.speaker == speaker && abs(u.start - start) < 0.001 }
     }
 

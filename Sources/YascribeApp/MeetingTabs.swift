@@ -360,8 +360,8 @@ struct TranscriptTab: View {
                 ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
-                    case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""], edited: edited.contains(index), in: t,
-                                                           visible: visible)
+                    case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""],
+                                                           edited: edited.contains(u.part?.index ?? index), in: t, visible: visible)
                     case .mute(let m): MuteRow(note: m)
                     }
                 }
@@ -407,10 +407,13 @@ struct TranscriptTab: View {
         let corrected = state.useCorrected
         // Szkic z poprzedniego przebiegu (nowy przebieg został bieżącym) nie blokuje ołówków — nowy go zastępuje.
         let active = state.segmentDraft.map { $0.runID == item.runID } ?? false
-        if let runID = item.runID, !moving, !active, item.canEdit(corrected: corrected) {
+        // Część podzielonej wypowiedzi (TASK-127): edytujemy całe źródło (indeks, początek i tekst z `part`), edytor w pierwszej części.
+        let source = u.part?.index ?? index
+        if let runID = item.runID, !moving, !active, u.isFirstPart, item.canEdit(corrected: corrected) {
+            let text = u.part?.text ?? u.text
             startEdit = {
-                state.segmentDraft = SegmentDraft(runID: runID, index: index, speaker: u.speaker, start: u.start,
-                                                  corrected: corrected, initial: u.text, text: u.text)
+                state.segmentDraft = SegmentDraft(runID: runID, index: source, speaker: u.speaker, start: u.part?.start ?? u.start,
+                                                  corrected: corrected, initial: text, text: text)
             }
         }
         let onSave: (() -> Void)? = moving ? nil : { save() }
@@ -418,7 +421,7 @@ struct TranscriptTab: View {
         // Usunięcie wiersza z zaznaczenia usuwa całe zaznaczenie; inaczej tylko ten wiersz.
         let targets = selected.contains(index) ? selected.sorted() : [index]
         var row = UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
-                               isEdited: edited, draft: draft(index), onStartEdit: hidden ? nil : startEdit, onSave: onSave,
+                               isEdited: edited, draft: u.isFirstPart ? draft(source) : nil, onStartEdit: hidden ? nil : startEdit, onSave: onSave,
                                onCancel: { state.segmentDraft = nil }, onJump: { onJump(index, u) })
         row.isSelected = selected.contains(index)
         if canHide, let runID = item.runID {
@@ -438,7 +441,9 @@ struct TranscriptTab: View {
     /// Ukrycie (TASK-119) po mówcy i początku z pełnego transkryptu tej wersji; po sukcesie pasek „Undo”.
     private func setHidden(_ indices: [Int], in t: Transcript, _ on: Bool) {
         guard let runID = item.runID else { return }
+        // Części jednej wypowiedzi dają ten sam klucz (TASK-127): bez powtórek, by „Deleted N segments” liczyło źródła.
         let keys = indices.filter(t.utterances.indices.contains).map { TranscriptEdits.Hidden(t.utterances[$0]) }
+            .reduce(into: [TranscriptEdits.Hidden]()) { if !$0.contains($1) { $0.append($1) } }
         guard model.setHidden(item, runID: runID, keys: keys, hidden: on) else { return }
         if on {
             state.lastHidden = .init(runID: runID, keys: keys)
@@ -451,7 +456,7 @@ struct TranscriptTab: View {
     /// Pasek zaznaczenia, „Undo” po usunięciu i przełącznik „Show deleted”.
     @ViewBuilder private var hiddenBar: some View {
         if let t = shown {
-            let count = t.utterances.filter { $0.hidden == true }.count
+            let count = t.utterances.filter { $0.hidden == true && $0.isFirstPart }.count
             if !selected.isEmpty, canHide {
                 HStack(spacing: 8) {
                     Text(String.localizedStringWithFormat(NSLocalizedString("%lld selected", comment: ""), Int64(selected.count)))

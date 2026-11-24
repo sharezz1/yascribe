@@ -33,13 +33,31 @@ public struct Utterance: Codable, Equatable, Sendable {
     public var speakerKey: String? = nil
     /// Ukryta przez użytkownika (TASK-119): tylko w pamięci, nadawana z `edits.json` (`TranscriptEdits.markingHidden`).
     public var hidden: Bool? = nil
+    /// Część wypowiedzi podzielonej na granicy mówców (TASK-127): tylko w pamięci, nadawana w `withSpeakerLabels`.
+    public var part: UtterancePart? = nil
 
     enum CodingKeys: String, CodingKey {
         case speaker, start, end, text, words, approximateTiming, languageMismatch, echoOfThem
     }
 
+    /// Pierwsza (albo jedyna) część wypowiedzi źródłowej: tu edytor i licznik ukrytych.
+    public var isFirstPart: Bool { part.map { abs($0.start - start) < 0.001 } ?? true }
+
     /// Oznaczona wypowiedź (zły język, echo albo ukryta przez użytkownika) nie trafia do notatki ani do korekty.
     public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true || hidden == true }
+}
+
+/// Wypowiedź źródłowa części (TASK-127): poprawki (`edits.json`) i ukrycia idą po niej, nie po części.
+public struct UtterancePart: Equatable, Sendable {
+    /// Pozycja w `utterances` przed podziałem.
+    public var index: Int
+    public var start: Double
+    public var text: String
+    public init(index: Int, start: Double, text: String) {
+        self.index = index
+        self.start = start
+        self.text = text
+    }
 }
 
 public struct ChunkFailure: Codable, Equatable, Sendable {
