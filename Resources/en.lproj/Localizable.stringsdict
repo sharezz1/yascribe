@@ -450,5 +450,21 @@
 			<string>Delete %lld segments</string>
 		</dict>
 	</dict>
+	<key>%lld samples</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@count@</string>
+		<key>count</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld sample</string>
+			<key>other</key>
+			<string>%lld samples</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

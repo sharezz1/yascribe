@@ -176,6 +176,7 @@ struct MeetingDetailView: View {
                 .fixedSize()
                 .help("More").accessibilityLabel("More")
                 .modifier(SpeakerMenuDialogs(support: model.speakerModel, state: speakerMenu, item: item))
+                .modifier(VoiceConsentAlert())
             }
             HStack(spacing: 12) {
                 MetaLine([
@@ -365,13 +366,20 @@ struct UtteranceRow: View {
                 .accessibilityLabel("Play segment from \(MeetingDetailView.time(utterance.start))")
             Group {
                 if utterance.speaker == .them, let key = utterance.speakerKey, let item, let number = speakerNumber {
-                    Button(displaySpeakerName) { picker.isPresented = true }
+                    let recognized = model.voiceRecognition(item, key: key)
+                    Button { picker.isPresented = true } label: {
+                        HStack(spacing: 3) {
+                            Text(displaySpeakerName)
+                            if recognized != nil { Image(systemName: "waveform").font(.system(size: 9)) }
+                        }
+                    }
                         .buttonStyle(.plain)
+                        .help(recognized.map { _ in String(localized: "Recognized by voice") } ?? String(localized: "Speaker \(number), rename"))
                         .accessibilityLabel("Speaker \(number), rename")
                         .popover(isPresented: $picker.isPresented) {
                             SpeakerPicker(attendees: item.notes.meta.calendarEvent?.attendees ?? [],
                                           known: KnownPeople.load(root: model.paths.root).names,
-                                          currentName: item.speakers?.names?[key], number: number) { name in
+                                          currentName: item.speakers?.names?[key], number: number, recognized: recognized) { name in
                                 model.renameSpeaker(item: item, key: key, name: name)
                                 picker.isPresented = false
                             }

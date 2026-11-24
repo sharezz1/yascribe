@@ -20,6 +20,8 @@ struct SpeakerPicker: View {
     let known: [String]
     let currentName: String?
     let number: Int
+    /// Imię z profilu głosu (TASK-117): podobieństwo 0…1; „Not X” odrzuca profil dla tego mówcy.
+    var recognized: Double? = nil
     let select: (String?) -> Void
     @StateObject private var state = SpeakerPickerState()
 
@@ -30,6 +32,11 @@ struct SpeakerPicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Who is this?").font(.headline)
+            if let recognized, let currentName {
+                Label(VoiceProfilesText.recognized(similarity: recognized), systemImage: "waveform")
+                    .font(.caption).foregroundStyle(.mnText2)
+                Button(String(localized: "Not \(currentName)")) { select(nil) }.buttonStyle(.plain)
+            }
             TextField("Type a name", text: $state.query)
                 .onSubmit { if let name = options.typed { select(name) } }
             if let name = options.typed { Button("Use \(name)") { select(name) }.buttonStyle(.plain) }
@@ -39,7 +46,7 @@ struct SpeakerPicker: View {
                     if !options.known.isEmpty { section(String(localized: "Recent"), names: options.known) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.frame(maxHeight: 240)
-            if options.canClear { Divider(); Button("Use Speaker \(number)") { select(nil) }.buttonStyle(.plain) }
+            if options.canClear, recognized == nil { Divider(); Button("Use Speaker \(number)") { select(nil) }.buttonStyle(.plain) }
         }
         .padding(14).frame(width: 250, alignment: .leading)
         .foregroundStyle(Color.mnText) // nie dziedziczy koloru mówcy z etykiety

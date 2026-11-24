@@ -61,3 +61,13 @@ private func sampleDiarization() -> SpeakerDiarization {
     try Data([1, 2, 3]).write(to: audio)
     #expect(SpeakerDiarization.audioFingerprint(session: session) != changed)
 }
+@Test func fromTrackKeepsTrackTimes() throws {
+    let summary = SessionSummary(startedHostTime: 0, timebase: Timebase(numer: 1, denom: 1), tracks: [])
+    let d = SpeakerDiarization.fromTrack(segments: [("S1", 2, 5)], clock: SessionClock(summary: summary), modelPin: "p", sensitivity: nil,
+                                         audioFingerprint: nil, createdAt: Date())
+    #expect(d.segments[0].trackStart == 2 && d.segments[0].trackEnd == 5)
+    let old = try JSONDecoder().decode(SpeakerDiarization.self, from: Data(#"{"version":1,"modelPin":"p","segments":[{"speaker":"s","start":1,"end":2}]}"#.utf8))
+    #expect(old.segments[0].trackStart == nil && old.segments[0].trackEnd == nil)
+    var moved = d; moved.segments[0].trackStart = 9
+    #expect(moved.segmentsDigest == d.segmentsDigest) // czas toru nie zmienia tożsamości wykrycia
+}

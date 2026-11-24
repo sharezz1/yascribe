@@ -32,7 +32,7 @@ public enum DiarizerManifest {
         "plda-parameters.json": 89416,
     ])
 
-    static func url(for file: String) -> URL {
+    public static func url(for file: String) -> URL {
         URL(string: "https://huggingface.co/\(repo)/resolve/\(revision)/\(file)")!
     }
 }

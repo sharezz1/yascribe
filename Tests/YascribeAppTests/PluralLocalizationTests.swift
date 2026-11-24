@@ -10,6 +10,7 @@ import Testing
         ("%lld days", ["days", "day", "days", "days", "days", "days", "days"], ["dni", "dzień", "dni", "dni", "dni", "dni", "dni"]),
         ("%lld terms", ["terms", "term", "terms", "terms", "terms", "terms", "terms"], ["terminów", "termin", "terminy", "terminów", "terminów", "terminy", "terminów"]),
         ("%lld aliases", ["aliases", "alias", "aliases", "aliases", "aliases", "aliases", "aliases"], ["aliasów", "alias", "aliasy", "aliasów", "aliasów", "aliasy", "aliasów"]),
+        ("%lld samples", ["samples", "sample", "samples", "samples", "samples", "samples", "samples"], ["próbek", "próbka", "próbki", "próbek", "próbek", "próbki", "próbek"]),
         ("Partial — %lld gaps", ["gaps", "gap", "gaps", "gaps", "gaps", "gaps", "gaps"], ["luk", "luka", "luki", "luk", "luk", "luki", "luk"]),
     ]
     for (key, english, polish) in cases {
