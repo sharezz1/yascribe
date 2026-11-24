@@ -20,7 +20,7 @@ private let base = make([seg("A", 0, 10), seg("B", 10, 15), seg("C", 15, 30), se
     #expect(d.segments.map(\.speaker) == ["A", "A", "C", "A", "A"])
     #expect(d.segments.map(\.originalSpeaker) == [nil, "B", nil, nil, "B"])
     #expect(d.names == ["A": "Anna Testowa"])
-    #expect(d.merges == ["B": .init(into: "A", auto: false)])
+    #expect(d.merges == ["B": .init(into: "A", auto: false, name: "Bob Example")])
 }
 
 @Test func mergeIntoUnnamedKeepsName() {
@@ -37,7 +37,8 @@ private let base = make([seg("A", 0, 10), seg("B", 10, 15), seg("C", 15, 30), se
     #expect(m.voiceMatches == ["A": .init(profileID: p1, similarity: 0.9, model: "m")])
     #expect(m.voiceRejected == ["A": [p2]])
     let split = m.splitting(original: "B")
-    #expect(split?.names?["B"] == nil && split?.voiceMatches?["B"] == nil)
+    // Imię wraca do przywróconej grupy (ręczne imię nie ginie), dopasowanie nie.
+    #expect(split?.names == ["A": "Anna Testowa", "B": "Bob Example"] && split?.voiceMatches?["B"] == nil)
 }
 
 @Test func cascadeSplitRestoresOnlyOriginal() throws {
@@ -89,10 +90,10 @@ private let base = make([seg("A", 0, 10), seg("B", 10, 15), seg("C", 15, 30), se
     d.voiceMatches = ["B": .init(profileID: UUID(), similarity: 0.9, model: "m")]
     let merged = d.merging(["B": "A"], auto: false)
     #expect(merged.names == ["A": "Bob Example"] && merged.voiceMatches == nil)
-    #expect(merged.merges?["B"]?.name == "Bob Example")
+    #expect(merged.merges?["B"] == .init(into: "A", auto: false, name: "Bob Example", moved: true))
     let split = try #require(merged.splitting(original: "B"))
-    #expect(split.names == nil)
+    #expect(split.names == ["B": "Bob Example"])
     // Użytkownik nadał celowi inne imię po złączeniu: „Rozdziel” go nie zdejmuje.
     let renamed = try #require(merged.renamed("A", to: "Anna Testowa")?.splitting(original: "B"))
-    #expect(renamed.names == ["A": "Anna Testowa"])
+    #expect(renamed.names == ["A": "Anna Testowa", "B": "Bob Example"])
 }

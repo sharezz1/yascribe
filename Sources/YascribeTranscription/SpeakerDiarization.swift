@@ -128,9 +128,13 @@ extension RunDirectory {
 public struct MergeRecord: Codable, Equatable, Sendable {
     public var into: String
     public var auto: Bool
-    /// Imię źródła przeniesione na cel bez imienia — „Rozdziel” je zdejmuje, jeśli cel nadal je nosi.
+    /// Imię źródła w chwili złączenia — „Rozdziel” oddaje je przywróconej grupie (ręczne imię nie ginie).
     public var name: String? = nil
-    public init(into: String, auto: Bool, name: String? = nil) { self.into = into; self.auto = auto; self.name = name }
+    /// `true` = imię przeszło na cel bez imienia; „Rozdziel” zdejmuje je z celu, jeśli cel nadal je nosi.
+    public var moved: Bool? = nil
+    public init(into: String, auto: Bool, name: String? = nil, moved: Bool? = nil) {
+        self.into = into; self.auto = auto; self.name = name; self.moved = moved
+    }
 }
 
 extension SpeakerDiarization {
@@ -155,7 +159,7 @@ extension SpeakerDiarization {
             // Dopasowanie z profilu nie przechodzi: przeniesione imię jest odtąd zwykłym imieniem grupy.
             let movedName = names[target] == nil ? names[source] : nil
             if let movedName { names[target] = movedName }
-            merges[source] = MergeRecord(into: target, auto: auto, name: movedName)
+            merges[source] = MergeRecord(into: target, auto: auto, name: names[source], moved: movedName == nil ? nil : true)
             result.merges = merges
             names[source] = nil; matches[source] = nil; rejected[source] = nil
             result.names = names.isEmpty ? nil : names
@@ -173,11 +177,15 @@ extension SpeakerDiarization {
             result.segments[i].speaker = original
             result.segments[i].originalSpeaker = nil
         }
-        if let record = merges?[original], let moved = record.name, result.names?[record.into] == moved {
-            result.names?[record.into] = nil
-            result.voiceMatches?[record.into] = nil
-            if result.names?.isEmpty == true { result.names = nil }
-            if result.voiceMatches?.isEmpty == true { result.voiceMatches = nil }
+        if let record = merges?[original], let name = record.name {
+            var names = result.names ?? [:]
+            if record.moved == true, names[record.into] == name {
+                names[record.into] = nil
+                result.voiceMatches?[record.into] = nil
+                if result.voiceMatches?.isEmpty == true { result.voiceMatches = nil }
+            }
+            if names[original] == nil { names[original] = name }
+            result.names = names.isEmpty ? nil : names
         }
         result.merges?[original] = nil
         if result.merges?.isEmpty == true { result.merges = nil }

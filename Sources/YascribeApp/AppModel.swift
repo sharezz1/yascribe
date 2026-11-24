@@ -1571,8 +1571,8 @@ final class AppModel {
         }
     }
 
-    /// „Rozdziel”: pierwotna grupa wraca osobno, bez imienia. Próbka głosu złączonej mowy schodzi od razu (zawiera cudzą mowę);
-    /// przy zgodzie cel uczy się od nowa z tego, co mu zostało.
+    /// „Rozdziel”: pierwotna grupa wraca osobno ze swoim imieniem sprzed złączenia. Próbka głosu złączonej mowy schodzi od razu
+    /// (zawiera cudzą mowę); przy zgodzie obie grupy z imieniem uczą się od nowa ze swojej mowy.
     func splitSpeaker(item: SessionItem, original: String) {
         editSpeakers(item, failure: { String(localized: "Couldn't split speakers: \($0)") }) { $0.splitting(original: original) } after: { runID, previous, split in
             guard let target = previous.merges?[original]?.into else { return }
@@ -1580,8 +1580,11 @@ final class AppModel {
             var updated = voiceProfiles
             updated.forget(sampleID: mixed)
             if updated != voiceProfiles { voiceProfiles = updated; saveVoiceProfiles() }
-            guard let name = split.names?[target], split.voiceMatches?[target] == nil, settings.voiceProfiles == true else { return }
-            learnVoice(VoiceLearnRequest(sessionURL: item.url, runID: runID, key: target, name: name, diarization: split))
+            guard settings.voiceProfiles == true else { return }
+            for key in [target, original] {
+                guard let name = split.names?[key], split.voiceMatches?[key] == nil else { continue }
+                learnVoice(VoiceLearnRequest(sessionURL: item.url, runID: runID, key: key, name: name, diarization: split))
+            }
         }
     }
 

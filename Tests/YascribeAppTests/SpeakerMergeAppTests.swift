@@ -265,3 +265,18 @@ private actor HoldFirst {
     await waitUntil { f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [30] }
     #expect(f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [30])
 }
+
+@Test @MainActor func splitReturnsNameAndRelearnsSource() async throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    try f.installModel()
+    f.model.setVoiceConsent(true)
+    f.model.voiceEmbedOverride = { _, spans, _ in spans.mapValues { _ in [1, 0, 0, 0] } }
+    f.model.renameSpeaker(item: f.item, key: "S2", name: "Bob Example")
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    await waitUntil { f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [50] }
+    f.model.splitSpeaker(item: f.item, original: "S2")
+    #expect(try f.speakers()?.names == ["S2": "Bob Example"])
+    await waitUntil { f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [20] }
+    #expect(f.model.voiceProfiles.profiles.map(\.name) == ["Bob Example"])
+    #expect(f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [20])
+}
