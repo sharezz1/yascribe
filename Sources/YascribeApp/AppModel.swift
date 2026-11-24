@@ -231,6 +231,8 @@ final class AppModel {
     @ObservationIgnored private var voiceDeletions = 0
     /// Testy: liczenie odcisków bez modelu CoreML.
     @ObservationIgnored var voiceEmbedOverride: VoiceContext.Embed?
+    /// Testy: odciski do łączenia zdublowanych mówców (TASK-126), niezależnie od atrapy profili.
+    @ObservationIgnored var speakerMergeEmbedOverride: VoiceContext.Embed?
     @ObservationIgnored private lazy var voiceEmbedder = VoiceEmbedder(diarizerStore: speakerModel.store, campPlusStore: campPlusModel.store)
 
     /// `nil` = nieznany model lokalny; pusty = v3 (jak `LocalASRVariant(model:)`).
@@ -1489,10 +1491,22 @@ final class AppModel {
         let http = diarizationHTTP
         let override = speakerWorkOverride
         let voice = voiceContext()
+        let mergeEmbed = speakerMergeEmbed()
         let work = Task.detached { () -> (SpeakerDiarization, String?) in
-            let diarization: SpeakerDiarization
+            var diarization: SpeakerDiarization
             if let override { diarization = try await override() } else {
                 diarization = try await Self.diarization(sessionURL: sessionURL, runID: ticket.runID, store: store, cloud: cloud, http: http)
+            }
+            // TASK-126: złączenie zdublowanych grup przed profilami (profile widzą całą mowę osoby). Odcisk tylko w pamięci,
+            // więc bez zgody na profile; błąd liczenia = grupy bez zmian, bez komunikatu.
+            if let mergeEmbed {
+                let attendees = NotesStore(session: sessionURL).readMeta().calendarEvent?.attendees?.count ?? 0
+                let track = SessionDirectory(url: sessionURL).trackURL("system")
+                do {
+                    diarization = try await SpeakerMerge.apply(diarization, expected: SpeakerMerge.expected(attendees: attendees)) {
+                        try await mergeEmbed(track, $0, .diarizer)
+                    }
+                } catch is CancellationError { throw CancellationError() } catch {}
             }
             // TASK-117: imiona z profili przed zapisem — w tej samej pracy, więc między bramką a zapisem nadal nie ma `await`.
             guard let voice else { return (diarization, nil) }
@@ -1636,6 +1650,14 @@ final class AppModel {
 
     private var voiceEmbed: VoiceContext.Embed {
         if let voiceEmbedOverride { return voiceEmbedOverride }
+        let embedder = voiceEmbedder
+        return { try await embedder.embed(systemTrack: $0, speakers: $1, model: $2) }
+    }
+
+    /// Łączenie zdublowanych mówców (TASK-126): zawsze modelem mówców; bez pobranego modelu — pominięte.
+    func speakerMergeEmbed() -> VoiceContext.Embed? {
+        if let speakerMergeEmbedOverride { return speakerMergeEmbedOverride }
+        guard speakerModel.store.status() == .ready else { return nil }
         let embedder = voiceEmbedder
         return { try await embedder.embed(systemTrack: $0, speakers: $1, model: $2) }
     }

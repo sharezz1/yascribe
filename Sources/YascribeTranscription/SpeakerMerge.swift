@@ -82,4 +82,22 @@ public enum SpeakerMerge {
             clusters[best.i] = merged
         }
     }
+
+    /// Zdalni mówcy wg kalendarza: uczestnicy bez nagrywającego; `nil`, gdy nie ma kogo oczekiwać.
+    /// shortcut: zasoby/sale w zaproszeniu zawyżają liczbę; filtrować, jeśli kalibracja pokaże błędne złączenia.
+    public static func expected(attendees: Int) -> Int? { attendees >= 2 ? attendees - 1 : nil }
+
+    public typealias Embed = @Sendable ([String: [ClosedRange<Double>]]) async throws -> [String: [Float]]
+
+    /// Odciski grup z czystą mową ≥ 1 s → `plan` → `merging(auto: true)`. Mniej niż dwie takie grupy = bez liczenia.
+    public static func apply(_ d: SpeakerDiarization, expected: Int?, embed: Embed) async throws -> SpeakerDiarization {
+        let speech = VoiceSpans.speech(d).filter { !$0.value.spans.isEmpty }
+        guard speech.count > 1 else { return d }
+        let vectors = try await embed(speech.mapValues(\.spans))
+        let groups = vectors.compactMap { key, vector in
+            speech[key].map { Group(key: key, vector: vector, seconds: $0.seconds, name: d.names?[key]) }
+        }
+        let plan = plan(groups, expected: expected)
+        return plan.isEmpty ? d : d.merging(plan, auto: true)
+    }
 }

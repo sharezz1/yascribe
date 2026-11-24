@@ -72,3 +72,30 @@ private func g(_ key: String, _ vector: [Float], _ seconds: Double = 60, name: S
 @Test func namedGroupIsTargetEitherSide() {
     #expect(SpeakerMerge.plan([g("a", v(1), 40, name: "Anna Testowa"), g("b", v(0.95), 100)], expected: nil) == ["b": "a"])
 }
+
+private func timed(_ speaker: String, _ a: Double, _ b: Double) -> SpeakerDiarization.Segment {
+    .init(speaker: speaker, start: a, end: b, trackStart: a, trackEnd: b)
+}
+private let three = SpeakerDiarization(version: 1, modelPin: "pin", sensitivity: nil, fa: nil, fb: nil, threshold: nil, minClusterSeconds: nil,
+                                       audioFingerprint: nil, createdAt: nil,
+                                       segments: [timed("S1", 0, 30), timed("S2", 30, 50), timed("S3", 50, 80)])
+
+@Test func applyMergesSameVoices() async throws {
+    let d = try await SpeakerMerge.apply(three, expected: nil) { spans in
+        #expect(Set(spans.keys) == ["S1", "S2", "S3"])
+        return ["S1": [1, 0], "S2": [0.99, 0.14], "S3": [0, 1]]
+    }
+    #expect(Set(d.segments.map(\.speaker)) == ["S1", "S3"] && d.merges == ["S2": .init(into: "S1", auto: true)])
+}
+
+@Test func applySkipsSingleGroupAndUntimed() async throws {
+    var one = three; one.segments = [timed("S1", 0, 30)]
+    let same = try await SpeakerMerge.apply(one, expected: nil) { _ in Issue.record("no embed for one group"); return [:] }
+    #expect(same == one)
+    var untimed = three; untimed.segments = three.segments.map { var s = $0; s.trackStart = nil; s.trackEnd = nil; return s }
+    #expect(try await SpeakerMerge.apply(untimed, expected: nil) { _ in Issue.record("no embed"); return [:] } == untimed)
+}
+
+@Test func expectedFromAttendees() {
+    #expect(SpeakerMerge.expected(attendees: 3) == 2 && SpeakerMerge.expected(attendees: 1) == nil && SpeakerMerge.expected(attendees: 0) == nil)
+}
