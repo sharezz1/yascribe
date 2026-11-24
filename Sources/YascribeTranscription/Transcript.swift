@@ -41,7 +41,7 @@ public struct Utterance: Codable, Equatable, Sendable {
     }
 
     /// Pierwsza (albo jedyna) część wypowiedzi źródłowej: tu edytor i licznik ukrytych.
-    public var isFirstPart: Bool { part.map { abs($0.start - start) < 0.001 } ?? true }
+    public var isFirstPart: Bool { part?.isFirst ?? true }
 
     /// Oznaczona wypowiedź (zły język, echo albo ukryta przez użytkownika) nie trafia do notatki ani do korekty.
     public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true || hidden == true }
@@ -49,14 +49,17 @@ public struct Utterance: Codable, Equatable, Sendable {
 
 /// Wypowiedź źródłowa części (TASK-127): poprawki (`edits.json`) i ukrycia idą po niej, nie po części.
 public struct UtterancePart: Equatable, Sendable {
-    /// Pozycja w `utterances` przed podziałem.
+    /// Pozycja w `utterances` transkryptu podanego do `withSpeakerLabels` — indeks `edits.json` tylko wtedy, gdy ten transkrypt
+    /// ma wszystkie wypowiedzi (widok: `includeHidden: true`), nie po `withoutHidden()`.
     public var index: Int
     public var start: Double
     public var text: String
-    public init(index: Int, start: Double, text: String) {
+    public var isFirst: Bool
+    public init(index: Int, start: Double, text: String, isFirst: Bool) {
         self.index = index
         self.start = start
         self.text = text
+        self.isFirst = isFirst
     }
 }
 

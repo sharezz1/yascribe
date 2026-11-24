@@ -428,7 +428,7 @@ struct TranscriptTab: View {
             if hidden {
                 row.onRestore = { setHidden([index], in: t, false) }
             } else {
-                row.deleteCount = targets.count
+                row.deleteCount = Set(targets.filter(t.utterances.indices.contains).map { t.utterances[$0].part?.index ?? $0 }).count
                 row.onDelete = { setHidden(targets, in: t, true) }
                 row.onSelect = { command, shift in
                     state.click(index, command: command, shift: shift, runID: runID, corrected: state.useCorrected, visible: visible)

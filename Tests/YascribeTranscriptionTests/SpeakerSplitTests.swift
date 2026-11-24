@@ -47,7 +47,7 @@ private func labeled(_ us: [Utterance], _ segments: [SpeakerDiarization.Segment]
 }
 
 @Test func textOfPartsConcatenatesToSourceAfterCorrection() {
-    // Ta sama liczba tokenów (podmiana słowa): cięcie po indeksie.
+    // Zmieniona wielkość liter: klucze słów i tokenów zgodne.
     let swapped = labeled([utterance(wordsA + wordsB, text: "Alfa beta Gamma delta. Epsilon Zeta eta theta.")])
     #expect(swapped.map(\.text) == ["Alfa beta Gamma delta.", "Epsilon Zeta eta theta."])
     // Usunięte słowo przed granicą i dodane za nią (liczba tokenów ta sama, treść przesunięta): wyrównanie LCS, nie indeks.
@@ -57,11 +57,25 @@ private func labeled(_ us: [Utterance], _ segments: [SpeakerDiarization.Segment]
     #expect(aligned.map(\.text).joined(separator: " ") == source)
 }
 
-@Test func ambiguousBoundaryKeepsWholeUtterance() {
+@Test func boundaryInsideRewrittenTextCutsProportionally() {
+    // Brak wspólnych słów: granica po 4 z 8 słów = po 3 z 6 tokenów; mówcy i numeracja nie zależą od tekstu.
     let parts = labeled([utterance(wordsA + wordsB, text: "Całkiem inny tekst bez wspólnych słów")])
+    #expect(parts.map(\.text) == ["Całkiem inny tekst", "bez wspólnych słów"])
+    #expect(parts.map(\.speakerKey) == ["A", "B"])
+}
+
+@Test func fewerTokensThanPartsKeepsWholeUtterance() {
+    let parts = labeled([utterance(wordsA + wordsB, text: "Krótko.")])
     #expect(parts.count == 1)
     #expect(parts[0].part == nil)
     #expect(parts[0].speakerKey == "B") // jak dotąd: klucz z większym pokryciem całej wypowiedzi
+}
+
+@Test func tokenCutHandlesEveryStepKind() {
+    #expect(SpeakerLabels.tokenCut(2, [.same(0, 0), .same(1, 1), .same(2, 2)]) == 2)
+    #expect(SpeakerLabels.tokenCut(2, [.same(0, 0), .changed(1..<1, 1..<2), .changed(2..<4, 2..<3)]) == 2)
+    #expect(SpeakerLabels.tokenCut(2, [.changed(0..<4, 0..<2)]) == 1)
+    #expect(SpeakerLabels.tokenCut(2, [.same(0, 0), .same(1, 1)]) == 2)
 }
 
 @Test func singleWordIslandDoesNotSplit() {
@@ -128,4 +142,13 @@ private func labeled(_ us: [Utterance], _ segments: [SpeakerDiarization.Segment]
     let parts = labeled([u])
     #expect(parts.map(\.hidden) == [true, true])
     #expect(parts.map(\.echoOfThem) == [true, true])
+}
+
+@Test func diarizeStatsCountSpeakerOnlyInMinorityPart() {
+    // Całość pod B (większe pokrycie), A tylko w części: CLI `diarize` liczy obu, jak widok.
+    let t = Transcript(utterances: [utterance(wordsA + wordsB)], failedChunks: [])
+    let counts = SpeakerLabelCounts(transcript: t, diarization: diarization(boundary))
+    #expect(counts.letters == 2)
+    #expect(counts.them == 1)
+    #expect(counts.unlabeled == 0)
 }

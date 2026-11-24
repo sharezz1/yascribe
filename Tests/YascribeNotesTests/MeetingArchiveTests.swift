@@ -198,3 +198,9 @@ private func twoSpeakerShown(_ raw: Transcript, corrected: CorrectedTranscript? 
     #expect(shown?.utterances.map(\.text) == ["jeden dwa", "Alfa, gamma delta.", "Epsilon i zeta eta theta."])
     #expect(shown?.utterances.map(\.speakerName) == ["Me", "Speaker 1", "Ola"])
 }
+
+@Test func searchFindsPhraseAcrossSplitBoundary() {
+    let shown = twoSpeakerShown(twoSpeakerRaw(), edits: nil)
+    #expect(shown?.utterances.count == 3)
+    #expect(SessionSearch.matches("delta. epsilon", title: "", myNotes: "", summary: nil, transcript: shown))
+}

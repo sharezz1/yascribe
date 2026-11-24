@@ -80,7 +80,8 @@ public enum SpeakerLabels {
 
     /// Podział wypowiedzi `them` na granicach mówców według czasów słów (TASK-127); `[]` = bez podziału.
     /// Bez znaczników słów (`approximateTiming`) nie dzielimy. Tekst tnie wyrównanie kluczy słów i tokenów, bo korekta, poprawka
-    /// ręczna i Replacement zmieniają tylko `text`; granica w środku zmienionego bloku = bez podziału.
+    /// ręczna i Replacement zmieniają tylko `text`. Granica w środku zmienionego bloku tnie go proporcjonalnie, więc podział
+    /// (i numeracja „Speaker N”) nie zależy od tekstu; bez podziału tylko, gdy tokenów jest mniej niż części.
     static func split(_ u: Utterance, index: Int, diarization: SpeakerDiarization) -> [Utterance] {
         guard u.speaker == .them, !u.approximateTiming, u.words.count >= 2 * minPartWords else { return [] }
         let (segments, first) = usable(diarization)
@@ -109,10 +110,7 @@ public enum SpeakerLabels {
         let tokens = u.text.split(separator: " ").map(String.init)
         let steps = TokenAlign.align(u.words.map { TokenAlign.key($0.text) }, tokens.map(TokenAlign.key))
         var cuts = [0]
-        for run in runs.dropFirst() {
-            guard let cut = tokenCut(run.words.lowerBound, steps) else { return [] }
-            cuts.append(cut)
-        }
+        for run in runs.dropFirst() { cuts.append(tokenCut(run.words.lowerBound, steps)) }
         cuts.append(tokens.count)
         guard zip(cuts, cuts.dropFirst()).allSatisfy({ $0 < $1 }) else { return [] }
         return runs.enumerated().map { n, run in
@@ -122,22 +120,28 @@ public enum SpeakerLabels {
             part.end = n == runs.count - 1 ? u.end : part.words[part.words.count - 1].end
             part.text = tokens[cuts[n]..<cuts[n + 1]].joined(separator: " ")
             part.speakerKey = run.key
-            part.part = UtterancePart(index: index, start: u.start, text: u.text)
+            part.part = UtterancePart(index: index, start: u.start, text: u.text, isFirst: n == 0)
             return part
         }
     }
 
-    /// Pierwszy token części zaczynającej się słowem `word`; `nil`, gdy granica wypada w środku zmienionego bloku.
-    static func tokenCut(_ word: Int, _ steps: [TokenAlign.Step]) -> Int? {
+    /// Pierwszy token części zaczynającej się słowem `word`. Granica w środku zmienionego bloku: miejsce proporcjonalne do słów.
+    static func tokenCut(_ word: Int, _ steps: [TokenAlign.Step]) -> Int {
+        var end = 0
         for step in steps {
             switch step {
-            case .same(let i, let j): if i >= word { return j }
+            case .same(let i, let j):
+                if i >= word { return j }
+                end = j + 1
             case .changed(let words, let tokens):
                 if words.lowerBound >= word { return tokens.lowerBound }
-                if words.upperBound > word { return nil }
+                if words.upperBound > word {
+                    return tokens.lowerBound + Int((Double(word - words.lowerBound) * Double(tokens.count) / Double(words.count)).rounded())
+                }
+                end = tokens.upperBound
             }
         }
-        return nil
+        return end
     }
 }
 

@@ -11,6 +11,7 @@ public enum SessionSearch {
         guard !q.isEmpty else { return true }
         if title.localizedCaseInsensitiveContains(q) || myNotes.localizedCaseInsensitiveContains(q) { return true }
         if summary?.localizedCaseInsensitiveContains(q) == true { return true }
-        return transcript()?.utterances.contains { $0.text.localizedCaseInsensitiveContains(q) } == true
+        // Część podzielonej wypowiedzi (TASK-127) szuka w tekście źródła: fraza na granicy mówców nadal pasuje.
+        return transcript()?.utterances.contains { ($0.part?.text ?? $0.text).localizedCaseInsensitiveContains(q) } == true
     }
 }
