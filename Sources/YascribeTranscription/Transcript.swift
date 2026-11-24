@@ -33,13 +33,36 @@ public struct Utterance: Codable, Equatable, Sendable {
     public var speakerKey: String? = nil
     /// Ukryta przez użytkownika (TASK-119): tylko w pamięci, nadawana z `edits.json` (`TranscriptEdits.markingHidden`).
     public var hidden: Bool? = nil
+    /// Część wypowiedzi podzielonej na granicy mówców (TASK-127): tylko w pamięci, nadawana w `withSpeakerLabels`.
+    public var part: UtterancePart? = nil
+    /// Pozycja przed podziałem (TASK-127) dla każdej wypowiedzi po `withSpeakerLabels` — wiersze za podzieloną są przesunięte.
+    public var sourceIndex: Int? = nil
 
     enum CodingKeys: String, CodingKey {
         case speaker, start, end, text, words, approximateTiming, languageMismatch, echoOfThem
     }
 
+    /// Pierwsza (albo jedyna) część wypowiedzi źródłowej: tu edytor i licznik ukrytych.
+    public var isFirstPart: Bool { part?.isFirst ?? true }
+
     /// Oznaczona wypowiedź (zły język, echo albo ukryta przez użytkownika) nie trafia do notatki ani do korekty.
     public var excludedFromNotes: Bool { languageMismatch != nil || echoOfThem == true || hidden == true }
+}
+
+/// Wypowiedź źródłowa części (TASK-127): poprawki (`edits.json`) i ukrycia idą po niej, nie po części.
+public struct UtterancePart: Equatable, Sendable {
+    /// Pozycja w `utterances` transkryptu podanego do `withSpeakerLabels` — indeks `edits.json` tylko wtedy, gdy ten transkrypt
+    /// ma wszystkie wypowiedzi (widok: `includeHidden: true`), nie po `withoutHidden()`.
+    public var index: Int
+    public var start: Double
+    public var text: String
+    public var isFirst: Bool
+    public init(index: Int, start: Double, text: String, isFirst: Bool) {
+        self.index = index
+        self.start = start
+        self.text = text
+        self.isFirst = isFirst
+    }
 }
 
 public struct ChunkFailure: Codable, Equatable, Sendable {

@@ -138,3 +138,69 @@ private func archiveSpeakers(names: [String: String]? = ["voice": "Anna"]) -> Sp
                                                 rawTranscript: transcript([utt("cześć", .them, at: 0), utt("tak", .them, at: 25)]))
     #expect(markers.resolved(summary.markdown) == "Anna i Anna")
 }
+
+// TASK-127: wypowiedź na granicy dwóch mówców — części idą za źródłem w poprawkach, ukryciach i korekcie.
+private func twoSpeakerRaw() -> Transcript {
+    let words = [("alfa", 143.08, 144.5), ("beta", 144.6, 146.0), ("gamma", 146.1, 147.5), ("delta.", 147.6, 148.66),
+                 ("Epsilon", 149.58, 151.0), ("zeta", 151.1, 155.0), ("eta", 155.1, 159.0), ("theta.", 159.1, 163.0)]
+        .map { Word(text: $0.0, start: $0.1, end: $0.2) }
+    let me = Utterance(speaker: .me, start: 100, end: 101, text: "jeden dwa", words: [], approximateTiming: true, languageMismatch: nil)
+    let them = Utterance(speaker: .them, start: 143.08, end: 163, text: words.map(\.text).joined(separator: " "), words: words,
+                         approximateTiming: false, languageMismatch: nil)
+    return Transcript(utterances: [me, them], failedChunks: [])
+}
+private func twoSpeakerDiarization() -> SpeakerDiarization {
+    var d = SpeakerDiarization(version: 1, modelPin: "p", sensitivity: nil, fa: nil, fb: nil, threshold: nil, minClusterSeconds: nil,
+                       audioFingerprint: nil, createdAt: nil,
+                       segments: [.init(speaker: "A", start: 133.28, end: 149.13), .init(speaker: "B", start: 149.80, end: 162.84)])
+    d.names = ["B": "Ola"]
+    return d
+}
+private func twoSpeakerShown(_ raw: Transcript, corrected: CorrectedTranscript? = nil, edits: TranscriptEdits?,
+                             useCorrected: Bool = false, includeHidden: Bool = false) -> Transcript? {
+    MeetingArchive.displayTranscript(raw: raw, corrected: corrected, edits: edits, useCorrected: useCorrected,
+                                     rules: ReplacementRules(UserDictionary()), speakers: twoSpeakerDiarization(),
+                                     includeHidden: includeHidden)
+}
+
+@Test func splitUtteranceShowsTwoSpeakersInArchive() {
+    let shown = twoSpeakerShown(twoSpeakerRaw(), edits: nil)
+    #expect(shown?.utterances.map(\.speakerName) == ["Me", "Speaker 1", "Ola"])
+    #expect(shown?.utterances.map(\.text) == ["jeden dwa", "alfa beta gamma delta.", "Epsilon zeta eta theta."])
+}
+
+@Test func hidingSecondPartHidesWholeSourceUtterance() throws {
+    let raw = twoSpeakerRaw()
+    let second = try #require(twoSpeakerShown(raw, edits: nil)?.utterances[2])
+    let key = TranscriptEdits.Hidden(second)
+    #expect(key == TranscriptEdits.Hidden(speaker: .them, start: 143.08))
+    let edits = TranscriptEdits().settingHidden([key], true)
+    #expect(twoSpeakerShown(raw, edits: edits, includeHidden: true)?.utterances.map(\.hidden) == [nil, true, true])
+    #expect(twoSpeakerShown(raw, edits: edits)?.utterances.map(\.text) == ["jeden dwa"])
+}
+
+@Test func editOfSourceAppearsInBothParts() {
+    let raw = twoSpeakerRaw()
+    let edits = TranscriptEdits().setting("Alfa beta gamma delta. Epsilon zeta, eta theta.", at: 1, of: raw.utterances[1],
+                                          original: raw.utterances[1].text)
+    let shown = twoSpeakerShown(raw, edits: edits)
+    #expect(shown?.utterances.map(\.text) == ["jeden dwa", "Alfa beta gamma delta.", "Epsilon zeta, eta theta."])
+    #expect(shown?.utterances.map { $0.part?.index } == [nil, 1, 1])
+    #expect(shown?.utterances.map { $0.part?.text } == [nil, edits.edits[0].text, edits.edits[0].text])
+}
+
+@Test func correctedTextSplitsAtSameBoundary() {
+    let raw = twoSpeakerRaw()
+    var fixed = raw
+    fixed.utterances[1].text = "Alfa, gamma delta. Epsilon i zeta eta theta."
+    let corrected = CorrectedTranscript(transcript: fixed, model: "m", batches: 1, failedBatches: 0, rejectedLines: 0)
+    let shown = twoSpeakerShown(raw, corrected: corrected, edits: nil, useCorrected: true)
+    #expect(shown?.utterances.map(\.text) == ["jeden dwa", "Alfa, gamma delta.", "Epsilon i zeta eta theta."])
+    #expect(shown?.utterances.map(\.speakerName) == ["Me", "Speaker 1", "Ola"])
+}
+
+@Test func searchFindsPhraseAcrossSplitBoundary() {
+    let shown = twoSpeakerShown(twoSpeakerRaw(), edits: nil)
+    #expect(shown?.utterances.count == 3)
+    #expect(SessionSearch.matches("delta. epsilon", title: "", myNotes: "", summary: nil, transcript: shown))
+}

@@ -11,7 +11,8 @@ public struct SpeakerLabelCounts: Equatable, Sendable {
     public init(transcript: Transcript, diarization: SpeakerDiarization) {
         let labels = SpeakerLabels.speakerKeys(for: transcript, diarization: diarization)
         let them = zip(transcript.utterances, labels).filter { $0.0.speaker == .them }
-        self.letters = Set(them.compactMap(\.1)).count
+        // Mówca obecny tylko w części podzielonej wypowiedzi (TASK-127) też się liczy — jak w widoku i notatce.
+        self.letters = Set(transcript.withSpeakerLabels(diarization).utterances.filter { $0.speaker == .them }.compactMap(\.speakerKey)).count
         self.them = them.count
         self.unlabeled = them.filter { $0.1 == nil }.count
     }
