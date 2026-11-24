@@ -6,14 +6,15 @@ import YascribeNotes
 
 // TASK-127: wiersze części jednej wypowiedzi — edycja, ukrycie i liczniki idą po źródle.
 
-private func shown(hiddenFirst: Bool = false) -> Transcript {
+private func shown(hiddenFirst: Bool = false, after: Bool = false) -> Transcript {
     let words = [("alfa", 143.08, 144.5), ("beta", 144.6, 146.0), ("gamma", 146.1, 147.5), ("delta.", 147.6, 148.66),
                  ("Epsilon", 149.58, 151.0), ("zeta", 151.1, 155.0), ("eta", 155.1, 159.0), ("theta.", 159.1, 163.0)]
         .map { Word(text: $0.0, start: $0.1, end: $0.2) }
     let me = Utterance(speaker: .me, start: 100, end: 101, text: "jeden dwa", words: [], approximateTiming: true, languageMismatch: nil)
     let them = Utterance(speaker: .them, start: 143.08, end: 163, text: words.map(\.text).joined(separator: " "), words: words,
                          approximateTiming: false, languageMismatch: nil)
-    let raw = Transcript(utterances: [me, them], failedChunks: [])
+    let tail = Utterance(speaker: .me, start: 165, end: 170, text: "trzy cztery", words: [], approximateTiming: true, languageMismatch: nil)
+    let raw = Transcript(utterances: after ? [me, them, tail] : [me, them], failedChunks: [])
     let d = SpeakerDiarization(version: 1, modelPin: "p", sensitivity: nil, fa: nil, fb: nil, threshold: nil, minClusterSeconds: nil,
                                audioFingerprint: nil, createdAt: nil,
                                segments: [.init(speaker: "A", start: 133.28, end: 149.13), .init(speaker: "B", start: 149.80, end: 162.84)])
@@ -43,4 +44,14 @@ private func shown(hiddenFirst: Bool = false) -> Transcript {
     var hidden = t
     for i in hidden.utterances.indices { hidden.utterances[i].hidden = true }
     #expect(TranscriptTab.hiddenSourceCount(hidden) == 2)
+}
+
+@Test @MainActor func rowAfterSplitUsesSourceIndex() throws {
+    // Wiersz 3 (za podzieloną wypowiedzią) to źródło 2: edycja i liczniki po źródle, nie po wierszu.
+    let t = shown(after: true)
+    #expect(t.utterances.count == 4)
+    #expect(t.utterances.map(\.sourceIndex) == [0, 1, 1, 2])
+    #expect(try #require(TranscriptTab.editTarget(3, t.utterances[3])).index == 2)
+    #expect(TranscriptTab.sourceCount([2, 3], in: t) == 2)
+    #expect(TranscriptTab.sourceCount([1, 2, 3], in: t) == 2)
 }

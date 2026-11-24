@@ -35,6 +35,8 @@ public struct Utterance: Codable, Equatable, Sendable {
     public var hidden: Bool? = nil
     /// Część wypowiedzi podzielonej na granicy mówców (TASK-127): tylko w pamięci, nadawana w `withSpeakerLabels`.
     public var part: UtterancePart? = nil
+    /// Pozycja przed podziałem (TASK-127) dla każdej wypowiedzi po `withSpeakerLabels` — wiersze za podzieloną są przesunięte.
+    public var sourceIndex: Int? = nil
 
     enum CodingKeys: String, CodingKey {
         case speaker, start, end, text, words, approximateTiming, languageMismatch, echoOfThem

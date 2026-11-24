@@ -172,6 +172,7 @@ public extension Transcript {
             } else {
                 result.utterances += parts
             }
+            for i in (result.utterances.count - max(parts.count, 1))..<result.utterances.count { result.utterances[i].sourceIndex = index }
         }
         let numbered = SpeakerLabels.numbers(for: result)
         for i in result.utterances.indices {

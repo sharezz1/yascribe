@@ -361,7 +361,7 @@ struct TranscriptTab: View {
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
                     case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""],
-                                                           edited: edited.contains(u.part?.index ?? index), in: t, visible: visible)
+                                                           edited: edited.contains(u.sourceIndex ?? index), in: t, visible: visible)
                     case .mute(let m): MuteRow(note: m)
                     }
                 }
@@ -407,7 +407,7 @@ struct TranscriptTab: View {
         let corrected = state.useCorrected
         // Szkic z poprzedniego przebiegu (nowy przebieg został bieżącym) nie blokuje ołówków — nowy go zastępuje.
         let active = state.segmentDraft.map { $0.runID == item.runID } ?? false
-        let source = u.part?.index ?? index
+        let source = u.sourceIndex ?? index
         if let runID = item.runID, !moving, !active, let target = Self.editTarget(index, u), item.canEdit(corrected: corrected) {
             startEdit = {
                 state.segmentDraft = SegmentDraft(runID: runID, index: target.index, speaker: u.speaker, start: target.start,
@@ -437,12 +437,13 @@ struct TranscriptTab: View {
     }
 
     // Części podzielonej wypowiedzi (TASK-127) to jedno źródło: edycja całości w pierwszej części, ukrycie i liczniki po źródłach.
-    // `t` musi mieć wszystkie wypowiedzi (`includeHidden: true`), bo `part.index` to pozycja w transkrypcie przed etykietami.
+    // Wiersz ≠ źródło: każda wypowiedź za podzieloną ma przesunięty wiersz, więc zawsze `sourceIndex` (pozycja przed podziałem).
+    // `t` musi mieć wszystkie wypowiedzi (`includeHidden: true`), inaczej `sourceIndex` nie jest indeksem `edits.json`.
 
     /// Indeks, początek i tekst do edycji; `nil` w dalszych częściach (edytor tylko w pierwszej).
     static func editTarget(_ index: Int, _ u: Utterance) -> (index: Int, start: Double, text: String)? {
         guard u.isFirstPart else { return nil }
-        return (u.part?.index ?? index, u.part?.start ?? u.start, u.part?.text ?? u.text)
+        return (u.sourceIndex ?? index, u.part?.start ?? u.start, u.part?.text ?? u.text)
     }
 
     /// Klucze ukrycia bez powtórek (obie części dają klucz źródła).
@@ -453,7 +454,7 @@ struct TranscriptTab: View {
 
     /// Liczba wypowiedzi źródłowych pod wierszami `indices` („N selected”, „Delete N”).
     static func sourceCount(_ indices: some Collection<Int>, in t: Transcript) -> Int {
-        Set(indices.filter(t.utterances.indices.contains).map { t.utterances[$0].part?.index ?? $0 }).count
+        Set(indices.filter(t.utterances.indices.contains).map { t.utterances[$0].sourceIndex ?? $0 }).count
     }
 
     /// Ukryte wypowiedzi źródłowe („Show deleted (N)”).
