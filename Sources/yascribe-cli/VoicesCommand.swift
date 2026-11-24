@@ -34,8 +34,7 @@ extension CLI {
             }
             let speech = VoiceSpans.speech(diarization).filter { $0.value.seconds >= VoiceMatcher.minSeconds && !$0.value.spans.isEmpty }
             if speech.isEmpty { FileHandle.standardError.write(Data("\(session.lastPathComponent): brak mówców ≥ 20 s z czasem toru\n".utf8)); continue }
-            guard speech.count > 1 else { print("za mało grup z mową ≥ 1 s"); return }
-        let vectors = try await embedder.embed(systemTrack: session.appendingPathComponent("system.caf"), speakers: speech.mapValues(\.spans), model: model)
+            let vectors = try await embedder.embed(systemTrack: session.appendingPathComponent("system.caf"), speakers: speech.mapValues(\.spans), model: model)
             for key in vectors.keys.sorted() {
                 let name = diarization.names?[key].map { "(\($0))" } ?? ""
                 rows.append(("\(session.lastPathComponent.suffix(12)):\(key)\(name)", speech[key]!.seconds, vectors[key]!))
@@ -70,6 +69,7 @@ extension CLI {
         let attendees = NotesStore(session: session).readMeta().calendarEvent?.attendees?.count ?? 0
         let expected = SpeakerMerge.expected(attendees: attendees)
         print("== \(session.lastPathComponent): grup \(Set(original.segments.map(\.speaker)).count), z odciskiem \(speech.count), oczekiwano \(expected.map(String.init) ?? "-")")
+        guard speech.count > 1 else { print("za mało grup z czystą mową ≥ 1 s"); return }
         let vectors = try await embedder.embed(systemTrack: SessionDirectory(url: session).trackURL("system"), speakers: speech.mapValues(\.spans), model: .diarizer)
         let groups = vectors.keys.sorted().compactMap { key in
             speech[key].map { SpeakerMerge.Group(key: key, vector: vectors[key]!, seconds: $0.seconds, name: diarization.names?[diarization.currentKey(key)]) }
@@ -80,7 +80,7 @@ extension CLI {
             print(String(format: "[%2d] ", i) + groups.map { String(format: "%6.3f", VoiceVectors.cosine(a.vector, $0.vector)) }.joined())
         }
         for threshold in [0.70, 0.75, 0.80, 0.85] {
-            for hint in [nil, expected] where hint == nil || expected != nil {
+            for hint in expected == nil ? [nil] : [nil, expected] {
                 let plan = SpeakerMerge.plan(groups, expected: hint, mergeThreshold: threshold)
                 let left = Set(groups.map { plan[$0.key] ?? $0.key }).count
                 let text = plan.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value)" }.joined(separator: " ")

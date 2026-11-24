@@ -215,3 +215,53 @@ private actor Gate {
 @MainActor private func waitUntil(_ condition: () -> Bool) async {
     for _ in 0..<2000 where !condition() { try? await Task.sleep(for: .milliseconds(5)) }
 }
+
+@Test @MainActor func mergeOptionsWithoutNoteUseTranscriptNumbers() throws {
+    var f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    func u(_ at: Double) -> Utterance {
+        Utterance(speaker: .them, start: at, end: at + 2, text: "x", words: [], approximateTiming: false, languageMismatch: nil)
+    }
+    f.item.transcript = Transcript(utterances: [u(5), u(35), u(60)], failedChunks: [])
+    f.item.speakers = MergeFixture.diarization
+    #expect(f.model.speakerMergeOptions(f.item, key: "S1").others.map(\.key) == ["S2", "S3"])
+}
+
+private actor HoldFirst {
+    var calls = 0
+    var waiting: CheckedContinuation<Void, Never>?
+    func embed(_ spans: [String: [ClosedRange<Double>]]) async -> [String: [Float]] {
+        calls += 1
+        if calls == 1 { await withCheckedContinuation { waiting = $0 } }
+        return spans.mapValues { _ in [1, 0, 0, 0] }
+    }
+    func release() { waiting?.resume(); waiting = nil }
+}
+
+@Test @MainActor func mergeDuringLearningStoresOnlyMergedSample() async throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    try f.installModel()
+    f.model.setVoiceConsent(true)
+    let gate = HoldFirst()
+    f.model.voiceEmbedOverride = { _, spans, _ in await gate.embed(spans) }
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Anna Testowa")
+    while await gate.calls == 0 { await Task.yield() }
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    await waitUntil { f.model.voiceProfiles.profiles.first?.samples.isEmpty == false }
+    await gate.release()
+    try await Task.sleep(for: .milliseconds(100))
+    // Nauka sprzed złączenia (30 s samego S1) nie trafia do profilu — grupa zmieniła skład w trakcie liczenia.
+    #expect(f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [50])
+}
+
+@Test @MainActor func splitForgetsMixedSampleAndRelearns() async throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    try f.installModel()
+    f.model.setVoiceConsent(true)
+    f.model.voiceEmbedOverride = { _, spans, _ in spans.mapValues { _ in [1, 0, 0, 0] } }
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Anna Testowa")
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    await waitUntil { f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [50] }
+    f.model.splitSpeaker(item: f.item, original: "S2")
+    await waitUntil { f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [30] }
+    #expect(f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [30])
+}

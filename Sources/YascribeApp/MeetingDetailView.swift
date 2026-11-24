@@ -377,7 +377,7 @@ struct UtteranceRow: View {
                         .help(recognized.map { _ in String(localized: "Recognized by voice") } ?? String(localized: "Speaker \(number), rename"))
                         .accessibilityLabel("Speaker \(number), rename")
                         .popover(isPresented: $picker.isPresented) {
-                            let options = model.speakerMergeOptions(item, key: key, numbers: item.speakerMarkers.numbers)
+                            let options = model.speakerMergeOptions(item, key: key)
                             SpeakerPicker(attendees: item.notes.meta.calendarEvent?.attendees ?? [],
                                           known: KnownPeople.load(root: model.paths.root).names,
                                           currentName: item.speakers?.names?[key], number: number, recognized: recognized,

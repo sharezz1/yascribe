@@ -83,3 +83,16 @@ private let base = make([seg("A", 0, 10), seg("B", 10, 15), seg("C", 15, 30), se
     let out = String(decoding: try JSONEncoder().encode(d), as: UTF8.self)
     #expect(!out.contains("merges") && !out.contains("originalSpeaker"))
 }
+
+@Test func splitDropsMovedNameButKeepsLaterRename() throws {
+    var d = make(base.segments, names: ["B": "Bob Example"])
+    d.voiceMatches = ["B": .init(profileID: UUID(), similarity: 0.9, model: "m")]
+    let merged = d.merging(["B": "A"], auto: false)
+    #expect(merged.names == ["A": "Bob Example"] && merged.voiceMatches == nil)
+    #expect(merged.merges?["B"]?.name == "Bob Example")
+    let split = try #require(merged.splitting(original: "B"))
+    #expect(split.names == nil)
+    // Użytkownik nadał celowi inne imię po złączeniu: „Rozdziel” go nie zdejmuje.
+    let renamed = try #require(merged.renamed("A", to: "Anna Testowa")?.splitting(original: "B"))
+    #expect(renamed.names == ["A": "Anna Testowa"])
+}

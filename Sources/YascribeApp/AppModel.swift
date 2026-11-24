@@ -1543,8 +1543,10 @@ final class AppModel {
     }
 
     /// Inni mówcy tego spotkania (do „To ta sama osoba co…”) i grupy złączone w `key` (do „Rozdziel”), TASK-126.
-    func speakerMergeOptions(_ item: SessionItem, key: String, numbers: [String: Int])
+    func speakerMergeOptions(_ item: SessionItem, key: String, numbers given: [String: Int]? = nil)
         -> (others: [(key: String, label: String)], merged: [(key: String, seconds: Double, auto: Bool)]) {
+        // Numery jak w wierszach transkryptu — nie z notatki (bez notatki albo po ponownym wykryciu jej mapa jest pusta).
+        let numbers = given ?? item.transcript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(item.speakers)) } ?? [:]
         let others = numbers.filter { $0.key != key }.sorted { $0.value < $1.value }.map { other in
             (other.key, item.speakers?.names?[other.key] ?? String(localized: "Speaker \(other.value)"))
         }
@@ -1569,10 +1571,18 @@ final class AppModel {
         }
     }
 
-    /// „Rozdziel”: pierwotna grupa wraca osobno, bez imienia.
-    /// shortcut: próbka głosu złączonej mowy zostaje w profilu; dopisać forget+relearn, jeśli profile zaczną się mylić po rozdzieleniu.
+    /// „Rozdziel”: pierwotna grupa wraca osobno, bez imienia. Próbka głosu złączonej mowy schodzi od razu (zawiera cudzą mowę);
+    /// przy zgodzie cel uczy się od nowa z tego, co mu zostało.
     func splitSpeaker(item: SessionItem, original: String) {
-        editSpeakers(item, failure: { String(localized: "Couldn't split speakers: \($0)") }) { $0.splitting(original: original) } after: { _, _, _ in }
+        editSpeakers(item, failure: { String(localized: "Couldn't split speakers: \($0)") }) { $0.splitting(original: original) } after: { runID, previous, split in
+            guard let target = previous.merges?[original]?.into else { return }
+            let mixed = VoiceSample.id(session: item.id, run: runID, key: previous.voiceSampleKey(target), digest: previous.segmentsDigest)
+            var updated = voiceProfiles
+            updated.forget(sampleID: mixed)
+            if updated != voiceProfiles { voiceProfiles = updated; saveVoiceProfiles() }
+            guard let name = split.names?[target], split.voiceMatches?[target] == nil, settings.voiceProfiles == true else { return }
+            learnVoice(VoiceLearnRequest(sessionURL: item.url, runID: runID, key: target, name: name, diarization: split))
+        }
     }
 
     /// Odczyt na nowo, zmiana, zapis — poza trwającym wykrywaniem (jego zapis nadpisałby ręczną zmianę).
@@ -1748,7 +1758,8 @@ final class AppModel {
                 guard VoiceLearning.mayStore(consent: settings.voiceProfiles), deletions == voiceDeletions else { return }
                 // Imię mogło się zmienić w trakcie liczenia (Anna → Bob): próbka trafia tylko pod imię, które nadal jest w pliku.
                 let current = try? JSONFile.load(SpeakerDiarization?.self, from: RunDirectory(session: request.sessionURL, runID: request.runID).speakers, default: nil)
-                guard VoiceLearning.stillNamed(current, key: request.key, name: request.name, digest: request.diarization.segmentsDigest) else { return }
+                guard VoiceLearning.stillNamed(current, key: request.key, name: request.name, digest: request.diarization.segmentsDigest,
+                                               sampleKey: request.diarization.voiceSampleKey(request.key)) else { return }
                 for id in request.replacing { voiceProfiles.forget(sampleID: id) }
                 voiceProfiles.learn(name: request.name, sample: VoiceSample(id: sampleID, model: model.id, values: vector, seconds: speech.seconds), now: Date())
                 saveVoiceProfiles()

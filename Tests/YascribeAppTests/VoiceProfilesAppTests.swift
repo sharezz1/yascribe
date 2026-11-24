@@ -265,10 +265,11 @@ private actor EmbedGate {
 
 @Test func stillNamedRequiresSameNameAndDetection() {
     let d = Fixture.diarization().renamed("S1", to: "Anna Testowa")!
-    #expect(VoiceLearning.stillNamed(d, key: "S1", name: "anna testowa", digest: d.segmentsDigest))
-    #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Bob Example", digest: d.segmentsDigest))
-    #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Anna Testowa", digest: "other"))
-    #expect(!VoiceLearning.stillNamed(nil, key: "S1", name: "Anna Testowa", digest: d.segmentsDigest))
+    #expect(VoiceLearning.stillNamed(d, key: "S1", name: "anna testowa", digest: d.segmentsDigest, sampleKey: "S1"))
+    #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Bob Example", digest: d.segmentsDigest, sampleKey: "S1"))
+    #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Anna Testowa", digest: "other", sampleKey: "S1"))
+    #expect(!VoiceLearning.stillNamed(nil, key: "S1", name: "Anna Testowa", digest: d.segmentsDigest, sampleKey: "S1"))
+    #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Anna Testowa", digest: d.segmentsDigest, sampleKey: "S1+S2"))
 }
 
 @Test @MainActor func deleteDuringLearningStaysDeleted() async throws {

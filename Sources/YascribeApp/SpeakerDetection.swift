@@ -66,8 +66,10 @@ enum VoiceLearning {
     static func mayStore(consent: Bool?) -> Bool { consent == true }
 
     /// Ten sam mówca nadal nosi to ręczne imię w tym samym wykryciu (nie zmieniono go ani nie wykryto mówców ponownie).
-    static func stillNamed(_ d: SpeakerDiarization?, key: String, name: String, digest: String) -> Bool {
-        guard let d, d.segmentsDigest == digest, d.voiceMatches?[key] == nil, let current = d.names?[key] else { return false }
+    /// `sampleKey`: złożenie grupy — łączenie i rozdzielanie nie zmieniają skrótu, ale zmieniają, czyją mowę liczono.
+    static func stillNamed(_ d: SpeakerDiarization?, key: String, name: String, digest: String, sampleKey: String) -> Bool {
+        guard let d, d.segmentsDigest == digest, d.voiceSampleKey(key) == sampleKey, d.voiceMatches?[key] == nil,
+              let current = d.names?[key] else { return false }
         return current.caseInsensitiveCompare(name) == .orderedSame
     }
 }
