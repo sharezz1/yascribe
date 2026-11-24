@@ -3,7 +3,8 @@ import Foundation
 public enum SpeakerLabels {
     public static let nearestRadius = 1.0
 
-    public static func labels(for t: Transcript, diarization: SpeakerDiarization?) -> [String?] {
+    /// Etykiety wypowiedzi źródłowych, bez podziału (TASK-127) — tylko testy; widok i notatki biorą `withSpeakerLabels`.
+    static func labels(for t: Transcript, diarization: SpeakerDiarization?) -> [String?] {
         let keys = speakerKeys(for: t, diarization: diarization)
         let numbered = numbers(keys: keys, in: t)
         return keys.map { $0.flatMap { key in diarization?.names?[key] ?? numbered[key].map { "Speaker \($0)" } } }
@@ -26,7 +27,7 @@ public enum SpeakerLabels {
     }
 
     /// Odcinki bez okruchów (klucz z mniej niż `minClusterSeconds` mowy) i początek pierwszego odcinka każdego klucza (remisy).
-    private static func usable(_ diarization: SpeakerDiarization) -> (segments: [SpeakerDiarization.Segment], first: [String: Double]) {
+    static func usable(_ diarization: SpeakerDiarization) -> (segments: [SpeakerDiarization.Segment], first: [String: Double]) {
         var totals: [String: Double] = [:]
         var first: [String: Double] = [:]
         for segment in diarization.segments {
@@ -88,9 +89,12 @@ public enum SpeakerLabels {
     /// Bez znaczników słów (`approximateTiming`) nie dzielimy. Tekst tnie wyrównanie kluczy słów i tokenów, bo korekta, poprawka
     /// ręczna i Replacement zmieniają tylko `text`. Granica w środku zmienionego bloku tnie go proporcjonalnie, więc podział
     /// (i numeracja „Speaker N”) nie zależy od tekstu; bez podziału tylko, gdy tokenów jest mniej niż części.
-    static func split(_ u: Utterance, index: Int, diarization: SpeakerDiarization) -> [Utterance] {
+    /// shortcut: tekst krótszy niż liczba części (np. ręczna poprawka do jednego słowa) zostaje w całości, więc numeracja
+    /// „Speaker N” tej wypowiedzi zależy od tekstu, a `[[SN]]` liczy ją z surowego; zmienić, jeśli numery w notatce i widoku się rozjadą.
+    static func split(_ u: Utterance, index: Int,
+                      usable: (segments: [SpeakerDiarization.Segment], first: [String: Double])) -> [Utterance] {
         guard u.speaker == .them, !u.approximateTiming, u.words.count >= 2 * minPartWords else { return [] }
-        let (segments, first) = usable(diarization)
+        let (segments, first) = usable
         var keys = u.words.map { most(overlap($0.start, $0.end, segments), first: first) ?? nearest($0.start, $0.end, segments) }
         // Słowo w ciszy diaryzacji dalej niż `nearestRadius` od odcinka dziedziczy klucz poprzednika (przodujące — następnika).
         guard let known = keys.firstIndex(where: { $0 != nil }) else { return [] }
@@ -158,8 +162,9 @@ public extension Transcript {
         let keys = SpeakerLabels.speakerKeys(for: self, diarization: diarization)
         var result = self
         result.utterances = []
+        let usable = diarization.map(SpeakerLabels.usable)
         for (index, u) in utterances.enumerated() {
-            let parts = diarization.map { SpeakerLabels.split(u, index: index, diarization: $0) } ?? []
+            let parts = usable.map { SpeakerLabels.split(u, index: index, usable: $0) } ?? []
             if parts.isEmpty {
                 var whole = u
                 whole.speakerKey = keys[index]

@@ -407,13 +407,11 @@ struct TranscriptTab: View {
         let corrected = state.useCorrected
         // Szkic z poprzedniego przebiegu (nowy przebieg został bieżącym) nie blokuje ołówków — nowy go zastępuje.
         let active = state.segmentDraft.map { $0.runID == item.runID } ?? false
-        // Część podzielonej wypowiedzi (TASK-127): edytujemy całe źródło (indeks, początek i tekst z `part`), edytor w pierwszej części.
         let source = u.part?.index ?? index
-        if let runID = item.runID, !moving, !active, u.isFirstPart, item.canEdit(corrected: corrected) {
-            let text = u.part?.text ?? u.text
+        if let runID = item.runID, !moving, !active, let target = Self.editTarget(index, u), item.canEdit(corrected: corrected) {
             startEdit = {
-                state.segmentDraft = SegmentDraft(runID: runID, index: source, speaker: u.speaker, start: u.part?.start ?? u.start,
-                                                  corrected: corrected, initial: text, text: text)
+                state.segmentDraft = SegmentDraft(runID: runID, index: target.index, speaker: u.speaker, start: target.start,
+                                                  corrected: corrected, initial: target.text, text: target.text)
             }
         }
         let onSave: (() -> Void)? = moving ? nil : { save() }
@@ -428,7 +426,7 @@ struct TranscriptTab: View {
             if hidden {
                 row.onRestore = { setHidden([index], in: t, false) }
             } else {
-                row.deleteCount = Set(targets.filter(t.utterances.indices.contains).map { t.utterances[$0].part?.index ?? $0 }).count
+                row.deleteCount = Self.sourceCount(targets, in: t)
                 row.onDelete = { setHidden(targets, in: t, true) }
                 row.onSelect = { command, shift in
                     state.click(index, command: command, shift: shift, runID: runID, corrected: state.useCorrected, visible: visible)
@@ -438,12 +436,33 @@ struct TranscriptTab: View {
         return row
     }
 
+    // Części podzielonej wypowiedzi (TASK-127) to jedno źródło: edycja całości w pierwszej części, ukrycie i liczniki po źródłach.
+    // `t` musi mieć wszystkie wypowiedzi (`includeHidden: true`), bo `part.index` to pozycja w transkrypcie przed etykietami.
+
+    /// Indeks, początek i tekst do edycji; `nil` w dalszych częściach (edytor tylko w pierwszej).
+    static func editTarget(_ index: Int, _ u: Utterance) -> (index: Int, start: Double, text: String)? {
+        guard u.isFirstPart else { return nil }
+        return (u.part?.index ?? index, u.part?.start ?? u.start, u.part?.text ?? u.text)
+    }
+
+    /// Klucze ukrycia bez powtórek (obie części dają klucz źródła).
+    static func hiddenKeys(_ indices: [Int], in t: Transcript) -> [TranscriptEdits.Hidden] {
+        indices.filter(t.utterances.indices.contains).map { TranscriptEdits.Hidden(t.utterances[$0]) }
+            .reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+    }
+
+    /// Liczba wypowiedzi źródłowych pod wierszami `indices` („N selected”, „Delete N”).
+    static func sourceCount(_ indices: some Collection<Int>, in t: Transcript) -> Int {
+        Set(indices.filter(t.utterances.indices.contains).map { t.utterances[$0].part?.index ?? $0 }).count
+    }
+
+    /// Ukryte wypowiedzi źródłowe („Show deleted (N)”).
+    static func hiddenSourceCount(_ t: Transcript) -> Int { t.utterances.filter { $0.hidden == true && $0.isFirstPart }.count }
+
     /// Ukrycie (TASK-119) po mówcy i początku z pełnego transkryptu tej wersji; po sukcesie pasek „Undo”.
     private func setHidden(_ indices: [Int], in t: Transcript, _ on: Bool) {
         guard let runID = item.runID else { return }
-        // Części jednej wypowiedzi dają ten sam klucz (TASK-127): bez powtórek, by „Deleted N segments” liczyło źródła.
-        let keys = indices.filter(t.utterances.indices.contains).map { TranscriptEdits.Hidden(t.utterances[$0]) }
-            .reduce(into: [TranscriptEdits.Hidden]()) { if !$0.contains($1) { $0.append($1) } }
+        let keys = Self.hiddenKeys(indices, in: t)
         guard model.setHidden(item, runID: runID, keys: keys, hidden: on) else { return }
         if on {
             state.lastHidden = .init(runID: runID, keys: keys)
@@ -456,10 +475,10 @@ struct TranscriptTab: View {
     /// Pasek zaznaczenia, „Undo” po usunięciu i przełącznik „Show deleted”.
     @ViewBuilder private var hiddenBar: some View {
         if let t = shown {
-            let count = t.utterances.filter { $0.hidden == true && $0.isFirstPart }.count
+            let count = Self.hiddenSourceCount(t)
             if !selected.isEmpty, canHide {
                 HStack(spacing: 8) {
-                    Text(String.localizedStringWithFormat(NSLocalizedString("%lld selected", comment: ""), Int64(selected.count)))
+                    Text(String.localizedStringWithFormat(NSLocalizedString("%lld selected", comment: ""), Int64(Self.sourceCount(selected, in: t))))
                         .font(.callout).foregroundStyle(.mnText2)
                     Button(String(localized: "Delete")) { setHidden(selected.sorted(), in: t, true) }.buttonStyle(.pillSmall)
                     Button(String(localized: "Cancel")) { state.clearSelection() }.buttonStyle(.pillSmall)
