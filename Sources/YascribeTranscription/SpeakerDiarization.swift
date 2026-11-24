@@ -154,12 +154,18 @@ extension SpeakerDiarization {
                 result.segments[i].speaker = target
             }
             var merges = result.merges ?? [:]
-            for (key, record) in merges where record.into == source { merges[key]?.into = target }
             var names = result.names ?? [:], matches = result.voiceMatches ?? [:], rejected = result.voiceRejected ?? [:]
+            // Imię źródła mogło przyjść z wcześniej złączonej grupy (kaskada): wtedy należy do niej, nie do źródła.
+            let owner = merges.first { $0.value.into == source && $0.value.moved == true && $0.value.name == names[source] }?.key
             // Dopasowanie z profilu nie przechodzi: przeniesione imię jest odtąd zwykłym imieniem grupy.
             let movedName = names[target] == nil ? names[source] : nil
             if let movedName { names[target] = movedName }
-            merges[source] = MergeRecord(into: target, auto: auto, name: names[source], moved: movedName == nil ? nil : true)
+            for (key, record) in merges where record.into == source {
+                merges[key]?.into = target
+                if key == owner { merges[key]?.moved = movedName == nil ? nil : true }
+            }
+            merges[source] = MergeRecord(into: target, auto: auto, name: owner == nil ? names[source] : nil,
+                                         moved: movedName != nil && owner == nil ? true : nil)
             result.merges = merges
             names[source] = nil; matches[source] = nil; rejected[source] = nil
             result.names = names.isEmpty ? nil : names
@@ -169,7 +175,7 @@ extension SpeakerDiarization {
         return result
     }
 
-    /// Cofa złączenie pierwotnego klucza; wraca bez imienia. `nil` = ten klucz nie był złączony.
+    /// Cofa złączenie pierwotnego klucza; grupa wraca z imieniem, które miała przy złączeniu. `nil` = ten klucz nie był złączony.
     public func splitting(original: String) -> SpeakerDiarization? {
         guard merges?[original] != nil else { return nil }
         var result = self

@@ -97,3 +97,18 @@ private let base = make([seg("A", 0, 10), seg("B", 10, 15), seg("C", 15, 30), se
     let renamed = try #require(merged.renamed("A", to: "Anna Testowa")?.splitting(original: "B"))
     #expect(renamed.names == ["A": "Anna Testowa", "B": "Bob Example"])
 }
+
+@Test func cascadeNameStaysWithItsOwner() throws {
+    // B („Bob”) → A (bez imienia), potem A → C: imię należy do B, nie do A.
+    for cName in [nil, "Carol Example"] as [String?] {
+        var start = make(base.segments, names: ["B": "Bob Example"])
+        if let cName { start.names?["C"] = cName }
+        let d = start.merging(["B": "A"], auto: false).merging(["A": "C"], auto: false)
+        #expect(d.names?["C"] == (cName ?? "Bob Example"))
+        for order in [["A", "B"], ["B", "A"]] {
+            var s = d
+            for key in order { s = try #require(s.splitting(original: key)) }
+            #expect(s.names?["A"] == nil && s.names?["B"] == "Bob Example" && s.names?["C"] == cName, "\(cName ?? "-") \(order)")
+        }
+    }
+}
