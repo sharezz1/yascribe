@@ -34,7 +34,8 @@ extension CLI {
             }
             let speech = VoiceSpans.speech(diarization).filter { $0.value.seconds >= VoiceMatcher.minSeconds && !$0.value.spans.isEmpty }
             if speech.isEmpty { FileHandle.standardError.write(Data("\(session.lastPathComponent): brak mówców ≥ 20 s z czasem toru\n".utf8)); continue }
-            let vectors = try await embedder.embed(systemTrack: session.appendingPathComponent("system.caf"), speakers: speech.mapValues(\.spans), model: model)
+            guard speech.count > 1 else { print("za mało grup z mową ≥ 1 s"); return }
+        let vectors = try await embedder.embed(systemTrack: session.appendingPathComponent("system.caf"), speakers: speech.mapValues(\.spans), model: model)
             for key in vectors.keys.sorted() {
                 let name = diarization.names?[key].map { "(\($0))" } ?? ""
                 rows.append(("\(session.lastPathComponent.suffix(12)):\(key)\(name)", speech[key]!.seconds, vectors[key]!))
@@ -56,7 +57,14 @@ extension CLI {
         }
         // Plik mógł już być złączony: liczymy na pierwotnych grupach.
         var original = diarization
-        original.segments = diarization.segments.map { var s = $0; s.speaker = s.originalSpeaker ?? s.speaker; s.originalSpeaker = nil; return s }
+        // Pliki sprzed TASK-117 nie mają czasu toru.
+        // shortcut: czas toru = czas sesji − przesunięcie toru (bez dryfu kotwic); wystarcza do kalibracji, nie do zapisu.
+        let offset = (try? SessionDirectory(url: session).summarize()).map { SessionClock(summary: $0).sessionSeconds(track: "system", trackSeconds: 0) } ?? 0
+        original.segments = diarization.segments.map {
+            var s = $0; s.speaker = s.originalSpeaker ?? s.speaker; s.originalSpeaker = nil
+            if s.trackStart == nil || s.trackEnd == nil { s.trackStart = max(s.start - offset, 0); s.trackEnd = max(s.end - offset, 0) }
+            return s
+        }
         original.merges = nil
         let speech = VoiceSpans.speech(original).filter { !$0.value.spans.isEmpty }
         let attendees = NotesStore(session: session).readMeta().calendarEvent?.attendees?.count ?? 0
