@@ -54,6 +54,18 @@ public enum SpeakerLabels {
         return overlap
     }
 
+    /// Najbliższy odcinek nie dalej niż `nearestRadius` (remis: nazwa).
+    private static func nearest(_ start: Double, _ end: Double, _ segments: [SpeakerDiarization.Segment]) -> String? {
+        var best: (distance: Double, speaker: String)?
+        for segment in segments {
+            let distance = max(segment.start - end, start - segment.end)
+            guard distance <= nearestRadius else { continue }
+            if let b = best, b.distance < distance || (b.distance == distance && b.speaker <= segment.speaker) { continue }
+            best = (distance, segment.speaker)
+        }
+        return best?.speaker
+    }
+
     static func speakerKeys(for t: Transcript, diarization: SpeakerDiarization?) -> [String?] {
         guard let diarization else { return Array(repeating: nil, count: t.utterances.count) }
         let (segments, first) = usable(diarization)
@@ -63,13 +75,7 @@ public enum SpeakerLabels {
             if !overlap.isEmpty {
                 assigned[index] = most(overlap, first: first)
             } else {
-                let distances: [(distance: Double, speaker: String)] = segments.map { segment in
-                    (max(segment.start - utterance.end, utterance.start - segment.end), segment.speaker)
-                }
-                let nearest = distances.filter { $0.distance <= nearestRadius }.sorted { a, b in
-                    a.distance == b.distance ? a.speaker < b.speaker : a.distance < b.distance
-                }
-                assigned[index] = nearest.first?.speaker
+                assigned[index] = nearest(utterance.start, utterance.end, segments)
             }
         }
         return assigned
@@ -85,8 +91,8 @@ public enum SpeakerLabels {
     static func split(_ u: Utterance, index: Int, diarization: SpeakerDiarization) -> [Utterance] {
         guard u.speaker == .them, !u.approximateTiming, u.words.count >= 2 * minPartWords else { return [] }
         let (segments, first) = usable(diarization)
-        var keys = u.words.map { most(overlap($0.start, $0.end, segments), first: first) }
-        // Słowo w ciszy diaryzacji dziedziczy klucz poprzednika (przodujące — następnika).
+        var keys = u.words.map { most(overlap($0.start, $0.end, segments), first: first) ?? nearest($0.start, $0.end, segments) }
+        // Słowo w ciszy diaryzacji dalej niż `nearestRadius` od odcinka dziedziczy klucz poprzednika (przodujące — następnika).
         guard let known = keys.firstIndex(where: { $0 != nil }) else { return [] }
         for i in keys.indices where keys[i] == nil { keys[i] = i < known ? keys[known] : keys[i - 1] }
         var runs: [(key: String, words: Range<Int>)] = []

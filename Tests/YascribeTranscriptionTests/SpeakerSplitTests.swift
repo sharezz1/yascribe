@@ -89,12 +89,13 @@ private func labeled(_ us: [Utterance], _ segments: [SpeakerDiarization.Segment]
 }
 
 @Test func wordsWithoutOverlapFollowNeighbour() {
-    // Słowo w ciszy diaryzacji (przed pierwszym odcinkiem i między odcinkami) dziedziczy klucz sąsiada.
+    // Słowo w ciszy diaryzacji: najbliższy odcinek do 1 s (gamma → A, Epsilon → B, jak „Tam” w prawdziwej sesji),
+    // dalej — klucz sąsiada (zero → następnik A, delta → poprzednik A).
     let gappy = [SpeakerDiarization.Segment(speaker: "A", start: 134, end: 146.05),
                  SpeakerDiarization.Segment(speaker: "B", start: 151.05, end: 170)]
     let early = [("zero", 130.0, 131.0)]
     let parts = labeled([utterance(early + wordsA + wordsB)], gappy)
-    #expect(parts.map(\.text) == ["zero alfa beta gamma delta. Epsilon", "zeta eta theta."])
+    #expect(parts.map(\.text) == ["zero alfa beta gamma delta.", "Epsilon zeta eta theta."])
     #expect(parts.map(\.speakerKey) == ["A", "B"])
 }
 
