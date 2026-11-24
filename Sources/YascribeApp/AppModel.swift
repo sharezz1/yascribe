@@ -227,6 +227,8 @@ final class AppModel {
     var voiceProfiles = VoiceProfiles()
     /// Mówca czekający na odpowiedź w oknie zgody (pierwsze zapamiętanie głosu).
     var voiceConsentPending: VoiceLearnRequest?
+    /// Rośnie przy każdym usunięciu profilu: nauka liczona przed usunięciem nie odtwarza usuniętej biometrii.
+    @ObservationIgnored private var voiceDeletions = 0
     /// Testy: liczenie odcisków bez modelu CoreML.
     @ObservationIgnored var voiceEmbedOverride: VoiceContext.Embed?
     @ObservationIgnored private lazy var voiceEmbedder = VoiceEmbedder(diarizerStore: speakerModel.store, campPlusStore: campPlusModel.store)
@@ -1661,6 +1663,7 @@ final class AppModel {
         if let refusal = voiceRefusal(request) { lastError = refusal; return }
         let model = voiceModel, embed = voiceEmbed
         let track = SessionDirectory(url: request.sessionURL).trackURL("system")
+        let deletions = voiceDeletions
         let sampleID = VoiceSample.id(session: request.sessionURL.lastPathComponent, run: request.runID, key: request.key,
                                       digest: request.diarization.segmentsDigest)
         Task {
@@ -1669,7 +1672,7 @@ final class AppModel {
                     lastError = String(localized: "Couldn't remember the voice: no speech found in the recording.")
                     return
                 }
-                guard VoiceLearning.mayStore(consent: settings.voiceProfiles) else { return }
+                guard VoiceLearning.mayStore(consent: settings.voiceProfiles), deletions == voiceDeletions else { return }
                 // Imię mogło się zmienić w trakcie liczenia (Anna → Bob): próbka trafia tylko pod imię, które nadal jest w pliku.
                 let current = try? JSONFile.load(SpeakerDiarization?.self, from: RunDirectory(session: request.sessionURL, runID: request.runID).speakers, default: nil)
                 guard VoiceLearning.stillNamed(current, key: request.key, name: request.name, digest: request.diarization.segmentsDigest) else { return }
@@ -1700,12 +1703,14 @@ final class AppModel {
     }
 
     func deleteVoiceProfile(_ id: UUID) {
+        voiceDeletions += 1
         voiceProfiles.remove(id: id)
         saveVoiceProfiles()
     }
 
     /// Usuwa plik profili i jego odłożone uszkodzone kopie (`voice-profiles.json.corrupt-…`).
     func deleteAllVoiceProfiles() {
+        voiceDeletions += 1
         do {
             try VoiceProfiles.delete(root: paths.root)
             let fm = FileManager.default

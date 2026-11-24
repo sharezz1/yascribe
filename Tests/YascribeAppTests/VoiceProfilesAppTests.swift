@@ -270,3 +270,18 @@ private actor EmbedGate {
     #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Anna Testowa", digest: "other"))
     #expect(!VoiceLearning.stillNamed(nil, key: "S1", name: "Anna Testowa", digest: d.segmentsDigest))
 }
+
+@Test @MainActor func deleteDuringLearningStaysDeleted() async throws {
+    let f = try Fixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    let gate = EmbedGate()
+    await gate.setHold()
+    f.model.voiceEmbedOverride = { _, speakers, _ in await gate.embed(speakers) }
+    f.model.setVoiceConsent(true)
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Anna Testowa")
+    while await gate.calls == 0 { await Task.yield() }
+    f.model.deleteAllVoiceProfiles()
+    await gate.release()
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(f.model.voiceProfiles.profiles.isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: VoiceProfiles.url(root: f.root).path))
+}
