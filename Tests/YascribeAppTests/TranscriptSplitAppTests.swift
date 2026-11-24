@@ -55,3 +55,17 @@ private func shown(hiddenFirst: Bool = false, after: Bool = false) -> Transcript
     #expect(TranscriptTab.sourceCount([2, 3], in: t) == 2)
     #expect(TranscriptTab.sourceCount([1, 2, 3], in: t) == 2)
 }
+
+@Test @MainActor func sourceCountUsesSourceNotRowBetweenTwoSplits() {
+    // Źródła: 0 → wiersze 0,1; 1 → wiersz 2; 2 → wiersze 3,4. Wiersze {2, 3} to dwa źródła (1 i 2), choć wiersz 2 == źródło 2.
+    func row(_ source: Int, part: Bool) -> Utterance {
+        var u = Utterance(speaker: .them, start: Double(source), end: Double(source) + 1, text: "x", words: [],
+                          approximateTiming: false, languageMismatch: nil)
+        u.sourceIndex = source
+        if part { u.part = UtterancePart(index: source, start: Double(source), text: "x", isFirst: false) }
+        return u
+    }
+    let t = Transcript(utterances: [row(0, part: true), row(0, part: true), row(1, part: false), row(2, part: true), row(2, part: true)],
+                       failedChunks: [])
+    #expect(TranscriptTab.sourceCount([2, 3], in: t) == 2)
+}
