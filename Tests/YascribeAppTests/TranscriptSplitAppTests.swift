@@ -69,3 +69,13 @@ private func shown(hiddenFirst: Bool = false, after: Bool = false) -> Transcript
                        failedChunks: [])
     #expect(TranscriptTab.sourceCount([2, 3], in: t) == 2)
 }
+
+@Test @MainActor func selectionDropsWhenSplitLayoutChanges() {
+    // Złączenie mówców zlewa części: te same numery wierszy wskazują już inne wypowiedzi.
+    let state = MeetingViewState()
+    let split = TranscriptTab.rows(shown(after: true))
+    #expect(split == [0, 1, 1, 2])
+    state.click(3, command: true, shift: false, runID: "r", corrected: false, visible: [0, 1, 2, 3], rows: split)
+    #expect(state.selected(runID: "r", corrected: false, rows: split) == [3])
+    #expect(state.selected(runID: "r", corrected: false, rows: [0, 1, 2]).isEmpty)
+}

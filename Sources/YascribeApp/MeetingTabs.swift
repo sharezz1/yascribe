@@ -46,17 +46,18 @@ final class MeetingViewState: ObservableObject {
     /// Ostatnio ukryte wypowiedzi — pasek „Undo”.
     @Published var lastHidden: HiddenUndo?
 
-    struct SelectionScope: Equatable { var runID: String; var corrected: Bool }
+    /// `rows`: źródło każdego wiersza (TASK-127) — złączenie albo rozdzielenie mówców przesuwa podział, więc i numery wierszy.
+    struct SelectionScope: Equatable { var runID: String; var corrected: Bool; var rows: [Int] = [] }
     struct HiddenUndo: Equatable { var runID: String; var keys: [TranscriptEdits.Hidden] }
 
-    /// Zaznaczenie z innego przebiegu albo wersji (inne indeksy) nie obowiązuje.
-    func selected(runID: String?, corrected: Bool) -> Set<Int> {
-        selectionScope == runID.map { SelectionScope(runID: $0, corrected: corrected) } ? selection : []
+    /// Zaznaczenie z innego przebiegu, wersji albo układu wierszy (inne indeksy) nie obowiązuje.
+    func selected(runID: String?, corrected: Bool, rows: [Int] = []) -> Set<Int> {
+        selectionScope == runID.map { SelectionScope(runID: $0, corrected: corrected, rows: rows) } ? selection : []
     }
 
     /// ⌘-klik przełącza wiersz, ⇧-klik zaznacza zakres od kotwicy po widocznych wierszach (`visible` w kolejności listy).
-    func click(_ index: Int, command: Bool, shift: Bool, runID: String, corrected: Bool, visible: [Int]) {
-        let scope = SelectionScope(runID: runID, corrected: corrected)
+    func click(_ index: Int, command: Bool, shift: Bool, runID: String, corrected: Bool, visible: [Int], rows: [Int] = []) {
+        let scope = SelectionScope(runID: runID, corrected: corrected, rows: rows)
         if selectionScope != scope { selection = []; selectionAnchor = nil; selectionScope = scope }
         if shift, let anchor = selectionAnchor, let a = visible.firstIndex(of: anchor), let b = visible.firstIndex(of: index) {
             selection.formUnion(visible[min(a, b)...max(a, b)])
@@ -336,7 +337,11 @@ struct TranscriptTab: View {
     private var modelName: String? { model.notes.correctionAssignment(for: item)?.model }
     /// Pełny transkrypt (z ukrytymi, TASK-119): indeksy ▶/✎ to pozycje w `utterances`; ukryte wiersze pokazuje tylko „Show deleted”.
     private var shown: Transcript? { model.transcript(of: item, corrected: state.useCorrected, includeHidden: true) }
-    private var selected: Set<Int> { state.selected(runID: item.runID, corrected: state.useCorrected) }
+    private var selected: Set<Int> {
+        state.selected(runID: item.runID, corrected: state.useCorrected, rows: shown.map(Self.rows) ?? [])
+    }
+    /// Układ wierszy dla zakresu zaznaczenia: źródło każdego wiersza.
+    static func rows(_ t: Transcript) -> [Int] { t.utterances.indices.map { t.utterances[$0].sourceIndex ?? $0 } }
     private var canHide: Bool { item.runID != nil && !moving }
     /// Przebieg w Auto: jedyna flaga to „obcy alfabet" (T1), więc etykieta mówi to wprost. Z migawki przebiegu (I2).
     private var isAuto: Bool { model.runLanguage(item).isAuto }
@@ -429,7 +434,8 @@ struct TranscriptTab: View {
                 row.deleteCount = Self.sourceCount(targets, in: t)
                 row.onDelete = { setHidden(targets, in: t, true) }
                 row.onSelect = { command, shift in
-                    state.click(index, command: command, shift: shift, runID: runID, corrected: state.useCorrected, visible: visible)
+                    state.click(index, command: command, shift: shift, runID: runID, corrected: state.useCorrected, visible: visible,
+                                rows: Self.rows(t))
                 }
             }
         }
