@@ -233,3 +233,40 @@ private actor EmbedGate {
     let saved = try #require(try f.speakers())
     #expect(saved.names == nil && saved.voiceMatches == nil && saved.segments.count == 2)
 }
+
+@Test @MainActor func renameDuringLearningStoresOnlyLatestName() async throws {
+    let f = try Fixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    let gate = EmbedGate()
+    await gate.setHold()
+    f.model.voiceEmbedOverride = { _, speakers, _ in await gate.embed(speakers) }
+    f.model.setVoiceConsent(true)
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Anna Testowa")
+    while await gate.calls == 0 { await Task.yield() }
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Bob Example")
+    while await gate.calls < 2 { await gate.release(); await Task.yield() }
+    await gate.release()
+    await f.waitFor { f.model.voiceProfiles.profiles.contains { $0.name == "Bob Example" } }
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(f.model.voiceProfiles.profiles.map(\.name) == ["Bob Example"])
+    #expect(f.model.voiceProfiles.profiles.first?.samples.count == 1)
+}
+
+@Test @MainActor func shortSpeakerNamedQuietly() throws {
+    let f = try Fixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    let run = RunDirectory(session: f.session, runID: "run")
+    var d = Fixture.diarization()
+    d.segments[0].end = 10; d.segments[0].trackEnd = 10
+    try JSONFile.save(d, to: run.speakers)
+    f.model.voiceEmbedOverride = { _, _, _ in Issue.record("no embedding for a short speaker"); return [:] }
+    f.model.setVoiceConsent(true)
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Anna Testowa")
+    #expect(try f.speakers()?.names == ["S1": "Anna Testowa"] && f.model.lastError == nil)
+}
+
+@Test func stillNamedRequiresSameNameAndDetection() {
+    let d = Fixture.diarization().renamed("S1", to: "Anna Testowa")!
+    #expect(VoiceLearning.stillNamed(d, key: "S1", name: "anna testowa", digest: d.segmentsDigest))
+    #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Bob Example", digest: d.segmentsDigest))
+    #expect(!VoiceLearning.stillNamed(d, key: "S1", name: "Anna Testowa", digest: "other"))
+    #expect(!VoiceLearning.stillNamed(nil, key: "S1", name: "Anna Testowa", digest: d.segmentsDigest))
+}

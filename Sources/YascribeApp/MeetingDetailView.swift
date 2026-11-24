@@ -374,7 +374,7 @@ struct UtteranceRow: View {
                         }
                     }
                         .buttonStyle(.plain)
-                        .help(recognized != nil ? String(localized: "Recognized by voice") : "")
+                        .help(recognized.map { _ in String(localized: "Recognized by voice") } ?? String(localized: "Speaker \(number), rename"))
                         .accessibilityLabel("Speaker \(number), rename")
                         .popover(isPresented: $picker.isPresented) {
                             SpeakerPicker(attendees: item.notes.meta.calendarEvent?.attendees ?? [],

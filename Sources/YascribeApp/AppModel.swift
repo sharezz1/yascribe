@@ -1656,8 +1656,9 @@ final class AppModel {
 
     /// Odcisk tego mówcy → próbka profilu o jego imieniu. Liczenie poza MainActor (kolejka diaryzacji), zapis tu.
     func learnVoice(_ request: VoiceLearnRequest) {
+        // Krótki mówca i stare pliki bez czasu toru to zwykły przypadek, nie błąd: nazwa zostaje, głosu nie uczymy, bez komunikatu.
+        guard let speech = VoiceSpans.speech(request.diarization)[request.key], speech.seconds >= VoiceMatcher.minSeconds else { return }
         if let refusal = voiceRefusal(request) { lastError = refusal; return }
-        guard let speech = VoiceSpans.speech(request.diarization)[request.key] else { return }
         let model = voiceModel, embed = voiceEmbed
         let track = SessionDirectory(url: request.sessionURL).trackURL("system")
         let sampleID = VoiceSample.id(session: request.sessionURL.lastPathComponent, run: request.runID, key: request.key,
@@ -1669,6 +1670,9 @@ final class AppModel {
                     return
                 }
                 guard VoiceLearning.mayStore(consent: settings.voiceProfiles) else { return }
+                // Imię mogło się zmienić w trakcie liczenia (Anna → Bob): próbka trafia tylko pod imię, które nadal jest w pliku.
+                let current = try? JSONFile.load(SpeakerDiarization?.self, from: RunDirectory(session: request.sessionURL, runID: request.runID).speakers, default: nil)
+                guard VoiceLearning.stillNamed(current, key: request.key, name: request.name, digest: request.diarization.segmentsDigest) else { return }
                 voiceProfiles.learn(name: request.name, sample: VoiceSample(id: sampleID, model: model.id, values: vector, seconds: speech.seconds), now: Date())
                 saveVoiceProfiles()
             } catch is CancellationError {

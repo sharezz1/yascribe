@@ -64,6 +64,12 @@ enum VoiceLearning {
 
     /// Odcisk trafia do pliku wyłącznie przy zgodzie aktualnej w chwili zapisu (zgoda mogła zniknąć w trakcie liczenia).
     static func mayStore(consent: Bool?) -> Bool { consent == true }
+
+    /// Ten sam mówca nadal nosi to ręczne imię w tym samym wykryciu (nie zmieniono go ani nie wykryto mówców ponownie).
+    static func stillNamed(_ d: SpeakerDiarization?, key: String, name: String, digest: String) -> Bool {
+        guard let d, d.segmentsDigest == digest, d.voiceMatches?[key] == nil, let current = d.names?[key] else { return false }
+        return current.caseInsensitiveCompare(name) == .orderedSame
+    }
 }
 
 /// Mówca do zapamiętania po zgodzie (okno zgody w spotkaniu).
