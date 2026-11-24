@@ -124,3 +124,17 @@ private func archiveSpeakers(names: [String: String]? = ["voice": "Anna"]) -> Sp
         #expect(display.map { MeetingArchive.copyLines($0, summary: nil) }?.contains { $0.lowercased().contains("tł") || $0.contains("tlo") } == false)
     }
 }
+
+@Test func noteMarkersSurviveMerge() {
+    var speakers = archiveSpeakers()
+    speakers.segments.append(.init(speaker: "dup", start: 20, end: 30))
+    var summary = NoteSummary(title: nil, markdown: "[[S1]] i [[S2]]", templateID: "t", model: "m", context: "c",
+                              generatedAt: Date(timeIntervalSince1970: 0))
+    summary.speakers = ["1": "voice", "2": "dup"]
+    summary.speakersDigest = speakers.segmentsDigest
+    let merged = speakers.merging(["dup": "voice"], auto: false)
+    #expect(merged.segmentsDigest == speakers.segmentsDigest)
+    let markers = MeetingArchive.speakerMarkers(summary: summary, speakers: merged,
+                                                rawTranscript: transcript([utt("cześć", .them, at: 0), utt("tak", .them, at: 25)]))
+    #expect(markers.resolved(summary.markdown) == "Anna i Anna")
+}

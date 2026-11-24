@@ -10,8 +10,12 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
         /// Czas na torze (nie w sesji) — wejście do odcisku głosu (TASK-117); starsze pliki go nie mają.
         public var trackStart: Double? = nil
         public var trackEnd: Double? = nil
-        public init(speaker: String, start: Double, end: Double, trackStart: Double? = nil, trackEnd: Double? = nil) {
+        /// Pierwotny klucz diaryzatora, gdy grupę złączono z inną (TASK-126); `speaker` to klucz po złączeniu.
+        public var originalSpeaker: String? = nil
+        public init(speaker: String, start: Double, end: Double, trackStart: Double? = nil, trackEnd: Double? = nil,
+                    originalSpeaker: String? = nil) {
             self.speaker = speaker; self.start = start; self.end = end; self.trackStart = trackStart; self.trackEnd = trackEnd
+            self.originalSpeaker = originalSpeaker
         }
     }
 
@@ -30,6 +34,8 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
     public var voiceMatches: [String: VoiceMatch]? = nil
     /// „To nie X” dla mówcy w tym wykryciu; ponowne wykrycie pisze plik od nowa, więc odrzucenia znikają z kluczami.
     public var voiceRejected: [String: [UUID]]? = nil
+    /// Złączenia grup (TASK-126): pierwotny klucz → cel; ślad do „Rozdziel” i tłumaczenia kluczy notatki.
+    public var merges: [String: MergeRecord]? = nil
 
     public init(version: Int, modelPin: String, sensitivity: SpeakerSensitivity?, fa: Double?, fb: Double?,
                 threshold: Double?, minClusterSeconds: Double?, audioFingerprint: String?, createdAt: Date?, segments: [Segment]) {
@@ -79,7 +85,8 @@ public struct SpeakerDiarization: Codable, Equatable, Sendable {
     /// (`speaker_0`…), więc notatka porównuje ten skrót, zanim pokaże imię.
     public var segmentsDigest: String {
         var hasher = SHA256()
-        for s in segments { hasher.update(data: Data("\(s.speaker)\u{0}\(s.start)\u{0}\(s.end)\n".utf8)) }
+        // Pierwotne klucze: złączenie i rozdzielenie nie zmieniają tożsamości wykrycia (notatka, próbki głosu).
+        for s in segments { hasher.update(data: Data("\(s.originalSpeaker ?? s.speaker)\u{0}\(s.start)\u{0}\(s.end)\n".utf8)) }
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
@@ -114,4 +121,67 @@ public struct VoiceMatch: Codable, Equatable, Sendable {
 
 extension RunDirectory {
     public var speakers: URL { url.appendingPathComponent("speakers.json") }
+}
+
+// MARK: - Łączenie grup (TASK-126)
+
+public struct MergeRecord: Codable, Equatable, Sendable {
+    public var into: String
+    public var auto: Bool
+    public init(into: String, auto: Bool) { self.into = into; self.auto = auto }
+}
+
+extension SpeakerDiarization {
+    /// Bieżący klucz grupy, do której trafił pierwotny klucz diaryzatora (notatka pamięta pierwotne klucze).
+    public func currentKey(_ original: String) -> String { merges?[original]?.into ?? original }
+
+    /// Źródło → cel. Segmenty źródła przechodzą do celu i pamiętają pierwotny klucz; imię źródła przechodzi tylko na cel bez imienia.
+    /// Wpisy z nieobecnym źródłem/celem albo źródło == cel są pomijane (plik mógł się zmienić).
+    public func merging(_ plan: [String: String], auto: Bool) -> SpeakerDiarization {
+        var result = self
+        for source in plan.keys.sorted() {
+            guard let target = plan[source], source != target,
+                  result.segments.contains(where: { $0.speaker == source }),
+                  result.segments.contains(where: { $0.speaker == target }) else { continue }
+            for i in result.segments.indices where result.segments[i].speaker == source {
+                result.segments[i].originalSpeaker = result.segments[i].originalSpeaker ?? source
+                result.segments[i].speaker = target
+            }
+            var merges = result.merges ?? [:]
+            for (key, record) in merges where record.into == source { merges[key] = MergeRecord(into: target, auto: record.auto) }
+            merges[source] = MergeRecord(into: target, auto: auto)
+            result.merges = merges
+            var names = result.names ?? [:], matches = result.voiceMatches ?? [:], rejected = result.voiceRejected ?? [:]
+            if names[target] == nil, let name = names[source] {
+                names[target] = name
+                matches[target] = matches[source]
+            }
+            names[source] = nil; matches[source] = nil; rejected[source] = nil
+            result.names = names.isEmpty ? nil : names
+            result.voiceMatches = matches.isEmpty ? nil : matches
+            result.voiceRejected = rejected.isEmpty ? nil : rejected
+        }
+        return result
+    }
+
+    /// Cofa złączenie pierwotnego klucza; wraca bez imienia. `nil` = ten klucz nie był złączony.
+    public func splitting(original: String) -> SpeakerDiarization? {
+        guard merges?[original] != nil else { return nil }
+        var result = self
+        for i in result.segments.indices where result.segments[i].originalSpeaker == original {
+            result.segments[i].speaker = original
+            result.segments[i].originalSpeaker = nil
+        }
+        result.merges?[original] = nil
+        if result.merges?.isEmpty == true { result.merges = nil }
+        return result
+    }
+
+    /// Pierwotne grupy złączone w `key` (do „Rozdziel”), po kluczu.
+    public func mergedOriginals(into key: String) -> [(key: String, seconds: Double, auto: Bool)] {
+        (merges ?? [:]).filter { $0.value.into == key }.keys.sorted().map { original in
+            let seconds = segments.filter { $0.originalSpeaker == original }.reduce(0) { $0 + $1.end - $1.start }
+            return (original, seconds, merges?[original]?.auto ?? false)
+        }
+    }
 }
