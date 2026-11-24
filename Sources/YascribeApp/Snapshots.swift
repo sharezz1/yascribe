@@ -576,6 +576,14 @@ enum Snapshots {
                         .padding(.horizontal, 30).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
                     }
                 }
+                // TASK-126: „To ta sama osoba co…” i lista „Rozdziel” (grupa automatyczna i ręczna).
+                try render("speaker-picker-merge", size: CGSize(width: 320, height: 520), dark: dark, model: model) {
+                    SpeakerPicker(attendees: [.init(name: "Ala")], known: ["Piotr"], currentName: "Ala", number: 2,
+                                  others: [("first", "Speaker 1"), ("third", "Speaker 3")],
+                                  merged: [("x", 44, true), ("y", 12, false)]) { _ in }
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                        .padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).contentBackground()
+                }
                 // Notatka ze znacznikami mówców: imię i „Speaker N” w kolorach transkryptu, bez podkreślenia linku.
                 let speakerNote = SpeakerMarkers(keys: ["1": "first", "2": "second"], names: ["second": "Ala"], numbers: ["first": 1, "second": 2])
                     .linked(MarkdownBlocks.group("## Decisions\n- [[S2]] will send the forecast by Friday.\n- [[S1]] asked about the budget; [[S2]] agreed."))

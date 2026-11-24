@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import YascribeLocalASR
+import YascribeNotes
 import YascribeProviders
 import YascribeSessionFormat
 import YascribeTranscription
@@ -80,9 +81,23 @@ extension CLI {
         let elapsed = Date().timeIntervalSince(started)
         FileHandle.standardError.write(Data("\n".utf8))
 
-        let diarization = SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
+        var diarization = SpeakerDiarization.fromTrack(segments: segments, clock: SessionClock(summary: summary),
                                                        modelPin: cloudPin ?? (mistral ? MistralDiarization.pin : DiarizerManifest.pin), sensitivity: (mistral || cloud) ? nil : sensitivity,
                                                        audioFingerprint: SpeakerDiarization.audioFingerprint(session: session), createdAt: Date())
+        // TASK-126: to samo łączenie zdublowanych grup co w aplikacji (model mówców; bez niego — grupy bez zmian).
+        if store.status() == .ready {
+            let embedder = VoiceEmbedder(diarizerStore: store, campPlusStore: CampPlusManifest.store(root: YascribePaths.fromEnvironment().root))
+            let track = SessionDirectory(url: session).trackURL("system")
+            let attendees = NotesStore(session: session).readMeta().calendarEvent?.attendees?.count ?? 0
+            do {
+                diarization = try await SpeakerMerge.apply(diarization, expected: SpeakerMerge.expected(attendees: attendees)) {
+                    try await embedder.embed(systemTrack: track, speakers: $0, model: .diarizer)
+                }
+                if let merges = diarization.merges {
+                    print("złączone: " + merges.sorted { $0.key < $1.key }.map { "\($0.key)→\($0.value.into)" }.joined(separator: ", "))
+                }
+            } catch { FileHandle.standardError.write(Data("łączenie mówców pominięte: \(error.localizedDescription)\n".utf8)) }
+        }
         try JSONFile.save(diarization, to: run.speakers, createParents: false)
 
         print("przebieg: \(runID)")

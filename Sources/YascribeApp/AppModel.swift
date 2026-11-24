@@ -231,6 +231,8 @@ final class AppModel {
     @ObservationIgnored private var voiceDeletions = 0
     /// Testy: liczenie odcisków bez modelu CoreML.
     @ObservationIgnored var voiceEmbedOverride: VoiceContext.Embed?
+    /// Testy: odciski do łączenia zdublowanych mówców (TASK-126), niezależnie od atrapy profili.
+    @ObservationIgnored var speakerMergeEmbedOverride: VoiceContext.Embed?
     @ObservationIgnored private lazy var voiceEmbedder = VoiceEmbedder(diarizerStore: speakerModel.store, campPlusStore: campPlusModel.store)
 
     /// `nil` = nieznany model lokalny; pusty = v3 (jak `LocalASRVariant(model:)`).
@@ -1489,10 +1491,22 @@ final class AppModel {
         let http = diarizationHTTP
         let override = speakerWorkOverride
         let voice = voiceContext()
+        let mergeEmbed = speakerMergeEmbed()
         let work = Task.detached { () -> (SpeakerDiarization, String?) in
-            let diarization: SpeakerDiarization
+            var diarization: SpeakerDiarization
             if let override { diarization = try await override() } else {
                 diarization = try await Self.diarization(sessionURL: sessionURL, runID: ticket.runID, store: store, cloud: cloud, http: http)
+            }
+            // TASK-126: złączenie zdublowanych grup przed profilami (profile widzą całą mowę osoby). Odcisk tylko w pamięci,
+            // więc bez zgody na profile; błąd liczenia = grupy bez zmian, bez komunikatu.
+            if let mergeEmbed {
+                let attendees = NotesStore(session: sessionURL).readMeta().calendarEvent?.attendees?.count ?? 0
+                let track = SessionDirectory(url: sessionURL).trackURL("system")
+                do {
+                    diarization = try await SpeakerMerge.apply(diarization, expected: SpeakerMerge.expected(attendees: attendees)) {
+                        try await mergeEmbed(track, $0, .diarizer)
+                    }
+                } catch is CancellationError { throw CancellationError() } catch {}
             }
             // TASK-117: imiona z profili przed zapisem — w tej samej pracy, więc między bramką a zapisem nadal nie ma `await`.
             guard let voice else { return (diarization, nil) }
@@ -1526,6 +1540,69 @@ final class AppModel {
             speakerTasks[id] = nil
         }
         reloadSessions()
+    }
+
+    /// Inni mówcy tego spotkania (do „To ta sama osoba co…”) i grupy złączone w `key` (do „Rozdziel”), TASK-126.
+    func speakerMergeOptions(_ item: SessionItem, key: String, numbers given: [String: Int]? = nil)
+        -> (others: [(key: String, label: String)], merged: [(key: String, seconds: Double, auto: Bool)]) {
+        // Numery jak w wierszach transkryptu — nie z notatki (bez notatki albo po ponownym wykryciu jej mapa jest pusta).
+        let numbers = given ?? item.transcript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(item.speakers)) } ?? [:]
+        let others = numbers.filter { $0.key != key }.sorted { $0.value < $1.value }.map { other in
+            (other.key, item.speakers?.names?[other.key] ?? String(localized: "Speaker \(other.value)"))
+        }
+        return (others, item.speakers?.mergedOriginals(into: key) ?? [])
+    }
+
+    /// Ręczne „To ta sama osoba co…”: `key` dołącza do `target`. Imię celu staje się ręczne; przy zgodzie profil celu
+    /// dostaje próbkę całej złączonej mowy (stare próbki obu grup schodzą).
+    func mergeSpeaker(item: SessionItem, key: String, into target: String) {
+        editSpeakers(item, failure: { String(localized: "Couldn't merge speakers: \($0)") }) { current in
+            var result = current.merging([key: target], auto: false)
+            guard result != current else { return nil }
+            result.voiceMatches?[target] = nil
+            if result.voiceMatches?.isEmpty == true { result.voiceMatches = nil }
+            return result
+        } after: { runID, previous, merged in
+            guard let name = merged.names?[target], settings.voiceProfiles == true else { return }
+            let replacing = [target, key].map {
+                VoiceSample.id(session: item.id, run: runID, key: previous.voiceSampleKey($0), digest: previous.segmentsDigest)
+            }
+            learnVoice(VoiceLearnRequest(sessionURL: item.url, runID: runID, key: target, name: name, diarization: merged, replacing: replacing))
+        }
+    }
+
+    /// „Rozdziel”: pierwotna grupa wraca osobno ze swoim imieniem sprzed złączenia. Próbka głosu złączonej mowy schodzi od razu
+    /// (zawiera cudzą mowę); przy zgodzie obie grupy z imieniem uczą się od nowa ze swojej mowy.
+    func splitSpeaker(item: SessionItem, original: String) {
+        editSpeakers(item, failure: { String(localized: "Couldn't split speakers: \($0)") }) { $0.splitting(original: original) } after: { runID, previous, split in
+            guard let target = previous.merges?[original]?.into else { return }
+            let mixed = VoiceSample.id(session: item.id, run: runID, key: previous.voiceSampleKey(target), digest: previous.segmentsDigest)
+            var updated = voiceProfiles
+            updated.forget(sampleID: mixed)
+            if updated != voiceProfiles { voiceProfiles = updated; saveVoiceProfiles() }
+            guard settings.voiceProfiles == true else { return }
+            for key in [target, original] {
+                guard let name = split.names?[key], split.voiceMatches?[key] == nil else { continue }
+                learnVoice(VoiceLearnRequest(sessionURL: item.url, runID: runID, key: key, name: name, diarization: split))
+            }
+        }
+    }
+
+    /// Odczyt na nowo, zmiana, zapis — poza trwającym wykrywaniem (jego zapis nadpisałby ręczną zmianę).
+    private func editSpeakers(_ item: SessionItem, failure: (String) -> String, change: (SpeakerDiarization) -> SpeakerDiarization?,
+                              after: (String, SpeakerDiarization, SpeakerDiarization) -> Void) {
+        guard let runID = item.runID else { return }
+        guard speakerTickets[item.id] == nil else {
+            lastError = String(localized: "Speakers are being detected. Try again when that finishes.")
+            return
+        }
+        let url = RunDirectory(session: item.url, runID: runID).speakers
+        do {
+            guard let current = try JSONFile.load(SpeakerDiarization?.self, from: url, default: nil), let result = change(current) else { return }
+            try JSONFile.save(result, to: url, createParents: false)
+            reloadSessions()
+            after(runID, current, result)
+        } catch { lastError = failure(error.localizedDescription) }
     }
 
     func detectSpeakersAgain(item: SessionItem) {
@@ -1610,7 +1687,7 @@ final class AppModel {
         } catch { lastError = String(localized: "Couldn't rename speaker: \(error.localizedDescription)"); return }
         if outcome.forgetPrevious {
             var updated = voiceProfiles
-            updated.forget(sampleID: VoiceSample.id(session: item.id, run: runID, key: key, digest: previous.segmentsDigest))
+            updated.forget(sampleID: VoiceSample.id(session: item.id, run: runID, key: previous.voiceSampleKey(key), digest: previous.segmentsDigest))
             if updated != voiceProfiles { voiceProfiles = updated; saveVoiceProfiles() }
         }
         guard outcome.learn, let name = outcome.diarization.names?[key] else { return }
@@ -1640,6 +1717,14 @@ final class AppModel {
         return { try await embedder.embed(systemTrack: $0, speakers: $1, model: $2) }
     }
 
+    /// Łączenie zdublowanych mówców (TASK-126): zawsze modelem mówców; bez pobranego modelu — pominięte.
+    func speakerMergeEmbed() -> VoiceContext.Embed? {
+        if let speakerMergeEmbedOverride { return speakerMergeEmbedOverride }
+        guard speakerModel.store.status() == .ready else { return nil }
+        let embedder = voiceEmbedder
+        return { try await embedder.embed(systemTrack: $0, speakers: $1, model: $2) }
+    }
+
     /// Rozpoznawanie po wykryciu: tylko przy zgodzie, z pobranym modelem, progiem dla modelu i profilem z próbką tego modelu.
     func voiceContext() -> VoiceContext? {
         let model = voiceModel
@@ -1664,7 +1749,8 @@ final class AppModel {
         let model = voiceModel, embed = voiceEmbed
         let track = SessionDirectory(url: request.sessionURL).trackURL("system")
         let deletions = voiceDeletions
-        let sampleID = VoiceSample.id(session: request.sessionURL.lastPathComponent, run: request.runID, key: request.key,
+        let sampleID = VoiceSample.id(session: request.sessionURL.lastPathComponent, run: request.runID,
+                                      key: request.diarization.voiceSampleKey(request.key),
                                       digest: request.diarization.segmentsDigest)
         Task {
             do {
@@ -1675,7 +1761,9 @@ final class AppModel {
                 guard VoiceLearning.mayStore(consent: settings.voiceProfiles), deletions == voiceDeletions else { return }
                 // Imię mogło się zmienić w trakcie liczenia (Anna → Bob): próbka trafia tylko pod imię, które nadal jest w pliku.
                 let current = try? JSONFile.load(SpeakerDiarization?.self, from: RunDirectory(session: request.sessionURL, runID: request.runID).speakers, default: nil)
-                guard VoiceLearning.stillNamed(current, key: request.key, name: request.name, digest: request.diarization.segmentsDigest) else { return }
+                guard VoiceLearning.stillNamed(current, key: request.key, name: request.name, digest: request.diarization.segmentsDigest,
+                                               sampleKey: request.diarization.voiceSampleKey(request.key)) else { return }
+                for id in request.replacing { voiceProfiles.forget(sampleID: id) }
                 voiceProfiles.learn(name: request.name, sample: VoiceSample(id: sampleID, model: model.id, values: vector, seconds: speech.seconds), now: Date())
                 saveVoiceProfiles()
             } catch is CancellationError {

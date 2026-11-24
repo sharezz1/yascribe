@@ -22,6 +22,11 @@ struct SpeakerPicker: View {
     let number: Int
     /// Imię z profilu głosu (TASK-117): podobieństwo 0…1; „Not X” odrzuca profil dla tego mówcy.
     var recognized: Double? = nil
+    /// TASK-126: inni mówcy spotkania („To ta sama osoba co…”) i grupy złączone w tego mówcę („Rozdziel”).
+    var others: [(key: String, label: String)] = []
+    var merged: [(key: String, seconds: Double, auto: Bool)] = []
+    var merge: (String) -> Void = { _ in }
+    var split: (String) -> Void = { _ in }
     let select: (String?) -> Void
     @StateObject private var state = SpeakerPickerState()
 
@@ -46,6 +51,24 @@ struct SpeakerPicker: View {
                     if !options.known.isEmpty { section(String(localized: "Recent"), names: options.known) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }.frame(maxHeight: 240)
+            if !others.isEmpty {
+                Divider()
+                Menu(String(localized: "Same person as…")) {
+                    ForEach(Array(others.enumerated()), id: \.offset) { _, other in Button(other.label) { merge(other.key) } }
+                }.menuStyle(.borderlessButton).fixedSize()
+            }
+            if !merged.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Merged into this speaker").font(.caption).foregroundStyle(.mnText2)
+                    ForEach(Array(merged.enumerated()), id: \.offset) { _, group in
+                        HStack {
+                            Text(SpeakerMergeText.group(seconds: group.seconds, auto: group.auto)).font(.caption)
+                            Spacer()
+                            Button("Split") { split(group.key) }.buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
             if options.canClear, recognized == nil { Divider(); Button("Use Speaker \(number)") { select(nil) }.buttonStyle(.plain) }
         }
         .padding(14).frame(width: 250, alignment: .leading)
@@ -63,3 +86,10 @@ struct SpeakerPicker: View {
 }
 
 private final class SpeakerPickerState: ObservableObject { @Published var query = "" }
+
+enum SpeakerMergeText {
+    static func group(seconds: Double, auto: Bool) -> String {
+        let n = Int(seconds.rounded())
+        return auto ? String(localized: "\(n) s of speech, merged automatically") : String(localized: "\(n) s of speech")
+    }
+}

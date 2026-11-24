@@ -710,11 +710,16 @@ struct SummaryTab: View {
 
     /// Ten sam „Who is this?” co w transkrypcie; zmiana imienia od razu przerysowuje notatkę (bloki zawierają nazwy).
     private func speakerPicker(_ number: Int, close: @escaping () -> Void) -> AnyView {
-        guard let key = item.speakerMarkers.numbers.first(where: { $0.value == number })?.key else { return AnyView(EmptyView()) }
+        let numbers = item.speakerMarkers.numbers
+        guard let key = numbers.first(where: { $0.value == number })?.key else { return AnyView(EmptyView()) }
+        let options = model.speakerMergeOptions(item, key: key, numbers: numbers)
         return AnyView(SpeakerPicker(attendees: item.notes.meta.calendarEvent?.attendees ?? [],
                                      known: KnownPeople.load(root: model.paths.root).names,
                                      currentName: item.speakers?.names?[key], number: number,
-                                     recognized: model.voiceRecognition(item, key: key)) { name in
+                                     recognized: model.voiceRecognition(item, key: key),
+                                     others: options.others, merged: options.merged,
+                                     merge: { model.mergeSpeaker(item: item, key: key, into: $0); close() },
+                                     split: { model.splitSpeaker(item: item, original: $0); close() }) { name in
             model.renameSpeaker(item: item, key: key, name: name)
             close()
         })

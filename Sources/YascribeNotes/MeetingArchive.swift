@@ -31,7 +31,9 @@ public enum MeetingArchive {
                                       rawTranscript: Transcript?) -> SpeakerMarkers {
         let current = speakers.map(\.segmentsDigest)
         let sameDetection = current != nil && summary?.speakersDigest == current
-        return SpeakerMarkers(keys: summary?.speakers, names: speakers?.names ?? [:],
+        // Złączone grupy (TASK-126): notatka pamięta pierwotne klucze, pokazujemy grupę, do której trafiły.
+        let keys = summary?.speakers.map { keys in keys.mapValues { speakers?.currentKey($0) ?? $0 } }
+        return SpeakerMarkers(keys: keys, names: speakers?.names ?? [:],
                               numbers: sameDetection ? rawTranscript.map { SpeakerLabels.numbers(for: $0.withSpeakerLabels(speakers)) } ?? [:] : [:])
     }
 
