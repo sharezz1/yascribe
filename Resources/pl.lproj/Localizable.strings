@@ -1145,3 +1145,13 @@
 "Delete all voice profiles?" = "Usunąć wszystkie profile głosów?";
 "Delete all" = "Usuń wszystkie";
 "License" = "Licencja";
+
+/* TASK-126: zdublowani mówcy */
+"Same person as…" = "To ta sama osoba co…";
+"Merged into this speaker" = "Dołączone do tego mówcy";
+"Split" = "Rozdziel";
+"%lld s of speech, merged automatically" = "%lld s mowy, połączone automatycznie";
+"%lld s of speech" = "%lld s mowy";
+"Speakers are being detected. Try again when that finishes." = "Trwa wykrywanie mówców. Spróbuj ponownie, gdy się zakończy.";
+"Couldn't merge speakers: %@" = "Nie udało się połączyć mówców: %@";
+"Couldn't split speakers: %@" = "Nie udało się rozdzielić mówców: %@";

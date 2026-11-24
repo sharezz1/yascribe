@@ -126,3 +126,92 @@ import YascribeSessionFormat
     await f.model.detectSpeakers(sessionURL: f.session, runID: "run", sensitivity: .medium)
     #expect(try f.speakers()?.merges != nil)
 }
+
+private actor Gate {
+    var waiting: CheckedContinuation<Void, Never>?
+    var started = false
+    func wait() async { started = true; await withCheckedContinuation { waiting = $0 } }
+    func release() { waiting?.resume(); waiting = nil }
+}
+
+@Test @MainActor func manualMergeSavesAndLearnsTarget() async throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    try f.installModel()
+    f.model.setVoiceConsent(true)
+    f.model.voiceEmbedOverride = { _, spans, _ in spans.mapValues { _ in [1, 0, 0, 0] } }
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Anna Testowa")
+    await waitUntil { f.model.voiceProfiles.profiles.first?.samples.count == 1 }
+    let before = try #require(f.model.voiceProfiles.profiles.first?.samples.first)
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    let saved = try #require(try f.speakers())
+    #expect(saved.merges == ["S2": .init(into: "S1", auto: false)] && saved.names == ["S1": "Anna Testowa"])
+    await waitUntil { f.model.voiceProfiles.profiles.first?.samples.first?.id != before.id }
+    #expect(!f.model.voiceProfiles.profiles.isEmpty)
+    // Stara próbka (30 s) zastąpiona próbką całej złączonej mowy (50 s).
+    #expect(f.model.voiceProfiles.profiles.first?.samples.map(\.seconds) == [50])
+}
+
+@Test @MainActor func manualMergeWithoutConsentDoesNotLearn() async throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    try f.installModel()
+    f.model.setVoiceConsent(false)
+    f.model.voiceEmbedOverride = { _, _, _ in Issue.record("no embedding without consent"); return [:] }
+    f.model.renameSpeaker(item: f.item, key: "S1", name: "Anna Testowa")
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(try f.speakers()?.merges?["S2"] != nil && f.model.voiceProfiles.profiles.isEmpty)
+}
+
+@Test @MainActor func manualMergeIntoRecognizedLearns() async throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    try f.installModel()
+    f.model.setVoiceConsent(true)
+    var d = MergeFixture.diarization
+    d.names = ["S1": "Anna Testowa"]
+    d.voiceMatches = ["S1": .init(profileID: UUID(), similarity: 0.9, model: VoiceModel.diarizer.id)]
+    try JSONFile.save(d, to: RunDirectory(session: f.session, runID: "run").speakers)
+    f.model.voiceEmbedOverride = { _, spans, _ in spans.mapValues { _ in [1, 0, 0, 0] } }
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    #expect(try f.speakers()?.voiceMatches == nil)
+    await waitUntil { !f.model.voiceProfiles.profiles.isEmpty }
+    #expect(f.model.voiceProfiles.profiles.map(\.name) == ["Anna Testowa"])
+}
+
+@Test @MainActor func splitRestoresGroup() throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    f.model.splitSpeaker(item: f.item, original: "S2")
+    #expect(try f.speakers() == MergeFixture.diarization)
+}
+
+@Test @MainActor func mergeOnStaleFileIsNoop() throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    f.model.mergeSpeaker(item: f.item, key: "S9", into: "S1")
+    f.model.splitSpeaker(item: f.item, original: "S2")
+    #expect(try f.speakers() == MergeFixture.diarization && f.model.lastError == nil)
+}
+
+@Test @MainActor func mergeRefusedDuringDetection() async throws {
+    let f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    let gate = Gate()
+    f.model.speakerWorkOverride = { await gate.wait(); return MergeFixture.diarization }
+    let detection = Task { await f.model.detectSpeakers(sessionURL: f.session, runID: "run", sensitivity: .medium) }
+    while await !gate.started { await Task.yield() }
+    f.model.mergeSpeaker(item: f.item, key: "S2", into: "S1")
+    let saved = try f.speakers()
+    #expect(f.model.lastError != nil && saved?.merges == nil)
+    await gate.release()
+    await detection.value
+}
+
+@Test @MainActor func mergeOptionsListOthersAndMerged() throws {
+    var f = try MergeFixture(); defer { try? FileManager.default.removeItem(at: f.root) }
+    f.item.speakers = MergeFixture.diarization.merging(["S2": "S1"], auto: true)
+    let options = f.model.speakerMergeOptions(f.item, key: "S1", numbers: ["S1": 1, "S3": 2])
+    #expect(options.others.map(\.key) == ["S3"] && options.others.map(\.label) == ["Speaker 2"])
+    #expect(options.merged.map(\.key) == ["S2"] && options.merged.map(\.auto) == [true])
+}
+
+@MainActor private func waitUntil(_ condition: () -> Bool) async {
+    for _ in 0..<2000 where !condition() { try? await Task.sleep(for: .milliseconds(5)) }
+}

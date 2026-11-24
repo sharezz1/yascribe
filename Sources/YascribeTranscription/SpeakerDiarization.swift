@@ -177,6 +177,11 @@ extension SpeakerDiarization {
         return result
     }
 
+    /// Klucz próbki głosu: grupa z jej złączonymi grupami — po złączeniu powstaje nowa próbka zamiast odrzuconego duplikatu id.
+    public func voiceSampleKey(_ key: String) -> String {
+        ([key] + mergedOriginals(into: key).map(\.key)).joined(separator: "+")
+    }
+
     /// Pierwotne grupy złączone w `key` (do „Rozdziel”), po kluczu.
     public func mergedOriginals(into key: String) -> [(key: String, seconds: Double, auto: Bool)] {
         (merges ?? [:]).filter { $0.value.into == key }.keys.sorted().map { original in

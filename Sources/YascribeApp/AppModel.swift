@@ -1542,6 +1542,55 @@ final class AppModel {
         reloadSessions()
     }
 
+    /// Inni mówcy tego spotkania (do „To ta sama osoba co…”) i grupy złączone w `key` (do „Rozdziel”), TASK-126.
+    func speakerMergeOptions(_ item: SessionItem, key: String, numbers: [String: Int])
+        -> (others: [(key: String, label: String)], merged: [(key: String, seconds: Double, auto: Bool)]) {
+        let others = numbers.filter { $0.key != key }.sorted { $0.value < $1.value }.map { other in
+            (other.key, item.speakers?.names?[other.key] ?? String(localized: "Speaker \(other.value)"))
+        }
+        return (others, item.speakers?.mergedOriginals(into: key) ?? [])
+    }
+
+    /// Ręczne „To ta sama osoba co…”: `key` dołącza do `target`. Imię celu staje się ręczne; przy zgodzie profil celu
+    /// dostaje próbkę całej złączonej mowy (stare próbki obu grup schodzą).
+    func mergeSpeaker(item: SessionItem, key: String, into target: String) {
+        editSpeakers(item, failure: { String(localized: "Couldn't merge speakers: \($0)") }) { current in
+            var result = current.merging([key: target], auto: false)
+            guard result != current else { return nil }
+            result.voiceMatches?[target] = nil
+            if result.voiceMatches?.isEmpty == true { result.voiceMatches = nil }
+            return result
+        } after: { runID, previous, merged in
+            guard let name = merged.names?[target], settings.voiceProfiles == true else { return }
+            let replacing = [target, key].map {
+                VoiceSample.id(session: item.id, run: runID, key: previous.voiceSampleKey($0), digest: previous.segmentsDigest)
+            }
+            learnVoice(VoiceLearnRequest(sessionURL: item.url, runID: runID, key: target, name: name, diarization: merged, replacing: replacing))
+        }
+    }
+
+    /// „Rozdziel”: pierwotna grupa wraca osobno, bez imienia.
+    func splitSpeaker(item: SessionItem, original: String) {
+        editSpeakers(item, failure: { String(localized: "Couldn't split speakers: \($0)") }) { $0.splitting(original: original) } after: { _, _, _ in }
+    }
+
+    /// Odczyt na nowo, zmiana, zapis — poza trwającym wykrywaniem (jego zapis nadpisałby ręczną zmianę).
+    private func editSpeakers(_ item: SessionItem, failure: (String) -> String, change: (SpeakerDiarization) -> SpeakerDiarization?,
+                              after: (String, SpeakerDiarization, SpeakerDiarization) -> Void) {
+        guard let runID = item.runID else { return }
+        guard speakerTickets[item.id] == nil else {
+            lastError = String(localized: "Speakers are being detected. Try again when that finishes.")
+            return
+        }
+        let url = RunDirectory(session: item.url, runID: runID).speakers
+        do {
+            guard let current = try JSONFile.load(SpeakerDiarization?.self, from: url, default: nil), let result = change(current) else { return }
+            try JSONFile.save(result, to: url, createParents: false)
+            reloadSessions()
+            after(runID, current, result)
+        } catch { lastError = failure(error.localizedDescription) }
+    }
+
     func detectSpeakersAgain(item: SessionItem) {
         guard let snapshot = item.runSnapshot, let cloud = cloudProvider(snapshot.providerID) else {
             lastError = String(localized: "Couldn't detect speakers: No API key.")
@@ -1624,7 +1673,7 @@ final class AppModel {
         } catch { lastError = String(localized: "Couldn't rename speaker: \(error.localizedDescription)"); return }
         if outcome.forgetPrevious {
             var updated = voiceProfiles
-            updated.forget(sampleID: VoiceSample.id(session: item.id, run: runID, key: key, digest: previous.segmentsDigest))
+            updated.forget(sampleID: VoiceSample.id(session: item.id, run: runID, key: previous.voiceSampleKey(key), digest: previous.segmentsDigest))
             if updated != voiceProfiles { voiceProfiles = updated; saveVoiceProfiles() }
         }
         guard outcome.learn, let name = outcome.diarization.names?[key] else { return }
@@ -1686,7 +1735,8 @@ final class AppModel {
         let model = voiceModel, embed = voiceEmbed
         let track = SessionDirectory(url: request.sessionURL).trackURL("system")
         let deletions = voiceDeletions
-        let sampleID = VoiceSample.id(session: request.sessionURL.lastPathComponent, run: request.runID, key: request.key,
+        let sampleID = VoiceSample.id(session: request.sessionURL.lastPathComponent, run: request.runID,
+                                      key: request.diarization.voiceSampleKey(request.key),
                                       digest: request.diarization.segmentsDigest)
         Task {
             do {
@@ -1698,6 +1748,7 @@ final class AppModel {
                 // Imię mogło się zmienić w trakcie liczenia (Anna → Bob): próbka trafia tylko pod imię, które nadal jest w pliku.
                 let current = try? JSONFile.load(SpeakerDiarization?.self, from: RunDirectory(session: request.sessionURL, runID: request.runID).speakers, default: nil)
                 guard VoiceLearning.stillNamed(current, key: request.key, name: request.name, digest: request.diarization.segmentsDigest) else { return }
+                for id in request.replacing { voiceProfiles.forget(sampleID: id) }
                 voiceProfiles.learn(name: request.name, sample: VoiceSample(id: sampleID, model: model.id, values: vector, seconds: speech.seconds), now: Date())
                 saveVoiceProfiles()
             } catch is CancellationError {

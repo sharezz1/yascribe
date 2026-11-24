@@ -79,6 +79,8 @@ struct VoiceLearnRequest: Equatable {
     var key: String
     var name: String
     var diarization: SpeakerDiarization
+    /// Próbki zastępowane nową (złączenie grup, TASK-126): schodzą dopiero po udanym odcisku.
+    var replacing: [String] = []
 }
 
 /// Wszystko, czego potrzebuje rozpoznawanie poza MainActor; `embed` = `VoiceEmbedder.embed` albo atrapa testu.
