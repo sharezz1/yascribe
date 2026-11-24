@@ -1570,6 +1570,7 @@ final class AppModel {
     }
 
     /// „Rozdziel”: pierwotna grupa wraca osobno, bez imienia.
+    /// shortcut: próbka głosu złączonej mowy zostaje w profilu; dopisać forget+relearn, jeśli profile zaczną się mylić po rozdzieleniu.
     func splitSpeaker(item: SessionItem, original: String) {
         editSpeakers(item, failure: { String(localized: "Couldn't split speakers: \($0)") }) { $0.splitting(original: original) } after: { _, _, _ in }
     }

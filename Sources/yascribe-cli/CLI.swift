@@ -35,6 +35,8 @@ struct CLI {
                                                                   brak modelu = błąd, pobranie tylko z --download (≈22 MB do Models/speaker-diarization)
       voices <katalog sesji>… [--model diarizer|campplus]          kalibracja profili głosów: odciski mówców ≥ 20 s z bieżących speakers.json
                                                                   i macierz cosinusów (nic nie zapisuje; model już pobrany; nie razem z aplikacją)
+      voices <katalog sesji>… --merge-dry-run                      kalibracja łączenia zdublowanych mówców: grupy, macierz i wynik dla progów
+                                                                  0.70–0.85 z kalendarzem i bez (model mówców; nic nie zapisuje)
       session-from-file <plik audio> <katalog>                     TYLKO TESTY: sesja z pliku (korpus)
       mcp                                                         serwer MCP na stdio (tylko odczyt; zgoda w Settings → Agent access)
     Czasy z transcribe są na osi sesji; czas w pliku ścieżki = czas na osi − przesunięcie z summarize.
@@ -42,7 +44,7 @@ struct CLI {
 
     /// Opcje z wartością — także te z planów B4/C4. `positional` pomija ich wartości.
     static let valued: Set = ["--seconds", "--silence", "--max-lag-ms", "--language", "--shape", "--run", "--model-store", "--replacements", "--vocabulary", "--out", "--only", "--source", "--thinking", "--context", "--timeout", "--sensitivity", "--model"]
-    static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output", "--download", "--mistral", "--cloud"])
+    static let known = valued.union(["--aec", "--no-aec", "--no-system", "--with-mic", "--with-output", "--download", "--mistral", "--cloud", "--merge-dry-run"])
 
     static func main() async {
         var args = Array(CommandLine.arguments.dropFirst())
