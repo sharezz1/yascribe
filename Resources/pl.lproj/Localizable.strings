@@ -1155,3 +1155,5 @@
 "Speakers are being detected. Try again when that finishes." = "Trwa wykrywanie mówców. Spróbuj ponownie, gdy się zakończy.";
 "Couldn't merge speakers: %@" = "Nie udało się połączyć mówców: %@";
 "Couldn't split speakers: %@" = "Nie udało się rozdzielić mówców: %@";
+"Play" = "Odtwórz";
+"Playback position" = "Pozycja odtwarzania";
