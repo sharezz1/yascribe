@@ -6,8 +6,9 @@ import YascribeTranscription
 /// - zmiany zapisu liczb i godzin (`13.30` → `13:30`, „dwunastej" → `12:00`, `2` → „dwa"): prompt każe zostawić zapis;
 /// - nowe słowa z artefaktem (`_` w środku, zdublowana litera z ogonkiem `podepnąą`, trzy takie same litery z rzędu);
 /// - wstawkę dwóch lub więcej nowych słów bez odpowiednika w oryginale (halucynacja typu „jest try to.").
-/// - usunięcie słów bez zamiennika („wrzucić tam wrzucamy" → „wrzucamy"); wolno usunąć przerywniki z `fillerWords`, same znaki
-///   i powtórzenie słowa stojącego tuż obok (jąkanie „I, i, no i"; przy nim LCS i tak nie wie, który egzemplarz zniknął).
+/// - usunięcie słów bez zamiennika („jeszcze"); wolno usunąć przerywniki z `fillerWords`, same znaki, powtórzenie słowa stojącego
+///   tuż obok (jąkanie „I, i, no i"; przy nim LCS i tak nie wie, który egzemplarz zniknął) i urwany początek („wrzucić tam wrzucamy"
+///   → „wrzucamy"), gdy `fillerWords` niepusta.
 /// - nowe słowo z błędem pisowni, gdy wszystkie zastąpione słowa były poprawne (`oddziałów` → `odziałów`); tylko z `isMisspelled`.
 /// Poza cofaniem przywracamy końcówkę, gdy model zamienił odmienione słowo na Term w formie podstawowej
 /// (`na Genesisa` → `na Genesys` daje `na Genesysa`); liczy się to jak cofnięcie.
@@ -36,7 +37,8 @@ public enum CorrectionGuard {
                 let before = Array(o[oi]), after = Array(c[ci])
                 if suspicious(original: before, corrected: after, isMisspelled: isMisspelled, terms: terms)
                     || deletesWords(original: before, corrected: after, fillerWords: fillerWords,
-                                    neighbours: o[max(0, oi.lowerBound - 2)..<oi.lowerBound].map(key) + o[oi.upperBound..<min(o.count, oi.upperBound + 2)].map(key)) {
+                                    neighbours: o[max(0, oi.lowerBound - 2)..<oi.lowerBound].map(key) + o[oi.upperBound..<min(o.count, oi.upperBound + 2)].map(key),
+                                    following: o[oi.upperBound..<min(o.count, oi.upperBound + 6)].map(key)) {
                     out += before; reverted += 1
                 }
                 else if before.count == after.count, let fixed = restoredEndings(original: before, corrected: after, terms: terms) { out += fixed; reverted += 1 }
@@ -69,10 +71,21 @@ public enum CorrectionGuard {
     }
 
     /// Blok bez zamiennika, w którym znika token z literami, niebędący przerywnikiem ani powtórzeniem sąsiada (dwa słowa z każdej strony).
-    static func deletesWords(original: [String], corrected: [String], fillerWords: [String], neighbours: [String] = []) -> Bool {
-        corrected.isEmpty && original.contains {
+    /// Wyjątek: urwany początek wypowiedzi („wrzucić tam wrzucamy" → „wrzucamy"): do 4 słów, a pierwsze wraca zaraz potem (`following`,
+    /// ten sam początek słowa). Tylko przy włączonym usuwaniu przerywników (`fillerWords` niepusta).
+    /// shortcut: „restart" poznajemy po wspólnych 4 literach początku słowa, nie po sensie; zbyt luźne przy pomiarze → zaostrzyć.
+    static func deletesWords(original: [String], corrected: [String], fillerWords: [String], neighbours: [String] = [],
+                             following: [String] = []) -> Bool {
+        guard corrected.isEmpty, original.contains(where: {
             $0.contains(where: \.isLetter) && !FillerWords.isFiller($0, words: fillerWords) && !neighbours.contains(key($0))
-        }
+        }) else { return false }
+        let words = original.filter { $0.contains(where: \.isLetter) && !FillerWords.isFiller($0, words: fillerWords) }.map(key)
+        guard !fillerWords.isEmpty, words.count <= 4, let first = words.first else { return true }
+        return !following.contains { sameStart(first, $0) }
+    }
+
+    static func sameStart(_ a: String, _ b: String) -> Bool {
+        a == b || (a.count >= 4 && b.count >= 4 && a.prefix(4) == b.prefix(4))
     }
 
     /// Słowo do sprawdzenia pisowni: same litery, co najmniej 4, nie same wielkie (skróty). Inne tokeny pomijamy.

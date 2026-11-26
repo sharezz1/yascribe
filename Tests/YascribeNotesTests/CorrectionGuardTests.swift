@@ -97,8 +97,15 @@ import Testing
         // Spike A/B korekty: model usuwa urwany początek („wrzucić tam wrzucamy") albo słowo („jeszcze").
         let f = ["yyy", "eee", "mhm"]
         func deleted(_ o: String, _ c: String) -> CorrectionGuard.Result { CorrectionGuard.apply(original: o, corrected: c, fillerWords: f) }
+        // Urwany początek zostaje usunięty tylko przy włączonym usuwaniu przerywników i gdy jego pierwsze słowo wraca zaraz potem.
         let r = deleted("no to wrzucić tam wrzucamy na listę", "No to wrzucamy na listę")
-        #expect(r.text == "No to wrzucić tam wrzucamy na listę" && r.reverted == 1)
+        #expect(r.text == "No to wrzucamy na listę" && r.reverted == 0)
+        #expect(deleted("Wasielewski miał tam Wasilewski miał tam", "Wasilewski miał tam").reverted == 0)
+        let noFillers = CorrectionGuard.apply(original: "no to wrzucić tam wrzucamy na listę", corrected: "No to wrzucamy na listę")
+        #expect(noFillers.text == "No to wrzucić tam wrzucamy na listę" && noFillers.reverted == 1)
+        // Pierwsze słowo bloku nie wraca albo blok jest długi: zostaje oryginał.
+        #expect(deleted("no to trzeba tam wrzucamy na listę", "No to wrzucamy na listę").text == "No to trzeba tam wrzucamy na listę")
+        #expect(deleted("wrzucić jedno drugie trzecie czwarte wrzucamy", "Wrzucamy").text == "wrzucić jedno drugie trzecie czwarte Wrzucamy")
         #expect(deleted("trzeba było jeszcze oprócz tego", "trzeba było oprócz tego").text == "trzeba było jeszcze oprócz tego")
         // Przerywniki z listy (także rozciągnięte) i same znaki mogą zniknąć.
         for (o, c) in [("to yyy jest eeee dobre", "To jest dobre"), ("wiem -- mhm, tak", "Wiem, tak"),
