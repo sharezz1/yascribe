@@ -5,7 +5,7 @@ import Foundation
 /// shortcut: liczba wypowiedziana słowami („piętnasta") i zapisana cyframi w notatce też trafi na listę; to ostrzeżenie, nie cofnięcie.
 public enum NumberCheck {
     public static func unverified(in note: String, sources: [String]) -> [String] {
-        let known = Set(sources.flatMap(numbers).map(digits))
+        let known = Set(sources.flatMap(numbers).map(digits) + sources.flatMap(scores))
         var seen = Set<String>()
         return numbers(in: note).filter { n in
             let d = digits(n)
@@ -26,6 +26,12 @@ public enum NumberCheck {
             return String(line[r.upperBound...])
         }.joined(separator: "\n")
         return cleaned.matches(of: /\d+(?:[.,:]\d+)*/).map { String($0.output) }
+    }
+
+    /// Wynik zapisany w transkrypcie jako `8-1` (cyfry po obu stronach łącznika) pasuje do `8:1` w notatce.
+    /// shortcut: „dwa do zera" słowami i „1 do 0" nadal są zgłaszane jako `1:0`; do rozszerzenia, gdy przeszkadza.
+    static func scores(in text: String) -> [String] {
+        text.matches(of: /\d+\s?[-–]\s?\d+/).map { digits(String($0.output)) }
     }
 
     private static func digits(_ n: String) -> String { n.filter(\.isNumber) }
