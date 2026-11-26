@@ -87,7 +87,10 @@ public struct OpenAICompatibleClient: TranscriptionClient {
                                 boundary: String = "Yascribe-\(UUID().uuidString)") throws -> URLRequest {
         var r = try request("audio/transcriptions")
         r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        var fields = [("model", model), ("response_format", "verbose_json"), ("timestamp_granularities[]", "word")]
+        // Mistral: pole bez `[]` i tylko `segment` (słowa → 400, a `[]` ignoruje i oddaje puste `segments`).
+        let mistral = provider.baseURL.host?.hasSuffix("mistral.ai") == true
+        var fields = [("model", model), ("response_format", "verbose_json"),
+                      mistral ? ("timestamp_granularities", "segment") : ("timestamp_granularities[]", "word")]
         if let language { fields.append(("language", language.rawValue)) }
         // Rozszerzenie oMLX: bez niego Whisper oddaje same segmenty. Tylko lokalnie — API OpenAI nie zna pola.
         if provider.isLocal && wordTimestamps { fields.append(("word_timestamps", "true")) }
@@ -126,10 +129,18 @@ public struct OpenAICompatibleClient: TranscriptionClient {
             guard let id = m["id"] as? String else { return nil }
             let arch = m["architecture"] as? [String: Any]
             return ModelInfo(id: id, inputModalities: arch?["input_modalities"] as? [String],
-                             outputModalities: arch?["output_modalities"] as? [String], name: m["name"] as? String)
+                             outputModalities: arch?["output_modalities"] as? [String] ?? Self.capabilityModalities(m["capabilities"]),
+                             name: m["name"] as? String)
         }
         guard let output else { return all }
         return all.filter { $0.outputModalities.map { $0.contains(output) } ?? true }
+    }
+
+    /// Mistral nie podaje `architecture`, tylko `capabilities` (`completion_chat`, `audio_transcription`); inne serwery bez
+    /// modalności dają `nil` (model zostaje na każdej liście).
+    static func capabilityModalities(_ raw: Any?) -> [String]? {
+        guard let c = raw as? [String: Any], c["audio_transcription"] != nil || c["completion_chat"] != nil else { return nil }
+        return (c["completion_chat"] as? Bool == true ? ["text"] : []) + (c["audio_transcription"] as? Bool == true ? ["transcription"] : [])
     }
 
     /// `language == nil` tylko w sondzie honorowania języka. Profil nagrania zawsze
@@ -183,8 +194,10 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         let m = message.lowercased()
         // Brak pola `file` albo nieznane pole `input_audio`; „Invalid audio file” / „invalid base64” to treść, nie kształt.
         let missingFile = m.contains("file") && ["required", "missing"].contains(where: m.contains)
+        // Mistral: „make sure the request is formatted as a multipart/form-data request” (422).
+        let wantsMultipart = m.contains("multipart/form-data")
         let unknownAudio = m.contains("input_audio") && ["unknown", "unexpected", "extra", "not permitted", "unrecognized"].contains(where: m.contains)
-        return missingFile || unknownAudio
+        return missingFile || unknownAudio || wantsMultipart
     }
 
     /// Multipart po odrzuceniu JSON. Odrzucony też kształtem (400/415/422) → błąd ze statusem multipart i oboma komunikatami

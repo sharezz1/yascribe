@@ -80,6 +80,18 @@ import os
     #expect(http.calls[0].path == "/api/v1/models?output_modalities=transcription")
 }
 
+@Test func mistralCapabilitiesBecomeModalities() async throws {
+    let http = StubHTTP { _, _ in ok(["data": [
+        ["id": "mistral-large-latest", "capabilities": ["completion_chat": true, "audio_transcription": false]],
+        ["id": "voxtral-mini-latest", "capabilities": ["completion_chat": false, "audio_transcription": true]],
+        ["id": "no-info"],
+    ]]) }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    #expect(try await c.listModels(output: "transcription").map(\.id) == ["voxtral-mini-latest", "no-info"])
+    let all = try await c.listModels()
+    #expect(ModelCatalog.visible(all, role: .correction, query: "").map(\.id) == ["mistral-large-latest", "no-info"])
+}
+
 @Test func providerRejectingTheModalityParameterIsAskedAgainWithoutIt() async throws {
     let http = StubHTTP { path, _ in
         path.contains("output_modalities") ? fail(400, "{\"error\":\"unknown parameter\"}")
@@ -410,6 +422,26 @@ private func chatWithUsage(_ provider: Provider, _ promptTokens: Double?, system
     let obj: [String: Any] = ["text": "Dzień dobry. Wyślę umowę.", "segments": [
         ["start": 0.0, "end": 1.0, "text": "Dzień dobry."], ["start": 2.0, "text": "Wyślę umowę."]]]
     #expect(OpenAICompatibleClient.words(obj) == nil)
+}
+
+// Mistral odrzuca JSON kodem 422 z prośbą o multipart/form-data: przechodzimy na multipart.
+@Test func mistralStyleMultipartRequestMessageSwitchesToMultipart() async throws {
+    let http = StubHTTP { _, body in
+        body.isEmpty ? ok(["text": "Dzień dobry."])
+            : fail(422, "{\"message\":\"Invalid request, make sure the request is formatted as a multipart/form-data request.\"}")
+    }
+    let c = OpenAICompatibleClient(provider: openRouter, key: "k", http: http)
+    let r = try await c.transcribe(wav: ProbeClips.polish.wav, model: "m", language: .polish, shape: .audioTranscriptions)
+    #expect(r.text == "Dzień dobry.")
+    #expect(http.calls.last?.headers["Content-Type"]?.hasPrefix("multipart/form-data") == true)
+}
+
+@Test func mistralMultipartAsksForSegmentTimestamps() throws {
+    let mistral = Provider(name: "Mistral API", baseURL: URL(string: "https://api.mistral.ai/v1")!)
+    let body = try OpenAICompatibleClient(provider: mistral, key: "k", http: StubHTTP { _, _ in ok([:]) })
+        .multipartTranscription(wav: Data([1]), model: "m", language: nil, boundary: "B").httpBody.flatMap { String(decoding: $0, as: UTF8.self) } ?? ""
+    #expect(body.contains("name=\"timestamp_granularities\"\r\n\r\nsegment"))
+    #expect(!body.contains("timestamp_granularities[]"))
 }
 
 @Test func wordTimestampFallbackHappensOnlyOnce() async {
