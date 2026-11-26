@@ -88,7 +88,7 @@ public struct OpenAICompatibleClient: TranscriptionClient {
         var r = try request("audio/transcriptions")
         r.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         // Mistral: pole bez `[]` i tylko `segment` (słowa → 400, a `[]` ignoruje i oddaje puste `segments`).
-        let mistral = provider.baseURL.host?.hasSuffix("mistral.ai") == true
+        let mistral = provider.baseURL.host.map { $0 == "mistral.ai" || $0.hasSuffix(".mistral.ai") } == true
         var fields = [("model", model), ("response_format", "verbose_json"),
                       mistral ? ("timestamp_granularities", "segment") : ("timestamp_granularities[]", "word")]
         if let language { fields.append(("language", language.rawValue)) }
