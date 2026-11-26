@@ -24,14 +24,15 @@ private func shown(hiddenFirst: Bool = false, after: Bool = false) -> Transcript
                                             rules: ReplacementRules(UserDictionary()), speakers: d, includeHidden: true)!
 }
 
-@Test @MainActor func editTargetIsWholeSourceInFirstPartOnly() throws {
+@Test @MainActor func editTargetIsWholeSourceInEveryPart() throws {
     let t = shown(hiddenFirst: true)
     #expect(t.utterances.count == 3)
     let first = try #require(TranscriptTab.editTarget(1, t.utterances[1]))
     #expect(first.index == 1)
     #expect(first.start == 143.08)
     #expect(first.text == "alfa beta gamma delta. Epsilon zeta eta theta.")
-    #expect(TranscriptTab.editTarget(2, t.utterances[2]) == nil)
+    #expect(TranscriptTab.editTarget(2, t.utterances[2])?.index == 1)
+    #expect(TranscriptTab.editTarget(2, t.utterances[2])?.text == first.text)
     #expect(TranscriptTab.editTarget(0, t.utterances[0])?.index == 0)
 }
 
