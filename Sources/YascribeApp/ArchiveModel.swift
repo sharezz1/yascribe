@@ -172,6 +172,13 @@ final class ArchiveModel {
         }
     }
 
+    /// „Retry” przy błędzie: ostatnia nieudana tura znika, a to samo pytanie idzie od nowa (nie dubluje wpisu w rozmowie).
+    func retry(_ id: UUID) {
+        guard let last = turns.last, last.id == id, case .failed = last.state else { return }
+        turns.removeLast()
+        ask(last.question)
+    }
+
     /// Sprawdzenia bez sieci; zamraża model odpowiedzi, dostawcę, przestrzeń embeddingu i zakres na całe pytanie.
     private func prepare(_ turn: Turn, resolved: (ids: Set<String>, label: String)?) throws -> Run {
         guard !isMoving() else { throw Failure(message: "Meetings are being moved to a new folder. Ask again when that finishes.") }

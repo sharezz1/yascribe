@@ -118,7 +118,10 @@ struct ArchiveChatView: View {
             case .noAnswer(let message): Text(model.archive.displayedMessage(message, for: turn)).foregroundStyle(.mnText2)
             case .failed(let message, let opensSettings):
                 WarnLabel(model.archive.displayedMessage(message, for: turn))
-                if opensSettings { LinkButton(String(localized: "Open Settings")) { model.section = .settings } }
+                HStack(spacing: 10) {
+                    if turn.id == model.archive.turns.last?.id { Button("Retry") { model.archive.retry(turn.id) }.buttonStyle(.pillSmall) }
+                    if opensSettings { LinkButton(String(localized: "Open Settings")) { model.section = .settings } }
+                }
             case .cancelled: Text("Cancelled").foregroundStyle(.mnText2)
             }
         }.font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
