@@ -17,6 +17,11 @@ import Testing
         #expect(NumberCheck.unverified(in: "Defekty: 130-170.", sources: ["było 130 parę i 150 par"]) == ["170"])
     }
 
+    @Test func scoreWrittenWithHyphenMatchesColonScore() {
+        #expect(NumberCheck.unverified(in: "Lech wygrał 2:0, a Breidablik 8:1.", sources: ["po 2-0 był spokój", "8-1 albo 7-1"]).isEmpty)
+        #expect(NumberCheck.unverified(in: "Wynik 2:1.", sources: ["po 2-0 był spokój"]) == ["2:1"])
+    }
+
     @Test func listMarkersAndRepeatsAreNotReported() {
         #expect(NumberCheck.unverified(in: "10. Pierwszy punkt\n12) drugi", sources: ["tekst"]).isEmpty)
         #expect(NumberCheck.unverified(in: "ID 770, potem znowu 770", sources: ["nic"]) == ["770"])

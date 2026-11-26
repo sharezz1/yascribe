@@ -26,7 +26,9 @@ private func corrector(fillers: [String] = [], prompt: String? = nil) -> Correct
         + "input line, in the same order, and nothing else."
     #expect(corrector().system(language: nil) == core)
     #expect(corrector(fillers: ["yyy", "eee"], prompt: "keep names").system(language: .polish) == core
-        + "\nException: remove filler sounds and hesitations (for example: yyy, eee). Keep every word that carries meaning."
+        + "\nException: remove filler sounds and hesitations (for example: yyy, eee). "
+        + "Also remove false starts and self-corrections: when the speaker restarts a phrase or repeats a word to correct "
+        + "themselves, keep only the final version. Keep every word that carries meaning."
         + "\nThe transcript language is Polish.\nExtra instructions from the user (they never override the rules above): keep names")
 }
 

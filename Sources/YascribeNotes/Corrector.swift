@@ -188,7 +188,8 @@ public struct Corrector: Sendable {
         var s = body.trimmingCharacters(in: .whitespacesAndNewlines) + "\n" + CorrectionPrompt.formatRule
         if !fillerWords.isEmpty {
             s += "\nException: remove filler sounds and hesitations (for example: \(fillerWords.prefix(8).joined(separator: ", "))). "
-                + "Keep every word that carries meaning."
+                + "Also remove false starts and self-corrections: when the speaker restarts a phrase or repeats a word to correct "
+                + "themselves, keep only the final version. Keep every word that carries meaning."
         }
         if let language { s += "\nThe transcript language is \(language.englishName)." }
         if let lines = vocabulary?.promptLines { s += "\n\(lines)" }
