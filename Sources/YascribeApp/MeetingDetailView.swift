@@ -5,33 +5,92 @@ import YascribeRecording
 import YascribeTranscription
 import SwiftUI
 
+/// Pozycja odtwarzania (oś sesji, sekundy) osobno od `PlaybackState`: tyka ~20 razy na sekundę i odświeża tylko pasek, nie listę wierszy.
+@MainActor final class PlaybackClock: ObservableObject {
+    @Published var position: Double = 0
+    /// Wartość suwaka w trakcie przeciągania; `nil` poza nim.
+    @Published var scrub: Double?
+}
+
 /// Odtwarzanie: odsłuch = ścieżka systemowa bit w bit (spec rdzenia §5); mikrofon osobno.
-/// TASK-109: segment gra od startu do końca; `playing` = indeks grającej wypowiedzi w `utterances`.
+/// TASK-131: segment gra od startu i dalej przez kolejne (łańcuch) aż do pauzy; `current` = wiersz w `utterances`, który gra albo był ostatni.
 @MainActor final class PlaybackState: ObservableObject {
+    struct Segment { let entry: TranscriptPlaylist.Entry; let fileFrom: Double; let fileTo: Double; let sessionFrom: Double }
+
     var player: AVAudioPlayer?
     var track: String?
-    @Published private(set) var playing: Int?
-    private var stopTask: Task<Void, Never>?
+    let clock = PlaybackClock()
+    @Published private(set) var current: Int?
+    @Published private(set) var isPlaying = false
+    /// Wiersz z ikoną „pauza”: tylko grający.
+    var playing: Int? { isPlaying ? current : nil }
+    private(set) var segment: Segment?
+    /// Koniec okna segmentu (albo pliku przy odsłuchu całości): widok wybiera następny segment albo kończy.
+    var onSegmentEnd: (() -> Void)?
+    private var ticker: Task<Void, Never>?
 
-    /// Nowe odtworzenie anuluje stop poprzedniego; wszystko na MainActor, więc anulowane zadanie nie zdąży zatrzymać następnego.
-    /// `seconds == nil` = gra do pauzy (menu Meeting).
-    func started(index: Int?, seconds: Double?) {
-        stopTask?.cancel()
-        playing = index
-        guard let seconds else { stopTask = nil; return }
-        stopTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard let self, !Task.isCancelled else { return }
-            self.player?.pause()
-            self.playing = nil
+    /// Nowy segment zastępuje poprzedni; ticker stary kończy się sam (zadanie anulowane, a wszystko jest na MainActor).
+    func began(_ entry: TranscriptPlaylist.Entry, fileFrom: Double, fileTo: Double, sessionFrom: Double) {
+        segment = Segment(entry: entry, fileFrom: fileFrom, fileTo: fileTo, sessionFrom: sessionFrom)
+        current = entry.row
+        isPlaying = true
+        clock.position = sessionFrom
+        startTicker()
+    }
+
+    /// Menu Meeting bez transkryptu: gra cały tor od bieżącego miejsca do pauzy.
+    func beganWholeTrack() {
+        segment = nil
+        current = nil
+        isPlaying = true
+        startTicker()
+    }
+
+    func pause() {
+        ticker?.cancel()
+        ticker = nil
+        player?.pause()
+        isPlaying = false
+    }
+
+    /// Koniec łańcucha: zaznaczenie znika, pasek stoi na `position`.
+    func finish(position: Double? = nil) {
+        pause()
+        segment = nil
+        current = nil
+        if let position { clock.position = position }
+    }
+
+    /// Tylko do migawek.
+    func previewPlaying(row: Int, position: Double) {
+        current = row
+        isPlaying = true
+        clock.position = position
+    }
+
+    private func startTicker() {
+        ticker?.cancel()
+        ticker = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(50))
+                guard let self, !Task.isCancelled else { return }
+                self.tick()
+            }
         }
     }
 
-    func stop() {
-        stopTask?.cancel()
-        stopTask = nil
-        player?.pause()
-        playing = nil
+    private func tick() {
+        guard let player else { return }
+        guard let s = segment else {
+            clock.position = player.currentTime
+            if !player.isPlaying { finish() }
+            return
+        }
+        if player.currentTime >= s.fileTo - 0.03 || !player.isPlaying {
+            onSegmentEnd?()
+        } else {
+            clock.position = s.sessionFrom + (player.currentTime - s.fileFrom)
+        }
     }
 }
 
@@ -80,7 +139,8 @@ struct MeetingDetailView: View {
                 } else {
                     switch state.tab ?? defaultTab {
                     case .myNotes: MyNotesTab(state: state, item: item)
-                    case .transcript: TranscriptTab(state: state, item: item, playing: playback.playing) { play($0, $1) }
+                    case .transcript: TranscriptTab(state: state, item: item, playing: playback.playing, current: playback.current, clock: playback.clock,
+                                              onToggle: togglePlayback, onSeek: seek) { play($0, $1) }
                     case .summary: SummaryTab(state: state, item: item)
                     }
                 }
@@ -93,7 +153,7 @@ struct MeetingDetailView: View {
         }
         .background(Color.mnCard)
         // Uwaga 7 pkt 5: przycisk ▶II zniknął z paska (nie wynika z §11.5); odtwarzanie jest w menu Meeting.
-        .focusedSceneValue(\.playRecording, isRecording || item.audioDeletedAfterDays != nil ? nil : { togglePlayback() })
+        .focusedSceneValue(\.playRecording, isRecording || item.audioDeletedAfterDays != nil ? nil : { togglePlayback(playlist()) })
         .navigationTitle(item.displayTitle)
         .onAppear {
             if isRecording, state.tab == nil { state.tab = .myNotes }
@@ -230,28 +290,63 @@ struct MeetingDetailView: View {
         }
     }
 
-    /// Odsłuch nagrania (ścieżka systemowa) od bieżącego miejsca albo pauza.
-    private func togglePlayback() {
-        if playback.player?.isPlaying == true {
-            playback.stop()
-        } else if playback.player != nil || load("system"), playback.player?.play() == true {
-            playback.started(index: nil, seconds: nil)
+    /// Lista odtwarzania z tego samego transkryptu co widok (z ukrytymi, więc wiersze zgadzają się z indeksami ▶).
+    private func playlist() -> TranscriptPlaylist {
+        model.transcript(of: item, corrected: state.useCorrected, includeHidden: true).map(TranscriptPlaylist.init) ?? .empty
+    }
+
+    /// Menu Meeting i ▶ na pasku: pauza albo gra dalej od zapamiętanej pozycji (za końcem — od początku).
+    private func togglePlayback(_ list: TranscriptPlaylist) {
+        if playback.isPlaying { playback.pause(); return }
+        guard let first = list.start(at: playback.clock.position) ?? list.entries.first.map({ ($0, $0.start) }) else {
+            // Bez transkryptu: cały tor systemowy od bieżącego miejsca.
+            if playback.player != nil || load("system"), playback.player?.play() == true { playback.beganWholeTrack() }
+            return
         }
+        chain(list, first)
+    }
+
+    /// ▶ na wierszu: gra grający wiersz = pauza; inny startuje od jego początku i leci dalej.
+    private func play(_ row: Int, _ list: TranscriptPlaylist) {
+        if playback.isPlaying, playback.current == row { playback.pause(); return }
+        guard let e = list.entry(row: row) else { return }
+        chain(list, (e, e.start))
+    }
+
+    /// Przeciągnięcie paska: gra od `t` (w ciszy — od najbliższej następnej wypowiedzi).
+    private func seek(_ t: Double, _ list: TranscriptPlaylist) {
+        guard let first = list.start(at: t) else { playback.finish(position: list.duration); return }
+        chain(list, first)
+    }
+
+    /// Startuje `first` i po każdym końcu okna bierze następny wpis.
+    /// shortcut: lista z chwili startu — ukrycie wiersza w trakcie odtwarzania działa od następnego ▶; poprawić, gdy będzie to przeszkadzać.
+    private func chain(_ list: TranscriptPlaylist, _ first: (entry: TranscriptPlaylist.Entry, from: Double)?) {
+        playback.onSegmentEnd = {
+            guard let cur = playback.segment?.entry else { return playback.finish() }
+            chain(list, list.next(after: cur, cursor: cur.end))
+        }
+        var next = first
+        while let (e, from) = next {
+            if begin(e, from: from) { return }
+            next = list.next(after: e, cursor: e.end) // segment bez dźwięku w pliku toru: dalej
+        }
+        playback.finish(position: list.duration)
     }
 
     /// ChatGPT #8: „Me" nie ma w pliku odsłuchu (to tap systemowy) — gramy tor mikrofonu,
-    /// przeliczając czas sesji na czas tej ścieżki. TASK-109: gra tylko ten segment; klik grającego = pauza.
-    private func play(_ index: Int, _ u: Utterance) {
-        if playback.playing == index, playback.player?.isPlaying == true { playback.stop(); return }
+    /// przeliczając czas sesji na czas tej ścieżki.
+    private func begin(_ e: TranscriptPlaylist.Entry, from: Double) -> Bool {
         let aecOK = item.summary?.tracks.first { $0.id == "mic_aec" }.map { $0.failure == nil && $0.channels > 0 } ?? false
-        let track = u.speaker == .them ? "system" : (aecOK ? "mic_aec" : "mic_raw")
+        let track = e.speaker == .them ? "system" : (aecOK ? "mic_aec" : "mic_raw")
         let offset = item.summary?.tracks.first { $0.id == track }?.offsetSeconds ?? 0
-        guard playback.track == track || load(track), let player = playback.player else { return }
-        let window = Self.segmentWindow(start: u.start, end: u.end, offset: offset, fileDuration: player.duration)
-        guard window.to > window.from else { return }
+        guard playback.track == track || load(track), let player = playback.player else { return false }
+        let window = Self.segmentWindow(start: from, end: e.end, offset: offset, fileDuration: player.duration)
+        guard window.to > window.from else { return false }
         player.currentTime = window.from
-        guard player.play() else { return }
-        playback.started(index: index, seconds: window.to - window.from)
+        guard player.play() else { return false }
+        playback.began(e, fileFrom: window.from, fileTo: window.to, sessionFrom: from)
+        return true
     }
 
     /// Okno segmentu na osi pliku toru: oba końce przesunięte o offset toru, przycięte do [0, długość pliku];
@@ -272,7 +367,7 @@ struct MeetingDetailView: View {
             playback.track = track
             return true
         } catch {
-            playback.stop()
+            playback.finish()
             playback.player = nil
             playback.track = nil
             let ns = error as NSError
@@ -313,6 +408,8 @@ struct UtteranceRow: View {
     var item: SessionItem? = nil
     var speakerNumber: Int? = nil
     var isPlaying = false
+    /// Wiersz z pozycją odtwarzania (TASK-131): delikatne podświetlenie.
+    var isCurrent = false
     var isEdited = false
     /// Szkic poprawki, gdy ten wiersz jest edytowany.
     var draft: Binding<String>? = nil
@@ -430,7 +527,7 @@ struct UtteranceRow: View {
             actions
         }
         .padding(.vertical, 11)
-        .background(isSelected ? Color.mnAccent.opacity(0.12) : Color.clear)
+        .background(isSelected ? Color.mnAccent.opacity(0.12) : isCurrent ? Color.mnAccent.opacity(0.06) : Color.clear)
         .contentShape(Rectangle())
         .onHover { picker.hovering = $0 }
         // TASK-119: ⌘/⇧-klik zaznacza; zwykły klik dalej zaznacza tekst.
@@ -507,4 +604,31 @@ struct UtteranceRow: View {
 private final class RowPresentation: ObservableObject {
     @Published var isPresented = false
     @Published var hovering = false
+}
+
+/// TASK-131: ▶/⏸ i pasek postępu nad listą wypowiedzi; przeciągnięcie przewija (start po puszczeniu suwaka).
+struct PlayerBar: View {
+    @ObservedObject var clock: PlaybackClock
+    let isPlaying: Bool
+    let duration: Double
+    let onToggle: () -> Void
+    let onSeek: (Double) -> Void
+
+    var body: some View {
+        let shown = min(clock.scrub ?? clock.position, duration)
+        HStack(spacing: 10) {
+            Button(action: onToggle) { Image(systemName: isPlaying ? "pause.fill" : "play.fill").frame(width: 16) }
+                .buttonStyle(.plain)
+                .help(isPlaying ? String(localized: "Pause") : String(localized: "Play"))
+                .accessibilityLabel(isPlaying ? "Pause" : "Play")
+            Text(MeetingDetailView.time(shown)).monospacedDigit().frame(width: 60, alignment: .trailing)
+            Slider(value: Binding(get: { shown }, set: { clock.scrub = $0 }), in: 0...max(duration, 1)) { editing in
+                if !editing, let t = clock.scrub { clock.scrub = nil; clock.position = t; onSeek(t) }
+            }
+            .controlSize(.small)
+            .accessibilityLabel("Playback position")
+            Text(MeetingDetailView.time(duration)).monospacedDigit().frame(width: 60, alignment: .leading)
+        }
+        .font(.system(size: 12)).foregroundStyle(.mnText2)
+    }
 }

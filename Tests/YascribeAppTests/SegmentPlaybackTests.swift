@@ -16,31 +16,15 @@ import Testing
         #expect(MeetingDetailView.segmentWindow(start: 1, end: 2, offset: 3, fileDuration: 60) == (0, 0)) // cały przed startem toru
     }
 
-    @Test func lateStopOfPreviousSegmentDoesNotStopNext() async throws {
+    @Test func pauseKeepsCurrentRowButClearsPlayingAndFinishClearsBoth() {
         let p = PlaybackState()
-        p.started(index: 1, seconds: 0.05)
-        p.started(index: 2, seconds: 5)
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(p.playing == 2)
-        // A → B → A: ten sam indeks, ale nowe odtworzenie — stary stop nadal nie działa.
-        p.started(index: 1, seconds: 0.05)
-        p.started(index: 1, seconds: 5)
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(p.playing == 1)
-        p.started(index: nil, seconds: nil) // menu Meeting przejmuje odtwarzacz
-        try await Task.sleep(for: .milliseconds(50))
-        #expect(p.playing == nil)
-    }
-
-    @Test func segmentStopsAtEndAndStopClears() async throws {
-        let p = PlaybackState()
-        p.started(index: 3, seconds: 0.05)
-        #expect(p.playing == 3)
-        // Pod obciążeniem (równoległe testy) MainActor bywa zajęty sekundami — czekamy z limitem, nie stałe 300 ms.
-        for _ in 0..<500 where p.playing != nil { try await Task.sleep(for: .milliseconds(20)) }
-        #expect(p.playing == nil)
-        p.started(index: 4, seconds: 5)
-        p.stop()
-        #expect(p.playing == nil)
+        let e = TranscriptPlaylist.Entry(row: 3, speaker: .me, start: 1, end: 2)
+        p.began(e, fileFrom: 1, fileTo: 2, sessionFrom: 1)
+        #expect(p.playing == 3 && p.current == 3)
+        p.pause()
+        #expect(p.playing == nil && p.current == 3) // podświetlenie zostaje po pauzie, ikona ⏸ znika
+        p.began(e, fileFrom: 1, fileTo: 2, sessionFrom: 1)
+        p.finish(position: 9)
+        #expect(p.playing == nil && p.current == nil && p.clock.position == 9)
     }
 }

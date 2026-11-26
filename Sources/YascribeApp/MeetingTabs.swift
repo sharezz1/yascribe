@@ -223,8 +223,14 @@ struct TranscriptTab: View {
     @Environment(AppModel.self) private var model
     @ObservedObject var state: MeetingViewState
     let item: SessionItem
+    /// Wiersz z ikoną ⏸ (gra) i wiersz podświetlony (gra albo ostatni po pauzie) — indeksy w `utterances` (TASK-131).
     var playing: Int? = nil
-    let onJump: (Int, Utterance) -> Void
+    var current: Int? = nil
+    /// `nil` = bez paska odtwarzacza (migawki).
+    var clock: PlaybackClock? = nil
+    var onToggle: (TranscriptPlaylist) -> Void = { _ in }
+    var onSeek: (Double, TranscriptPlaylist) -> Void = { _, _ in }
+    let onJump: (Int, TranscriptPlaylist) -> Void
     private var busy: Bool { model.isTranscribing(item) }
     /// Diaryzacja po transkrypcji trzyma `busy` (F01), ale wiersz mówi, co naprawdę trwa.
     private var detecting: Bool { model.isDetectingSpeakers(item) }
@@ -350,6 +356,7 @@ struct TranscriptTab: View {
         if let t = shown {
             let numbers = UtteranceRow.speakerNumbers(t)
             let edited = item.editedIndices(corrected: state.useCorrected)
+            let playlist = TranscriptPlaylist(t)
             // Uwaga 7: lista rośnie z treścią (przewija strona), separator `line2` między wierszami.
             LazyVStack(alignment: .leading, spacing: 0) {
                 if !t.failedChunks.isEmpty {
@@ -359,6 +366,11 @@ struct TranscriptTab: View {
                         .help("Sends only the parts that failed; finished parts aren't paid for again")
                         .padding(.bottom, 8)
                 }
+                if let clock, item.audioDeletedAfterDays == nil, !playlist.entries.isEmpty {
+                    PlayerBar(clock: clock, isPlaying: playing != nil, duration: playlist.duration,
+                              onToggle: { onToggle(playlist) }, onSeek: { onSeek($0, playlist) })
+                        .padding(.bottom, 8)
+                }
                 Rectangle().fill(.mnLine2).frame(height: 0.5)
                 let lines = Self.lines(t, item: item, showHidden: state.showHidden)
                 let visible = lines.compactMap { if case .utterance(let i, _) = $0 { i } else { nil } }
@@ -366,7 +378,7 @@ struct TranscriptTab: View {
                     if i > 0 { Rectangle().fill(.mnLine2).frame(height: 0.5) }
                     switch line {
                     case .utterance(let index, let u): row(index, u, number: numbers[u.speakerKey ?? ""],
-                                                           edited: edited.contains(u.sourceIndex ?? index), in: t, visible: visible)
+                                                           edited: edited.contains(u.sourceIndex ?? index), in: t, visible: visible, playlist: playlist)
                     case .mute(let m): MuteRow(note: m)
                     }
                 }
@@ -406,7 +418,7 @@ struct TranscriptTab: View {
         }
     }
 
-    private func row(_ index: Int, _ u: Utterance, number: Int?, edited: Bool, in t: Transcript, visible: [Int]) -> UtteranceRow {
+    private func row(_ index: Int, _ u: Utterance, number: Int?, edited: Bool, in t: Transcript, visible: [Int], playlist: TranscriptPlaylist) -> UtteranceRow {
         // Jeden szkic naraz: otwarty edytor wyłącza pozostałe ołówki (niezapisany szkic nie znika).
         var startEdit: (() -> Void)?
         let corrected = state.useCorrected
@@ -423,9 +435,9 @@ struct TranscriptTab: View {
         let hidden = u.hidden == true
         // Usunięcie wiersza z zaznaczenia usuwa całe zaznaczenie; inaczej tylko ten wiersz.
         let targets = selected.contains(index) ? selected.sorted() : [index]
-        var row = UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index,
+        var row = UtteranceRow(utterance: u, isAuto: isAuto, item: item, speakerNumber: number, isPlaying: playing == index, isCurrent: current == index,
                                isEdited: edited, draft: u.isFirstPart ? draft(source) : nil, onStartEdit: hidden ? nil : startEdit, onSave: onSave,
-                               onCancel: { state.segmentDraft = nil }, onJump: { onJump(index, u) })
+                               onCancel: { state.segmentDraft = nil }, onJump: { onJump(index, playlist) })
         row.isSelected = selected.contains(index)
         if canHide, let runID = item.runID {
             if hidden {
