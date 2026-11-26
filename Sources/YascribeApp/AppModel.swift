@@ -616,19 +616,30 @@ final class AppModel {
     /// Ukryte i wyłączone z notatek wypowiedzi pomijamy; `before` to tekst bazowy bez Replacement (stosuje je sam `find`).
     static func editPairs(for item: SessionItem) -> [AliasSuggestions.EditPair] {
         guard let edits = item.edits, !edits.edits.isEmpty else { return [] }
+        // Obie wersje tej samej wypowiedzi: Original pierwszy, żeby remis wyboru bazy został przy nim.
+        var bases: [Transcript] = []
+        if let base = item.transcript { bases.append(base) }
+        if let fixed = item.corrected, item.canEdit(corrected: true) { bases.append(fixed.transcript) }
         var pairs: [AliasSuggestions.EditPair] = []
-        func append(from base: Transcript) {
-            for edit in edits.edits {
-                // Po „Retry Failed Parts" indeksy nie pasują: poprawka uczy tylko w wersji, w której jest widoczna.
-                guard edits.isEdited(index: edit.index, in: base) else { continue }
+        for edit in edits.edits {
+            // Jedna poprawka = jedna para: wersja bliższa tekstowi poprawki. Para z Original zawiera też podmiany korektora (LLM),
+            // więc przy edycji w Corrected liczyłaby je jako poprawki użytkownika i omijała próg 2 (fałszywe `fromEdits`).
+            var candidates: [(text: String, distance: Int)] = []
+            for base in bases {
+                guard base.utterances.indices.contains(edit.index) else { continue }
                 let u = base.utterances[edit.index]
-                guard !u.excludedFromNotes, !edits.isHidden(u) else { continue }
-                pairs.append(AliasSuggestions.EditPair(sessionID: item.id, editKey: "\(item.id)#\(edit.index)",
-                                                      before: u.text, after: edit.text))
+                // Dopasowujemy bieżącą poprawkę, nie dowolny wpis o tym indeksie (stary wpis po „Retry Failed Parts").
+                guard u.speaker == edit.speaker, abs(u.start - edit.start) < 0.001,
+                      !u.excludedFromNotes, !edits.isHidden(u) else { continue }
+                candidates.append((u.text, AliasSuggestions.differingWords(u.text, edit.text)))
             }
+            // Baza identyczna z tekstem poprawki nie może być wersją, którą użytkownik edytował (poprawka zawsze coś zmienia);
+            // wtedy zostaje druga baza, np. gdy w Original wpisano dokładnie tekst korekty.
+            let changed = candidates.filter { $0.distance > 0 }
+            guard let chosen = (changed.isEmpty ? candidates : changed).min(by: { $0.distance < $1.distance }) else { continue }
+            pairs.append(AliasSuggestions.EditPair(sessionID: item.id, editKey: "\(item.id)#\(edit.index)",
+                                                   before: chosen.text, after: edit.text))
         }
-        if let base = item.transcript { append(from: base) }
-        if let fixed = item.corrected, item.canEdit(corrected: true) { append(from: fixed.transcript) }
         return pairs
     }
 

@@ -249,8 +249,8 @@ struct TranscriptTab: View {
                 ErrorLine(message: String(localized: "Correction failed: \(why)"), retry: model.notes.canCorrectNow(item) ? { state.openModelsSheet(on: .transcript) } : nil)
                     .disabled(moving)
             }
-            // TASK-112: korekta tego spotkania podsunęła Aliasy do słownika (lista i Add w zakładce Dictionary).
-            if item.corrected != nil, !correcting, suggestionCount > 0 {
+            // TASK-112/116: korekta albo ręczna poprawka tego spotkania podsunęła Aliasy do słownika (lista i Add w zakładce Dictionary).
+            if !correcting, suggestionCount > 0 {
                 HStack(spacing: 8) {
                     StateLabel(.neutral, String.localizedStringWithFormat(NSLocalizedString("%lld dictionary suggestions from this meeting", comment: ""), Int64(suggestionCount)))
                     LinkButton(String(localized: "Review")) { model.section = .dictionary }

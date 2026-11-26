@@ -120,6 +120,32 @@ private func u(_ text: String) -> Utterance {
         #expect(model.suggestionsPublish != before)
     }
 
+    /// Edycja w Corrected: para musi użyć Corrected, bo Original zawiera też podmiany korektora (LLM).
+    @Test func editInCorrectedUsesCorrectedAsBase() throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var item = session(in: root, ["w Rokmie wczoraj"])
+        item.corrected = correction(["w Nimbuie wczoraj"])
+        item.edits = TranscriptEdits(edits: [edit("w Nimbuie dzisiaj")])
+        #expect(AppModel.editPairs(for: item) == [
+            AliasSuggestions.EditPair(sessionID: item.id, editKey: "\(item.id)#0",
+                                      before: "w Nimbuie wczoraj", after: "w Nimbuie dzisiaj"),
+        ])
+    }
+
+    /// Edycja w Original, która wpisała dokładnie tekst korekty: bazą zostaje Original, bo Corrected nie różni się od poprawki.
+    @Test func editInOriginalUsesOriginalAsBase() throws {
+        let root = try temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var item = session(in: root, ["w Rokmie wczoraj"])
+        item.corrected = correction(["w Nimbuie wczoraj"])
+        item.edits = TranscriptEdits(edits: [edit("w Nimbuie wczoraj")])
+        #expect(AppModel.editPairs(for: item) == [
+            AliasSuggestions.EditPair(sessionID: item.id, editKey: "\(item.id)#0",
+                                      before: "w Rokmie wczoraj", after: "w Nimbuie wczoraj"),
+        ])
+    }
+
     /// Pusty słownik: sama poprawka tworzy sugestię nowego Terma.
     @Test func editWithEmptyDictionaryProposesNewTerm() async throws {
         let root = try temporaryRoot()

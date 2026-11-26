@@ -330,7 +330,52 @@ import Testing
         #expect((s.alias, s.term) == ("Rokm", "Nimbu"))
     }
 
+    @Test func cannotIsANegation() {
+        #expect(find(edits: [edit("a", "0", "cannot Rokm", "can Nimbu")]).isEmpty)
+    }
+
     @Test func hundredsInflectionsInEditsAreFiltered() {
         #expect(find(edits: [edit("a", "0", "do dwustu sztuk", "do trzystu sztuk")]).isEmpty)
+    }
+
+    @Test func teenNumeralsInEditsAreFiltered() {
+        let cases = [
+            ("mamy dwanaście sztuk", "mamy piętnaście sztuk"),
+            ("mamy dwunascie sztuk", "mamy pietnascie sztuk"),
+            ("mamy osiemnaście sztuk", "mamy dziewiętnaście sztuk"),
+            ("mamy trzej ludzie", "mamy czterej ludzie"),
+            ("mamy hundreds sztuk", "mamy thousands sztuk"),
+        ]
+        for (before, after) in cases {
+            #expect(find(edits: [edit("a", "0", before, after)]).isEmpty, "\(before) → \(after)")
+        }
+    }
+
+    @Test func typographicApostropheNegationIsFiltered() {
+        #expect(find(edits: [edit("a", "0", "to isn\u{2019}t Rokm", "to is Nimbu")]).isEmpty)
+    }
+
+    @Test func newTermIsNotCreatedForAFormOfAnExistingTerm() {
+        // Poprawiona strona jest odmianą Terma „Nimbu”: to nie nowa nazwa (F3).
+        #expect(find(edits: [edit("a", "0", "widzę Nimbua", "widzę Nimbuie")]).isEmpty)
+        #expect(find(edits: [edit("a", "0", "Rokma tu", "Nimbuie tu")]).isEmpty)
+    }
+
+    @Test func newTermIsNotCreatedFromAnExistingTerm() {
+        // Surowa strona jest już Termem: podmiana na nową nazwę nie uczy Aliasu dla drugiej strony (F3).
+        #expect(find(edits: [edit("a", "0", "to Nimbu", "to Terra")]).isEmpty)
+    }
+
+    @Test func secondAliasOfTheSameNewTermIsAppended() throws {
+        let s1 = AliasSuggestion(id: "terą→terra", termID: UUID(), term: "Terra", alias: "Terą", inflects: false, risky: false,
+                                 forms: ["Terą"], count: 1, sessions: ["a"], fromEdits: true, isNewTerm: true)
+        let s2 = AliasSuggestion(id: "tera→terra", termID: UUID(), term: "Terra", alias: "Tera", inflects: false, risky: true,
+                                 forms: ["Tera"], count: 1, sessions: ["b"], fromEdits: true, isNewTerm: true)
+        var d = try AliasSuggestions.accept(s1, in: UserDictionary(terms: []))
+        d = try AliasSuggestions.accept(s2, in: d)
+        #expect(d.terms.count == 1)
+        let term = try #require(d.terms.first)
+        #expect(Set(term.aliases.map(\.text)) == ["Terą", "Tera"])
+        #expect(term.priority == .normal)
     }
 }

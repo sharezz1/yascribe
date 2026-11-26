@@ -274,9 +274,20 @@ public enum AliasSuggestions {
               !(before + after).contains(where: { fillers.contains(CorrectionGuard.key($0)) }),
               // Poprawiona strona nie może być już Termem/Aliasem: to nie nowa nazwa, tylko nadpisanie istniejącej.
               !dictionary.terms.contains(where: { UserDictionary.key($0.text) == UserDictionary.key(corrected) }),
+              // Surowa strona ani poprawiona nie może być odmienioną formą Terma: „widzę Nimbua” → „widzę Nimbuie” to nie nowa nazwa.
+              !dictionary.terms.contains(where: { isTermForm(raw, of: $0) || isTermForm(corrected, of: $0) }),
               dictionary.owner(ofAlias: corrected) == nil,
               dictionary.owner(ofAlias: raw) == nil else { return nil }
         return (raw, corrected)
+    }
+
+    /// Dokładnie Term albo Term + końcówka z liter, zaczynający się tą samą literą („Nimbuie”, „Nimbuowski” przy „Nimbu”).
+    private static func isTermForm(_ text: String, of term: DictionaryTerm) -> Bool {
+        let key = UserDictionary.key(text), base = UserDictionary.key(term.text)
+        if key == base { return true }
+        let lower = text.lowercased(), termLower = term.text.lowercased()
+        return text.first == term.text.first && lower.hasPrefix(termLower)
+            && lower.dropFirst(termLower.count).allSatisfy(\.isLetter)
     }
 
     private struct Pair { var raw: String; var corrected: String; var stem: String; var ending: String; var term: DictionaryTerm }
@@ -295,9 +306,15 @@ public enum AliasSuggestions {
     public static func accept(_ s: AliasSuggestion, in d: UserDictionary) throws(DictionaryError) -> UserDictionary {
         var out = d
         // Nowy Term: `find` nadał `termID`, więc Add jest tą samą walidacją co ręczne dodanie.
+        // Druga poprawka ucząca innego Aliasu tego samego Terma musi dopisać Alias, nie nadpisać listy (`upsert` podmienia cały Term).
         if s.isNewTerm {
-            try out.upsert(DictionaryTerm(s.term, aliases: [DictionaryAlias(s.alias, risky: s.risky, enabled: true, inflects: false)],
-                                          id: s.termID))
+            if var term = d.terms.first(where: { $0.id == s.termID || UserDictionary.key($0.text) == UserDictionary.key(s.term) }) {
+                term.aliases.append(DictionaryAlias(s.alias, risky: s.risky, enabled: true, inflects: false))
+                try out.upsert(term)
+            } else {
+                try out.upsert(DictionaryTerm(s.term, aliases: [DictionaryAlias(s.alias, risky: s.risky, enabled: true, inflects: false)],
+                                              id: s.termID))
+            }
             return out
         }
         guard var term = d.terms.first(where: { $0.id == s.termID }) else { throw .emptyTerm }
@@ -306,12 +323,21 @@ public enum AliasSuggestions {
         return out
     }
 
+    /// Liczba słów różniących się między tekstami po kluczach `TokenAlign`: `editPairs` wybiera bazę bliższą tekstowi poprawki.
+    public static func differingWords(_ a: String, _ b: String) -> Int {
+        let ka = words(a).map(CorrectionGuard.key), kb = words(b).map(CorrectionGuard.key)
+        return CorrectionGuard.align(ka, kb).reduce(0) { n, step in
+            guard case .changed(let l, let r) = step else { return n }
+            return n + max(l.count, r.count)
+        }
+    }
+
     /// Cyfra albo słowo liczebnikowe/negacja po którymkolwiek rdzeniu (F1): poprawka liczby lub negacji nie uczy nazwy.
     private static func isNumberOrNegation(_ token: String) -> Bool {
         let t = UserDictionary.key(token).trimmingCharacters(in: .punctuationCharacters.union(.symbols))
         guard !t.isEmpty else { return false }
         if t.contains(where: \.isNumber) { return true }
-        if negationWords.contains(t) || negationPrefixes.contains(where: { t.hasPrefix($0) }) || t.hasSuffix("n't") { return true }
+        if negationWords.contains(t) || negationPrefixes.contains(where: { t.hasPrefix($0) }) || t.hasSuffix("n't") || t.hasSuffix("n\u{2019}t") { return true }
         if numberWordsEN.contains(t) || numberWordsPL.contains(t) { return true }
         if numberPrefixesPL.contains(where: { t.hasPrefix($0) }) { return true }
         // Złożenia z myślnikiem („twenty-one”): sprawdzamy każdą część osobno.
@@ -325,6 +351,7 @@ public enum AliasSuggestions {
         "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
         "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
         "hundred", "thousand", "million", "billion", "trillion",
+        "hundreds", "thousands", "millions", "billions", "trillions",
         "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth",
         "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth",
         "twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth", "seventieth", "eightieth", "ninetieth",
@@ -337,7 +364,7 @@ public enum AliasSuggestions {
         // „jedną" nie łapie się żadnym wąskim prefiksem („jedn-" objąłby „jednak", „jednostka").
         "jedną", "jednemu", "jednymi", "jednemi",
         "dwa", "dwie", "dwu", "dwóch", "dwoma", "dwom", "dwoje", "dwojga",
-        "trzy", "trzech", "trzem", "trzema", "troje", "trojga",
+        "trzy", "trzech", "trzem", "trzema", "troje", "trojga", "trzej",
         "cztery", "czterech", "czterem", "czterema", "czworo",
         "pięć", "pięciu", "pięcią", "pięcioma", "piątka",
         "sześć", "sześciu", "sześcioma", "szóstka",
@@ -362,6 +389,10 @@ public enum AliasSuggestions {
         "osiemdzie", "osiemset", "osiemnast", "ośmi", "osmi",
         "dziewięćdzie", "dziewiecdzie", "dziewięćset", "dziewiecset", "dziewiętnast", "dziewietnast", "dziewię", "dziewie", "dziewiąt", "dziewiat",
         "jedenast", "jedyn", "dziesiąt", "dziesiat",
+        // Pełne rdzenie 11–18 z „-naście" (z diakrytykami i bez): „dwanaście” → „piętnaście” to liczebnik, nie nazwa (F4).
+        "jedenaśc", "jedenasc", "dwanaśc", "dwanasc", "trzynaśc", "trzynasc",
+        "czternaśc", "czternasc", "piętnaśc", "pietnasc", "szesnaśc", "szesnasc",
+        "siedemnaśc", "siedemnasc", "osiemnaśc", "osiemnasc", "dziewiętnaśc", "dziewietnasc",
         "pierwsz", "drug", "czwart",
         // Odmiany liczebników rzeczownikowych: „tysiącem", „milionem", „setką" (F1).
         "tysi", "tysięcz", "tysiecz", "milion", "miliard", "setk",
@@ -370,7 +401,7 @@ public enum AliasSuggestions {
 
     private static let negationWords: Set<String> = [
         "nie", "bez", "brak", "nigdy", "ani", "żaden", "zadna", "żadna", "żadne", "zadne", "żadnego", "zadnego",
-        "żadnej", "zadnej", "no", "not", "never", "none", "nobody", "nothing", "nowhere", "without", "nor", "neither",
+        "żadnej", "zadnej", "no", "not", "never", "none", "nobody", "nothing", "nowhere", "without", "nor", "neither", "cannot",
     ]
 
     /// Prefiksy odmian negacji; „nie”, „bez” i „ani” tylko w całości, żeby nie łapać „niebo”, „bezpieczny”, „animacja”.
