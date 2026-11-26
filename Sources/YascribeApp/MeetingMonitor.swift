@@ -86,7 +86,7 @@ final class MeetingMonitor {
         case .show(let offer):
             present(offer)
         case .hide:
-            model.recording.hideOffer()  // tylko stan Offer, nie pigułka nagrania
+            hideOffer()  // tylko stan Offer, nie pigułka nagrania
         case .startRecording(let offer):
             accept(offer)
         case nil:
@@ -105,7 +105,17 @@ final class MeetingMonitor {
 
     private func present(_ offer: Offer) {
         guard let model else { return }
-        model.recording.showOffer(offer, onStart: { [weak self] in self?.accept(offer) }, onDismiss: { [weak self] in self?.offers.dismiss() })
+        model.applyAutoPreset(key: offer.id, event: offer.event, app: offer.app)
+        model.recording.showOffer(offer, onStart: { [weak self] in self?.accept(offer) }, onDismiss: { [weak self] in
+            self?.model?.autoPreset.clearContext()
+            self?.offers.dismiss()
+        })
+    }
+
+    /// Wspólne ukrycie oferty: czyści też kontekst auto-presetu (oferta znika, więc dopasowanie nie może zostać).
+    private func hideOffer() {
+        model?.autoPreset.clearContext()
+        model?.recording.hideOffer()
     }
 
     /// Start z oferty (przycisk albo auto-start). Gdy się nie uda (np. preset bez języka), oferta zostaje na ekranie
@@ -141,7 +151,7 @@ final class MeetingMonitor {
         end.reset()
         events = []
         eventsFetchedAt = nil
-        model.recording.hideOffer()
+        hideOffer()
         model.recording.hideEndPrompt()
         setActivity(false)
     }

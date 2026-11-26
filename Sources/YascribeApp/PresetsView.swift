@@ -1,3 +1,4 @@
+import YascribeMeetings
 import YascribeProviders
 import SwiftUI
 
@@ -48,6 +49,12 @@ struct PresetsView: View {
                                           trailing: p.isFullyLocal(providers: model.providers.providers) ? FullyLocalBadge() : nil)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Move up") { model.movePreset(p.id, by: -1) }.disabled(i == 0)
+                            Button("Move down") { model.movePreset(p.id, by: 1) }.disabled(i == model.presets.presets.count - 1)
+                        }
+                        .accessibilityAction(named: Text("Move up")) { model.movePreset(p.id, by: -1) }
+                        .accessibilityAction(named: Text("Move down")) { model.movePreset(p.id, by: 1) }
                     }
                 }
             }
@@ -62,6 +69,7 @@ struct PresetsView: View {
     private func meta(_ p: Preset) -> String {
         var parts = [AppModel.presetLanguageLabel(p), p.asr.map { $0.model.split(separator: "/").last.map(String.init) ?? $0.model } ?? String(localized: "No speech-to-text model")]
         if p.id == model.settings.defaultPresetID { parts.append(String(localized: "default")) }
+        if p.rules?.isEmpty == false { parts.append(String(localized: "has rules")) }
         return parts.joined(separator: " · ")
     }
 
@@ -198,9 +206,67 @@ struct PresetForm: View {
                     }
                 }
             }
+            SectionHeader(String(localized: "Use this preset when…"))
+            Card {
+                FormRow(label: String(localized: "Title contains"),
+                        caption: String(localized: "One phrase per line. Matches part of the calendar event title, ignoring case and accents.")) {
+                    EditorPromptField(text: titleRulesText, minHeight: 44)
+                }
+                RowDivider()
+                FormRow(label: String(localized: "Attendee domain"),
+                        caption: String(localized: "One domain per line, e.g. example.test. Matches any attendee's email domain and its subdomains.")) {
+                    EditorPromptField(text: domainRulesText, minHeight: 44)
+                }
+                RowDivider()
+                FormRow(label: String(localized: "Call app"),
+                        caption: String(localized: "Only applies when a call is detected, not when you start from a calendar event.")) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(MeetingTuning().callApps, id: \.self) { family in
+                            Toggle(OfferDetector.appName(family), isOn: appRulesBinding(family))
+                                .toggleStyle(.switch).controlSize(.small)
+                        }
+                    }
+                }
+            }
+            Text(String(localized: "The first matching preset in the list wins. A preset you choose yourself always overrides rules."))
+                .font(.system(size: 11)).foregroundStyle(.mnText2).padding(.top, 8).padding(.leading, 2)
+            if draft.wrappedValue.isAutoLanguage && !(draft.wrappedValue.rules?.isEmpty ?? true) {
+                WarnLabel(String(localized: "This preset uses Auto language. A rule can select it, so check the language before you start."))
+                    .padding(.top, 8).padding(.leading, 2)
+            }
             Text("Embeddings are set once for the whole archive in Settings.")
                 .font(.system(size: 11)).foregroundStyle(.mnText2).padding(.top, 14).padding(.leading, 2)
         }
+    }
+
+    /// Wspólna przebudowa reguł: bieżące trzy pola, zmiana jednego, `make` (nil, gdy wszystko puste).
+    private func updateRules(_ change: (inout PresetRules) -> Void) {
+        var rules = draft.wrappedValue.rules ?? PresetRules()
+        change(&rules)
+        draft.wrappedValue.rules = PresetRules.make(
+            titleText: PresetRules.text(rules.titleContains),
+            domainText: PresetRules.text(rules.attendeeDomains),
+            apps: rules.apps)
+    }
+
+    private var titleRulesText: Binding<String> {
+        Binding(get: { PresetRules.text(draft.wrappedValue.rules?.titleContains) },
+                set: { value in updateRules { $0.titleContains = PresetRules.lines(value) } })
+    }
+
+    private var domainRulesText: Binding<String> {
+        Binding(get: { PresetRules.text(draft.wrappedValue.rules?.attendeeDomains) },
+                set: { value in updateRules { $0.attendeeDomains = PresetRules.lines(value) } })
+    }
+
+    private func appRulesBinding(_ family: String) -> Binding<Bool> {
+        Binding(get: { draft.wrappedValue.rules?.apps?.contains(family) ?? false },
+                set: { on in updateRules { rules in
+                    var apps = rules.apps ?? []
+                    if on { if !apps.contains(family) { apps.append(family) } }
+                    else { apps.removeAll { $0 == family } }
+                    rules.apps = apps.isEmpty ? nil : apps
+                } })
     }
 }
 

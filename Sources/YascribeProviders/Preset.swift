@@ -43,9 +43,12 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
     /// `true` = język „Auto" (spec 1.5 §3.8): tylko razem z `language == nil`. Opcjonalne — stare pliki go nie mają.
     public var languageAuto: Bool?
 
+    /// Reguły auto-wyboru (TASK-115). Opcjonalne (E6): stare pliki go nie mają.
+    public var rules: PresetRules?
+
     public init(id: UUID = UUID(), name: String, language: LanguageCode?, asr: RoleAssignment?,
                 correction: RoleAssignment? = nil, summary: RoleAssignment? = nil, notesLanguage: LanguageCode? = nil,
-                languageAuto: Bool? = nil) {
+                languageAuto: Bool? = nil, rules: PresetRules? = nil) {
         self.id = id
         self.name = name
         self.language = language
@@ -54,6 +57,7 @@ public struct Preset: Codable, Equatable, Identifiable, Sendable {
         self.summary = summary
         self.notesLanguage = notesLanguage
         self.languageAuto = languageAuto
+        self.rules = rules
     }
 
     public var isAutoLanguage: Bool { language == nil && languageAuto == true }

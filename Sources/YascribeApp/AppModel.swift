@@ -184,6 +184,8 @@ final class AppModel {
     /// Spotkanie, które po otwarciu ma pokazać okno Improve (Retry z listy po nieudanej korekcie).
     var improveRequest: String?
     var activePresetID: UUID?
+    /// Auto-wybór presetu z reguł (TASK-115); ręczny wybór ma pierwszeństwo.
+    var autoPreset = AutoPresetState()
     var lastError: String?
     /// Kalendarz Apple (T7); prośba o dostęp dopiero z przełącznika w Settings.
     let calendarSource: any CalendarSource = EventKitCalendar()
@@ -343,8 +345,33 @@ final class AppModel {
         }
     }
 
+    /// Preset bez auto-wyboru z reguł: ręczny wybór albo domyślny. Dyktowanie i słownik czytają ten, nie `activePreset`.
+    var selectedPreset: Preset? {
+        let candidates = [activePresetID, settings.defaultPresetID].compactMap { $0 }
+        return candidates.lazy.compactMap { id in self.presets.presets.first { $0.id == id } }.first ?? presets.presets.first
+    }
+
+    /// Preset następnego nagrania: dopasowanie reguły (oferta/wydarzenie w toku) przed `selectedPreset`.
     var activePreset: Preset? {
-        presets.presets.first { $0.id == (activePresetID ?? settings.defaultPresetID) } ?? presets.presets.first
+        autoPreset.match.flatMap { m in presets.presets.first { $0.id == m.presetID } } ?? selectedPreset
+    }
+
+    /// Ręczny wybór presetu; `key` (oferta/wydarzenie) blokuje auto-wybór dla tego kontekstu.
+    func chooseManually(_ id: UUID, key: String? = nil) {
+        activePresetID = id
+        autoPreset.chooseManually(key: key)
+    }
+
+    /// Liczy reguły dla kontekstu i zapisuje wynik; ten sam klucz nie przelicza.
+    func applyAutoPreset(key: String, event: CalendarEventInfo?, app: String?) {
+        autoPreset.apply(presets: presets.presets, key: key, title: event?.title,
+                         attendeeEmails: (event?.attendees ?? []).compactMap(\.email), app: app)
+    }
+
+    /// Podgląd dopasowania bez zmiany stanu (Coming up pokazuje preset przed startem).
+    func autoMatch(event: CalendarEventInfo, key: String) -> PresetMatch? {
+        autoPreset.candidate(presets: presets.presets, key: key, title: event.title,
+                             attendeeEmails: event.attendees.compactMap(\.email), app: nil)
     }
 
     func provider(_ id: UUID?) -> Provider? { providers.providers.first { $0.id == id } }
@@ -897,6 +924,7 @@ final class AppModel {
                 return String(localized: "This model returns no word timings, so it can't be used for meetings.")
             }
             try presets.upsert(p)
+            autoPreset.clearContext()  // zmienione reguły: nie trzymamy wyniku liczonego ze starych
             if settings.defaultPresetID == nil { settings.defaultPresetID = p.id }
             save()
             return nil
@@ -909,6 +937,16 @@ final class AppModel {
         } catch {
             return String(describing: error)
         }
+    }
+
+    /// Kolejność listy to priorytet reguł, więc przesunięcie od razu zapisuje nowy porządek.
+    func movePreset(_ id: UUID, by offset: Int) {
+        guard let from = presets.presets.firstIndex(where: { $0.id == id }) else { return }
+        let to = min(max(from + offset, 0), presets.presets.count - 1)
+        guard to != from else { return }
+        presets.presets.insert(presets.presets.remove(at: from), at: to)
+        autoPreset.clearContext()  // dopasowanie liczone ze starej kolejności jest nieaktualne
+        save()
     }
 
     /// Zapis słownika po zmianie w zakładce Dictionary; `nil` = zapisano, tekst = powód.
@@ -1009,7 +1047,10 @@ final class AppModel {
 
     /// Start z oferty (detekcja w tle) — błąd tylko w `lastError`, bez przełączania sekcji. `true` = nagranie trwa.
     @discardableResult
-    func startRecording(offer: Offer) -> Bool { startRecording(event: offer.event, background: true) }
+    func startRecording(offer: Offer) -> Bool {
+        applyAutoPreset(key: offer.id, event: offer.event, app: offer.app)
+        return startRecording(event: offer.event, background: true)
+    }
 
     /// `event`: nagranie od razu z tytułem i powiązaniem (spec 1.6 §4.7) — z oferty albo z karty „Coming up” (§11.5).
     @discardableResult
@@ -1024,6 +1065,8 @@ final class AppModel {
             lastError = String(localized: "Meetings are being moved to a new folder. Record when that finishes.")
             return false
         }
+        // Start z wydarzenia (Coming up) też liczy reguły — przed wyborem presetu.
+        if let event { applyAutoPreset(key: event.id, event: event, app: nil) }
         // ChatGPT #2: preset — z językiem — ustalony PRZED startem i zamrożony na całą sesję.
         guard let preset = activePreset, (try? preset.validate()) != nil else {
             lastError = String(localized: "Choose a preset with a language before recording.")
@@ -1038,6 +1081,7 @@ final class AppModel {
                     self?.transcribe(sessionURL: dir, preset: preset)
                 }
             }
+            autoPreset.consume()
             // Nagranie trwa mimo błędu zapisu — ten przebieg i tak dostaje `preset` z domknięcia.
             do { try JSONFile.save(preset, to: dir.appendingPathComponent("preset.json")) } catch {
                 lastError = String(localized: "Recording, but couldn't save its preset: \(String(describing: error)). After a restart it will use the active preset.")
@@ -1060,7 +1104,7 @@ final class AppModel {
     /// Spec §1.5: preset zamrożony przy starcie (`<sesja>/preset.json`) idzie do transkrypcji także po restarcie;
     /// sesja bez pliku (np. z CLI) dostaje aktywny.
     func presetFor(sessionURL: URL) -> Preset? {
-        (try? JSONFile.load(Preset?.self, from: sessionURL.appendingPathComponent("preset.json"), default: nil)) ?? activePreset
+        (try? JSONFile.load(Preset?.self, from: sessionURL.appendingPathComponent("preset.json"), default: nil)) ?? selectedPreset
     }
 
     /// Przełącza na listę spotkań i otwiera sesję (np. notatkę trwającego nagrania). Nie aktywuje aplikacji.
