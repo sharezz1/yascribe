@@ -924,6 +924,7 @@ final class AppModel {
                 return String(localized: "This model returns no word timings, so it can't be used for meetings.")
             }
             try presets.upsert(p)
+            autoPreset.clearContext()  // zmienione reguły: nie trzymamy wyniku liczonego ze starych
             if settings.defaultPresetID == nil { settings.defaultPresetID = p.id }
             save()
             return nil
@@ -936,6 +937,16 @@ final class AppModel {
         } catch {
             return String(describing: error)
         }
+    }
+
+    /// Kolejność listy to priorytet reguł, więc przesunięcie od razu zapisuje nowy porządek.
+    func movePreset(_ id: UUID, by offset: Int) {
+        guard let from = presets.presets.firstIndex(where: { $0.id == id }) else { return }
+        let to = min(max(from + offset, 0), presets.presets.count - 1)
+        guard to != from else { return }
+        presets.presets.insert(presets.presets.remove(at: from), at: to)
+        autoPreset.clearContext()  // dopasowanie liczone ze starej kolejności jest nieaktualne
+        save()
     }
 
     /// Zapis słownika po zmianie w zakładce Dictionary; `nil` = zapisano, tekst = powód.

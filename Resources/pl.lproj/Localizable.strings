@@ -1157,3 +1157,15 @@
 "Couldn't split speakers: %@" = "Nie udało się rozdzielić mówców: %@";
 "Play" = "Odtwórz";
 "Playback position" = "Pozycja odtwarzania";
+
+/* TASK-115: reguły auto-wyboru presetu */
+"Use this preset when…" = "Użyj tego presetu, gdy…";
+"Title contains" = "Tytuł zawiera";
+"Attendee domain" = "Domena uczestnika";
+"Call app" = "Aplikacja rozmowy";
+"One phrase per line. Matches part of the calendar event title, ignoring case and accents." = "Jedna fraza w wierszu. Pasuje do fragmentu tytułu wydarzenia w kalendarzu, bez uwzględniania wielkości liter i znaków diakrytycznych.";
+"One domain per line, e.g. example.test. Matches any attendee's email domain and its subdomains." = "Jedna domena w wierszu, np. example.test. Pasuje do domeny e-mail dowolnego uczestnika i jej poddomen.";
+"Only applies when a call is detected, not when you start from a calendar event." = "Działa tylko przy wykrytej rozmowie, nie przy starcie z wydarzenia w kalendarzu.";
+"The first matching preset in the list wins. A preset you choose yourself always overrides rules." = "Wygrywa pierwszy pasujący preset na liście. Preset wybrany ręcznie zawsze ma pierwszeństwo przed regułami.";
+"This preset uses Auto language. A rule can select it, so check the language before you start." = "Ten preset używa języka Auto. Reguła może go wybrać, więc sprawdź język przed rozpoczęciem.";
+"has rules" = "ma reguły";

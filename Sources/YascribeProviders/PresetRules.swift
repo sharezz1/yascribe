@@ -12,6 +12,25 @@ public struct PresetRules: Codable, Equatable, Sendable {
         self.apps = apps
     }
 
+    /// Tekst z edytora na listę reguł; puste pole to nil. Puste linie zostają, żeby wpisanie nowej linii działało (matcher je pomija).
+    public static func lines(_ text: String) -> [String]? {
+        text.isEmpty ? nil : text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    }
+
+    /// Lista reguł z powrotem do tekstu edytora; nil daje puste pole.
+    public static func text(_ lines: [String]?) -> String {
+        (lines ?? []).joined(separator: "\n")
+    }
+
+    /// Reguły z trzech pól edytora; nil, gdy wszystkie trzy są puste.
+    public static func make(titleText: String, domainText: String, apps: [String]?) -> PresetRules? {
+        let title = lines(titleText)
+        let domains = lines(domainText)
+        let apps = (apps?.isEmpty ?? true) ? nil : apps
+        guard title != nil || domains != nil || apps != nil else { return nil }
+        return PresetRules(titleContains: title, attendeeDomains: domains, apps: apps)
+    }
+
     /// Puste reguły nie mogą niczego wybrać — same białe znaki też się nie liczą.
     public var isEmpty: Bool {
         let t = (titleContains ?? []).contains { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

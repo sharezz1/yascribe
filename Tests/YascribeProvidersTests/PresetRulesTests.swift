@@ -193,3 +193,23 @@ private func validPreset(_ name: String = "Preset", language: LanguageCode? = .p
     #expect(state.key == "k1")
     #expect(state.match == nil)
 }
+
+@Test func ruleTextAndLinesRoundTripKeepTrailingNewline() {
+    #expect(PresetRules.lines("") == nil)
+    #expect(PresetRules.text(nil) == "")
+    let text = "Standup\nWeekly\n"
+    #expect(PresetRules.text(PresetRules.lines(text)) == text)
+    #expect(PresetRules.text(["a", ""]) == "a\n")
+}
+
+@Test func makeRulesReturnsNilWhenAllEmpty() {
+    #expect(PresetRules.make(titleText: "", domainText: "", apps: nil) == nil)
+    #expect(PresetRules.make(titleText: "", domainText: "", apps: []) == nil)
+}
+
+@Test func makeRulesWithOnlyApps() throws {
+    let rules = try #require(PresetRules.make(titleText: "", domainText: "", apps: ["com.example.call"]))
+    #expect(rules.apps == ["com.example.call"])
+    #expect(rules.titleContains == nil)
+    #expect(rules.attendeeDomains == nil)
+}
