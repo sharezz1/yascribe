@@ -458,10 +458,9 @@ struct TranscriptTab: View {
     // Wiersz ≠ źródło: każda wypowiedź za podzieloną ma przesunięty wiersz, więc zawsze `sourceIndex` (pozycja przed podziałem).
     // `t` musi mieć wszystkie wypowiedzi (`includeHidden: true`), inaczej `sourceIndex` nie jest indeksem `edits.json`.
 
-    /// Indeks, początek i tekst do edycji; `nil` w dalszych częściach (edytor tylko w pierwszej).
+    /// Indeks, początek i tekst całej wypowiedzi źródłowej; ołówek dalszej części otwiera ten sam edytor, co pierwszej (stoi w niej).
     static func editTarget(_ index: Int, _ u: Utterance) -> (index: Int, start: Double, text: String)? {
-        guard u.isFirstPart else { return nil }
-        return (u.sourceIndex ?? index, u.part?.start ?? u.start, u.part?.text ?? u.text)
+        (u.sourceIndex ?? index, u.part?.start ?? u.start, u.part?.text ?? u.text)
     }
 
     /// Klucze ukrycia bez powtórek (obie części dają klucz źródła).
