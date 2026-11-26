@@ -36,7 +36,7 @@ struct PillOfferView: View {
             // Język spotkania jest jawny (W§): wybór presetu w ofercie to ten sam `activePresetID` co na stronie Meetings.
             FieldMenu(label: String(localized: "Preset"), value: model.activePreset.map(AppModel.label) ?? String(localized: "No preset"), prefix: String(localized: "Preset"), width: 292) {
                 ForEach(model.presets.presets) { p in
-                    Button(AppModel.label(p)) { model.activePresetID = p.id }
+                    Button(AppModel.label(p)) { model.chooseManually(p.id, key: offer.id) }
                 }
             }
             HStack(spacing: 8) {

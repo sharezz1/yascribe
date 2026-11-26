@@ -37,6 +37,44 @@ public struct PresetMatch: Equatable, Sendable {
     }
 }
 
+/// Stan auto-wyboru presetu (TASK-115). Auto NIGDY nie nadpisuje ręcznego `activePresetID`; ręczny wybór zawsze wygrywa.
+public struct AutoPresetState: Equatable, Sendable {
+    public private(set) var match: PresetMatch?
+    public private(set) var key: String?
+    // shortcut: zbiór rośnie przez życie procesu (po jednym id wydarzenia), znikomy koszt; przyciąć, gdy kiedykolwiek urośnie
+    private var overriddenKeys: Set<String> = []
+    private var pageOverride = false
+    public init() {}
+    /// Wynik reguł dla kontekstu (oferta albo wydarzenie); nil, gdy użytkownik wybrał ręcznie dla tego klucza albo w menu strony.
+    public func candidate(presets: [Preset], key: String, title: String?, attendeeEmails: [String], app: String?) -> PresetMatch? {
+        guard !pageOverride, !overriddenKeys.contains(key) else { return nil }
+        return PresetRuleMatcher.match(presets: presets, title: title, attendeeEmails: attendeeEmails, app: app)
+    }
+    /// Idempotentne dla tego samego klucza (powtórne `present` nie przelicza i nie gubi wyniku z aplikacją).
+    public mutating func apply(presets: [Preset], key: String, title: String?, attendeeEmails: [String], app: String?) {
+        guard key != self.key else { return }
+        self.key = key
+        match = candidate(presets: presets, key: key, title: title, attendeeEmails: attendeeEmails, app: app)
+    }
+    /// key != nil: wybór w pigułce dla oferty/wydarzenia o tym kluczu; key == nil: wybór w menu strony (dotyczy najbliższego nagrania). Zawsze zdejmuje bieżące dopasowanie.
+    public mutating func chooseManually(key: String?) {
+        if let key { overriddenKeys.insert(key) } else { pageOverride = true }
+        if let current = self.key { overriddenKeys.insert(current) }
+        match = nil
+    }
+    /// Oferta znikła (dismiss/ukrycie): zdejmuje dopasowanie i klucz, zostawia ręczne wybory.
+    public mutating func clearContext() {
+        match = nil
+        key = nil
+    }
+    /// Nagranie wystartowało: preset zamrożony w sesji; zużywa wybór ze strony.
+    public mutating func consume() {
+        match = nil
+        key = nil
+        pageOverride = false
+    }
+}
+
 public enum PresetRuleMatcher {
     /// Kolejność presetów jest priorytetem: wygrywa pierwszy pasujący. Niepoprawne presety pomijamy.
     public static func match(presets: [Preset], title: String?, attendeeEmails: [String],

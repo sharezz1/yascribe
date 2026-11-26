@@ -162,7 +162,7 @@ struct HotkeySettingsGate {
     }
 
     /// Jawny język dyktowania, inaczej język aktywnego presetu (preset „Auto" ma `nil`, więc Auto nie przechodzi).
-    private var language: LanguageCode? { model.settings.dictationOrDefault.language ?? model.activePreset?.language }
+    private var language: LanguageCode? { model.settings.dictationOrDefault.language ?? model.selectedPreset?.language }
 
     // MARK: Wejście potoku
 

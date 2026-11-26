@@ -116,3 +116,80 @@ private func validPreset(_ name: String = "Preset", language: LanguageCode? = .p
                                            apps: ["com.example.call"]))
     #expect(PresetRuleMatcher.match(presets: [p], title: nil, attendeeEmails: [], app: nil) == nil)
 }
+
+@Test func autoStateApplySetsMatch() {
+    let p = validPreset(rules: PresetRules(titleContains: ["standup"]))
+    var state = AutoPresetState()
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.key == "k1")
+    #expect(state.match?.presetID == p.id)
+}
+
+@Test func autoStateApplySameKeyDoesNotRecompute() {
+    let first = validPreset("First", rules: PresetRules(titleContains: ["standup"]))
+    let second = validPreset("Second", rules: PresetRules(titleContains: ["weekly"]))
+    var state = AutoPresetState()
+    state.apply(presets: [first, second], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    // Powtórne `present` z innym tytułem nie może przeliczyć wyniku.
+    state.apply(presets: [first, second], key: "k1", title: "Weekly", attendeeEmails: [], app: nil)
+    #expect(state.match?.presetID == first.id)
+}
+
+@Test func autoStateManualChoiceBlocksLaterApplyForThatKey() {
+    let p = validPreset(rules: PresetRules(titleContains: ["standup"]))
+    var state = AutoPresetState()
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    state.chooseManually(key: "k1")
+    #expect(state.match == nil)
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.match == nil)
+}
+
+@Test func autoStatePageOverrideBlocksEveryKeyUntilConsume() {
+    let p = validPreset(rules: PresetRules(titleContains: ["standup"]))
+    var state = AutoPresetState()
+    state.chooseManually(key: nil)
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.match == nil)
+    state.apply(presets: [p], key: "k2", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.match == nil)
+}
+
+@Test func autoStateConsumeResetsPageOverrideAndClearsMatch() {
+    let p = validPreset(rules: PresetRules(titleContains: ["standup"]))
+    var state = AutoPresetState()
+    state.chooseManually(key: nil)
+    state.consume()
+    #expect(state.match == nil)
+    #expect(state.key == nil)
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.match?.presetID == p.id)
+}
+
+@Test func autoStateClearContextKeepsManualChoices() {
+    let p = validPreset(rules: PresetRules(titleContains: ["standup"]))
+    var state = AutoPresetState()
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    state.chooseManually(key: "k1")
+    state.clearContext()
+    #expect(state.match == nil)
+    #expect(state.key == nil)
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.match == nil)
+}
+
+@Test func autoStateOtherKeyStillMatchesAfterManualChoice() {
+    let p = validPreset(rules: PresetRules(titleContains: ["standup"]))
+    var state = AutoPresetState()
+    state.chooseManually(key: "k1")
+    state.apply(presets: [p], key: "k2", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.match?.presetID == p.id)
+}
+
+@Test func autoStateNoRulesKeepsKeyWithoutMatch() {
+    let p = validPreset()
+    var state = AutoPresetState()
+    state.apply(presets: [p], key: "k1", title: "Standup", attendeeEmails: [], app: nil)
+    #expect(state.key == "k1")
+    #expect(state.match == nil)
+}

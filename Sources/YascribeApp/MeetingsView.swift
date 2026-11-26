@@ -475,7 +475,7 @@ struct PresetMenu: View {
     var body: some View {
         FieldMenu(label: String(localized: "Preset"), value: model.activePreset?.name ?? String(localized: "No preset"), width: width) {
             ForEach(model.presets.presets) { p in
-                Button(AppModel.label(p)) { model.activePresetID = p.id }
+                Button(AppModel.label(p)) { model.chooseManually(p.id) }
             }
             Divider()
             Button("Edit Presets…") { model.section = .presets }
