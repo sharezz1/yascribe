@@ -15,10 +15,14 @@ import Testing
         return AliasSuggestions.Source(id: id, raw: raw, corrected: fixed)
     }
 
-    private func find(_ sources: [AliasSuggestions.Source], _ terms: [DictionaryTerm]? = nil, dismissed: Set<String> = [],
-                      common: Set<String> = []) -> [AliasSuggestion] {
+    private func find(_ sources: [AliasSuggestions.Source] = [], _ terms: [DictionaryTerm]? = nil, dismissed: Set<String> = [],
+                      common: Set<String> = [], edits: [AliasSuggestions.EditPair] = []) -> [AliasSuggestion] {
         AliasSuggestions.find(in: sources, dictionary: UserDictionary(terms: terms ?? [nimbu, kopt]), dismissed: dismissed,
-                              fillerWords: ["yyy"], isCommonWord: { common.contains($0.lowercased()) })
+                              fillerWords: ["yyy"], edits: edits, isCommonWord: { common.contains($0.lowercased()) })
+    }
+
+    private func edit(_ session: String, _ note: String, _ before: String, _ after: String) -> AliasSuggestions.EditPair {
+        .init(sessionID: session, editKey: "\(session)#\(note)", before: before, after: after)
     }
 
     @Test func inflectedFormsOfOneNameBecomeOneStemSuggestion() throws {
@@ -180,5 +184,198 @@ import Testing
         let alias = try #require(d.terms.first { $0.id == nimbu.id }?.aliases.first)
         #expect((alias.text, alias.inflecting, alias.risky, alias.enabled) == ("rok", false, true, true))
         #expect(find([source("a", [pair]), source("b", [pair])], d.terms, common: ["rok"]).isEmpty)
+    }
+
+    // MARK: - TASK-116: nauka z poprawek użytkownika
+
+    @Test func singleEditToAnExistingTermSuggestsTheAlias() throws {
+        let s = try #require(find(edits: [edit("a", "0", "byłem w Rokmie", "byłem w Nimbuie")]).first)
+        // Jedna poprawka wystarcza (D3); reszta zachowuje się jak w TASK-112.
+        #expect((s.alias, s.inflects, s.term, s.count, s.sessions) == ("Rokm", true, "Nimbu", 1, ["a"]))
+        #expect((s.fromEdits, s.isNewTerm) == (true, false))
+        #expect(s.termID == nimbu.id)
+    }
+
+    @Test func editTeachesANewTerm() throws {
+        let s = try #require(find(edits: [edit("a", "0", "pracuję w Rokm", "pracuję w Nimbu Corp")]).first)
+        #expect((s.alias, s.term, s.inflects, s.count) == ("Rokm", "Nimbu Corp", false, 1))
+        #expect((s.fromEdits, s.isNewTerm) == (true, true))
+        let d = try AliasSuggestions.accept(s, in: UserDictionary(terms: [nimbu, kopt]))
+        let term = try #require(d.terms.first { $0.id == s.termID })
+        #expect(term.text == "Nimbu Corp")
+        #expect((term.aliases.first?.text, term.aliases.first?.inflecting) == ("Rokm", false))
+    }
+
+    @Test func editCoveredByAnExistingAliasIsNotSuggested() {
+        // `before` jest już po Replacement; drugie `apply` jest idempotentne i chowa parę pokrytą Aliasem.
+        let term = DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Rokm", inflects: true)])
+        #expect(find([], [term], edits: [edit("a", "0", "w Rokmie", "w Nimbuie")]).isEmpty)
+    }
+
+    @Test func editsOfNumbersAreIgnored() {
+        #expect(find(edits: [edit("a", "0", "mamy 5 sztuk", "mamy 6 sztuk")]).isEmpty)
+        #expect(find(edits: [edit("a", "0", "mamy dwa koty", "mamy trzy koty")]).isEmpty)
+        #expect(find(edits: [edit("a", "0", "mamy twenty sztuk", "mamy thirty sztuk")]).isEmpty)
+    }
+
+    @Test func numeralAndNegationInflectionsAreFiltered() {
+        let cases = [
+            ("mamy pięciu ludzi", "mamy sześciu ludzi"),
+            ("mamy dwoma ludźmi", "mamy trzema ludźmi"),
+            ("mamy żadnego Rokma", "mamy Nimbu"),
+            ("to isn't Rokm", "to is Nimbu"),
+            ("mamy twenty-one sztuk", "mamy thirty-two sztuk"),
+        ]
+        for (before, after) in cases {
+            #expect(find(edits: [edit("a", "0", before, after)]).isEmpty, "\(before) → \(after)")
+        }
+    }
+
+    @Test func editsOfNegationsAreIgnored() {
+        #expect(find(edits: [edit("a", "0", "to nie Rokm", "to jest Nimbu")]).isEmpty)
+    }
+
+    @Test func rewrittenSentenceIsNotALesson() {
+        let e = edit("a", "0", "alfa beta gamma delta epsilon", "Nimbu KOPT Rokm zeta theta")
+        #expect(find(edits: [e]).isEmpty)
+    }
+
+    @Test func deletionAndInsertionAreIgnored() {
+        #expect(find(edits: [edit("a", "0", "Rokm tu jest", "Rokm tu")]).isEmpty)
+        #expect(find(edits: [edit("a", "0", "Rokm tu", "Rokm tu jest")]).isEmpty)
+    }
+
+    @Test func caseOnlyEditIsIgnored() {
+        #expect(find(edits: [edit("a", "0", "nimbu tu", "Nimbu tu")]).isEmpty)
+    }
+
+    @Test func theSameEditInOriginalAndCorrectedCountsOnce() throws {
+        let e = edit("a", "0", "w Rokmie", "w Nimbuie")
+        let s = try #require(find(edits: [e, e]).first)
+        #expect((s.count, s.sessions) == (1, ["a"]))
+    }
+
+    @Test func newTermDoesNotOverwriteARawAlias() {
+        let other = DictionaryTerm("Orbit", aliases: [DictionaryAlias("Rokm", enabled: false)])
+        #expect(find([], [nimbu, other], edits: [edit("a", "0", "Rokm tu", "Nimbu Corp tu")]).isEmpty)
+    }
+
+    @Test func newTermTargetMustNotAlreadyBeAnAlias() {
+        let term = DictionaryTerm("Nimbu", aliases: [DictionaryAlias("Orbit")])
+        #expect(find([], [term], edits: [edit("a", "0", "Rokm tu", "Orbit tu")]).isEmpty)
+    }
+
+    @Test func dismissedEditSuggestionStaysHidden() throws {
+        let e = edit("a", "0", "w Rokmie", "w Nimbuie")
+        let s = try #require(find(edits: [e]).first)
+        #expect(find([], nil, dismissed: [s.id], edits: [e]).isEmpty)
+    }
+
+    @Test func riskyEditStillNeedsTwoMeetings() throws {
+        let a = edit("a", "0", "ten rok jest", "ten Nimbu jest")
+        #expect(find([], nil, common: ["rok"], edits: [a]).isEmpty)
+        let s = try #require(find([], nil, common: ["rok"], edits: [a, edit("b", "0", "ten rok jest", "ten Nimbu jest")]).first)
+        #expect((s.alias, s.inflects, s.risky, s.sessions) == ("rok", false, true, ["a", "b"]))
+    }
+
+    @Test func editAliasThatWouldRewriteKeptWordsIsRisky() throws {
+        // Ta sama linia zawiera nietknięte „Rokmowski”: Alias „Rokm*” przepisałby je, więc jedna poprawka nie wystarcza.
+        let a = edit("a", "0", "w Rokmie i Rokmowski", "w Nimbuie i Rokmowski")
+        #expect(find(edits: [a]).isEmpty)
+        let b = edit("b", "0", "w Rokmie i Rokmowski", "w Nimbuie i Rokmowski")
+        let s = try #require(find(edits: [a, b]).first)
+        #expect((s.alias, s.inflects, s.risky, s.sessions) == ("Rokm", true, true, ["a", "b"]))
+    }
+
+    @Test func repeatedWordInEditedLineMakesTheAliasRisky() throws {
+        // W linii zostaje nietknięte drugie „Rokm": Alias „Rokm" przepisałby je, więc jedna poprawka nie wystarcza.
+        let a = edit("a", "0", "Rokm tu Rokm", "Rokm tu Nimbu")
+        #expect(find(edits: [a]).isEmpty)
+        let b = edit("b", "0", "Rokm tu Rokm", "Rokm tu Nimbu")
+        let s = try #require(find(edits: [a, b]).first)
+        #expect((s.alias, s.term, s.risky, s.sessions) == ("Rokm", "Nimbu", true, ["a", "b"]))
+    }
+
+    @Test func repeatedWordInEditedLineMakesANewTermRisky() throws {
+        // Ta sama sytuacja na ścieżce nowego Terma („Nimbu" nie ma jeszcze w słowniku).
+        let a = edit("a", "0", "Rokm tu Rokm", "Rokm tu Nimbu")
+        #expect(find([], [kopt], edits: [a]).isEmpty)
+        let b = edit("b", "0", "Rokm tu Rokm", "Rokm tu Nimbu")
+        let s = try #require(find([], [kopt], edits: [a, b]).first)
+        #expect((s.alias, s.term, s.risky, s.sessions) == ("Rokm", "Nimbu", true, ["a", "b"]))
+    }
+
+    @Test func editThatLooksLikeInsertionIsNotALesson() {
+        // „Rokm Rokm" → „Nimbu Rokm" to dla LCS wstawienie i usunięcie, nie podmiana: nie tworzymy z tego Aliasu.
+        let e = edit("a", "0", "Rokm Rokm", "Nimbu Rokm")
+        #expect(find(edits: [e]).isEmpty)
+        #expect(find([], [kopt], edits: [e]).isEmpty)
+    }
+
+    @Test func editInASessionAlreadyInSourcesIsNotCountedTwice() throws {
+        // Surowy tekst sesji „a" jest już policzony w `sources`; `before` z edycji nie może zawyżyć `matched`.
+        let pair = ("w Rokmie", "w Nimbuie")
+        let s = try #require(find([source("a", [pair])], edits: [edit("a", "0", "w Rokmie", "w Nimbuie")]).first)
+        #expect((s.alias, s.inflects, s.risky, s.count, s.sessions) == ("Rokm", true, false, 2, ["a"]))
+    }
+
+    @Test func numeralInflectionsInEditsAreFiltered() {
+        #expect(find(edits: [edit("a", "0", "z tysiącem sztuk", "z milionem sztuk")]).isEmpty)
+        #expect(find(edits: [edit("a", "0", "mamy jedną sztukę", "mamy pojedynczą sztukę")]).isEmpty)
+    }
+
+    @Test func ordinaryWordStartingWithStoIsNotANumeral() throws {
+        // „sto"/„stu" tylko w całości: prefiks „sto-" blokowałby zwykłe „stoi".
+        let s = try #require(find(edits: [edit("a", "0", "stoi Rokm", "stoi Nimbu")]).first)
+        #expect((s.alias, s.term) == ("Rokm", "Nimbu"))
+    }
+
+    @Test func cannotIsANegation() {
+        #expect(find(edits: [edit("a", "0", "cannot Rokm", "can Nimbu")]).isEmpty)
+    }
+
+    @Test func hundredsInflectionsInEditsAreFiltered() {
+        #expect(find(edits: [edit("a", "0", "do dwustu sztuk", "do trzystu sztuk")]).isEmpty)
+    }
+
+    @Test func teenNumeralsInEditsAreFiltered() {
+        let cases = [
+            ("mamy dwanaście sztuk", "mamy piętnaście sztuk"),
+            ("mamy dwunascie sztuk", "mamy pietnascie sztuk"),
+            ("mamy osiemnaście sztuk", "mamy dziewiętnaście sztuk"),
+            ("mamy trzej ludzie", "mamy czterej ludzie"),
+            ("mamy hundreds sztuk", "mamy thousands sztuk"),
+        ]
+        for (before, after) in cases {
+            #expect(find(edits: [edit("a", "0", before, after)]).isEmpty, "\(before) → \(after)")
+        }
+    }
+
+    @Test func typographicApostropheNegationIsFiltered() {
+        #expect(find(edits: [edit("a", "0", "to isn\u{2019}t Rokm", "to is Nimbu")]).isEmpty)
+    }
+
+    @Test func newTermIsNotCreatedForAFormOfAnExistingTerm() {
+        // Poprawiona strona jest odmianą Terma „Nimbu”: to nie nowa nazwa (F3).
+        #expect(find(edits: [edit("a", "0", "widzę Nimbua", "widzę Nimbuie")]).isEmpty)
+        #expect(find(edits: [edit("a", "0", "Rokma tu", "Nimbuie tu")]).isEmpty)
+    }
+
+    @Test func newTermIsNotCreatedFromAnExistingTerm() {
+        // Surowa strona jest już Termem: podmiana na nową nazwę nie uczy Aliasu dla drugiej strony (F3).
+        #expect(find(edits: [edit("a", "0", "to Nimbu", "to Terra")]).isEmpty)
+    }
+
+    @Test func secondAliasOfTheSameNewTermIsAppended() throws {
+        let s1 = AliasSuggestion(id: "terą→terra", termID: UUID(), term: "Terra", alias: "Terą", inflects: false, risky: false,
+                                 forms: ["Terą"], count: 1, sessions: ["a"], fromEdits: true, isNewTerm: true)
+        let s2 = AliasSuggestion(id: "tera→terra", termID: UUID(), term: "Terra", alias: "Tera", inflects: false, risky: true,
+                                 forms: ["Tera"], count: 1, sessions: ["b"], fromEdits: true, isNewTerm: true)
+        var d = try AliasSuggestions.accept(s1, in: UserDictionary(terms: []))
+        d = try AliasSuggestions.accept(s2, in: d)
+        #expect(d.terms.count == 1)
+        let term = try #require(d.terms.first)
+        #expect(Set(term.aliases.map(\.text)) == ["Terą", "Tera"])
+        #expect(term.priority == .normal)
     }
 }

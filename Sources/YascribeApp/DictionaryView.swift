@@ -139,7 +139,7 @@ struct DictionaryView: View {
     private var suggestions: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Suggestions").font(.system(size: 13, weight: .semibold)).foregroundStyle(.mnText)
-            Text("The correction model kept fixing these. Add one as an alias to fix it in every transcript, without the model.")
+            Text("The correction model kept fixing these, or you fixed them by hand in a transcript. Add one as an alias to fix it in every transcript, without the model.")
                 .font(.system(size: 11)).foregroundStyle(.mnText2).fixedSize(horizontal: false, vertical: true)
             Card {
                 ForEach(Array(model.aliasSuggestions.enumerated()), id: \.element.id) { i, s in
@@ -159,7 +159,9 @@ struct DictionaryView: View {
             state.notice = nil
         } else {
             state.error = nil
-            state.notice = String(localized: "Added “\(SuggestionRow.aliasText(s))” to \(s.term).")
+            state.notice = s.isNewTerm
+                ? String(localized: "Added “\(s.term)” as a new term.")
+                : String(localized: "Added “\(SuggestionRow.aliasText(s))” to \(s.term).")
         }
     }
 
@@ -322,7 +324,11 @@ private struct SuggestionRow: View {
         let fallback = count == 1 ? "%lld meeting" : "%lld meetings"
         let format = NSLocalizedString("%lld meetings (in)", value: fallback, comment: "")
         let meetings = String(format: format, locale: locale, count)
-        return String(localized: "\(suggestion.count)× in \(meetings). Seen as \(suggestion.forms.joined(separator: ", ")).")
+        let seen = suggestion.forms.joined(separator: ", ")
+        if suggestion.fromEdits {
+            return String(localized: "\(suggestion.count)× from your edits in \(meetings). Seen as \(seen).")
+        }
+        return String(localized: "\(suggestion.count)× in \(meetings). Seen as \(seen).")
     }
 
     var body: some View {
@@ -337,6 +343,9 @@ private struct SuggestionRow: View {
                     Text(Self.aliasText(suggestion)).foregroundStyle(.mnText2)
                     Image(systemName: "arrow.right").font(.system(size: 10)).foregroundStyle(.mnText3).accessibilityHidden(true)
                     Text(suggestion.term).fontWeight(.semibold).foregroundStyle(.mnText)
+                    if suggestion.isNewTerm {
+                        Text("New Term").font(.system(size: 10, weight: .semibold)).foregroundStyle(.mnText3)
+                    }
                 }
                 .font(.system(size: 13)).lineLimit(1)
                 Text(detail).font(.system(size: 11)).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
