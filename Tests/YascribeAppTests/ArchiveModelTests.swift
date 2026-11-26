@@ -254,6 +254,23 @@ private extension ArchiveModel.TurnState {
     #expect(h.wire.calls.isEmpty && !h.model.isBusy)
 }
 
+@Test @MainActor func retryReplacesTheFailedTurnAndAsksAgain() async {
+    let h = Harness()
+    h.addMeeting("m1", notes: "Budget is 10")
+    h.providers[h.chatProvider.id] = nil
+    await h.ask("What is the budget?")
+    #expect(h.last?.failure == "This provider no longer exists.")
+    h.providers[h.chatProvider.id] = h.chatProvider
+    let id = h.model.turns.last!.id
+    h.model.retry(id)
+    await h.settle()
+    #expect(h.model.turns.count == 1 && h.model.turns.last?.question == "What is the budget?")
+    #expect(h.last?.failure == nil)
+    let done = h.model.turns.last!.id
+    h.model.retry(done) // tura bez błędu: nic się nie dzieje
+    #expect(h.model.turns.count == 1 && h.model.turns.last?.id == done)
+}
+
 // MARK: 10. zgoda na pierwsze budowanie indeksu
 
 @Test @MainActor func firstRemoteBuildNeedsConsentAndSendsNothingBeforeIt() async {
