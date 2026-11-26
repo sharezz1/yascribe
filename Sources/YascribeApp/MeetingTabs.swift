@@ -226,10 +226,6 @@ struct TranscriptTab: View {
     /// Wiersz z ikoną ⏸ (gra) i wiersz podświetlony (gra albo ostatni po pauzie) — indeksy w `utterances` (TASK-131).
     var playing: Int? = nil
     var current: Int? = nil
-    /// `nil` = bez paska odtwarzacza (migawki).
-    var clock: PlaybackClock? = nil
-    var onToggle: (TranscriptPlaylist) -> Void = { _ in }
-    var onSeek: (Double, TranscriptPlaylist) -> Void = { _, _ in }
     let onJump: (Int, TranscriptPlaylist) -> Void
     private var busy: Bool { model.isTranscribing(item) }
     /// Diaryzacja po transkrypcji trzyma `busy` (F01), ale wiersz mówi, co naprawdę trwa.
@@ -364,11 +360,6 @@ struct TranscriptTab: View {
                         .buttonStyle(.pillSmall)
                         .disabled(busy || moving || correcting)
                         .help("Sends only the parts that failed; finished parts aren't paid for again")
-                        .padding(.bottom, 8)
-                }
-                if let clock, item.audioDeletedAfterDays == nil, !playlist.entries.isEmpty {
-                    PlayerBar(clock: clock, isPlaying: playing != nil, duration: playlist.duration,
-                              onToggle: { onToggle(playlist) }, onSeek: { onSeek($0, playlist) })
                         .padding(.bottom, 8)
                 }
                 Rectangle().fill(.mnLine2).frame(height: 0.5)
