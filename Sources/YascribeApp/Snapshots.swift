@@ -744,7 +744,10 @@ enum Snapshots {
                     AliasSuggestion(id: "s1", termID: terms[0].id, term: "Nimbu", alias: "Rokn", inflects: true, risky: false,
                                     forms: ["Rokna", "Roknie", "Rokn"], count: 5, sessions: ["a", "b", "c"]),
                     AliasSuggestion(id: "s2", termID: terms[1].id, term: "KOPT", alias: "kop", inflects: true, risky: true,
-                                    forms: ["kopem", "kopa"], count: 3, sessions: ["a", "b"])]
+                                    forms: ["kopem", "kopa"], count: 3, sessions: ["a", "b"]),
+                    // TASK-116: sugestia z ręcznej poprawki w transkrypcie, poprawiona fraza nie jest jeszcze Termem.
+                    AliasSuggestion(id: "s3", termID: UUID(), term: "Terra", alias: "Terą", inflects: false, risky: false,
+                                    forms: ["Terą"], count: 2, sessions: ["d"], fromEdits: true, isNewTerm: true)]
                 try render("dictionary-suggestions", size: CGSize(width: 900, height: 760), dark: dark, model: model) { DictionaryView() }
                 model.aliasSuggestions = []
                 let termEditing = DictionaryViewState()

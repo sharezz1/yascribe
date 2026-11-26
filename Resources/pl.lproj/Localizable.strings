@@ -973,7 +973,10 @@
 "%lld meetings (from)" = "%lld spotkań";
 "%lld meetings (in)" = "%lld spotkaniach";
 "%lld× in %@. Seen as %@." = "%lld× w %@. Rozpoznano jako %@.";
+"%lld× from your edits in %@. Seen as %@." = "%lld× z Twoich poprawek w %@. Rozpoznano jako %@.";
 "Added “%@” to %@." = "Dodano alias „%@” do terminu „%@”.";
+"Added “%@” as a new term." = "Dodano „%@” jako nowy Term.";
+"New Term" = "Nowy Term";
 
 
 "Partial — %lld gaps" = "Częściowo — %lld luk";
@@ -1068,7 +1071,7 @@
 "The download didn't finish: The Internet connection appears to be offline." = "Pobieranie nie zostało ukończone. Brak połączenia z internetem.";
 "Couldn’t save the dictionary: The file couldn’t be saved because the disk is full." = "Nie udało się zapisać słownika. Brak miejsca na dysku.";
 "Suggestions" = "Sugestie";
-"The correction model kept fixing these. Add one as an alias to fix it in every transcript, without the model." = "Model korekty wielokrotnie poprawiał te słowa. Dodaj je jako alias, aby były poprawiane w każdym transkrypcie bez udziału modelu.";
+"The correction model kept fixing these, or you fixed them by hand in a transcript. Add one as an alias to fix it in every transcript, without the model." = "Model korekty wielokrotnie je poprawiał albo poprawiłeś je ręcznie w transkrypcie. Dodaj je jako alias, aby były poprawiane w każdym transkrypcie bez udziału modelu.";
 "This alias is also an ordinary word" = "Ten alias jest też zwykłym słowem";
 "Don’t suggest this again" = "Nie proponuj ponownie";
 "Add %@ as an alias of %@" = "Dodaj „%1$@” jako alias terminu „%2$@”";
