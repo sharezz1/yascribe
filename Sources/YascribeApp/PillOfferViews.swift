@@ -39,6 +39,11 @@ struct PillOfferView: View {
                     Button(AppModel.label(p)) { model.chooseManually(p.id, key: offer.id) }
                 }
             }
+            if let match = model.autoPreset.match {
+                Text(PresetReasonText.line(match, preset: model.activePreset))
+                    .font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             HStack(spacing: 8) {
                 Button { pill.onSecondary() } label: { Text("Not a meeting").frame(maxWidth: .infinity) }.buttonStyle(PillButtonStyle(kind: .secondary, large: true))
                 Button { pill.onPrimary() } label: { Text("Start").frame(maxWidth: .infinity) }.buttonStyle(PillButtonStyle(kind: .primary, large: true))

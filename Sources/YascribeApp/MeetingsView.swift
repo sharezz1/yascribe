@@ -312,6 +312,13 @@ struct NextMeetingCard: View {
         return parts.joined(separator: " · ")
     }
 
+    /// Powód auto-wyboru widoczny przed startem; nil, gdy reguła nie pasuje albo użytkownik wybrał ręcznie.
+    private func comingUpPresetLine(for event: CalendarEventInfo) -> String? {
+        guard let match = model.autoMatch(event: event, key: event.id),
+              let preset = model.presets.presets.first(where: { $0.id == match.presetID }) else { return nil }
+        return String(localized: "Preset \(preset.name): \(PresetReasonText.line(match, preset: preset))")
+    }
+
     var body: some View {
         let app = ComingUp.appName(event)
         Card {
@@ -330,6 +337,9 @@ struct NextMeetingCard: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(event.title).font(.system(size: 20, design: .serif)).foregroundStyle(.mnText).lineLimit(1).truncationMode(.tail)
                         Text(details).font(.system(size: 11)).monospacedDigit().foregroundStyle(.mnText2).lineLimit(1).truncationMode(.tail)
+                        if let presetLine = comingUpPresetLine(for: event) {
+                            Text(presetLine).font(.system(size: 11)).foregroundStyle(.mnText2).lineLimit(2).truncationMode(.tail)
+                        }
                     }
                     Spacer(minLength: 8)
                     Button {
@@ -480,7 +490,7 @@ struct PresetMenu: View {
             Divider()
             Button("Edit Presets…") { model.section = .presets }
         }
-        .help(model.activePreset.map { preset in
+        .help(model.autoPreset.match.map { PresetReasonText.line($0, preset: model.activePreset) } ?? model.activePreset.map { preset in
             let language = AppModel.presetLanguageLabel(preset)
             let asr = preset.asr?.model ?? String(localized: "no speech-to-text model")
             return String(localized: "Preset for the next recording: \(language) · \(asr)")

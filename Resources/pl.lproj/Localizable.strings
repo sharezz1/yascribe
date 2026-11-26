@@ -1169,3 +1169,8 @@
 "The first matching preset in the list wins. A preset you choose yourself always overrides rules." = "Wygrywa pierwszy pasujący preset na liście. Preset wybrany ręcznie zawsze ma pierwszeństwo przed regułami.";
 "This preset uses Auto language. A rule can select it, so check the language before you start." = "Ten preset używa języka Auto. Reguła może go wybrać, więc sprawdź język przed rozpoczęciem.";
 "has rules" = "ma reguły";
+"Rule: title contains “%@”" = "Reguła: tytuł zawiera “%@”";
+"Rule: attendee domain %@" = "Reguła: domena uczestnika %@";
+"Rule: call app %@" = "Reguła: aplikacja rozmowy %@";
+"⚠ Auto language, check it before you start" = "⚠ Język Auto, sprawdź go przed startem";
+"Preset %@: %@" = "Preset %@: %@";
