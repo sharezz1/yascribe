@@ -334,14 +334,22 @@ enum Snapshots {
                         editing.segmentDraft = SegmentDraft(runID: "snapshot-run", index: 0, speaker: t.utterances[0].speaker, start: t.utterances[0].start, corrected: true, initial: t.utterances[0].text, text: t.utterances[0].text)
                         try render("meeting-transcript-editing", size: CGSize(width: 900, height: 480), dark: dark, model: model) { MeetingDetailView(item: edited, state: editing) }
                         // TASK-131: pasek odtwarzacza nad listą, grający wiersz podświetlony (⏸ tylko na nim).
-                        let snapClock = PlaybackClock()
-                        snapClock.position = (t.utterances.first?.start ?? 0) + 3
+                        let snapPlayback = PlaybackState()
+                        snapPlayback.previewPlaying(row: 0, position: (t.utterances.first?.start ?? 0) + 3)
+                        try render("transcript-player-pinned", size: CGSize(width: 900, height: 420), dark: dark, model: model) {
+                            MeetingDetailView(item: edited, state: transcriptView, playback: snapPlayback)
+                        }
+                        let snapScrolled = PlaybackState()
+                        snapScrolled.previewPlaying(row: 2, position: (t.utterances.last?.start ?? 0) + 2)
+                        try render("transcript-player-pinned-small", size: CGSize(width: 900, height: 300), dark: dark, model: model) {
+                            MeetingDetailView(item: edited, state: transcriptView, playback: snapScrolled, bottomInset: 60)
+                        }
                         try render("transcript-segment-playing", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
-                            ScrollView { TranscriptTab(state: transcriptView, item: edited, playing: 0, current: 0, clock: snapClock) { _, _ in }.padding(20) }
+                            ScrollView { TranscriptTab(state: transcriptView, item: edited, playing: 0, current: 0) { _, _ in }.padding(20) }
                         }
                         try render("transcript-segment-no-audio", size: CGSize(width: 900, height: 360), dark: dark, model: model) {
                             var gone = edited; gone.audioDeletedAfterDays = 30
-                            return ScrollView { TranscriptTab(state: transcriptView, item: gone, playing: 0, current: 0, clock: snapClock) { _, _ in }.padding(20) }
+                            return ScrollView { TranscriptTab(state: transcriptView, item: gone, playing: 0, current: 0) { _, _ in }.padding(20) }
                         }
                         // TASK-119: zaznaczone wiersze (pasek „N selected”), „Undo” po usunięciu, „Show deleted” z „Restore”, komunikat w Summary.
                         var hidden = picked

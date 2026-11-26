@@ -101,15 +101,16 @@ struct MeetingDetailView: View {
     let item: SessionItem
     let presentsModelsSheet: Bool
     let bottomInset: CGFloat
-    @StateObject private var playback = PlaybackState()
+    @StateObject private var playback: PlaybackState
     @StateObject private var state: MeetingViewState
     @StateObject private var speakerMenu = SpeakerMenuState()
 
-    init(item: SessionItem, state: MeetingViewState = MeetingViewState(), presentsModelsSheet: Bool = true, bottomInset: CGFloat = 0) {
+    init(item: SessionItem, state: MeetingViewState = MeetingViewState(), playback: PlaybackState = PlaybackState(), presentsModelsSheet: Bool = true, bottomInset: CGFloat = 0) {
         self.item = item
         self.presentsModelsSheet = presentsModelsSheet
         self.bottomInset = bottomInset
         _state = StateObject(wrappedValue: state)
+        _playback = StateObject(wrappedValue: playback)
     }
 
     private var isRecording: Bool { SessionStatus.isRecording(item.url, recordingDirectory: model.recording.directory) }
@@ -139,13 +140,22 @@ struct MeetingDetailView: View {
                 } else {
                     switch state.tab ?? defaultTab {
                     case .myNotes: MyNotesTab(state: state, item: item)
-                    case .transcript: TranscriptTab(state: state, item: item, playing: playback.playing, current: playback.current, clock: playback.clock,
-                                              onToggle: togglePlayback, onSeek: seek) { play($0, $1) }
+                    case .transcript: TranscriptTab(state: state, item: item, playing: playback.playing, current: playback.current) { play($0, $1) }
                     case .summary: SummaryTab(state: state, item: item)
                     }
                 }
             }
-            .contentMargins(.bottom, bottomInset, for: .scrollContent)
+            .contentMargins(.bottom, bottomInset + (playerList == nil ? 0 : Self.playerHeight), for: .scrollContent)
+            // TASK-131: player przypięty u dołu (jak pasek Ask nad nim), nie przewija się z listą.
+            .overlay(alignment: .bottom) {
+                if let list = playerList {
+                    PlayerBar(clock: playback.clock, isPlaying: playback.isPlaying, duration: list.duration,
+                              onToggle: { togglePlayback(list) }, onSeek: { seek($0, list) })
+                        .padding(.horizontal, 28)
+                        .frame(maxWidth: 640)
+                        .padding(.bottom, bottomInset + 10)
+                }
+            }
         }
         .dismissibleSheet(isPresented: Binding(get: { presentsModelsSheet && state.modelsSheet },
                                                set: { state.modelsSheet = $0 }), onDismiss: { state.modelsSheet = false }) {
@@ -288,6 +298,15 @@ struct MeetingDetailView: View {
             .padding(14)
             .frame(width: 300, alignment: .leading)
         }
+    }
+
+    static let playerHeight: CGFloat = 54
+
+    /// Lista dla paska: tylko w zakładce Transcript, gdy jest co grać i audio istnieje.
+    private var playerList: TranscriptPlaylist? {
+        guard !isRecording, (state.tab ?? defaultTab) == .transcript, item.audioDeletedAfterDays == nil else { return nil }
+        let list = playlist()
+        return list.entries.isEmpty ? nil : list
     }
 
     /// Lista odtwarzania z tego samego transkryptu co widok (z ukrytymi, więc wiersze zgadzają się z indeksami ▶).
@@ -630,5 +649,9 @@ struct PlayerBar: View {
             Text(MeetingDetailView.time(duration)).monospacedDigit().frame(width: 60, alignment: .leading)
         }
         .font(.system(size: 12)).foregroundStyle(.mnText2)
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Capsule().fill(Color.mnCard))
+        .overlay(Capsule().stroke(Color.mnLine2, lineWidth: 1))
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
     }
 }
