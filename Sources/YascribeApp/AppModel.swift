@@ -585,6 +585,26 @@ final class AppModel {
         refreshSuggestions()
     }
 
+    /// Pary poprawek użytkownika (TASK-116) dla `find`: Original zawsze, Corrected tylko gdy indeksy pasują do transkryptu.
+    /// Ukryte i wyłączone z notatek wypowiedzi pomijamy; `before` to tekst bazowy bez Replacement (stosuje je sam `find`).
+    static func editPairs(for item: SessionItem) -> [AliasSuggestions.EditPair] {
+        guard let edits = item.edits, !edits.edits.isEmpty else { return [] }
+        var pairs: [AliasSuggestions.EditPair] = []
+        func append(from base: Transcript) {
+            for edit in edits.edits {
+                // Po „Retry Failed Parts" indeksy nie pasują: poprawka uczy tylko w wersji, w której jest widoczna.
+                guard edits.isEdited(index: edit.index, in: base) else { continue }
+                let u = base.utterances[edit.index]
+                guard !u.excludedFromNotes, !edits.isHidden(u) else { continue }
+                pairs.append(AliasSuggestions.EditPair(sessionID: item.id, editKey: "\(item.id)#\(edit.index)",
+                                                      before: u.text, after: edit.text))
+            }
+        }
+        if let base = item.transcript { append(from: base) }
+        if let fixed = item.corrected, item.canEdit(corrected: true) { append(from: fixed.transcript) }
+        return pairs
+    }
+
     /// Przelicza sugestie Aliasów w tle na kopii sesji i słownika; wynik przyjmuje tylko najnowsze wywołanie.
     func refreshSuggestions() {
         // Ukryte wypowiedzi (TASK-119) oznaczone po obu stronach: `find` pomija pary wyłączone z notatek.
@@ -594,12 +614,20 @@ final class AppModel {
             fixed.transcript = edits.markingHidden(fixed.transcript)
             return AliasSuggestions.Source(id: item.id, raw: edits.markingHidden(raw), corrected: fixed)
         }
+        // Poprawki (TASK-116) liczą się także bez korekty i przy pustym słowniku: nowy Term powstaje z samej edycji.
+        let pairs = sessions.flatMap { Self.editPairs(for: $0) }
         let fillers = settings.fillerWords ?? FillerWords.defaults, dictionary = dictionary
         func lengths(_ t: Transcript) -> String { t.utterances.map { String($0.text.utf8.count) }.joined(separator: ",") }
+        // Edycje w odcisku: poprawka o tej samej długości tekstu też musi odświeżyć sugestie.
+        func editsDigest(_ edits: TranscriptEdits?) -> String {
+            (edits?.edits ?? []).map { "\($0.index)\u{1}\($0.speaker.rawValue)\u{1}\($0.start)\u{1}\($0.text)" }.joined(separator: "\u{1}")
+        }
         let fingerprint = sessions.compactMap { item -> [String]? in
-            guard let raw = item.transcript, let fixed = item.corrected else { return nil }
+            guard item.transcript != nil || item.edits != nil else { return nil }
+            let raw = item.transcript, fixed = item.corrected
             let hidden = (item.edits?.hidden ?? []).map { "\($0.speaker.rawValue)@\($0.start)" }.joined(separator: ",")
-            return [item.id, item.runID ?? "", fixed.model, lengths(raw), lengths(fixed.transcript), hidden]
+            return [item.id, item.runID ?? "", fixed?.model ?? "", raw.map(lengths) ?? "",
+                    fixed.map { lengths($0.transcript) } ?? "", hidden, editsDigest(item.edits)]
         }
         let input = SuggestionsInput(sessions: fingerprint, dictionary: dictionary, fillers: fillers)
         guard input != suggestionsInput else { return }
@@ -607,11 +635,11 @@ final class AppModel {
         suggestionsGeneration += 1
         let generation = suggestionsGeneration
         suggestionsWork?.cancel() // zastąpione przeliczenie przerywa się przy następnej sesji (`Task.isCancelled` w `find`)
-        guard !sources.isEmpty, !dictionary.terms.isEmpty else { suggestionsWork = nil; aliasSuggestions = []; return }
+        guard (!sources.isEmpty && !dictionary.terms.isEmpty) || !pairs.isEmpty else { suggestionsWork = nil; aliasSuggestions = []; return }
         let work = Task.detached(priority: .utility) {
             // Słownik systemowy przez główny wątek (SystemSpelling), więc tylko dla grup po progu i raz na słowo.
             var common: [String: Bool] = [:]
-            return AliasSuggestions.find(in: sources, dictionary: dictionary, dismissed: [], fillerWords: fillers) { word in
+            return AliasSuggestions.find(in: sources, dictionary: dictionary, dismissed: [], fillerWords: fillers, edits: pairs) { word in
                 if let known = common[word] { return known }
                 let known = !SystemSpelling.isMisspelled(word)
                 common[word] = known
