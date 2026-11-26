@@ -17,7 +17,7 @@ struct DictationSettingsSection: View {
     private var asrProviders: [Provider] { RoleProviders.choices(model.providers.providers, role: .asr, current: s.asr?.providerID) }
     private var correctionProviders: [Provider] { DictationChoices.correction(model.providers.providers, current: s.correction?.model?.providerID) }
     /// Język, z którym dyktowanie naprawdę ruszy: jawny, inaczej język aktywnego presetu (Auto nie przechodzi).
-    private var effectiveLanguage: LanguageCode? { s.language ?? model.activePreset?.language }
+    private var effectiveLanguage: LanguageCode? { s.language ?? model.selectedPreset?.language }
 
     var body: some View {
         SectionHeader(String(localized: "Dictation"))
@@ -131,7 +131,7 @@ struct DictationSettingsSection: View {
     // MARK: Język
 
     private var languageRow: some View {
-        let missing = s.language == nil && model.activePreset?.language == nil
+        let missing = s.language == nil && model.selectedPreset?.language == nil
         let caption: String? = missing
             ? String(localized: "Choose a language: the active preset has none (Auto), and dictation needs an explicit one.")
             : (s.language == nil ? String(localized: "Uses the language of the active preset.") : nil)

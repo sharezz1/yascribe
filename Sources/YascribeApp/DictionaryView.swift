@@ -202,7 +202,7 @@ struct DictionaryView: View {
     /// D10: ile Termów nie mieści się w poleceniu korektora presetu aktywnego dla nowych nagrań (nie liczy nadpisań w pojedynczym spotkaniu).
     /// Budżet lokalny z pola „Context window” (bez sondy `/api/ps`, więc przybliżenie), dla API stały limit; ukryte przy 0 i bez korekty.
     private var counter: (count: Int, detail: String)? {
-        guard let c = model.activePreset?.correction, let provider = model.provider(c.providerID) else { return nil }
+        guard let c = model.selectedPreset?.correction, let provider = model.provider(c.providerID) else { return nil }
         let budget = ContextBudget.resolve(provider: provider, detected: nil)
         let omitted = DictionaryPrompt.make(model.dictionary, link: nil, maxChars: DictionaryPrompt.maxChars(budget: budget)).omittedTerms
         guard omitted > 0 else { return nil }
